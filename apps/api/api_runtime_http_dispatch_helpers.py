@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
-from .api_runtime_support import _optional_str
+from .api_runtime_support import _jsonable, _optional_str
 
 
 def _elephant_id_from_name(name: str) -> str:
@@ -14,11 +14,35 @@ def _elephant_id_from_name(name: str) -> str:
 
 
 def _session_compat_payload(payload: Any) -> Any:
-    """Apply session compatibility layer to payloads."""
+    """Translate canonical episode payloads for the `/v1/sessions` surface."""
+    payload = _jsonable(payload)
     if isinstance(payload, dict):
+        translated = dict(payload)
+        if isinstance(payload.get("episode"), dict):
+            translated["session"] = _session_compat_aliases(payload["episode"])
+            translated["episode_id"] = payload["episode"].get("episode_id")
+        if isinstance(payload.get("parent_episode"), dict):
+            translated["parent"] = _session_compat_aliases(payload["parent_episode"])
+        if isinstance(payload.get("personal_model"), dict):
+            translated["profile"] = payload["personal_model"]
+        if "latest_loop" in payload:
+            translated["latest_turn"] = (
+                _loop_compat_aliases(payload["latest_loop"])
+                if isinstance(payload.get("latest_loop"), dict)
+                else None
+            )
+        if isinstance(payload.get("outcome"), dict):
+            translated["outcome"] = _outcome_compat_aliases(payload["outcome"])
+        if isinstance(payload.get("inspection"), dict):
+            translated["inspection"] = _inspection_compat_aliases(payload["inspection"])
+        if isinstance(payload.get("lineage"), list):
+            translated["lineage"] = [
+                _session_compat_aliases(item) if isinstance(item, dict) else item
+                for item in payload["lineage"]
+            ]
         return {
-            **payload,
-            "episode_id": payload.get("episode_id") or payload.get("session_id"),
+            **translated,
+            "episode_id": translated.get("episode_id") or translated.get("session_id"),
         }
     return payload
 
@@ -32,6 +56,34 @@ def _session_compat_aliases(value: Any) -> Any:
             "sessionId": value.get("episode_id"),
         }
     return value
+
+
+def _loop_compat_aliases(value: Mapping[str, Any]) -> dict[str, Any]:
+    translated = dict(value)
+    if isinstance(value.get("outcome"), dict):
+        translated["outcome"] = _outcome_compat_aliases(value["outcome"])
+    return translated
+
+
+def _inspection_compat_aliases(value: Mapping[str, Any]) -> dict[str, Any]:
+    translated = dict(value)
+    if isinstance(value.get("episode"), dict):
+        translated["session"] = _session_compat_aliases(value["episode"])
+    if isinstance(value.get("latest_loop"), dict):
+        translated["latest_turn"] = _loop_compat_aliases(value["latest_loop"])
+    return translated
+
+
+def _outcome_compat_aliases(value: Mapping[str, Any]) -> dict[str, Any]:
+    translated = dict(value)
+    event = dict(value.get("event")) if isinstance(value.get("event"), dict) else {}
+    if event:
+        episode_id = event.get("episode_id")
+        if episode_id:
+            event.setdefault("session_id", episode_id)
+            event.setdefault("sessionId", episode_id)
+        translated["event"] = event
+    return translated
 
 
 def _cron_payload(payload: Mapping[str, Any]) -> dict[str, Any]:

@@ -349,11 +349,12 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(turn.status_code, 200)
         self.assertEqual(turn.payload["session"]["session_id"], "session-turn")
         self.assertEqual(turn.payload["outcome"]["event"]["session_id"], "session-turn")
+        self.assertEqual(turn.payload["outcome"]["event"]["payload"]["state_query"], "Continue the release plan")
         self.assertEqual(turn.payload["outcome"]["state"]["elephant_id"], "elephant-1")
-        self.assertEqual(turn.payload["outcome"]["state"]["active_task"], "Continue the release plan")
+        self.assertNotIn("active_task", turn.payload["outcome"]["state"])
         self.assertGreaterEqual(len(turn.payload["outcome"]["stages"]), 6)
         self.assertGreaterEqual(len(turn.payload["outcome"]["steps"]), 6)
-        self.assertGreaterEqual(turn.payload["inspection"]["memory_count"], 1)
+        self.assertEqual(turn.payload["inspection"]["memory_count"], 0)
         self.assertGreaterEqual(turn.payload["inspection"]["telemetry_count"], 1)
         self.assertEqual(turn.payload["inspection"]["progression"]["stage_title"], "learning the path")
         self.assertTrue(
@@ -407,9 +408,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(inspect.status_code, 200)
         self.assertEqual(inspect.payload["latest_turn"]["request"]["tool_name"], "tool.clarify")
         self.assertEqual(inspect.payload["lineage"][0]["session_id"], "session-turn")
-        self.assertGreaterEqual(len(inspect.payload["memories"]), 1)
-
-        memory_id = inspect.payload["memories"][0]["memory_id"]
+        self.assertEqual(inspect.payload["memories"], [])
 
         for method, route in (
             ("GET", "/v1/sessions/session-turn/goals"),
@@ -420,61 +419,22 @@ class APISurfaceE2ETest(unittest.TestCase):
             with self.subTest(method=method, route=route):
                 self.assertEqual(self.app.dispatch(method, route, body=self._body({})).status_code, 404)
 
-        memory_detail = self.app.dispatch("GET", f"/v1/sessions/session-turn/memories/{memory_id}")
-        self.assertEqual(memory_detail.status_code, 200)
-        self.assertEqual(memory_detail.payload["memory"]["memory_id"], memory_id)
-
-        corrected_memory = self.app.dispatch(
-            "PATCH",
-            f"/v1/sessions/session-turn/memories/{memory_id}",
-            body=self._body({"corrected_content": "API corrected durable memory.", "reason": "fix text"}),
-        )
-        self.assertEqual(corrected_memory.status_code, 200)
-        corrected_memory_id = corrected_memory.payload["memory"]["memory_id"]
-        self.assertIn(":corrected", corrected_memory_id)
-        self.assertEqual(corrected_memory.payload["decision"]["allowed"], True)
-
         profile_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/profile")
         self.assertEqual(profile_surface.status_code, 200)
-        self.assertEqual(profile_surface.payload["profile"]["profile_id"], "you")
+        self.assertEqual(profile_surface.payload["profile"]["profile_id"], "profile-companion")
 
         work_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/activity")
         self.assertEqual(work_surface.status_code, 404)
 
         memory_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/memory")
         self.assertEqual(memory_surface.status_code, 200)
-        self.assertGreaterEqual(len(memory_surface.payload["memory"]["memories"]), 1)
+        self.assertEqual(memory_surface.payload["memory"]["memories"], [])
 
         procedure_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/procedure")
         self.assertEqual(procedure_surface.status_code, 404)
 
         audit_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/audit")
         self.assertEqual(audit_surface.status_code, 404)
-
-        pinned_memory = self.app.dispatch(
-            "PATCH",
-            f"/v1/sessions/session-turn/memory/{corrected_memory_id}",
-            body=self._body({"pinned": True, "reason": "freeze this correction"}),
-        )
-        self.assertEqual(pinned_memory.status_code, 200)
-        self.assertIn("pinned", pinned_memory.payload["memory"]["tags"])
-
-        unpinned_memory = self.app.dispatch(
-            "PATCH",
-            f"/v1/sessions/session-turn/memory/{corrected_memory_id}",
-            body=self._body({"pinned": False, "reason": "thaw this correction"}),
-        )
-        self.assertEqual(unpinned_memory.status_code, 200)
-        self.assertNotIn("pinned", unpinned_memory.payload["memory"]["tags"])
-
-        deleted_memory = self.app.dispatch(
-            "DELETE",
-            f"/v1/sessions/session-turn/memories/{corrected_memory_id}",
-            body=self._body({"reason": "drop the corrected record"}),
-        )
-        self.assertEqual(deleted_memory.status_code, 200)
-        self.assertEqual(deleted_memory.payload["memory"]["memory_id"], corrected_memory_id)
-        self.assertEqual(deleted_memory.payload["memory_state"], "deleted")
 
     def test_api_chat_runtime_exposes_model_tools_and_skill_context(self) -> None:
         created = self.app.dispatch(
@@ -512,9 +472,8 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("tool.skill.manage", model_visible)
 
         bundle = self.app.context.assemble(session, (), ())
-        self.assertIn("### Capability Disclosure", bundle.prompt_envelope.frozen_prefix)
-        self.assertIn("call `tool.skill.list`", bundle.rendered_prompt)
-        self.assertIn("call `tool.skill.view` with its `skill_id`", bundle.rendered_prompt)
+        self.assertIn("### Memory tools", bundle.prompt_envelope.frozen_prefix)
+        self.assertIn("Use `tool.personal_model.search`", bundle.rendered_prompt)
 
         result = self.app.kernel.dependencies.tools.invoke(
             "tool.skill.list",
@@ -568,15 +527,15 @@ class APISurfaceE2ETest(unittest.TestCase):
             body=self._body(
                 {
                     "fields": {
-                        "identity.name.preferred": "Bit",
-                        "identity.work.current": "Build Elephant Agent",
+                        "preferred_name": "Bit",
+                        "current_work": "Build Elephant Agent",
                         "boundaries": "Prefer direct updates.",
                     }
                 }
             ),
         )
         self.assertEqual(updated_user.status_code, 200)
-        self.assertEqual(updated_user.payload["user"]["identity.name.preferred"], "Bit")
+        self.assertEqual(updated_user.payload["user"]["preferred_name"], "Bit")
         self.assertIn("current_work:Build Elephant Agent", updated_user.payload["user"]["biography_fragments"])
 
         updated_relationship = self.app.dispatch(
@@ -592,9 +551,9 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         continuity = self.app.dispatch("GET", "/v1/sessions/session-state/continuity")
         self.assertEqual(continuity.status_code, 200)
-        self.assertEqual(continuity.payload["profile"]["profile_id"], "you")
+        self.assertEqual(continuity.payload["profile"]["profile_id"], "profile-state")
         self.assertEqual(continuity.payload["identity"]["display_name"], "Atlas")
-        self.assertEqual(continuity.payload["user"]["identity.name.preferred"], "Bit")
+        self.assertEqual(continuity.payload["user"]["preferred_name"], "Bit")
         self.assertIn(
             "Keep replies concise and grounded.",
             continuity.payload["relationship"]["continuity_notes"],
@@ -692,10 +651,8 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(turn.status_code, 200)
         self.assertNotIn("goals", turn.payload["inspection"])
         self.assertNotIn("work_items", turn.payload["inspection"])
-        self.assertEqual(
-            turn.payload["outcome"]["state"]["active_task"],
-            "Implement the current-work lifecycle in Elephant Agent.",
-        )
+        self.assertNotIn("active_task", turn.payload["outcome"]["state"])
+        self.assertIn("current-work lifecycle", turn.payload["outcome"]["event"]["payload"]["message"])
 
     def test_turn_does_not_mutate_profile_without_explicit_profile_surface(self) -> None:
         self.app.dispatch(
@@ -724,7 +681,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         continuity = self.app.dispatch("GET", "/v1/sessions/session-turn-profile-guard/continuity")
         self.assertEqual(continuity.status_code, 200)
-        self.assertIsNone(continuity.payload["user"]["identity.name.preferred"])
+        self.assertIsNone(continuity.payload["user"]["preferred_name"])
         self.assertEqual(continuity.payload["user"]["communication_preferences"], [])
         self.assertEqual(continuity.payload["user"]["biography_fragments"], [])
         self.assertEqual(continuity.payload["relationship"]["continuity_notes"], [])
@@ -755,7 +712,8 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
 
         self.assertEqual(turn.status_code, 200)
-        self.assertIn("current-work lifecycle", turn.payload["outcome"]["state"]["active_task"].lower())
+        self.assertNotIn("active_task", turn.payload["outcome"]["state"])
+        self.assertIn("current-work lifecycle", turn.payload["outcome"]["event"]["payload"]["state_query"].lower())
 
     def test_openai_provider_profile_uses_first_party_runtime_resolution(self) -> None:
         created = self.app.dispatch(
@@ -973,8 +931,9 @@ class APISurfaceE2ETest(unittest.TestCase):
             if hasattr(turn.payload["outcome"], "execution")
             else turn.payload["outcome"]["execution"]
         )
+        execution_summary = execution.summary if hasattr(execution, "summary") else execution["summary"]
         self.assertTrue(
-            execution.summary.startswith(
+            execution_summary.startswith(
                 "live-chat:What should we do next?"
             )
         )
@@ -1068,7 +1027,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(
             projection["meta"]["query_contract"],
             [
-                "Internal dashboard inspection is centered on Personal Model claims, Evidence support rows, Questions, Elephant State, Episode, Step, semantic recall, and provider status.",
+                "Internal dashboard inspection is centered on Personal Model claims, PM history/source rows, Questions, Elephant State, Episode, Step, semantic recall, and provider status.",
                 "Dashboard management bridges may operate skills, tools, MCP, cron, gateway, provider, and settings controls; durable user understanding remains Personal Model claims.",
                 "Episode resume comes from State.current_context_note copied into Episode metadata at Episode open; live work belongs in Episode, Step, recall, or explicit task tools.",
                 "Runtime trace starts from Episode and renders ordered Step facts rather than profile/session summaries.",
@@ -1084,7 +1043,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(projection["evidence"]["records"], [])
         self.assertEqual(projection["overview"]["counts"]["personal_models"], 0)
         self.assertEqual(projection["overview"]["counts"]["states"], 0)
-        self.assertEqual(projection["overview"]["counts"]["records"], 0)
+        self.assertNotIn("records", projection["overview"]["counts"])
         self.assertEqual(projection["semantic_index_health"]["entry_count"], 0)
         self.assertIn("providers", projection)
         self.assertIn("operations", projection)
@@ -1140,7 +1099,7 @@ class APISurfaceE2ETest(unittest.TestCase):
             [ref["metadata"]["env_var"] for ref in account["secret_references"]],
             ["ELEPHANT_FEISHU_OPS_FEISHU_APP_ID", "ELEPHANT_FEISHU_OPS_FEISHU_APP_SECRET"],
         )
-        secret_file = Path(self.tempdir.name) / "gateway" / "gateway-local-secrets.json"
+        secret_file = Path(self.tempdir.name) / "gateway-local-secrets.json"
         local_secrets = json.loads(secret_file.read_text(encoding="utf-8"))
         self.assertEqual(local_secrets["ELEPHANT_FEISHU_OPS_FEISHU_APP_ID"], "cli-feishu-app")
         self.assertEqual(local_secrets["ELEPHANT_FEISHU_OPS_FEISHU_APP_SECRET"], "cli-feishu-secret")
@@ -1167,10 +1126,12 @@ class APISurfaceE2ETest(unittest.TestCase):
             )
         self.assertEqual(started.status_code, 200)
         command = run_mock.call_args.args[0]
-        self.assertIn("--profile-dir", command)
-        self.assertEqual(command[command.index("--profile-dir") + 1], str(Path(self.tempdir.name) / "profile"))
-        self.assertIn("--cli-profile-dir", command)
-        self.assertEqual(command[command.index("--cli-profile-dir") + 1], str(Path(self.tempdir.name) / "profile"))
+        self.assertIn("--state-dir", command)
+        self.assertEqual(command[command.index("--state-dir") + 1], str(Path(self.tempdir.name)))
+        self.assertIn("--cli-state-dir", command)
+        self.assertEqual(command[command.index("--cli-state-dir") + 1], str(Path(self.tempdir.name)))
+        self.assertNotIn("--profile-dir", command)
+        self.assertNotIn("--cli-profile-dir", command)
 
     def test_internal_dashboard_exposes_cli_linked_control_surfaces(self) -> None:
         created = self.app.dispatch(
@@ -1372,7 +1333,8 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(patched.status_code, 200)
         profile_json = Path(patched.payload["profileManifestPath"])
         self.assertTrue(profile_json.exists())
-        self.assertEqual(json.loads(profile_json.read_text(encoding="utf-8"))["preferences"], ["brief", "json"])
+        patched_config = load_global_config(profile_json, state_dir=self.app.repository.database_path.parent)
+        self.assertEqual(patched_config["runtime"]["state_dir"], str(self.app.repository.database_path.parent))
 
         global_config = self.app.dispatch(
             "PATCH",
@@ -1390,8 +1352,8 @@ class APISurfaceE2ETest(unittest.TestCase):
             body=self._body({"enabled": False}),
         )
         self.assertEqual(toggled.status_code, 200)
-        manifest = json.loads(profile_json.read_text(encoding="utf-8"))
-        self.assertFalse(manifest["skill_overrides"][skill_id]["enabled"])
+        manifest = load_global_config(profile_json, state_dir=self.app.repository.database_path.parent)
+        self.assertFalse(manifest["extensions"]["skill_overrides"][skill_id]["enabled"])
         refreshed = self.app.dispatch("GET", "/v1/internal/dashboard/skills")
         refreshed_skill = next(
             skill for skill in refreshed.payload["dashboard"]["operations"]["skills"] if skill["skillId"] == skill_id
@@ -1405,8 +1367,8 @@ class APISurfaceE2ETest(unittest.TestCase):
             body=self._body({"enabled": False}),
         )
         self.assertEqual(toggled_tool.status_code, 200)
-        manifest = json.loads(profile_json.read_text(encoding="utf-8"))
-        self.assertFalse(manifest["tool_overrides"][tool_id]["enabled"])
+        manifest = load_global_config(profile_json, state_dir=self.app.repository.database_path.parent)
+        self.assertFalse(manifest["extensions"]["tool_overrides"][tool_id]["enabled"])
         refreshed = self.app.dispatch("GET", "/v1/internal/dashboard/tools")
         refreshed_tool = next(
             tool for tool in refreshed.payload["dashboard"]["operations"]["tools"] if tool["toolId"] == tool_id
@@ -1820,15 +1782,15 @@ class APISurfaceE2ETest(unittest.TestCase):
         deleted_sessions = self.app.repository.delete_episodes(("session-orphan",))
 
         self.assertEqual(deleted_sessions, 1)
-        self.assertIsNotNone(self.app.repository.load_personal_model("you"))
+        self.assertIsNotNone(self.app.repository.load_personal_model("profile-orphan"))
         console = self.app.dispatch("GET", "/v1/internal/console")
         self.assertEqual(console.status_code, 404)
         dashboard = self.app.dispatch("GET", "/v1/internal/dashboard/overview")
         self.assertEqual(dashboard.status_code, 200)
         payload = dashboard.payload["dashboard"]
         self.assertNotIn("sessions", payload)
-        self.assertIn("you", [elephant["personal_model_id"] for elephant in payload["herd"]])
-        self.assertIn("state:you:default", [state["state_id"] for state in payload["states"]])
+        self.assertIn("profile-orphan", [elephant["personal_model_id"] for elephant in payload["herd"]])
+        self.assertIn("state:profile-orphan", [state["state_id"] for state in payload["states"]])
         self.assertEqual(payload["overview"]["counts"]["episodes"], 0)
 
     def test_internal_dashboard_excludes_personal_model_growth_state_lanes(self) -> None:

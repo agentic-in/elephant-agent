@@ -107,7 +107,7 @@ class PreviewDeploySmokeTest(unittest.TestCase):
             body = _wait_for_http(port)
             self.assertIn("Elephant Agent", body)
             docs_body = _wait_for_http(port, path="/docs/")
-            self.assertIn("Get started with Elephant Agent", docs_body)
+            self.assertIn("personal-model-first AI", docs_body)
             install_body = _wait_for_http(port, path="/install.sh")
             self.assertIn("Installed Elephant Agent CLI launcher", install_body)
         finally:

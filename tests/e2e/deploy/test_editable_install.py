@@ -58,7 +58,7 @@ class EditableInstallSmokeTest(unittest.TestCase):
         overview = self._run(env=env)
         self.assertIn("Elephant Agent CLI", overview.stdout)
         self.assertIn("personal-model-first AI", overview.stdout)
-        self.assertIn("Understand first", overview.stdout)
+        self.assertIn("Model what matters", overview.stdout)
         self.assertIn("elephant init", overview.stdout)
 
         state_dir = self.home_dir / "herd"
