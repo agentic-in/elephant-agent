@@ -3711,11 +3711,12 @@ button.gatewayStopButton:hover:not(:disabled) {
   gap: 0.82rem;
   align-items: center;
   padding: 0.78rem 0.84rem;
-  border: 1px solid rgba(244, 239, 231, 0.09);
+  border: 1px solid var(--dashboard-border);
   border-radius: 0.72rem;
   background:
-    linear-gradient(135deg, rgba(244, 239, 231, 0.035), rgba(244, 239, 231, 0.012)),
-    rgba(8, 9, 9, 0.42);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.92)),
+    var(--dashboard-surface-panel);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.44);
 }
 
 .usageEventMain {
@@ -3762,9 +3763,9 @@ button.gatewayStopButton:hover:not(:disabled) {
   gap: 0.08rem;
   min-width: 0;
   padding: 0.46rem 0.54rem;
-  border: 1px solid rgba(244, 239, 231, 0.075);
+  border: 1px solid var(--dashboard-line-soft);
   border-radius: 0.52rem;
-  background: rgba(244, 239, 231, 0.018);
+  background: rgba(255, 255, 255, 0.64);
 }
 
 .usageEventStats strong {
