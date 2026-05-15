@@ -1302,6 +1302,8 @@ h3 {
     width: min(calc(100% - 28px), var(--max-width));
     padding: 0.62rem 0.82rem;
     border-radius: 1.4rem;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   .navbar__inner {
@@ -1325,6 +1327,10 @@ h3 {
     width: 2.55rem;
     height: 2.55rem;
     margin-left: auto;
+  }
+
+  .navbar__items--right {
+    display: none;
   }
 }
 
