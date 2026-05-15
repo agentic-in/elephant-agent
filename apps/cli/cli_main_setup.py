@@ -89,32 +89,15 @@ CLI_THEME_WELCOME_GLYPH = "🐘"
 CLI_THEME_SUBTITLE = "Who you are, what matters, and what should stay close."
 
 INIT_REFLECTION_LINES = (
-    "Start with personal anchors first: name, context, style, rhythms, and care notes.",
-    "After those are in place, name the Elephant Agent and choose the model/recall path.",
-    "Then wire IM if you want Elephant Agent reachable beyond the local CLI.",
+    "Personal anchors first: name, language, style, rhythms.",
+    "Then choose the elephant, model, and recall path.",
+    "IM stays optional.",
 )
 INIT_SETUP_STEPS = (
-    ("01  You", "Personal context, language, hobbies, and optional care notes."),
-    ("02  Almost", "A short pause after the Personal Model anchors are gathered."),
-    ("03  Elephant + Model", "The first Elephant Agent name, dialogue model, and recall path."),
-    ("04  Wake + IM", "Open the first elephant and optionally wire messenger access."),
-)
-INIT_ANIMATION_STAGES = (
-    (
-        "Stage 0",
-        "Elephant Agent starts as a blank elephant.",
-        "Nothing personal is assumed yet.",
-    ),
-    (
-        "Personal anchors first",
-        "A few true things give the elephant a first outline.",
-        "Your context, style, hobbies, and care notes stay editable.",
-    ),
-    (
-        "Only a few steps left",
-        "After the personal pass, setup turns to the elephant and its model.",
-        "Name it, choose the route, then wake the first thread.",
-    ),
+    ("01  You", "Name, language, context, care notes."),
+    ("02  Almost", "Pause after Personal Model anchors."),
+    ("03  Elephant + Model", "Name, dialogue model, recall path."),
+    ("04  Wake + IM", "Open first elephant; IM optional."),
 )
 
 
@@ -133,16 +116,15 @@ def _default_personality_preset(runtime: CliRuntime, *, mode: str, current: str 
 
 def _print_birth_wizard_intro() -> None:
     if not RICH_AVAILABLE or Table is None or Panel is None or Group is None:
-        _print_heading("Elephant Agent Init", "Bring a personal AI online around your work, preferences, and context.")
+        _print_heading("Elephant Agent Init", "Start from you, then choose the first elephant and model path.")
         for line in INIT_REFLECTION_LINES:
             _print_bullet(line)
-        _print_bullet("Then name the Elephant Agent, choose the model and recall path, and optionally wire IM.")
         return
     console = Console(highlight=False, soft_wrap=True)
     questions = Text()
-    questions.append("Stage 0: begin with a blank elephant\n", style=f"bold {BRAND_LIGHT}")
+    questions.append("Stage 0: start from you\n", style=f"bold {BRAND_LIGHT}")
     questions.append(
-        "Init is not a personality quiz or a database dump. It only gives Elephant Agent enough signal to start the first reply with the right person in view.\n\n",
+        "Elephant Agent begins with a small Personal Model so the first reply sees the right person, path, and pace.\n\n",
         style=BRAND_MUTED,
     )
     for line in INIT_REFLECTION_LINES:
@@ -156,7 +138,6 @@ def _print_birth_wizard_intro() -> None:
 
     brand = Text(justify="center", no_wrap=True)
     brand.append("STAGE 0\n", style=f"bold {BRAND_ACCENT}")
-    brand.append("the elephant before recall\n\n", style=BRAND_MUTED)
 
     layout = Table.grid(expand=True)
     console_width = getattr(console.size, "width", 0)
@@ -169,14 +150,16 @@ def _print_birth_wizard_intro() -> None:
         layout.add_row(Text(" "))
         layout.add_row(flow)
     else:
-        layout.add_column(ratio=5, min_width=24)
-        layout.add_column(ratio=14, min_width=54)
-        layout.add_column(ratio=10, min_width=42)
+        layout.add_column(ratio=5, min_width=28)
+        layout.add_column(min_width=3)
+        layout.add_column(ratio=17, min_width=66)
+        layout.add_column(min_width=3)
+        layout.add_column(ratio=8, min_width=34)
         logo_block = Table.grid(expand=True)
         logo_block.add_column()
         logo_block.add_row(_center_brand_block(brand))
         logo_block.add_row(_center_brand_block(render_stage_zero_elephant_mark()))
-        layout.add_row(_center_brand_block(logo_block), questions, flow)
+        layout.add_row(_center_brand_block(logo_block), Text(" "), questions, Text(" "), flow)
     console.print(
         _center_intro_window(Panel(
             layout,
@@ -192,72 +175,72 @@ _INIT_WELCOME_VARIANTS = (
     {
         "title": "Elephant Agent",
         "language": "English",
-        "glyph": "🫂",
-        "slogan": "🕯️  Intelligence carries us farther; understanding gives us a place to return.",
+        "glyph": "🐘",
+        "slogan": "Elephants never forget.",
         "lines": (
-            "☁️  Everyone carries weather not yet named.",
-            "Elephant Agent begins by seeing it.",
-            "Your words belong to you first.",
-            "Then they become clues for care.",
-            "🌱  They grow in conversation, lighting the next step.",
+            "Memory is the beginning.",
+            "Elephant Agent grows a Personal Model so the right people, risks,",
+            "rhythms, and decisions can guide what happens next.",
+            "",
+            "Warm memory · PM-first · Gentle curiosity",
         ),
-        "enter": "Press Enter to step into Elephant Agent's world.",
+        "enter": "Press Enter to create yours.",
     },
     {
         "title": "开始之前",
         "language": "中文",
-        "glyph": "🕯️",
-        "slogan": "🕯️  智能让我们抵达远方，理解让我们有处可归。",
+        "glyph": "🐘",
+        "slogan": "Elephants never forget.",
         "lines": (
-            "☁️  每个人心里都有未命名的天气。",
-            "Elephant Agent 先从看见它开始。",
-            "这些话先属于你。",
-            "然后才成为 Elephant Agent 理解你的线索。",
-            "🌱  它们会在对话里生长，照见你，也照见下一步。",
+            "记忆只是起点。",
+            "Elephant Agent 从那些真正影响你的东西开始理解你：",
+            "人、风险、节奏、决定，以及一路留下的经验。",
+            "",
+            "Warm memory · PM-first · Gentle curiosity",
         ),
-        "enter": "按 Enter 进入 Elephant Agent 的世界。",
+        "enter": "按 Enter 创建属于你的 Elephant Agent。",
     },
     {
         "title": "Avant de commencer",
         "language": "Français",
-        "glyph": "🏠",
-        "slogan": "🕯️  L'intelligence avance; la mémoire nous ramène.",
+        "glyph": "🐘",
+        "slogan": "Elephants never forget.",
         "lines": (
-            "☁️  Chacun porte une meteo sans nom.",
-            "Elephant Agent commence par la voir.",
-            "Ces mots t'appartiennent d'abord.",
-            "Puis ils deviennent des indices pour Elephant Agent.",
-            "🌱  Ils grandissent et eclairent le prochain pas.",
+            "La mémoire est le début.",
+            "Elephant Agent fait grandir un Personal Model pour que les bonnes",
+            "personnes, les risques, les rythmes et les décisions guident la suite.",
+            "",
+            "Warm memory · PM-first · Gentle curiosity",
         ),
-        "enter": "Appuie sur Enter pour entrer dans le monde d'Elephant Agent.",
+        "enter": "Appuie sur Enter pour créer le tien.",
     },
     {
         "title": "시작하기 전에",
         "language": "한국어",
-        "glyph": "🫂",
-        "slogan": "🕯️  지능은 멀리 데려가고, 기억은 돌아올 곳을 줍니다.",
+        "glyph": "🐘",
+        "slogan": "Elephants never forget.",
         "lines": (
-            "☁️  누구에게나 아직 이름 없는 마음의 날씨가 있습니다.",
-            "Elephant Agent 은 그것을 보는 데서 시작합니다.",
-            "이 말들은 먼저 당신의 것입니다.",
-            "그다음에야 Elephant Agent 이 당신을 이해하는 단서가 됩니다.",
-            "🌱  대화 속에서 자라며 다음 걸음을 비춰 줍니다.",
+            "기억은 시작일 뿐입니다.",
+            "Elephant Agent는 당신에게 진짜 영향을 주는 것들에서 시작해",
+            "이해를 키웁니다: 사람, 위험, 리듬, 결정, 그리고 남은 경험.",
+            "",
+            "Warm memory · PM-first · Gentle curiosity",
         ),
-        "enter": "Enter 를 눌러 Elephant Agent 의 세계로 들어가세요.",
+        "enter": "Enter를 눌러 나만의 Elephant Agent를 만드세요.",
     },
     {
         "title": "Antes de empezar",
         "language": "Español",
-        "glyph": "🕯️",
-        "slogan": "🕯️  La inteligencia avanza; la memoria nos devuelve a casa.",
+        "glyph": "🐘",
+        "slogan": "Elephants never forget.",
         "lines": (
-            "☁️  Cada persona lleva un clima sin nombre.",
-            "Elephant Agent empieza por verlo.",
-            "Tus palabras te pertenecen primero.",
-            "Luego se vuelven pistas para Elephant Agent.",
-            "🌱  Crecen e iluminan el proximo paso.",
+            "La memoria es el comienzo.",
+            "Elephant Agent hace crecer un Personal Model para que las personas,",
+            "los riesgos, los ritmos y las decisiones guíen lo que viene.",
+            "",
+            "Warm memory · PM-first · Gentle curiosity",
         ),
-        "enter": "Pulsa Enter para entrar en el mundo de Elephant Agent.",
+        "enter": "Pulsa Enter para crear el tuyo.",
     },
 )
 
@@ -276,7 +259,27 @@ def _init_welcome_variant(variant_index: int) -> tuple[str, str, str, str, tuple
 
 def _init_welcome_plain_text(variant_index: int) -> str:
     _title, language, glyph, slogan, lines, enter = _init_welcome_variant(variant_index)
-    return "\n".join((f"Elephant Agent · {language}", glyph, "", slogan, "", *lines, "", enter))
+    return "\n".join((f"Elephant Agent · {language}", "", f"{slogan} {glyph}", "", *lines, "", enter))
+
+
+def _init_welcome_elephant_mark():
+    mark = render_stage_zero_elephant_mark()
+    if Text is None:
+        return mark
+    plain = getattr(mark, "plain", "")
+    rows = plain.splitlines()
+    visible_cells = [
+        index
+        for row in rows
+        for index, cell in enumerate(row)
+        if cell != " "
+    ]
+    if not rows or not visible_cells:
+        return mark
+    visible_left = min(visible_cells)
+    visible_right = max(visible_cells)
+    centered_rows = [row.ljust(visible_right + 1)[visible_left : visible_right + 1] for row in rows]
+    return Text("\n".join(centered_rows), style=BRAND_LIGHT, no_wrap=True)
 
 
 def _init_welcome_frame(variant_index: int):
@@ -285,13 +288,13 @@ def _init_welcome_frame(variant_index: int):
         return _init_welcome_plain_text(variant_index)
     body = Table.grid(expand=True)
     body.add_column()
-    body.add_row(_center_brand_block(render_stage_zero_elephant_mark()))
+    body.add_row(_center_brand_block(_init_welcome_elephant_mark()))
     body.add_row(Text(" "))
     copy = Text(justify="center", no_wrap=True)
     copy.append("Elephant Agent · ", style=BRAND_MUTED)
     copy.append(language + "\n", style=f"bold {BRAND_LIGHT}")
-    copy.append(glyph + "\n\n", style=f"bold {BRAND_ACCENT_STRONG}")
-    copy.append(slogan + "\n\n", style=f"bold {BRAND_LIGHT}")
+    copy.append(slogan, style=f"bold {BRAND_LIGHT}")
+    copy.append(f" {glyph}\n\n", style=f"bold {BRAND_ACCENT_STRONG}")
     for index, line in enumerate(lines):
         style = f"bold {BRAND_ACCENT_STRONG}" if index == 0 else BRAND_LIGHT
         if "Elephant Agent" not in line:
@@ -307,7 +310,7 @@ def _init_welcome_frame(variant_index: int):
     body.add_row(_center_brand_block(copy))
     return _center_intro_window(Panel(
         body,
-        subtitle=f"[bold {BRAND_ACCENT}]Enter to begin[/bold {BRAND_ACCENT}]",
+        subtitle=f"[bold {BRAND_ACCENT}]Create yours[/bold {BRAND_ACCENT}]",
         subtitle_align="center",
         border_style=BRAND_DARK,
         expand=True,
@@ -362,66 +365,6 @@ def _prompt_init_welcome_gate() -> bool:
                 next_switch = time.monotonic() + 4.2
 
 
-def _birth_intro_frame(tick: int, total_ticks: int):
-    if Table is None or Panel is None or Text is None:
-        return "Elephant Agent Stage 0: begin with a blank elephant."
-    progress = min(1.0, (tick + 1) / max(total_ticks, 1))
-    stage_index = min(len(INIT_ANIMATION_STAGES) - 1, int(progress * len(INIT_ANIMATION_STAGES)))
-    stage_title, stage_line, stage_detail = INIT_ANIMATION_STAGES[stage_index]
-    step_index = min(len(INIT_SETUP_STEPS) - 1, max(0, int(progress * len(INIT_SETUP_STEPS))))
-
-    logo = Table.grid(expand=True)
-    logo.add_column()
-    logo.add_row(_center_brand_block(render_stage_zero_elephant_mark()))
-    logo_caption = Text(justify="center", no_wrap=True)
-    logo_caption.append("STAGE 0\n", style=f"bold {BRAND_ACCENT}")
-    logo_caption.append("blank elephant · no assumptions", style=BRAND_MUTED)
-    logo.add_row(_center_brand_block(logo_caption))
-
-    prompt = Text()
-    prompt.append(f"{stage_title}\n", style=f"bold {BRAND_ACCENT_STRONG}")
-    prompt.append(f"{stage_line}\n", style=f"bold {BRAND_LIGHT}")
-    prompt.append(stage_detail, style=BRAND_MUTED)
-
-    progress_bar = Text(justify="center", no_wrap=True)
-    for index, (label, _) in enumerate(INIT_SETUP_STEPS):
-        short_label = label.split("  ", 1)[-1]
-        is_active = index == step_index
-        is_done = index < step_index
-        style = f"bold {BRAND_LIGHT}" if is_active else (BRAND_ACCENT if is_done else BRAND_MUTED)
-        marker = "●" if is_active else ("•" if is_done else "·")
-        progress_bar.append(f"{marker} {short_label}", style=style)
-        if index < len(INIT_SETUP_STEPS) - 1:
-            progress_bar.append("  ─  ", style=BRAND_DARK)
-
-    active_detail = Text(justify="center")
-    active_detail.append("Now setting up: ", style=BRAND_MUTED)
-    active_detail.append(INIT_SETUP_STEPS[step_index][0].split("  ", 1)[-1], style=f"bold {BRAND_LIGHT}")
-    active_detail.append(f" — {INIT_SETUP_STEPS[step_index][1]}", style=BRAND_MUTED)
-
-    body = Table.grid(expand=True)
-    body.add_column()
-    body.add_row(_center_brand_block(logo))
-    body.add_row(Text(" "))
-    body.add_row(_center_brand_block(prompt))
-    body.add_row(Text(" "))
-    body.add_row(_center_brand_block(progress_bar))
-    body.add_row(_center_brand_block(active_detail))
-
-    viewport_width, _ = _intro_console_size()
-    panel_width = None
-    if viewport_width >= 80:
-        panel_width = min(88, max(66, viewport_width - 16))
-    return _center_intro_window(Panel(
-        body,
-        title=f"[bold {BRAND_ACCENT}]Elephant Agent Init · Stage 0 → first wake[/bold {BRAND_ACCENT}]",
-        border_style=BRAND_ACCENT,
-        expand=False,
-        padding=(1, 2),
-        width=panel_width,
-    ))
-
-
 def _intro_console_size() -> tuple[int, int]:
     if Console is None:
         return (0, 0)
@@ -444,121 +387,8 @@ def _center_intro_window(renderable):
         return Align.center(renderable)
 
 
-def _play_birth_intro_animation() -> None:
-    if (
-        not RICH_AVAILABLE
-        or Live is None
-        or Console is None
-        or os.environ.get("ELEPHANT_NO_ANIMATION") == "1"
-        or not _interactive_shell_supported()
-    ):
-        return
-    try:
-        seconds = float(os.environ.get("ELEPHANT_INIT_INTRO_SECONDS", "2.0"))
-    except ValueError:
-        seconds = 2.0
-    seconds = min(4.0, max(1.0, seconds))
-    total_ticks = max(8, int(seconds * 4))
-    try:
-        settle_seconds = float(os.environ.get("ELEPHANT_INIT_INTRO_SETTLE", "0.2"))
-    except ValueError:
-        settle_seconds = 0.2
-    settle_seconds = max(0.0, min(0.8, settle_seconds))
-    console = Console(highlight=False, soft_wrap=True)
-    with Live(
-        _birth_intro_frame(0, total_ticks),
-        console=console,
-        refresh_per_second=8,
-        screen=True,
-        transient=True,
-    ) as live:
-        for tick in range(total_ticks):
-            live.update(_birth_intro_frame(tick, total_ticks))
-            time.sleep(seconds / total_ticks)
-        # Hold the final frame briefly so the create has time to land
-        # before the wizard questions begin.
-        if settle_seconds > 0:
-            live.update(_birth_intro_frame(total_ticks - 1, total_ticks))
-            time.sleep(settle_seconds)
-
-
-def _transition_text(language: str, english: str, chinese: str) -> str:
-    return chinese if str(language or "").strip().lower().startswith("zh") else english
-
-
-def _after_personal_transition_frame(language: str, tick: int, total_ticks: int):
-    if Table is None or Panel is None or Text is None:
-        return _transition_text(language, "Only a few steps left.", "只差几步了。")
-    progress = min(1.0, (tick + 1) / max(total_ticks, 1))
-    filled = max(1, int(progress * 18))
-    bar = "●" * filled + "·" * (18 - filled)
-    body = Table.grid(expand=True)
-    body.add_column()
-    headline = Text(justify="center")
-    headline.append(_transition_text(language, "Only a few steps left\n", "只差几步了\n"), style=f"bold {BRAND_ACCENT_STRONG}")
-    headline.append(
-        _transition_text(
-            language,
-            "Your personal anchors are in place. Next: name the Elephant Agent, choose the model, then wire IM.",
-            "你的个人锚点已经放好。接下来：给 Elephant Agent 起名、选择模型，然后按需配置 IM。",
-        ),
-        style=BRAND_LIGHT,
-    )
-    progress_line = Text(justify="center", no_wrap=True)
-    progress_line.append(bar, style=BRAND_ACCENT)
-    caption = Text(justify="center")
-    caption.append(_transition_text(language, "Personal pass complete → Elephant + model setup", "个人信息完成 → Elephant 与模型配置"), style=BRAND_MUTED)
-    body.add_row(_center_brand_block(render_stage_zero_elephant_mark()))
-    body.add_row(Text(" "))
-    body.add_row(_center_brand_block(headline))
-    body.add_row(Text(" "))
-    body.add_row(_center_brand_block(progress_line))
-    body.add_row(_center_brand_block(caption))
-    return _center_intro_window(Panel(
-        body,
-        title=f"[bold {BRAND_ACCENT}]path nearly ready[/bold {BRAND_ACCENT}]",
-        border_style=BRAND_DARK,
-        expand=False,
-        padding=(1, 3),
-        width=92,
-        height=28,
-    ))
-
-
 def _play_after_personal_transition(language: str = "en") -> None:
-    if (
-        not RICH_AVAILABLE
-        or Live is None
-        or Console is None
-        or os.environ.get("ELEPHANT_NO_ANIMATION") == "1"
-        or not _interactive_shell_supported()
-    ):
-        _print_heading(
-            _transition_text(language, "Only a few steps left", "只差几步了"),
-            _transition_text(
-                language,
-                "Personal anchors are in place. Next: name the Elephant Agent, choose the model, then wire IM.",
-                "个人锚点已经放好。接下来给 Elephant Agent 起名、选择模型，然后按需配置 IM。",
-            ),
-        )
-        return
-    try:
-        seconds = float(os.environ.get("ELEPHANT_INIT_TRANSITION_SECONDS", "1.4"))
-    except ValueError:
-        seconds = 1.4
-    seconds = min(3.0, max(0.8, seconds))
-    total_ticks = max(6, int(seconds * 5))
-    console = Console(highlight=False, soft_wrap=True)
-    with Live(
-        _after_personal_transition_frame(language, 0, total_ticks),
-        console=console,
-        refresh_per_second=10,
-        screen=True,
-        transient=True,
-    ) as live:
-        for tick in range(total_ticks):
-            live.update(_after_personal_transition_frame(language, tick, total_ticks))
-            time.sleep(seconds / total_ticks)
+    return None
 
 
 def _prompt_first_elephant_name(default_name: str, *, allow_back: bool = False) -> str | _WizardBackSignal:
@@ -841,7 +671,6 @@ __all__ = [
     "CLI_THEME_WELCOME_GLYPH",
     "CLI_THEME_SUBTITLE",
     "_default_personality_preset",
-    "_play_birth_intro_animation",
     "_print_birth_wizard_intro",
     "_prompt_init_welcome_gate",
     "_play_after_personal_transition",

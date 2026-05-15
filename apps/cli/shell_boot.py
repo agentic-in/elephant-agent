@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-WAKE_DISPLAY_SECONDS = 0.40
+WAKE_DISPLAY_SECONDS = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,9 +30,9 @@ def render_boot_frame(
     center_brand_block: Callable[[Any], Any],
     brand_mark: Any,
 ):
-    """Single-frame wake screen: brand mark + identity line + tagline."""
+    """Static boot frame retained for callers that still render one explicitly."""
     if not rich_available or table_cls is None or group_cls is None:
-        return text_cls(f"Elephant Agent waking · {context.display_name}")
+        return text_cls(f"Elephant Agent · {context.display_name}")
 
     identity = text_cls(justify="center", no_wrap=True)
     identity.append(f"{context.display_name}", style=f"bold {brand_light}")
@@ -51,7 +51,7 @@ def render_boot_frame(
 
     panel = panel_cls(
         boot,
-        title=f"[bold {brand_accent}]Elephant Agent is waking[/bold {brand_accent}]",
+        title=f"[bold {brand_accent}]Elephant Agent[/bold {brand_accent}]",
         border_style=brand_dark,
         padding=(1, 3),
         width=72,

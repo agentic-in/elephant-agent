@@ -96,7 +96,6 @@ from .shell_stack import (
     Document,
     FormattedText,
     Group,
-    Live,
     PROMPT_TOOLKIT_AVAILABLE,
     Panel,
     RICH_AVAILABLE,
@@ -415,40 +414,7 @@ def _interactive_clarify_surface(self) -> ShellInteractiveClarifySurface:
     return ShellInteractiveClarifySurface(self)
 
 def _render_startup_sequence(self) -> None:
-    if not self._use_alternate_screen:
-        return
-    if not self._animations_enabled() or Group is None or Table is None:
-        return
-    # Clear the terminal and vertically center the boot frame for a
-    # fullscreen feel. The alternate-screen buffer is already activated
-    # in run() so we only need to clear the (empty) alt buffer here.
-    self.console.clear()
-    terminal_height = int(getattr(self.console.size, "height", 0) or 24)
-    boot_content = self._render_boot_frame()
-    # The boot panel is ~14 rendered lines (border + padding + content).
-    boot_height = 14
-    top_padding = max(0, (terminal_height - boot_height) // 2)
-    padded_boot = Group(Text("\n" * top_padding), boot_content) if top_padding > 0 else boot_content
-    # transient=False keeps the frame on screen until _refresh_shell_frame()
-    # overwrites it — eliminates the blank flash between boot and chat.
-    with Live(
-        padded_boot,
-        console=self.console,
-        refresh_per_second=4,
-        transient=False,
-    ):
-        # Run status-cache steadyup in a background thread so the fixed
-        # display sleep is never extended by slow I/O (network, DB).
-        def _prime_safe():
-            try:
-                self._status_refresher_prime()
-            except Exception:
-                pass
-
-        prime_thread = threading.Thread(target=_prime_safe, daemon=True)
-        prime_thread.start()
-        time.sleep(WAKE_DISPLAY_SECONDS)
-        prime_thread.join(timeout=0.3)
+    return None
 
 def _render_boot_frame(self):
     continuity = self.runtime.inspect_continuity(session_id=self.session_id)

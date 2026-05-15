@@ -99,23 +99,62 @@ class _BoundedRadioListStub:
 
 
 class CliInitIntroTest(unittest.TestCase):
-    def test_birth_intro_frame_uses_personal_ai_product_language(self) -> None:
+    def test_init_welcome_frame_renders_enter_gate_without_removed_intro_animation(self) -> None:
         if not cli_main_setup.RICH_AVAILABLE or cli_main_setup.Console is None:
             self.skipTest("rich is not available")
 
         console = cli_main_setup.Console(record=True, width=100, height=30, highlight=False, soft_wrap=True)
-        console.print(cli_main_setup._birth_intro_frame(0, 24))
-        console.print(cli_main_setup._birth_intro_frame(15, 24))
+        console.print(cli_main_setup._init_welcome_frame(0))
 
         rendered = console.export_text(styles=False)
-        self.assertIn("Elephant Agent Init", rendered)
-        self.assertIn("Stage 0", rendered)
-        self.assertIn("blank elephant", rendered)
-        self.assertIn("Only a few steps left", rendered)
-        self.assertIn("Now setting up", rendered)
+        self.assertIn("Elephant Agent · English", rendered)
+        self.assertIn("Elephants never forget. 🐘", rendered)
+        self.assertIn("Memory is the beginning.", rendered)
+        self.assertIn("Warm memory · PM-first · Gentle curiosity", rendered)
+        self.assertIn("Create yours", rendered)
+        self.assertIn("Press Enter to create yours.", rendered)
+        self.assertNotIn("\n🐘\n", rendered)
+        self.assertNotIn("Enter to begin", rendered)
+        self.assertNotIn("Elephant Agent Init · Stage 0", rendered)
+        self.assertNotIn("Only a few steps left", rendered)
         self.assertNotIn("Who you are first. Continuity second. Ca", rendered)
         self.assertNotIn("personal model boot", rendered.lower())
         self.assertNotIn("corrigible", rendered.lower())
+
+    def test_init_welcome_copy_updates_all_language_variants(self) -> None:
+        rendered_variants = "\n\n".join(
+            cli_main_setup._init_welcome_plain_text(index)
+            for index in range(len(cli_main_setup._INIT_WELCOME_VARIANTS))
+        )
+
+        self.assertIn("Press Enter to create yours.", rendered_variants)
+        self.assertIn("按 Enter 创建属于你的 Elephant Agent。", rendered_variants)
+        self.assertIn("Appuie sur Enter pour créer le tien.", rendered_variants)
+        self.assertIn("Enter를 눌러 나만의 Elephant Agent를 만드세요.", rendered_variants)
+        self.assertIn("Pulsa Enter para crear el tuyo.", rendered_variants)
+        self.assertEqual(rendered_variants.count("Elephants never forget. 🐘"), 5)
+        self.assertNotIn("\n🐘\n", rendered_variants)
+        self.assertEqual(rendered_variants.count("Warm memory · PM-first · Gentle curiosity"), 5)
+        self.assertNotIn("进入 Elephant Agent 的世界", rendered_variants)
+        self.assertNotIn("step into Elephant Agent's world", rendered_variants)
+
+    def test_birth_wizard_intro_uses_short_pm_first_copy(self) -> None:
+        if not cli_main_setup.RICH_AVAILABLE or cli_main_setup.Console is None:
+            self.skipTest("rich is not available")
+
+        console = cli_main_setup.Console(record=True, width=170, height=36, highlight=False, soft_wrap=True)
+        with mock.patch.object(cli_main_setup, "Console", return_value=console):
+            cli_main_setup._print_birth_wizard_intro()
+
+        rendered = console.export_text(styles=False)
+        self.assertIn("Stage 0: start from you", rendered)
+        self.assertIn("small Personal Model", rendered)
+        self.assertIn("Personal anchors first", rendered)
+        self.assertIn("IM stays optional.", rendered)
+        self.assertIn("Open first elephant; IM optional.", rendered)
+        self.assertNotIn("begin with a blank elephant", rendered)
+        self.assertNotIn("database dump", rendered)
+        self.assertNotIn("the elephant before recall", rendered)
 
     def test_cli_help_intro_renders_only_once_without_separator_duplication(self) -> None:
         if not cli_main_support.RICH_AVAILABLE or cli_main_support.Console is None:

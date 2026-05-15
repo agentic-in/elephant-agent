@@ -2,11 +2,9 @@
 
 import argparse
 from dataclasses import dataclass
-import os
 import random
 import re
 import sys
-import time
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
@@ -37,12 +35,10 @@ from .shell import (
     _resolve_elephant_version,
     render_stage_zero_elephant_mark,
 )
-from .shell_stack import Live
 from .wizard import (
     WIZARD_BACK,
     WizardChoice,
     _WizardBackSignal,
-    _interactive_shell_supported,
     _wizard_choice_prompt,
     _wizard_dialogs_supported,
     _wizard_text_prompt,
@@ -469,64 +465,8 @@ def _print_cli_help(
     )
 
 
-def _creating_transition_frame(title: str, detail: str, stage_index: int):
-    if not RICH_AVAILABLE or Panel is None or Group is None or Text is None:
-        return f"🐘 {title} · {detail}"
-
-    stages = (
-        ("🐘", "A steady path is opening", "A quiet thread is forming around your work, preferences, and context."),
-        ("🐘 ✨", "It starts to recognize what matters", "The useful parts can stay with you between sessions without becoming rigid."),
-    )
-    clamped_index = max(0, min(stage_index, len(stages) - 1))
-    glyph, stage_title, stage_detail = stages[clamped_index]
-
-    header = Text(justify="center")
-    header.append(f"{glyph}  {title}\n", style=f"bold {BRAND_LIGHT}")
-    header.append(f"{stage_title}\n", style=f"bold {BRAND_ACCENT}")
-    header.append(stage_detail, style=BRAND_MUTED)
-
-    body: list[object] = [header]
-    body.extend((Text(" "), Align.center(_render_cli_banner_mark())))
-
-    pulse = Text(justify="center")
-    pulse.append("🐘  Model what matters   👂  Ask gently   🐾  Follow the path", style=BRAND_LIGHT)
-    body.extend((Text(" "), pulse))
-
-    footer = Text(justify="center")
-    footer.append(detail, style=BRAND_LIGHT)
-    body.extend((Text(" "), footer))
-
-    return Panel(
-        Group(*body),
-        title=f"[bold {BRAND_ACCENT}]🐘  Elephant Agent is waking[/bold {BRAND_ACCENT}]",
-        border_style=BRAND_DARK,
-        padding=(1, 3),
-        width=92,
-        height=28,
-    )
-
-
 def _play_creating_transition(title: str, detail: str) -> None:
-    if (
-        not RICH_AVAILABLE
-        or Live is None
-        or Console is None
-        or os.environ.get("ELEPHANT_NO_ANIMATION") == "1"
-        or not _interactive_shell_supported()
-    ):
-        return
-    console = Console(highlight=False, soft_wrap=True)
-    seconds = 1.2
-    frames = 2
-    with Live(
-        _creating_transition_frame(title, detail, 0),
-        console=console,
-        refresh_per_second=10,
-        transient=True,
-    ) as live:
-        for index in range(frames):
-            live.update(_creating_transition_frame(title, detail, index))
-            time.sleep(seconds / frames)
+    return None
 
 def _provider_secret_ready(runtime: CliRuntime, *, provider_id: str) -> bool:
     provider_summary = dict(runtime.provider_summary())

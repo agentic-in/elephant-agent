@@ -3006,107 +3006,28 @@ class ShellPaletteTest(unittest.TestCase):
         frame = shell._render_boot_frame()
 
         if not RICH_AVAILABLE:
-            self.assertIn("Elephant Agent waking", str(frame))
+            self.assertIn("Elephant Agent", str(frame))
+            self.assertNotIn("waking", str(frame).lower())
             return
 
         panel = getattr(frame, "renderable", frame)
-        self.assertIn("Elephant Agent is waking", str(getattr(panel, "title", "")))
+        self.assertIn("Elephant Agent", str(getattr(panel, "title", "")))
+        self.assertNotIn("waking", str(getattr(panel, "title", "")).lower())
         self.assertEqual(str(getattr(panel, "border_style", "")), BRAND_DARK)
         self.assertEqual(getattr(panel, "width", None), 72)
         console = Console(width=120, record=True, force_terminal=True)
         console.print(frame)
         rendered = console.export_text(styles=False)
         self.assertNotIn("ELEPHANT // wake", rendered)
+        self.assertNotIn("waking", rendered.lower())
         self.assertIn("Picking up your thread", rendered)
         self.assertIn("Memory I", rendered)
 
-    def test_startup_sequence_uses_full_screen_live_surface(self) -> None:
-        if not RICH_AVAILABLE:
-            self.skipTest("rich is required for startup animation rendering")
+    def test_startup_sequence_does_not_render_boot_animation(self) -> None:
         shell = self._make_shell()
-        recorded: list[dict[str, object]] = []
-
-        class _FakeLive:
-            def __init__(self, renderable, **kwargs) -> None:
-                recorded.append({"renderable": renderable, **kwargs})
-
-            def __enter__(self):
-                return self
-
-            def update(self, *_args, **_kwargs) -> None:
-                return None
-
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-        with mock.patch("apps.cli.shell.Live", _FakeLive), mock.patch("apps.cli.shell.time.sleep") as sleep:
+        with mock.patch.object(shell, "_render_boot_frame") as render_boot:
             shell._render_startup_sequence()
-
-        self.assertEqual(len(recorded), 1)
-        self.assertTrue(recorded[0]["screen"])
-        self.assertTrue(recorded[0]["transient"])
-        self.assertEqual(recorded[0]["refresh_per_second"], 30)
-        self.assertEqual(sleep.call_count, 4)
-
-    def test_startup_sequence_walks_elephant_to_elephant_frames(self) -> None:
-        if not RICH_AVAILABLE:
-            self.skipTest("rich is required for startup animation rendering")
-        shell = self._make_shell()
-        render_calls: list[int] = []
-
-        class _FakeLive:
-            def __init__(self, *_args, **_kwargs) -> None:
-                return None
-
-            def __enter__(self):
-                return self
-
-            def update(self, *_args, **_kwargs) -> None:
-                return None
-
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-        def _capture(_steps, *, active: int):
-            render_calls.append(active)
-            return f"frame-{active}"
-
-        with mock.patch("apps.cli.shell.Live", _FakeLive), mock.patch(
-            "apps.cli.shell.time.sleep"
-        ), mock.patch.object(shell, "_render_boot_frame", side_effect=_capture):
-            shell._render_startup_sequence()
-
-        self.assertEqual(render_calls, [-1, 0, 1, 2])
-
-    def test_startup_sequence_holds_elephant_frame_before_first_update(self) -> None:
-        if not RICH_AVAILABLE:
-            self.skipTest("rich is required for startup animation rendering")
-        shell = self._make_shell()
-        timeline: list[str] = []
-
-        class _FakeLive:
-            def __init__(self, *_args, **_kwargs) -> None:
-                timeline.append("init")
-
-            def __enter__(self):
-                return self
-
-            def update(self, *_args, **_kwargs) -> None:
-                timeline.append("update")
-
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
-
-        def _sleep(_seconds: float) -> None:
-            timeline.append("sleep")
-
-        with mock.patch("apps.cli.shell.Live", _FakeLive), mock.patch(
-            "apps.cli.shell.time.sleep", side_effect=_sleep
-        ):
-            shell._render_startup_sequence()
-
-        self.assertGreaterEqual(len(timeline), 2)
-        self.assertEqual(timeline[:2], ["init", "sleep"])
+        render_boot.assert_not_called()
 
     def test_unknown_command_uses_brand_accent_panel(self) -> None:
         shell = self._make_shell()

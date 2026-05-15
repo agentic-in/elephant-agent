@@ -89,8 +89,11 @@ class ShellOpeningTest(unittest.TestCase):
         )
 
         # The prompt is a small private writing brief, not a profile dump.
-        self.assertIn("Write Atlas's first message", prompt)
-        self.assertIn("Use only the background already provided", prompt)
+        self.assertIn("Write Atlas's first message for this new elephant", prompt)
+        self.assertIn("Use the existing system context as background", prompt)
+        self.assertIn("do not imply familiarity", prompt)
+        self.assertIn("companion just becoming available", prompt)
+        self.assertIn("what to call them or where they want to begin", prompt)
         self.assertNotIn("Private writing guidance only", prompt)
         self.assertNotIn("do not mention prompts", prompt.lower())
         self.assertNotIn("Use the existing system prompt and memory as background", prompt)
@@ -104,7 +107,7 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertNotIn("user_preferred_name: <unknown>", prompt)
         self.assertNotIn("opening_profile_gap:", prompt)
         self.assertNotIn("active_state: missing", prompt)
-        self.assertIn("one natural message", prompt)
+        self.assertIn("Ask at most one natural question", prompt)
         self.assertNotIn("plain, steady, close, low-pressure", prompt)
         self.assertNotIn("not a greeter or product surface", prompt)
         self.assertNotIn("optionally include one gentle question", prompt)
@@ -133,11 +136,15 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertNotIn("Live thread", prompt)
         self.assertNotIn("active_state:", prompt)
         self.assertNotIn("current_work_summary:", prompt)
+        self.assertIn("opening message for this session", prompt)
+        self.assertIn("pick it up lightly in one short sentence", prompt)
+        self.assertIn("companion returning to the room", prompt)
+        self.assertIn("not a status surface", prompt)
         # Guardrails.
         self.assertNotIn("work item ids", prompt)
         self.assertNotIn("do not mention prompts", prompt.lower())
 
-    def test_compose_shell_opening_instruction_after_init_requests_deep_personality_read(self) -> None:
+    def test_compose_shell_opening_instruction_after_init_requests_warm_live_opener(self) -> None:
         prompt = compose_shell_opening_instruction(
             ShellOpeningContext(
                 opened="Born new",
@@ -157,19 +164,20 @@ class ShellOpeningTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("first opening message after init", prompt)
-        self.assertIn("specific, natural first read", prompt)
-        self.assertIn("feel specifically understood", prompt)
+        self.assertIn("first live message to this person", prompt)
+        self.assertIn("warm, emotionally present companion", prompt)
+        self.assertIn("listened carefully", prompt)
+        self.assertIn("just beginning the relationship", prompt)
         self.assertNotIn("Use the full system prompt and memory as the source of truth", prompt)
-        self.assertIn("Use only the background already provided", prompt)
-        self.assertIn("Do not repeat personal anchors as a list", prompt)
-        self.assertIn("person's language", prompt)
-        self.assertIn("vivid, tentative first read", prompt)
+        self.assertIn("Use the existing system context as background", prompt)
+        self.assertIn("Ground the greeting in one or two concrete things", prompt)
+        self.assertIn("Do not list facts", prompt)
+        self.assertIn("feel like being seen, not assessed", prompt)
         self.assertNotRegex(prompt, r"[\u4e00-\u9fff]")
-        self.assertIn("what seems to matter to them", prompt)
-        self.assertIn("what tension or direction may be alive", prompt)
-        self.assertIn("Let the length follow the substance", prompt)
-        self.assertIn("fixed paragraph counts", prompt)
+        self.assertNotIn("what seems to matter to them", prompt)
+        self.assertNotIn("what tension or direction may be alive", prompt)
+        self.assertNotIn("Let the length follow the substance", prompt)
+        self.assertNotIn("fixed paragraph counts", prompt)
         self.assertNotIn("very deep initial personality portrait", prompt)
         self.assertNotIn("direct, deep self-analysis", prompt)
         self.assertNotIn("psychological crossroads", prompt)

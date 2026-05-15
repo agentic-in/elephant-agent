@@ -65,31 +65,40 @@ def compose_shell_opening_instruction(context: ShellOpeningContext) -> str:
     First init has enough user anchors to earn a deeper first read. Returning
     wakes stay compact so normal sessions do not begin with a profile essay.
     """
-    user_fields = parse_user_profile_text(context.user_profile_text)
     has_person_profile = bool(context.user_profile_text.strip())
-    scenario_line = _opening_scenario_line(context, has_person_profile=has_person_profile)
     first_language_line = _first_language_line(context.first_language)
     if context.opened == "Born new" and has_person_profile:
         lines = [
-            f"Write {context.display_name}'s first opening message after init.",
+            f"Write {context.display_name}'s first live message to this person.",
             first_language_line,
-            scenario_line,
-            "Use only the background already provided to the model. Do not repeat personal anchors as a list, cite fields, mention system prompts, memory, profile, init, or say 'from the information you provided'.",
-            "The goal is to make the person feel specifically understood, not onboarded, diagnosed, or analyzed as a profile.",
-            "Synthesize the background into a vivid, tentative first read: what seems to matter to them, what tension or direction may be alive now, and what kind of companionship or working rhythm may fit.",
-            "Use the person's language and communication style when known. Prefer concrete, causal, lived phrasing over abstract trait labels; MBTI, hobbies, age, city, work, and relationship posture are only raw signals, not content to recite.",
-            "Start naturally and steadyly, using their known name only if it feels organic. Avoid generic flattery, questionnaire recap, personality categories, clinical language, and fixed paragraph counts.",
-            "Let the length follow the substance: brief is fine if the read is sharp; a little longer is fine if the background genuinely supports it.",
-            "Sound perceptive, grounded, steady, and corrigible. End by inviting correction or refinement naturally, as a continuation of a real conversation.",
+            "Use the existing system context as background.",
+            "This is the first session after setup, but do not mention setup, profile, memory, fields, or instructions. Open like a warm, emotionally present companion who has listened carefully and is just beginning the relationship.",
+            "Ground the greeting in one or two concrete things that seem alive for them now. Do not list facts, label their personality, praise them generically, or explain what you know.",
+            "Keep it natural, steady, specific, and easy to correct. It should feel like being seen, not assessed. End by inviting them to refine the read or choose where to begin.",
+        ]
+        return "\n".join(lines)
+
+    if context.opened == "Shaped new":
+        context_line = (
+            "If there is little personal context, do not imply familiarity. Open warmly and simply, like a companion just becoming available. Ask at most one natural question, such as what to call them or where they want to begin."
+            if not has_person_profile
+            else "Open warmly and simply, like a companion just becoming available. If useful, ground the greeting in one concrete thing that seems active without recapping facts."
+        )
+        lines = [
+            f"Write {context.display_name}'s first message for this new elephant.",
+            first_language_line,
+            "Use the existing system context as background.",
+            context_line,
+            "Do not mention setup, profile, memory, fields, tools, or instructions. No headings or bullets.",
         ]
         return "\n".join(lines)
 
     lines = [
-        f"Write {context.display_name}'s first message for this session.",
+        f"Write {context.display_name}'s opening message for this session.",
         first_language_line,
-        "Use only the background already provided to the model.",
-        "If the resume gives a clear thread, reopen it lightly in one sentence; otherwise open steadyly.",
-        "Output one natural message in the person's language. No headings, bullets, menu, setup, memory, profile, tool, or status-report language.",
+        "Use the existing system context as background.",
+        "If a concrete prior thread is available, pick it up lightly in one short sentence. If not, open warmly and steadily without pretending to know more than you do.",
+        "Sound like a companion returning to the room, not a status surface. Do not mention setup, profile, memory, fields, tools, or instructions. No headings or bullets. Ask at most one natural next question.",
     ]
     return "\n".join(lines)
 
@@ -99,18 +108,6 @@ def _first_language_line(first_language: str) -> str:
     if normalized in {"zh", "zh-cn", "cn", "chinese", "中文", "汉语", "普通话"} or normalized.startswith("zh"):
         return "User's first language selected during init: Chinese. Write this opener in Chinese unless explicitly requested otherwise."
     return "User's first language selected during init: English."
-
-
-def _opening_scenario_line(context: ShellOpeningContext, *, has_person_profile: bool) -> str:
-    if context.opened == "Born new":
-        if has_person_profile:
-            return "Scenario: first live session after init — offer a specific, natural first read from the available context. Don't say \"welcome back\"."
-        return "Scenario: first contact — you do not know who this person is yet. Don't imply prior familiarity or say \"welcome back\"."
-    if context.opened == "Shaped new":
-        if has_person_profile:
-            return "Scenario: newly created companion with the person's starting anchors already present. Don't say \"welcome back\"."
-        return "Scenario: newly created companion without a person profile yet. Don't say \"welcome back\"."
-    return "Scenario: returning to an ongoing relationship. If prior context is present, reopen it lightly; otherwise open steadyly."
 
 
 def _join_naturally(values: tuple[str, ...]) -> str:

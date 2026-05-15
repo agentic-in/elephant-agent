@@ -978,7 +978,6 @@ def _run_interactive_birth_wizard(
         "first_language",
         "personal_basics",
         "starter_questions",
-        "personal_transition",
         "display_name",
         "provider_setup",
         "embedding_setup",
@@ -1163,10 +1162,6 @@ def _run_interactive_birth_wizard(
             if safety_back:
                 continue
             state.safety_boundaries = "; ".join(safety_values)
-            step_index += 1
-            continue
-        if step == "personal_transition":
-            _play_after_personal_transition(state.first_language)
             step_index += 1
             continue
         if step == "provider_setup":
@@ -1464,7 +1459,6 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
     interactive_birth = _interactive_shell_supported() and not args.non_interactive
     wizard_state = None
     if interactive_birth:
-        _play_birth_intro_animation()
         _print_birth_wizard_intro()
         wizard_state = _run_interactive_birth_wizard(
             runtime,
