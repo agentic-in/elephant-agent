@@ -504,7 +504,8 @@ def _render_evidence_block(hits: tuple[RetrievalHit, ...], *, max_chars: int = 1
     lines = []
     for hit in hits:
         source = hit.source_id or f"rank-{hit.rank}"
-        content = _clean_evidence_text(hit.content, max_chars=max_chars)
+        content_max_chars = 120_000 if hit.kind == "full_context" else max_chars
+        content = _clean_evidence_text(hit.content, max_chars=content_max_chars)
         lines.append(f"[{hit.rank}] {source}: {content}")
     return "\n".join(lines)
 

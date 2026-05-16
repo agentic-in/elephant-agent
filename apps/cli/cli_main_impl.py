@@ -2815,6 +2815,14 @@ def build_typer_app() -> typer.Typer:
         dataset_path: Path | None = typer.Option(None, "--dataset-path", help="Path to LoCoMo file or LoCoMo-Refined public directory."),
         output_dir: Path | None = typer.Option(None, "--output-dir", help="Directory for report.json, report.md, predictions, and traces."),
         top_k: int = typer.Option(5, "--top-k", help="Number of retrieved evidence hits per question."),
+        retrieval_mode: str = typer.Option(
+            "hybrid",
+            "--retrieval-mode",
+            help=(
+                "Memory retrieval mode: hybrid, semantic_raw_dialog, semantic_session_summary, "
+                "semantic_observation, semantic_combined, full_context, or oracle_evidence."
+            ),
+        ),
         limit_conversations: int | None = typer.Option(None, "--limit-conversations", help="Optional conversation cap for smoke runs."),
         limit_questions: int | None = typer.Option(None, "--limit-questions", help="Optional question cap for smoke runs."),
         model_role: str = typer.Option("strong", "--model-role", help="Configured model role to use for answer generation."),
@@ -2842,7 +2850,7 @@ def build_typer_app() -> typer.Typer:
             dataset_path=str(resolved_dataset_path),
             output_dir=str(resolved_output_dir),
             top_k=top_k,
-            retrieval_mode="hybrid",
+            retrieval_mode=retrieval_mode,
             answer_mode="model",
             answer_concurrency=answer_concurrency,
             answer_batch_size=answer_batch_size,

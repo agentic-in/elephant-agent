@@ -12,7 +12,12 @@ from packages.evals.contracts import EvalRunConfig, EvalRunOutput
 from packages.evals.datasets import load_locomo_dataset
 from packages.evals.reports import write_eval_artifacts
 from packages.evals.scorers import score_locomo_results
-from packages.evals.targets import ElephantMemoryEvalTarget, ElephantModelAnswerRunner
+from packages.evals.targets import (
+    ElephantMemoryEvalTarget,
+    ElephantModelAnswerRunner,
+    LoCoMoBaselineEvalTarget,
+    is_baseline_mode,
+)
 
 
 DEFAULT_LOCOMO_PATH = Path("/Users/bitliu/locomo/data/locomo10.json")
@@ -55,14 +60,10 @@ def run_eval(
             profile=profile,
             model_role=model_role,
         )
-    target = ElephantMemoryEvalTarget(
+    target = _build_target(
+        config=config,
         embedding_service=embedding_service,
         answer_runner=resolved_answer_runner,
-        top_k=config.top_k,
-        retrieval_mode=config.retrieval_mode,
-        answer_mode=config.answer_mode,
-        answer_concurrency=config.answer_concurrency,
-        answer_batch_size=config.answer_batch_size,
     )
     results_list = []
     artifacts: dict[str, Path] = {}
@@ -122,6 +123,37 @@ def summarize_eval_output(output: EvalRunOutput) -> dict[str, object]:
 
 def print_eval_output(output: EvalRunOutput) -> None:
     print(json.dumps(summarize_eval_output(output), ensure_ascii=False, indent=2))
+
+
+def _build_target(
+    *,
+    config: EvalRunConfig,
+    embedding_service: Any,
+    answer_runner: Any,
+) -> Any:
+    retrieval_mode = str(config.retrieval_mode or "hybrid").strip().lower()
+    if retrieval_mode == "hybrid":
+        return ElephantMemoryEvalTarget(
+            embedding_service=embedding_service,
+            answer_runner=answer_runner,
+            top_k=config.top_k,
+            retrieval_mode=config.retrieval_mode,
+            answer_mode=config.answer_mode,
+            answer_concurrency=config.answer_concurrency,
+            answer_batch_size=config.answer_batch_size,
+        )
+    if is_baseline_mode(retrieval_mode):
+        if config.answer_mode != "model":
+            raise ValueError("baseline eval targets only support model answer mode")
+        return LoCoMoBaselineEvalTarget(
+            embedding_service=embedding_service,
+            answer_runner=answer_runner,
+            top_k=config.top_k,
+            retrieval_mode=retrieval_mode,
+            answer_concurrency=config.answer_concurrency,
+            answer_batch_size=config.answer_batch_size,
+        )
+    raise ValueError(f"unsupported retrieval mode: {config.retrieval_mode}")
 
 
 def _normalize_dataset_name(value: str) -> str:

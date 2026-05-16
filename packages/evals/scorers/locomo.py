@@ -35,11 +35,10 @@ def score_locomo_results(
 
 def _score_row(result: EvalQuestionResult, *, top_k: int) -> dict[str, Any]:
     gold = tuple(str(item) for item in result.evidence_ids if str(item).strip())
-    retrieved = tuple(hit.source_id for hit in result.hits[:top_k] if hit.source_id)
-    rank = _first_hit_rank(gold, retrieved)
+    rank = _first_hit_rank(gold, result.hits[:top_k])
     answer_scores = [_answer_scores(result.predicted_answer, answer) for answer in result.answers]
     best_answer = max(answer_scores, key=lambda item: item["answer_f1"], default={"answer_exact": 0.0, "answer_f1": 0.0, "answer_bleu1": 0.0})
-    no_match_safe = 1.0 if not gold and (not retrieved or _is_abstention(result.predicted_answer)) else 0.0
+    no_match_safe = 1.0 if not gold and (not result.hits[:top_k] or _is_abstention(result.predicted_answer)) else 0.0
     return {
         "question_id": result.question_id,
         "conversation_id": result.conversation_id,
@@ -55,14 +54,26 @@ def _score_row(result: EvalQuestionResult, *, top_k: int) -> dict[str, Any]:
     }
 
 
-def _first_hit_rank(gold: tuple[str, ...], retrieved: tuple[str, ...]) -> int | None:
+def _first_hit_rank(gold: tuple[str, ...], hits: tuple[object, ...]) -> int | None:
     if not gold:
         return None
     gold_set = set(gold)
-    for index, source_id in enumerate(retrieved, start=1):
-        if source_id in gold_set:
+    for index, hit in enumerate(hits, start=1):
+        if gold_set.intersection(_represented_source_ids(hit)):
             return index
     return None
+
+
+def _represented_source_ids(hit: object) -> set[str]:
+    source_ids = {str(getattr(hit, "source_id", "") or "").strip()}
+    metadata = dict(getattr(hit, "metadata", {}) or {})
+    for key in ("source_ids", "evidence_ids", "message_ids"):
+        source_ids.update(
+            item.strip()
+            for item in str(metadata.get(key) or "").split(",")
+            if item.strip()
+        )
+    return {source_id for source_id in source_ids if source_id}
 
 
 def _answer_scores(prediction: str, answer: str) -> dict[str, float]:

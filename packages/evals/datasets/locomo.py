@@ -66,6 +66,7 @@ def _load_original(
             record,
             conversation_index=index,
             question_limit=remaining_questions,
+            source_label=dataset_id,
         )
         conversations.append(conversation)
         if remaining_questions is not None:
@@ -93,6 +94,7 @@ def _load_refined(
         raise FileNotFoundError(f"missing LoCoMo-Refined public files under {public_dir}")
     raw_conversations = _read_jsonl(conversations_path)
     raw_questions = _read_jsonl(questions_path)
+    raw_records_by_id = _load_refined_raw_records(public_dir)
     if limit_conversations is not None:
         allowed_ids = {
             str(item.get("sample_id") or "")
@@ -109,7 +111,11 @@ def _load_refined(
         question = _refined_question(item)
         questions_by_sample.setdefault(question.conversation_id, []).append(question)
     conversations = tuple(
-        _refined_conversation(item, questions=tuple(questions_by_sample.get(str(item.get("sample_id") or ""), ())))
+        _refined_conversation(
+            item,
+            questions=tuple(questions_by_sample.get(str(item.get("sample_id") or ""), ())),
+            raw_record=raw_records_by_id.get(str(item.get("sample_id") or "")),
+        )
         for item in raw_conversations
     )
     return EvalDataset(
@@ -129,6 +135,20 @@ def _resolve_refined_public_dir(path: Path) -> Path:
     if public_dir.exists():
         return public_dir
     return path
+
+
+def _load_refined_raw_records(public_dir: Path) -> dict[str, dict[str, Any]]:
+    raw_path = public_dir.parent / "raw" / "locomo_refined.json"
+    if not raw_path.exists():
+        return {}
+    payload = json.loads(raw_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        return {}
+    return {
+        str(item.get("sample_id") or ""): item
+        for item in payload
+        if isinstance(item, dict) and str(item.get("sample_id") or "").strip()
+    }
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -160,6 +180,7 @@ def _convert_original_record(
     *,
     conversation_index: int,
     question_limit: int | None,
+    source_label: str = "locomo_original",
 ) -> EvalConversation:
     conversation = dict(record.get("conversation") or {})
     conversation_id = str(record.get("sample_id") or f"conversation-{conversation_index:04d}")
@@ -170,6 +191,7 @@ def _convert_original_record(
         conversation_id=conversation_id,
         speaker_a=speaker_a,
         speaker_b=speaker_b,
+        raw_record=record,
     )
     questions = tuple(
         _original_question(
@@ -188,7 +210,7 @@ def _convert_original_record(
         speaker_b=speaker_b,
         sessions=tuple(sessions),
         questions=questions,
-        metadata={"source": "locomo_original"},
+        metadata={"source": source_label},
     )
 
 
@@ -198,6 +220,7 @@ def _original_sessions(
     conversation_id: str,
     speaker_a: str,
     speaker_b: str,
+    raw_record: dict[str, Any] | None = None,
 ) -> tuple[EvalSession, ...]:
     sessions: list[EvalSession] = []
     session_index = 1
@@ -223,6 +246,7 @@ def _original_sessions(
                 session_index=session_index,
                 date_time=date_time,
                 messages=messages,
+                metadata=_session_memory_metadata(raw_record, session_index=session_index),
             )
         )
         session_index += 1
@@ -276,7 +300,12 @@ def _original_question(
     )
 
 
-def _refined_conversation(item: dict[str, Any], *, questions: tuple[EvalQuestion, ...]) -> EvalConversation:
+def _refined_conversation(
+    item: dict[str, Any],
+    *,
+    questions: tuple[EvalQuestion, ...],
+    raw_record: dict[str, Any] | None = None,
+) -> EvalConversation:
     conversation_id = str(item.get("sample_id") or f"conversation-{item.get('conversation_idx', 0)}")
     speaker_a = str(item.get("speaker_a") or "")
     speaker_b = str(item.get("speaker_b") or "")
@@ -305,6 +334,7 @@ def _refined_conversation(item: dict[str, Any], *, questions: tuple[EvalQuestion
                 session_index=session_index,
                 date_time=date_time,
                 messages=messages,
+                metadata=_session_memory_metadata(raw_record, session_index=session_index),
             )
         )
     return EvalConversation(
@@ -316,6 +346,59 @@ def _refined_conversation(item: dict[str, Any], *, questions: tuple[EvalQuestion
         questions=questions,
         metadata={"source": "locomo_refined"},
     )
+
+
+def _session_memory_metadata(raw_record: dict[str, Any] | None, *, session_index: int) -> dict[str, str]:
+    if not raw_record:
+        return {}
+    metadata: dict[str, str] = {}
+    summary = (raw_record.get("session_summary") or {}).get(f"session_{session_index}_summary")
+    if isinstance(summary, str) and summary.strip():
+        metadata["session_summary"] = summary.strip()
+    observation = (raw_record.get("observation") or {}).get(f"session_{session_index}_observation")
+    normalized_observations = _normalize_observations(observation)
+    if normalized_observations:
+        metadata["observations_json"] = json.dumps(normalized_observations, ensure_ascii=False)
+    event_summary = (raw_record.get("event_summary") or {}).get(f"events_session_{session_index}")
+    normalized_events = _normalize_events(event_summary)
+    if normalized_events:
+        metadata["events_json"] = json.dumps(normalized_events, ensure_ascii=False)
+    return metadata
+
+
+def _normalize_observations(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, dict):
+        return []
+    out: list[dict[str, object]] = []
+    for speaker, observations in value.items():
+        if not isinstance(observations, list):
+            continue
+        for observation in observations:
+            text = ""
+            evidence_ids: list[str] = []
+            if isinstance(observation, list) and observation:
+                text = str(observation[0] or "").strip()
+                evidence_ids = [str(item).strip() for item in observation[1:] if str(item).strip()]
+            elif isinstance(observation, str):
+                text = observation.strip()
+            if text:
+                out.append({"speaker": str(speaker), "text": text, "evidence_ids": evidence_ids})
+    return out
+
+
+def _normalize_events(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, dict):
+        return []
+    date = str(value.get("date") or "").strip()
+    out: list[dict[str, str]] = []
+    for speaker, events in value.items():
+        if speaker == "date" or not isinstance(events, list):
+            continue
+        for event in events:
+            text = str(event or "").strip()
+            if text:
+                out.append({"speaker": str(speaker), "date": date, "text": text})
+    return out
 
 
 def _refined_question(item: dict[str, Any]) -> EvalQuestion:

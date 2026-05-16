@@ -14,7 +14,7 @@ from packages.evals.datasets import load_locomo_dataset
 class FakeEmbeddingService:
     def embed_text(self, text: str, **kwargs: object) -> EmbeddingVector:
         del kwargs
-        dimensions = 8
+        dimensions = 64
         buckets = [0.0] * dimensions
         for char in text.lower():
             buckets[ord(char) % dimensions] += 1.0
@@ -63,6 +63,20 @@ class LoCoMoEvalTest(unittest.TestCase):
                                     "category": "single_hop",
                                 }
                             ],
+                            "observation": {
+                                "session_1_observation": {
+                                    "Alice": [["Alice bought oat milk.", "D1:1"]]
+                                }
+                            },
+                            "session_summary": {
+                                "session_1_summary": "Alice bought oat milk."
+                            },
+                            "event_summary": {
+                                "events_session_1": {
+                                    "Alice": ["Alice bought oat milk."],
+                                    "date": "01 January 2024",
+                                }
+                            },
                         }
                     ]
                 ),
@@ -114,6 +128,7 @@ class LoCoMoEvalTest(unittest.TestCase):
             self.assertEqual(original.question_count, 1)
             self.assertEqual(refined.question_count, 1)
             self.assertEqual(original.conversations[0].sessions[0].messages[0].message_id, "D1:1")
+            self.assertEqual(original.conversations[0].sessions[0].metadata["session_summary"], "Alice bought oat milk.")
             self.assertEqual(refined.conversations[0].questions[0].question_id, "sample-1-q0")
 
     def test_run_eval_uses_hybrid_embedding_and_model_answer_runner(self) -> None:
@@ -179,6 +194,63 @@ class LoCoMoEvalTest(unittest.TestCase):
             self.assertEqual(output.results[0].metadata["answer_mode"], "model")
             self.assertTrue((output_dir / "report.json").exists())
             self.assertTrue((output_dir / "predictions.jsonl").exists())
+
+    def test_run_eval_supports_semantic_observation_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original_path = root / "locomo10.json"
+            original_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "sample_id": "sample-1",
+                            "conversation": {
+                                "speaker_a": "Alice",
+                                "speaker_b": "Bob",
+                                "session_1_date_time": "01 January 2024",
+                                "session_1": [
+                                    {"dia_id": "D1:1", "speaker": "Alice", "text": "I bought oat milk."},
+                                    {"dia_id": "D1:2", "speaker": "Bob", "text": "That works for coffee."},
+                                ],
+                            },
+                            "qa": [
+                                {
+                                    "question": "What did Alice buy?",
+                                    "answer": "oat milk",
+                                    "evidence": ["D1:1"],
+                                    "category": "1",
+                                }
+                            ],
+                            "observation": {
+                                "session_1_observation": {
+                                    "Alice": [["Alice bought oat milk.", "D1:1"]]
+                                }
+                            },
+                            "session_summary": {
+                                "session_1_summary": "Alice bought oat milk."
+                            },
+                            "event_summary": {},
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            output_dir = root / "out"
+            output = run_eval(
+                EvalRunConfig(
+                    dataset="locomo",
+                    dataset_path=str(original_path),
+                    output_dir=str(output_dir),
+                    top_k=1,
+                    retrieval_mode="semantic_observation",
+                ),
+                embedding_service=FakeEmbeddingService(),
+                answer_runner=FakeAnswerRunner(),
+            )
+
+            self.assertEqual(output.results[0].predicted_answer, "oat milk")
+            self.assertEqual(output.results[0].metadata["retrieval_mode"], "semantic_observation")
+            self.assertEqual(output.metrics["overall"]["retrieval_hit"], 1.0)
 
 
 if __name__ == "__main__":
