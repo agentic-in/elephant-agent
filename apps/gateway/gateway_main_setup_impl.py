@@ -320,27 +320,27 @@ def _run_add_discord(args: Namespace) -> int:
     return 0
 
 def _start_discord_runtime_after_setup(args: Namespace, *, transport: str) -> int:
-    service = _build_discord_service(args)
     start_args = Namespace(**vars(args))
     start_args.runtime_target = transport or "configured"
     start_args.account_id = None
     start_args.detach = True
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    return _run_restart(start_args, service=service)
+    from apps.gateway.gateway_main_impl import _start_via_daemon
+    return _start_via_daemon(start_args)
 
 def _start_feishu_runtime_after_setup(args: Namespace, *, transport: str) -> int:
-    service = _build_feishu_service(args)
     start_args = Namespace(**vars(args))
     start_args.runtime_target = transport or "configured"
-    if transport == "long-connection" and len(getattr(service, "account_configs", ())) == 1:
+    if transport == "long-connection":
         start_args.account_id = None
     start_args.detach = True
     start_args.host = getattr(start_args, "host", "127.0.0.1")
     start_args.port = int(getattr(start_args, "port", 8788) or 8788)
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    return _run_restart(start_args, service=service)
+    from apps.gateway.gateway_main_impl import _start_via_daemon
+    return _start_via_daemon(start_args)
 
 def _run_add_feishu(args: Namespace) -> int:
     _ensure_feishu_sdk_available(reason="Feishu setup")
@@ -595,14 +595,14 @@ def _run_remove_feishu(args: Namespace) -> int:
     return 0
 
 def _start_dingding_runtime_after_setup(args: Namespace, *, transport: str) -> int:
-    service = _build_dingding_service(args)
     start_args = Namespace(**vars(args))
     start_args.runtime_target = transport or "configured"
     start_args.account_id = None
     start_args.detach = True
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    return _run_restart(start_args, service=service)
+    from apps.gateway.gateway_main_impl import _start_via_daemon
+    return _start_via_daemon(start_args)
 
 def _run_add_dingding(args: Namespace) -> int:
     _ensure_dingding_sdk_available(reason="DingDing setup")
@@ -700,14 +700,14 @@ def _run_remove_dingding(args: Namespace) -> int:
     return 0
 
 def _start_weixin_runtime_after_setup(args: Namespace, *, transport: str) -> int:
-    service = _build_weixin_service(args)
     start_args = Namespace(**vars(args))
     start_args.runtime_target = transport or "configured"
     start_args.account_id = None
     start_args.detach = True
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    return _run_restart(start_args, service=service)
+    from apps.gateway.gateway_main_impl import _start_via_daemon
+    return _start_via_daemon(start_args)
 
 def _run_add_weixin(args: Namespace) -> int:
     from .weixin_support import check_weixin_requirements, qr_login, ILINK_BASE_URL

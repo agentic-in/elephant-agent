@@ -19,6 +19,8 @@ class DiscordGatewayService:
     runtime_state_dir: Path | None = None
     _outbound_drain_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _outbound_drain_stop: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
+    _daemon_task: asyncio.Task | None = field(default=None, init=False, repr=False)
+    _daemon_running: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.account_configs:
@@ -142,6 +144,16 @@ class DiscordGatewayService:
             "runnable_account_ids": tuple(runnable_account_ids),
             "blocked_account_ids": tuple(blocked_account_ids),
         }
+
+    def has_credentials(self) -> bool:
+        """Return True if at least one account can be resolved with current environment."""
+        for config in self.account_configs:
+            try:
+                resolve_discord_account(config, environ=self.environ)
+                return True
+            except (LookupError, RuntimeError):
+                continue
+        return False
 
     def describe(self) -> Mapping[str, object]:
         accounts, account_status = self._describe_accounts()
@@ -472,6 +484,28 @@ class DiscordGatewayService:
 
     def managed_runtime_log_hint(self, *, target: str) -> str:
         return "elephant gateway discord logs <account-id> --follow"
+
+    # ── DaemonService ──────────────────────────────────────────
+
+    async def start_daemon_task(self, *, loop: Any) -> asyncio.Task | None:
+        """Start Discord gateway as a daemon task in the unified event loop."""
+        self._daemon_running = True
+        self.start_outbound_drain()
+        task = asyncio.create_task(self.start_gateway(), name="discord-daemon")
+        self._daemon_task = task
+        return task
+
+    async def stop_daemon_task(self) -> None:
+        """Gracefully stop the Discord daemon task."""
+        self._daemon_running = False
+        self.stop_outbound_drain()
+        if self._daemon_task is not None and not self._daemon_task.done():
+            self._daemon_task.cancel()
+            try:
+                await self._daemon_task
+            except asyncio.CancelledError:
+                pass
+        self._daemon_task = None
 
     async def start_gateway(
         self,
@@ -836,8 +870,6 @@ class DiscordGatewayService:
         self._outbound_drain_stop.set()
         thread = self._outbound_drain_thread
         self._outbound_drain_thread = None
-        if idle_thread is not None and idle_thread.is_alive():
-            idle_thread.join(timeout=5.0)
         if thread is not None and thread.is_alive():
             thread.join(timeout=5.0)
 

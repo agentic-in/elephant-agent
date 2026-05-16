@@ -43,10 +43,13 @@ logger = logging.getLogger("elephant.supervisor")
 def _sqlite_path_for_state_dir(state_dir: Path) -> Path:
     """Resolve the sqlite database path the CLI runtime writes to.
 
-    Mirrors ``apps/cli/runtime.py`` which keeps the same file at
-    ``<state_dir>/state/elephant.sqlite3``. The supervisor doesn't need
-    the full CliRuntime — just the storage path.
+    Checks both ``<state_dir>/elephant.sqlite3`` (current layout) and
+    ``<state_dir>/state/elephant.sqlite3`` (legacy layout) so the
+    supervisor works regardless of schema version.
     """
+    current = state_dir / "elephant.sqlite3"
+    if current.exists():
+        return current
     return state_dir / "state" / "elephant.sqlite3"
 
 

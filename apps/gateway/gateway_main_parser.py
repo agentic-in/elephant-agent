@@ -310,6 +310,21 @@ def _run_status_all(args: Namespace) -> int:
     app, services = _build_services(args)
     print("Elephant Agent Gateway status")
     print(f"im_gateway_dir: {args.state_dir}")
+
+    # Show daemon status if running
+    try:
+        from apps.daemon_command import daemon_is_running
+        from apps.daemon_command import _read_pid, _daemon_pid_path
+        state_dir_path = Path(args.state_dir)
+        daemon_pid = _read_pid(_daemon_pid_path(state_dir_path))
+        if daemon_is_running(state_dir_path):
+            print(f"daemon_status: running (pid {daemon_pid})")
+            print("note: all adapters are managed by the unified daemon")
+        else:
+            print("daemon_status: stopped")
+    except Exception:
+        pass
+
     if not services:
         print("configured_services: <none>")
         print("next_steps:")

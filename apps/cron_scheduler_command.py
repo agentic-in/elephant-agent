@@ -9,12 +9,11 @@ from typing import Sequence
 
 import typer
 
+from apps.daemon_command import daemon_is_running
 from apps.gateway.cron_service import build_cron_scheduler_service
 from apps.gateway.gateway_main_runtime import (
     _gateway_runtime_environ,
     _run_logs,
-    _run_restart,
-    _run_start_detached,
     _run_status,
     _run_stop,
 )
@@ -139,6 +138,33 @@ def _namespace(**kwargs: object) -> Namespace:
     return Namespace(**kwargs)
 
 
+def _cron_start_via_daemon(args: Namespace) -> int:
+    """Start the unified Elephant daemon for cron --detach.
+
+    The cron scheduler runs inside the unified daemon alongside IM adapters,
+    supervisor, and learning worker. When ``cron start --detach`` is invoked
+    we redirect to the daemon.
+    """
+    from apps.daemon_command import (
+        daemon_is_running,
+        start_daemon_detached,
+        _read_pid,
+        _daemon_pid_path,
+    )
+
+    state_dir = args.state_dir
+    cli_state_dir = args.cli_state_dir
+
+    if daemon_is_running(state_dir):
+        pid = _read_pid(_daemon_pid_path(state_dir))
+        print(f"Elephant daemon is already running (pid {pid}).")
+        print("Cron is managed by the unified daemon.")
+        return 0
+
+    print("Starting unified Elephant daemon (cron, adapters, supervisor, learning)...")
+    return start_daemon_detached(state_dir, cli_state_dir)
+
+
 def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     app = typer.Typer(
         name="elephant cron",
@@ -181,9 +207,10 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         args.runtime_target = target
         args.detach = detach
         args.interval_seconds = interval_seconds
-        service = _build_service(args)
         if detach:
-            raise typer.Exit(_run_start_detached(args, service=service, target=service.configured_runtime_target()))
+            # Cron now runs inside the unified daemon
+            raise typer.Exit(_cron_start_via_daemon(args))
+        service = _build_service(args)
         raise typer.Exit(int(service.run_scheduler(interval_seconds=float(interval_seconds), once=False) or 0))
 
     @app.command("run")
@@ -228,8 +255,11 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         args.runtime_target = target
         args.timeout = timeout
         args.force = force
-        service = _build_service(args)
-        raise typer.Exit(_run_stop(args, service=service))
+        if daemon_is_running(args.state_dir):
+            from apps.daemon_command import stop_daemon
+            raise typer.Exit(stop_daemon(args.state_dir, timeout=timeout, force=force))
+        print("Elephant daemon is not running. Nothing to stop.")
+        raise typer.Exit(0)
 
     @app.command("restart")
     def restart_command(
@@ -248,8 +278,16 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         args.interval_seconds = interval_seconds
         args.timeout = timeout
         args.force = force
-        service = _build_service(args)
-        raise typer.Exit(_run_restart(args, service=service))
+        if daemon_is_running(args.state_dir):
+            from apps.daemon_command import restart_daemon
+            raise typer.Exit(restart_daemon(
+                args.state_dir,
+                args.cli_state_dir,
+                timeout=timeout,
+                force=force,
+            ))
+        # No daemon running — start a fresh daemon
+        raise typer.Exit(_cron_start_via_daemon(args))
 
     @app.command("logs")
     def logs_command(

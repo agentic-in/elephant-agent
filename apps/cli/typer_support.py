@@ -6,6 +6,11 @@ import typer
 from click.exceptions import ClickException, Exit as ClickExit
 
 
+def _normalize_help_flag(argv: Sequence[str]) -> list[str]:
+    """Replace ``-h`` with ``--help`` so it works as a short alias everywhere."""
+    return ["--help" if arg == "-h" else arg for arg in argv]
+
+
 def run_typer_app(
     app: typer.Typer,
     argv: Sequence[str] | None = None,
@@ -13,9 +18,10 @@ def run_typer_app(
     prog_name: str,
 ) -> int:
     command = typer.main.get_command(app)
+    resolved = _normalize_help_flag(argv) if argv is not None else None
     try:
         result = command.main(
-            args=list(argv) if argv is not None else None,
+            args=resolved,
             prog_name=prog_name,
             standalone_mode=False,
         )

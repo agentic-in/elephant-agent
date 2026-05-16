@@ -281,8 +281,34 @@ def default_gateway_runtime_path(
     return state_dir / f"{service_key}-{normalized_target}.{suffix}"
 
 
+@runtime_checkable
+class DaemonService(Protocol):
+    """Protocol for services that can run as async tasks inside the unified daemon."""
+
+    service_key: str
+    app: Any
+
+    def has_credentials(self) -> bool:
+        """Return True if at least one account can be resolved with current environment.
+
+        This is a preflight check: it should NOT start any task or allocate resources.
+        Return False if no accounts have sufficient credentials to start.
+        """
+
+    async def start_daemon_task(self, *, loop: Any) -> Any | None:
+        """Start this service as an asyncio Task inside the daemon event loop.
+
+        Returns the created Task, or None if the service has no long-running task
+        (e.g. webhook-only services that are handled by the HTTP server).
+        """
+
+    async def stop_daemon_task(self) -> None:
+        """Gracefully stop this service's daemon task."""
+
+
 __all__ = [
     "AdapterFactory",
+    "DaemonService",
     "GatewayAdapterDescriptor",
     "GatewayHttpService",
     "GatewayManagedRuntime",

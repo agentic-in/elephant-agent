@@ -15,6 +15,8 @@ from uuid import uuid4
 
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
+    GatewayAccountRef,
+    GatewayConversationRef,
     GatewayExchange,
     GatewayInboundMessage,
     GatewayOutboundMessage,
@@ -74,6 +76,7 @@ class DingdingGatewayService:
     _outbound_drain_task: asyncio.Task | None = field(default=None, init=False, repr=False)
     _inbound_sequencer: InboundSequencer = field(default_factory=InboundSequencer, init=False, repr=False)
     _running: bool = field(default=False, init=False, repr=False)
+    _daemon_task: asyncio.Task | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.account_configs:
@@ -131,6 +134,16 @@ class DingdingGatewayService:
     def _transport_account_configs(self) -> tuple[DingdingGatewayAccountConfig, ...]:
         enabled_configs = self._enabled_account_configs()
         return enabled_configs if enabled_configs else self.account_configs
+
+    def has_credentials(self) -> bool:
+        """Return True if at least one account can be resolved with current environment."""
+        for config in self.account_configs:
+            try:
+                resolve_dingding_account(config, environ=self.environ)
+                return True
+            except (LookupError, RuntimeError):
+                continue
+        return False
 
     def describe(self) -> Mapping[str, object]:
         configured_transport: str | None = None
@@ -587,6 +600,80 @@ class DingdingGatewayService:
         raise LookupError(
             "multiple enabled DingDing gateway accounts are configured; pass account_id explicitly"
         )
+
+    # ── Outbound drain (shared queue) ─────────────────────────
+
+    async def _outbound_drain_loop(self, *, account: DingdingResolvedAccount, dingtalk_module: Any) -> None:
+        """Drain the shared outbound queue for DingDing."""
+        queue = self._outbound_queue()
+        await run_outbound_drain_loop(
+            queue=queue,
+            adapter_id=DINGDING_ADAPTER_ID,
+            sender=self._send_outbound_queue_row,
+            is_running=lambda: self._running,
+            logger=LOGGER,
+            log_label=self.service_key,
+        )
+
+    async def _send_outbound_queue_row(self, row: GatewayOutboundRow) -> None:
+        """Send one queued outbound row via DingDing reply API."""
+        if self.adapter is None:
+            return
+        try:
+            account = self._match_account(account_id=row.account_id)
+        except LookupError:
+            LOGGER.warning("[dingding] cannot resolve account for queued row: %s", row.account_id)
+            return
+        outbound = GatewayOutboundMessage(
+            message_id=row.row_id,
+            account=GatewayAccountRef(
+                adapter_id=DINGDING_ADAPTER_ID,
+                account_id=row.account_id or DEFAULT_GATEWAY_ACCOUNT_ID,
+                surface="stream",
+            ),
+            conversation=GatewayConversationRef(conversation_id=row.conversation_id),
+            session_id=str(row.metadata.get("session_id") or f"outbound-queue:{row.row_id}"),
+            body=row.body,
+            metadata={
+                **dict(row.metadata),
+                "delivery_surface": "dingding-stream",
+                "queue_row_id": row.row_id,
+                "queue_attempts": row.attempts,
+            },
+        )
+        delivery_request = self.adapter.build_reply_request(outbound)
+        await self._send_dingtalk_reply(
+            delivery_request,
+            account=account,
+            dingtalk_module=None,
+        )
+
+    # ── DaemonService ──────────────────────────────────────────
+
+    async def start_daemon_task(self, *, loop: Any) -> asyncio.Task | None:
+        """Start DingDing gateway as a daemon task in the unified event loop."""
+        self._running = True
+        task = asyncio.create_task(self.start_gateway(), name="dingding-daemon")
+        self._daemon_task = task
+        return task
+
+    async def stop_daemon_task(self) -> None:
+        """Gracefully stop the DingDing daemon task."""
+        self._running = False
+        if self._outbound_drain_task is not None and not self._outbound_drain_task.done():
+            self._outbound_drain_task.cancel()
+            try:
+                await self._outbound_drain_task
+            except asyncio.CancelledError:
+                pass
+            self._outbound_drain_task = None
+        if self._daemon_task is not None and not self._daemon_task.done():
+            self._daemon_task.cancel()
+            try:
+                await self._daemon_task
+            except asyncio.CancelledError:
+                pass
+        self._daemon_task = None
 
 
 def _can_resolve_account(config: DingdingGatewayAccountConfig, *, environ: Mapping[str, str]) -> bool:
