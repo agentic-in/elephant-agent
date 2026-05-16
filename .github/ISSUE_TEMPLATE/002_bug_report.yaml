@@ -24,6 +24,20 @@ body:
       description: Steps, commands, or inputs needed to reproduce the issue.
     validations:
       required: true
+  - type: dropdown
+    id: affected_surface
+    attributes:
+      label: Affected surface
+      description: Which surface appears affected?
+      options:
+        - repo-docs
+        - agent-text
+        - agent-exec
+        - release-ops
+        - app-scaffold
+        - unsure
+    validations:
+      required: true
   - type: textarea
     id: context
     attributes:

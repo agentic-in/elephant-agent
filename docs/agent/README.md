@@ -70,3 +70,5 @@ Runtime entrypoints:
 - [../../.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
 - [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
 - [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
+- [../../.github/ISSUE_TEMPLATE/config.yml](../../.github/ISSUE_TEMPLATE/config.yml)
+- [../../.github/copilot-instructions.md](../../.github/copilot-instructions.md)

@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Read the project docs
+    url: https://elephant.agentic-in.ai/docs/
+    about: Use the docs first for setup, usage, and project orientation questions.
+  - name: Review contributor rules
+    url: https://github.com/agentic-in/elephant-agent/blob/main/CONTRIBUTING.md
+    about: Use this for commit, validation, and pull request expectations.

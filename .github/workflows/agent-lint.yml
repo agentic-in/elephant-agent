@@ -1,0 +1,70 @@
+name: Agent Lint
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+      - "docs/**"
+      - "chore/**"
+      - "exp/**"
+    paths:
+      - "AGENTS.md"
+      - "CONTRIBUTING.md"
+      - "docs/agent/**"
+      - "tools/agent/**"
+      - "tools/make/agent.mk"
+      - ".github/**"
+      - ".githooks/**"
+  pull_request:
+    paths:
+      - "AGENTS.md"
+      - "CONTRIBUTING.md"
+      - "docs/agent/**"
+      - "tools/agent/**"
+      - "tools/make/agent.mk"
+      - ".github/**"
+      - ".githooks/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve base ref
+        run: |
+          set -euo pipefail
+          BASE_REF=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+            BASE_REF="origin/${{ github.base_ref }}"
+          elif [ -n "${{ github.event.before || '' }}" ] && [ "${{ github.event.before || '' }}" != "0000000000000000000000000000000000000000" ]; then
+            BASE_REF="${{ github.event.before }}"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            BASE_REF="HEAD^"
+          fi
+          echo "AGENT_BASE_REF=$BASE_REF" >> "$GITHUB_ENV"
+
+      - name: Report agent surfaces
+        run: make agent-report AGENT_BASE_REF="$AGENT_BASE_REF"
+
+      - name: Run agent lint
+        run: make agent-lint AGENT_BASE_REF="$AGENT_BASE_REF"

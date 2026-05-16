@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -111,47 +112,6 @@ RESET_BANNED_TERMS: tuple[tuple[str, str], ...] = (
 )
 
 
-# ─── Surface-to-path mapping ──────────────────────────────────────────────────
-# Built from context-map.yaml surfaces section plus skill selector_paths.
-
-SURFACE_PATH_MAP: dict[str, tuple[str, ...]] = {
-    "contracts": ("packages/contracts/**",),
-    "kernel": ("packages/kernel/**",),
-    "state": ("packages/state/**",),
-    "evidence": ("packages/evidence/**",),
-    "storage": ("packages/storage/**",),
-    "context_assembly": ("packages/context/**", "packages/semantic_index/**"),
-    "tools_skills": ("packages/tools/**", "packages/skills/**"),
-    "learning": (
-        "packages/curiosity/**",
-        "packages/growth/**",
-        "packages/understanding/**",
-        "packages/experience/**",
-        "packages/continuity/**",
-    ),
-    "infra": (
-        "packages/auth/**",
-        "packages/capabilities/**",
-        "packages/embeddings/**",
-        "packages/gateway_core/**",
-        "packages/cron/**",
-        "packages/harness/**",
-        "packages/operator/**",
-        "packages/security/**",
-        "packages/telemetry/**",
-    ),
-    "models": ("packages/models/**",),
-    "cli": ("apps/cli/**", "apps/launcher.py", "apps/upgrade_command.py"),
-    "api": ("apps/api/**",),
-    "gateway": ("apps/gateway/**",),
-    "dashboard": ("apps/dashboard/**",),
-    "site": ("apps/site/**",),
-    "learning_agents": ("apps/reflect/**", "apps/learning_agents/**"),
-    "test_harness": ("tests/**",),
-    "deploy": ("deploy/**",),
-}
-
-
 @dataclass
 class RuleMatch:
     name: str
@@ -177,6 +137,7 @@ class ContextPack:
     start_here: list[SurfaceRef]
     read_first: list[str]
     surfaces: dict[str, list[SurfaceRef]]
+    surface_paths: dict[str, tuple[str, ...]]
     local_agents_md: list[str]
     validation: list[str]
     acceptance_criteria: str = ""
@@ -194,6 +155,18 @@ def load_manifest(path: Path) -> dict[str, object]:
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise SystemExit(f"failed to parse {path}: {exc}") from exc
+
+
+def load_surface_path_map() -> dict[str, tuple[str, ...]]:
+    context_map = load_manifest(CONTEXT_MAP_PATH) if CONTEXT_MAP_PATH.exists() else {}
+    raw_map = context_map.get("surface_paths", {})
+    if not isinstance(raw_map, dict):
+        return {}
+    return {
+        str(surface_name): tuple(str(pattern) for pattern in patterns)
+        for surface_name, patterns in raw_map.items()
+        if isinstance(patterns, list)
+    }
 
 
 def path_exists(relative_path: str) -> bool:
@@ -243,7 +216,10 @@ def resolve_repo_identity_name(root: Path = ROOT) -> str:
 
 def collect_changed_files(base_ref: str, changed_files: str, changed_files_path: str) -> list[str]:
     if changed_files:
-        return [item.strip() for item in changed_files.replace("\n", ",").split(",") if item.strip()]
+        normalized = changed_files.replace("\n", ",")
+        if "," in normalized:
+            return [item.strip() for item in normalized.split(",") if item.strip()]
+        return shlex.split(changed_files)
 
     if changed_files_path:
         path = ROOT / changed_files_path
@@ -304,7 +280,7 @@ def collect_tracked_files(root: Path = ROOT) -> tuple[str, ...]:
 
 def resolve_surfaces_for_files(changed_files: list[str]) -> set[str]:
     matched: set[str] = set()
-    for surface_name, patterns in SURFACE_PATH_MAP.items():
+    for surface_name, patterns in load_surface_path_map().items():
         for path in changed_files:
             if match_any(path, patterns):
                 matched.add(surface_name)
@@ -368,13 +344,16 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
         active_surfaces = touched_surfaces
 
     surfaces_section = context_map.get("surfaces", {})
+    surface_path_map = load_surface_path_map()
     resolved_surfaces: dict[str, list[SurfaceRef]] = {}
+    resolved_surface_paths: dict[str, tuple[str, ...]] = {}
     for surface_name in sorted(active_surfaces):
         refs = surfaces_section.get(surface_name, [])
         resolved_surfaces[surface_name] = [
             SurfaceRef(path=ref["path"], reason=ref.get("reason", ""))
             for ref in refs
         ]
+        resolved_surface_paths[surface_name] = surface_path_map.get(surface_name, ())
 
     # Also add rule-specific context from context-map rules section
     rules_section = context_map.get("rules", {})
@@ -409,6 +388,7 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
         start_here=start_here,
         read_first=read_first,
         surfaces=resolved_surfaces,
+        surface_paths=resolved_surface_paths,
         local_agents_md=local_agents,
         validation=validation,
         acceptance_criteria=acceptance,
@@ -424,7 +404,7 @@ def audit_surface_coverage(changed_files: list[str], context_pack: ContextPack) 
         warnings.append(
             f"surface '{surface}' has matching files but is not in the active skill's required/conditional surfaces"
         )
-    unmatched = [p for p in changed_files if not any(match_any(p, patterns) for patterns in SURFACE_PATH_MAP.values())]
+    unmatched = [p for p in changed_files if not any(match_any(p, patterns) for patterns in load_surface_path_map().values())]
     for path in unmatched:
         warnings.append(f"file does not belong to any surface: {path}")
     return warnings
@@ -498,6 +478,17 @@ def validate_contract() -> tuple[list[str], list[str]]:
     # Validate context-map references
     if CONTEXT_MAP_PATH.exists():
         context_map = load_manifest(CONTEXT_MAP_PATH)
+        surface_names = set(context_map.get("surfaces", {}).keys())
+        surface_path_names = set(context_map.get("surface_paths", {}).keys())
+        for surface_name in sorted(surface_names - surface_path_names):
+            errors.append(f"context-map surface is missing surface_paths entry: {surface_name}")
+        for surface_name in sorted(surface_path_names - surface_names):
+            errors.append(f"context-map surface_paths references missing surface: {surface_name}")
+        for surface_name, patterns in context_map.get("surface_paths", {}).items():
+            if not isinstance(patterns, list) or not patterns:
+                errors.append(f"context-map surface_paths entry must be a non-empty list: {surface_name}")
+                continue
+            checks.append(f"context-map surface paths exist: {surface_name}")
         for surface_name, refs in context_map.get("surfaces", {}).items():
             for ref in refs:
                 p = ref.get("path", "")
@@ -506,7 +497,6 @@ def validate_contract() -> tuple[list[str], list[str]]:
                 else:
                     errors.append(f"context-map surface path missing: {surface_name} -> {p}")
         # Validate skill required_surfaces reference valid surface names
-        surface_names = set(context_map.get("surfaces", {}).keys())
         for skill_name, skill_data in skills.items():
             for srf in skill_data.get("required_surfaces", []):
                 if srf not in surface_names:
@@ -646,6 +636,8 @@ def print_report(base_ref: str, changed_files: list[str], *, context_detail: str
         print("Surfaces")
         for surface_name, refs in pack.surfaces.items():
             print(f"  [{surface_name}]")
+            for pattern in pack.surface_paths.get(surface_name, ()):
+                print(f"    path: {pattern}")
             for ref in refs:
                 reason_part = f" :: {ref.reason}" if ref.reason else ""
                 print(f"    - {ref.path}{reason_part}")
@@ -693,7 +685,10 @@ def print_report_json(pack: ContextPack, changed_files: list[str], base_ref: str
         "start_here": [{"path": ref.path, "reason": ref.reason} for ref in pack.start_here],
         "read_first": pack.read_first,
         "surfaces": {
-            name: [{"path": ref.path, "reason": ref.reason} for ref in refs]
+            name: {
+                "path_patterns": list(pack.surface_paths.get(name, ())),
+                "refs": [{"path": ref.path, "reason": ref.reason} for ref in refs],
+            }
             for name, refs in pack.surfaces.items()
         },
         "local_agents_md": pack.local_agents_md,

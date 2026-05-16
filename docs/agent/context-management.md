@@ -18,7 +18,8 @@ This document defines how the harness exposes the minimum useful context for a t
   - loop mode and execution-plan guidance for the active task
   - the `read_first` docs referenced by the matched skill
 - `L2` surface context
-  - only docs for the impacted surfaces from `tools/agent/context-map.yaml`
+  - impacted code partitions from `surface_paths` in `tools/agent/context-map.yaml`
+  - only docs for the impacted surfaces from `surfaces` in `tools/agent/context-map.yaml`
   - resolved by matching changed file paths to surface zones
 - `L3` hotspot supplements
   - nearest local `AGENTS.md` files for changed hotspot trees
@@ -30,14 +31,14 @@ This document defines how the harness exposes the minimum useful context for a t
 1. Resolve changed files through `make agent-report CHANGED_FILES="..."` so the harness can emit the active skill, surfaces, and validation commands.
 2. Match changed files to task rules from `tools/agent/task-matrix.yaml` to find the primary skill.
 3. Pull the skill `read_first` references from `tools/agent/skill-registry.yaml`.
-4. Match changed files to surfaces and add surface-specific docs from `tools/agent/context-map.yaml`.
+4. Match changed files to `surface_paths` and add surface-specific docs from `tools/agent/context-map.yaml`.
 5. Add nearest local `AGENTS.md` files for hotspot paths when applicable.
 6. Add resume references (plans, debt) only when the task becomes long-horizon or unresolved.
 
 ## Source of Truth
 
 - Human-readable policy: this document and `docs/agent/`
-- Surface routing: `tools/agent/context-map.yaml`
+- Surface routing and code partitions: `tools/agent/context-map.yaml`
 - Skill ownership: `tools/agent/skill-registry.yaml`
 - Task classification: `tools/agent/task-matrix.yaml`
 - Runtime assembly: `tools/agent/scripts/agent_gate.py`
@@ -54,7 +55,8 @@ This document defines how the harness exposes the minimum useful context for a t
 ## Maintenance Rules
 
 - Do not duplicate full guidance into the context map; point to the canonical doc or local `AGENTS.md`.
+- Keep code partition patterns in `surface_paths`; do not hard-code a second surface-to-path map in scripts.
 - Keep the context pack task-first and minimal; if a reference is almost always skipped, remove it.
 - When a new surface, skill, or local rule is added, update `tools/agent/context-map.yaml` in the same change.
 - If the context pack and the canonical docs disagree, fix the canonical doc and the context map together.
-- Run `make agent-report --audit CHANGED_FILES="..."` after completing a task to detect surface gaps; if the audit reports drift, update the context map before shipping.
+- Run `make agent-report AGENT_REPORT_AUDIT=1 CHANGED_FILES="..."` after completing a task to detect surface gaps; if the audit reports drift, update the context map before shipping.

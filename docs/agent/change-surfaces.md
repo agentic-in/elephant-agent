@@ -24,6 +24,7 @@ Use for:
 - `docs/agent/**`
 - `.github/PULL_REQUEST_TEMPLATE.md`
 - `.github/ISSUE_TEMPLATE/**`
+- `.github/copilot-instructions.md`
 
 Default validation:
 
@@ -49,6 +50,7 @@ Use for:
 - `.github/workflows/**`
 - `install.sh`
 - release-facing templates and automation
+- `.github/*.md`
 
 Default validation:
 

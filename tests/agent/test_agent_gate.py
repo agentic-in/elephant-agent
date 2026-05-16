@@ -95,6 +95,16 @@ class AgentGateTests(unittest.TestCase):
 
         self.assertEqual(errors, [])
 
+    def test_collect_changed_files_accepts_space_and_comma_lists(self) -> None:
+        self.assertEqual(
+            MODULE.collect_changed_files("", "tools/agent/context-map.yaml .github/workflows/agent-lint.yml", ""),
+            ["tools/agent/context-map.yaml", ".github/workflows/agent-lint.yml"],
+        )
+        self.assertEqual(
+            MODULE.collect_changed_files("", "tools/agent/context-map.yaml,.github/workflows/agent-lint.yml", ""),
+            ["tools/agent/context-map.yaml", ".github/workflows/agent-lint.yml"],
+        )
+
     def test_scan_reset_banned_terms_defaults_to_tracked_files_with_allowlist(self) -> None:
         removed_term = " ".join(("goal", "graph"))
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -124,6 +134,54 @@ class AgentGateTests(unittest.TestCase):
         matches = MODULE.resolve_rule_matches([".github/workflows/ci.yml"])
         names = [match.name for match in matches]
         self.assertIn("release-ops", names)
+
+    def test_surface_paths_are_loaded_from_context_map(self) -> None:
+        surface_paths = MODULE.load_surface_path_map()
+        self.assertIn("packages/runtime_config.py", surface_paths["infra"])
+        self.assertIn("infra", MODULE.resolve_surfaces_for_files(["packages/runtime_config.py"]))
+
+    def test_full_report_includes_surface_path_patterns(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            MODULE.print_report("", ["apps/cli/cli_main_impl.py"], context_detail="full")
+
+        output = buffer.getvalue()
+        self.assertIn("Surfaces", output)
+        self.assertIn("[cli]", output)
+        self.assertIn("path: apps/cli/**", output)
+
+    def test_context_map_covers_harness_and_release_paths(self) -> None:
+        matches = MODULE.resolve_rule_matches(
+            [
+                "tools/agent/context-map.yaml",
+                ".github/workflows/agent-lint.yml",
+                ".github/copilot-instructions.md",
+                "docs/agent/context-management.md",
+            ]
+        )
+        pack = MODULE.build_context_pack(
+            [
+                "tools/agent/context-map.yaml",
+                ".github/workflows/agent-lint.yml",
+                ".github/copilot-instructions.md",
+                "docs/agent/context-management.md",
+            ],
+            matches,
+        )
+
+        self.assertEqual(MODULE.audit_surface_coverage([], pack), [])
+        self.assertEqual(
+            MODULE.audit_surface_coverage(
+                [
+                    "tools/agent/context-map.yaml",
+                    ".github/workflows/agent-lint.yml",
+                    ".github/copilot-instructions.md",
+                    "docs/agent/context-management.md",
+                ],
+                pack,
+            ),
+            [],
+        )
 
     def test_resolve_rules_for_root_make_and_gitignore(self) -> None:
         matches = MODULE.resolve_rule_matches(["Makefile", ".gitignore"])

@@ -25,6 +25,20 @@ body:
       description: Concrete, testable outcomes.
     validations:
       required: true
+  - type: dropdown
+    id: affected_surface
+    attributes:
+      label: Affected surface
+      description: Which surface should primarily own this feature?
+      options:
+        - repo-docs
+        - agent-text
+        - agent-exec
+        - release-ops
+        - app-scaffold
+        - unsure
+    validations:
+      required: true
   - type: textarea
     id: context
     attributes:

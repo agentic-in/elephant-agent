@@ -100,7 +100,150 @@
       }
     ]
   },
+  "surface_paths": {
+    "repo_docs": [
+      "README.md",
+      "CONTRIBUTING.md",
+      "CHANGELOG.md",
+      "learn.md",
+      "*_CODE_ANALYSIS.md",
+      "docs/**/*.md",
+      "docs/paper/**"
+    ],
+    "agent_text": [
+      "AGENTS.md",
+      "docs/agent/**",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/ISSUE_TEMPLATE/**",
+      ".github/copilot-instructions.md"
+    ],
+    "agent_exec": [
+      ".gitignore",
+      "Makefile",
+      "tools/agent/**",
+      "tools/make/agent.mk",
+      ".githooks/**"
+    ],
+    "release_ops": [
+      ".github/workflows/**",
+      "install.sh",
+      ".github/*.md"
+    ],
+    "contracts": [
+      "packages/contracts/**"
+    ],
+    "kernel": [
+      "packages/kernel/**"
+    ],
+    "state": [
+      "packages/state/**"
+    ],
+    "evidence": [
+      "packages/evidence/**"
+    ],
+    "storage": [
+      "packages/storage/**"
+    ],
+    "context_assembly": [
+      "packages/context/**",
+      "packages/semantic_index/**"
+    ],
+    "tools_skills": [
+      "packages/tools/**",
+      "packages/skills/**"
+    ],
+    "learning": [
+      "packages/curiosity/**",
+      "packages/growth/**",
+      "packages/understanding/**",
+      "packages/experience/**",
+      "packages/continuity/**"
+    ],
+    "infra": [
+      "packages/auth/**",
+      "packages/capabilities/**",
+      "packages/embeddings/**",
+      "packages/gateway_core/**",
+      "packages/cron/**",
+      "packages/harness/**",
+      "packages/operator/**",
+      "packages/security/**",
+      "packages/telemetry/**",
+      "packages/runtime_config.py",
+      "packages/runtime_layout.py"
+    ],
+    "models": [
+      "packages/models/**"
+    ],
+    "cli": [
+      "apps/cli/**",
+      "apps/launcher.py",
+      "apps/upgrade_command.py"
+    ],
+    "api": [
+      "apps/api/**"
+    ],
+    "gateway": [
+      "apps/gateway/**"
+    ],
+    "dashboard": [
+      "apps/dashboard/**"
+    ],
+    "site": [
+      "apps/site/**"
+    ],
+    "learning_agents": [
+      "apps/reflect/**",
+      "apps/learning_agents/**"
+    ],
+    "test_harness": [
+      "tests/**"
+    ],
+    "deploy": [
+      "deploy/**"
+    ]
+  },
   "surfaces": {
+    "repo_docs": [
+      {
+        "path": "docs/agent/README.md",
+        "reason": "Repository docs should stay aligned with the harness index."
+      },
+      {
+        "path": "docs/agent/testing-strategy.md",
+        "reason": "Docs changes still need the validation ladder."
+      }
+    ],
+    "agent_text": [
+      {
+        "path": "docs/agent/governance.md",
+        "reason": "Agent-facing prose and templates must follow source-of-truth layering."
+      },
+      {
+        "path": "docs/agent/change-surfaces.md",
+        "reason": "Contributor-interface changes are routed by named change surfaces."
+      }
+    ],
+    "agent_exec": [
+      {
+        "path": "docs/agent/governance.md",
+        "reason": "Executable harness changes must preserve the rule-layer contract."
+      },
+      {
+        "path": "docs/agent/testing-strategy.md",
+        "reason": "Executable guardrails need the stronger validation ladder."
+      }
+    ],
+    "release_ops": [
+      {
+        "path": "docs/agent/release-model.md",
+        "reason": "CI, release, and publish automation are release-model surfaces."
+      },
+      {
+        "path": "docs/agent/testing-strategy.md",
+        "reason": "Release-facing changes must keep local and CI gates aligned."
+      }
+    ],
     "contracts": [
       {
         "path": "packages/contracts/AGENTS.md",
