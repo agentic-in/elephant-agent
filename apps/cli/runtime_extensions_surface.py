@@ -17,7 +17,14 @@ from packages.runtime_config import global_config_path_for_state_dir, load_globa
 from packages.growth import GrowthUpdate, ProgressionProjection, ProgressionTransition
 from packages.skills import PublicSkillSourceDescriptor, SkillDefinition, SkillHubEntry, SkillManifestLoadRecord, SkillPackageLoader, SkillSearchEntry, build_installed_skill_provenance, build_public_skill_source_descriptor, install_bucket_for_source_descriptor, load_skill_package_definition, materialize_skill_package, public_skill_source_descriptor_from_metadata
 from packages.skills.authoring import write_skill_package
-from packages.state import PromptContract, PromptMode, build_prompt_contract, personality_presets
+from packages.state import (
+    PromptContract,
+    PromptMode,
+    build_prompt_contract,
+    elephant_id_from_session,
+    personality_presets,
+    profile_with_authored_elephant_identity,
+)
 from packages.tools import BuiltinToolDependencies, ToolAudience, ToolDefinition, ToolManifestLoadRecord, sync_custom_mcp_tools
 from packages.tools.adapters import StructuredClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
@@ -85,6 +92,13 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         prompt_mode: PromptMode = "full",
     ) -> PromptContract:
         loaded = self._load_profile(profile_id or self.current_profile().state.profile_id)
+        session = self.latest_session()
+        elephant_id = elephant_id_from_session(session) if session is not None else ""
+        if session is not None and elephant_id and session.personal_model_id == loaded.state.profile_id:
+            loaded = profile_with_authored_elephant_identity(
+                loaded,
+                self.paths.elephant_file_path(elephant_id),
+            )
         return build_prompt_contract(loaded, prompt_mode=prompt_mode)
 
     def prepare_session_surface(self, session_id: str, *, steady_embeddings: bool = True) -> Episode:

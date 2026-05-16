@@ -12,8 +12,10 @@ from .loader import (
 )
 from .files import (
     ELEPHANT_IDENTITY_FILENAME,
+    elephant_id_from_session,
     elephant_identity_file_path,
     ensure_elephant_identity_file,
+    profile_with_authored_elephant_identity,
     read_elephant_identity_file,
     write_elephant_identity_file,
 )
@@ -96,6 +98,7 @@ __all__ = [
     "build_prompt_contract",
     "build_understanding_tool_policy_section",
     "elephant_identity_text",
+    "elephant_id_from_session",
     "companion_manifest_payload",
     "default_personality_preset_id",
     "ensure_elephant_identity_file",
@@ -116,6 +119,7 @@ __all__ = [
     "parse_user_profile_text",
     "personality_presets",
     "profile_manifest_payload",
+    "profile_with_authored_elephant_identity",
     "read_elephant_identity_file",
     "render_default_elephant_identity",
     "render_user_profile_text",

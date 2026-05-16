@@ -448,6 +448,7 @@ def build_gateway_app(
                 profile_loader=profile_loader,
                 repository=runtime_repository,
                 epoch_store=epoch_store,
+                install_root=install_root,
             ),
             recall=GatewayRecallCapability(recall_runtime),
             model_provider=model_provider,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -35,6 +36,14 @@ from packages.contracts.runtime import (
     PersonalModelRuntimeState,
 )
 from packages.evidence import RecallRuntime
+from packages.runtime_layout import elephant_file_path
+from packages.state import (
+    ProfileLoader,
+    build_prompt_contract,
+    elephant_id_from_session,
+    load_runtime_profile,
+    profile_with_authored_elephant_identity,
+)
 from packages.storage import RuntimeStorageRepository
 from packages.skills import SkillPromptContextBuilder
 from packages.tools import ToolRuntime
@@ -79,6 +88,8 @@ class APIContextCapability(ContextCapability):
         *,
         skill_prompt_context: SkillPromptContextBuilder | None = None,
         repository: RuntimeStorageRepository | None = None,
+        profile_loader: ProfileLoader | None = None,
+        install_root: Path | None = None,
     ) -> None:
         self.descriptor = CapabilityDescriptor(
             capability_id="api.context",
@@ -89,7 +100,33 @@ class APIContextCapability(ContextCapability):
         self.runtime = runtime
         self.skill_prompt_context = skill_prompt_context
         self.repository = repository
+        self.profile_loader = profile_loader
+        self.install_root = install_root
         self._last_session_id: str | None = None
+
+    def _runtime_for_session(self, session: Episode) -> ContextRuntime:
+        if self.repository is None:
+            return self.runtime
+        try:
+            elephant_id = elephant_id_from_session(session)
+            loaded = load_runtime_profile(
+                self.repository,
+                personal_model_id=getattr(session, "personal_model_id", None),
+                elephant_id=elephant_id or None,
+                profile_loader=self.profile_loader,
+            )
+            if elephant_id and self.install_root is not None:
+                loaded = profile_with_authored_elephant_identity(
+                    loaded,
+                    elephant_file_path(elephant_id, install_root=self.install_root),
+                )
+            prompt_contract = build_prompt_contract(loaded, prompt_mode="full")
+            return ContextRuntime(
+                instruction_refs=prompt_contract.instruction_refs,
+                total_tokens=self.runtime.total_tokens,
+            )
+        except Exception:
+            return self.runtime
 
     def assemble(
         self,
@@ -100,12 +137,12 @@ class APIContextCapability(ContextCapability):
         state_focus: StateFocusDecision | None = None,
     ) -> ContextBundle:
         self._last_session_id = session.episode_id
-        runtime = self.runtime
+        runtime = self._runtime_for_session(session)
         if self.skill_prompt_context is not None:
             skill_lines = self.skill_prompt_context.stable_prefix_lines(session)
             if skill_lines:
                 runtime = ContextRuntime(
-                    instruction_refs=(*self.runtime.instruction_refs, *skill_lines),
+                    instruction_refs=(*runtime.instruction_refs, *skill_lines),
                     total_tokens=self.runtime.total_tokens,
                 )
         bundle = runtime.assemble(session, work_items, recall_items, state_focus=state_focus)

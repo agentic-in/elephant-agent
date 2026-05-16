@@ -40,7 +40,12 @@ from packages.experience import capture_turn_experience
 from packages.growth import GrowthTurnSignals, apply_turn_growth
 from packages.kernel import KernelOutcome
 from packages.kernel.generation_context import build_context_for_generation
-from packages.state import build_prompt_contract, load_runtime_profile
+from packages.state import (
+    build_prompt_contract,
+    elephant_id_from_session,
+    load_runtime_profile,
+    profile_with_authored_elephant_identity,
+)
 
 if TYPE_CHECKING:
     from apps.cli.runtime import CliRuntime
@@ -437,12 +442,18 @@ def _episode_open_frozen_context(
     frozen_skill_index: tuple[FrozenSkillIndexEntry, ...],
 ) -> ContextBundle | None:
     try:
+        resolved_elephant_id = elephant_id_from_session(session)
         loaded = load_runtime_profile(
             runtime.repository,
             personal_model_id=profile.profile_id,
-            elephant_id=session.elephant_id,
+            elephant_id=resolved_elephant_id or None,
             profile_loader=runtime.profile_loader,
         )
+        if resolved_elephant_id:
+            loaded = profile_with_authored_elephant_identity(
+                loaded,
+                runtime.paths.elephant_file_path(resolved_elephant_id),
+            )
         prompt_contract = build_prompt_contract(loaded, prompt_mode="full")
         stable_prefix_lines = tuple(prompt_contract.stable_prefix_refs or prompt_contract.instruction_refs)
         skill_lines = _frozen_skill_shelf_prompt_lines(frozen_skill_index)

@@ -34,6 +34,7 @@ from packages.contracts.runtime import (
     SupportModelProfile,
 )
 from packages.evidence import RecallRuntime
+from packages.runtime_layout import elephant_file_path
 from packages.state.rendered_views import RenderedRelationshipView
 from packages.skills import SkillHub, SkillRuntime
 from packages.state import (
@@ -41,7 +42,9 @@ from packages.state import (
     ProfileLoader,
     PromptMode,
     build_prompt_contract,
+    elephant_id_from_session,
     load_runtime_profile,
+    profile_with_authored_elephant_identity,
 )
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolRuntime
@@ -314,12 +317,18 @@ class _CliContextCapability:
         (skill / tool overrides) is merged in from ``profile.json`` via
         the profile loader.
         """
-        return load_runtime_profile(
+        loaded = load_runtime_profile(
             self.repository,
             personal_model_id=profile_id,
             elephant_id=elephant_id,
             profile_loader=self.profile_loader,
         )
+        if elephant_id and self.install_root is not None:
+            return profile_with_authored_elephant_identity(
+                loaded,
+                elephant_file_path(elephant_id, install_root=self.install_root),
+            )
+        return loaded
 
     def assemble(
         self,
@@ -344,6 +353,9 @@ class _CliContextCapability:
         bundle_id: str | None = None,
     ) -> ContextAssemblyResult:
         loaded = self._load_profile(session.personal_model_id, elephant_id=session.elephant_id)
+        resolved_elephant_id = elephant_id_from_session(session)
+        if resolved_elephant_id and resolved_elephant_id != session.elephant_id:
+            loaded = self._load_profile(session.personal_model_id, elephant_id=resolved_elephant_id)
         return self._assemble_result(
             session=session,
             work_items=work_items,

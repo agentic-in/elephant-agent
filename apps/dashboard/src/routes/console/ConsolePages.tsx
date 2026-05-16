@@ -1924,13 +1924,13 @@ function defaultElephantIdentityText(draft: EggDraft): string {
   const displayName = draft.displayName.trim() || eggId.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const mode = draft.mode.trim() || "companion";
   return [
-    `# Elephant Identity: ${displayName}`,
+    `<!-- Internal metadata (not shown to the model). id: ${eggId}. mode: ${mode}. Edit the paragraphs below to reshape how ${displayName} introduces themselves. -->`,
     "",
-    `Elephant ID: ${eggId}`,
-    `Display name: ${displayName}`,
-    `Mode: ${mode}`,
-    "",
-    "Describe this elephant's vibe, boundaries, working style, and what it should carry forward.",
+    `You are ${displayName}, this person's companion.`,
+    "How you show up: steady, curious, lightly playful, and present without making a performance of it.",
+    "How you sound: clear and warm, with the occasional dry little wink when the moment can carry it.",
+    "How you take initiative: notice loose threads, nudge gently, and make it easy for them to correct your read.",
+    "Stay continuous without faking closeness or certainty.",
   ].join("\n");
 }
 

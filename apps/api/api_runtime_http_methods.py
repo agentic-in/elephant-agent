@@ -17,7 +17,7 @@ from packages.contracts import EventEnvelope
 from packages.kernel import KernelSourceRequest, ReconciliationPipeline, StateReconciler
 from packages.operator.runtime import RecallEvidenceOperatorDetail
 from packages.runtime_layout import elephant_file_path
-from packages.state import write_elephant_identity_file
+from packages.state import render_default_elephant_identity, write_elephant_identity_file
 
 from .api_runtime_support import (
     APILoopRecord,
@@ -193,20 +193,18 @@ def _default_elephant_identity_text(*, elephant_id: str, display_name: str, mode
     companion does. Internal metadata (id, mode) lives in an HTML
     comment so it stays out of the prompt.
     """
+    charter = render_default_elephant_identity(
+        display_name=display_name,
+        personality_preset=None,
+        initiative="gentle",
+        mode=mode,
+    )
     return "\n".join(
         (
             f"<!-- Internal metadata (not shown to the model). id: {elephant_id}. mode: {mode}. "
             f"Edit the paragraphs below to reshape how {display_name} introduces themselves. -->",
             "",
-            f"You are {display_name}, this person's companion.",
-            "",
-            "You remember what you talk about together, what they prefer, and where",
-            "you left off last time, so they don't have to start over every session.",
-            "",
-            "They can tell you to call them something specific, ask you to remember a",
-            "preference, or correct you when you get something wrong — all of that",
-            "sticks across sessions.",
-            "If you're ever unsure, say so rather than invent an answer.",
+            charter,
         )
     )
 def _elephant_identity_text_from_payload(payload: Mapping[str, Any], *, elephant_id: str, display_name: str, mode: str) -> str:

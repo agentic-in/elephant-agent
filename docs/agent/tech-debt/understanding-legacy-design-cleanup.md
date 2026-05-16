@@ -29,6 +29,13 @@ conversation history, evidence, and durable understanding.
 - Skill affinities are valid Personal Model facts under
   `world.skills.affinity.*`. Dashboard may project them separately because they
   are inspectable facts, not hidden skill rankings.
+- Elephant voice ownership must be file-first. `ELEPHANT.md` is the authored
+  source of the elephant's own voice; State owns structured runtime continuity
+  and may cache the latest text, but it must not be the authoritative editor
+  surface for the voice paragraph. Episode-open prompt assembly reads
+  `ELEPHANT.md`, strips framework metadata, and freezes that snapshot for the
+  Episode. Edits during an Episode take effect on the next Episode unless the
+  operator explicitly refreshes by starting a new Episode.
 
 ## Target
 
@@ -85,11 +92,21 @@ observation, proposal, user-card, or relationship-memory shapes.
   indexing without a second evidence owner.
 - [x] Rename remaining public/test `source record` wording to source item /
   Step/Episode/Fact provenance so SemanticIndex no longer reads as Record-based.
+- [x] Replace the legacy mixed identity ownership path where prompt text came
+  from `State.elephant_identity_text` while dashboard showed `ELEPHANT.md`.
+  Runtime context now overlays `LoadedProfile` with the authored file before
+  prompt-contract assembly.
+- [x] Fix old API/dashboard Episodes that carried `state_id=state:<elephant>`
+  but an empty `elephant_id`; context assembly now resolves the elephant id from
+  either field before reading `ELEPHANT.md`.
+- [x] Auto-refresh the exact old generated identity seed when encountered so
+  legacy bland defaults pick up the livelier initial elephant voice without
+  overwriting custom-authored files.
 - [x] Verify episode identity, compress/reflect, and frozen-prefix behavior:
-  identity prompt text comes from canonical State / PM rows, high-usage
-  compress writes a reference summary back into the frozen prefix while keeping
-  the recent tail, and episode-open prefix freezing now starts before the first
-  user loop.
+  identity prompt text comes from the authored `ELEPHANT.md` snapshot at Episode
+  open, high-usage compress writes a reference summary back into the frozen
+  prefix while keeping the recent tail, and episode-open prefix freezing now
+  starts before the first user loop.
 - [x] Remove pre-close learning scheduling from `/clear`, `/exit`, gateway
   `/clear`, and gateway idle-close paths so the unified Episode close path owns
   the `episode_close` reflect job instead of being hidden by an earlier
@@ -101,8 +118,8 @@ observation, proposal, user-card, or relationship-memory shapes.
 
 Status: final clean is complete for the prioritized kernel, provenance,
 projection-owner, root-export, storage reset, same-version schema drift reset,
-recall/API, CLI slash-command, dashboard/operator, scenario, and test-contract
-items.
+recall/API, CLI slash-command, dashboard/operator, scenario, test-contract, and
+file-authored elephant identity items.
 
 Final review result:
 
@@ -128,10 +145,11 @@ Final review result:
   Fact indexing runs immediately after successful `tool.personal_model.update`
   writes; Episode summary indexing runs through the unified close path, including
   shell exit and `/clear`.
-- Episode system prefixes freeze at episode open, including runtime path context.
-  Later turns append role-preserved history outside the frozen prefix. High-usage
-  compress replaces older history with an Episode resume reference summary in the
-  frozen prefix and preserves the recent tail for the next loop.
+- Episode system prefixes freeze at episode open, including runtime path context
+  and the sanitized `ELEPHANT.md` voice snapshot. Later turns append
+  role-preserved history outside the frozen prefix. High-usage compress replaces
+  older history with an Episode resume reference summary in the frozen prefix and
+  preserves the recent tail for the next loop.
 - Root package exports expose current public contracts only; internal builders,
   projections, persistence helpers, and removed memory facades are not exported
   from package roots.

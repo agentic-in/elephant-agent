@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -28,7 +29,13 @@ from packages.contracts.runtime import (
     PersonalModelRuntimeState,
 )
 from packages.evidence import RecallRuntime
-from packages.state import LoadedProfile, build_prompt_contract
+from packages.runtime_layout import elephant_file_path
+from packages.state import (
+    LoadedProfile,
+    build_prompt_contract,
+    elephant_id_from_session,
+    profile_with_authored_elephant_identity,
+)
 from packages.storage import RuntimeStorageRepository
 
 
@@ -65,7 +72,9 @@ class GatewayRecallCapability(RecallCapability):
 
 
 class GatewayContextCapability(ContextCapability):
-    def __init__(self, profile: LoadedProfile, *, total_tokens: int = 3072) -> None:
+    def __init__(self, profile: LoadedProfile, *, total_tokens: int = 3072, install_root: Path | None = None) -> None:
+        self.profile = profile
+        self.install_root = install_root
         self.prompt_contract = build_prompt_contract(profile, prompt_mode="full")
         self.descriptor = CapabilityDescriptor(
             capability_id="gateway.context",
@@ -86,11 +95,24 @@ class GatewayContextCapability(ContextCapability):
         *,
         state_focus: StateFocusDecision | None = None,
     ) -> ContextBundle:
-        bundle = self.runtime.assemble(session, work_items, recall_items, state_focus=state_focus)
+        runtime = self.runtime
+        prompt_contract = self.prompt_contract
+        elephant_id = elephant_id_from_session(session)
+        if elephant_id and self.install_root is not None:
+            loaded = profile_with_authored_elephant_identity(
+                self.profile,
+                elephant_file_path(elephant_id, install_root=self.install_root),
+            )
+            prompt_contract = build_prompt_contract(loaded, prompt_mode="full")
+            runtime = ContextRuntime(
+                instruction_refs=prompt_contract.instruction_refs,
+                total_tokens=self.runtime.total_tokens,
+            )
+        bundle = runtime.assemble(session, work_items, recall_items, state_focus=state_focus)
         return replace(
             bundle,
             bundle_id=f"bundle:{session.episode_id}:{len(work_items)}:{len(recall_items)}",
-            instruction_refs=self.prompt_contract.instruction_refs,
+            instruction_refs=prompt_contract.instruction_refs,
         )
 
 

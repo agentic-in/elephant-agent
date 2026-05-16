@@ -10,7 +10,9 @@ from packages.state import (
     CompanionSettings,
     build_loaded_profile_from_state,
     build_prompt_contract,
+    profile_with_authored_elephant_identity,
     render_user_profile_text,
+    write_elephant_identity_file,
 )
 
 
@@ -161,6 +163,27 @@ class PromptContractTest(unittest.TestCase):
         rendered = "\n".join(contract.stable_prefix_refs)
         self.assertIn("You are Leah, the companion this person keeps coming back to.", rendered)
         self.assertNotIn("You are Aeon, the companion this person keeps coming back to.", rendered)
+
+    def test_authored_elephant_file_overlays_state_identity_before_prompt(self) -> None:
+        loaded = self._build_loaded_profile(
+            display_name="You",
+            elephant_identity_text="State cache says stay quiet and stale.",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            elephant_root = Path(tmpdir) / "leah"
+            write_elephant_identity_file(
+                elephant_root,
+                "<!-- file metadata -->\n\nFile-authored Leah is playful, precise, and alive.",
+            )
+            authored = profile_with_authored_elephant_identity(loaded, elephant_root)
+
+        contract = build_prompt_contract(authored, prompt_mode="full")
+
+        rendered = "\n".join(contract.stable_prefix_refs)
+        self.assertIn("You are Leah, the companion this person keeps coming back to.", rendered)
+        self.assertIn("File-authored Leah is playful, precise, and alive.", rendered)
+        self.assertNotIn("State cache says stay quiet and stale.", rendered)
+        self.assertNotIn("file metadata", rendered)
 
     def test_generated_elephant_charter_is_not_duplicated_as_custom_note(self) -> None:
         generated_elephant_identity_text = "\n".join(

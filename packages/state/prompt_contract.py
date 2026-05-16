@@ -137,10 +137,10 @@ def build_system_layer_contract_section(
 
 
 def build_elephant_identity_section(profile: LoadedProfile) -> tuple[str, ...]:
-    """The human identity paragraph projected from ``State.elephant_identity_text``.
+    """The human identity paragraph projected from authored elephant voice text.
 
     We run the text through ``_strip_framework_meta_from_identity_text``
-    so that even if the stored text was written from the old template —
+    so that even if the authored text was written from the old template —
     with ``# Elephant Identity: Zoey``, ``Elephant ID: ...``, ``Mode: ...``, the
     ``## Operating Contract`` list, and the ``Personal Model -> Elephant
     -> Episode -> Loop -> Step`` continuity bullet — none of that

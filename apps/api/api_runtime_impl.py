@@ -196,6 +196,8 @@ class ElephantAPIApp:
             self.context_runtime,
             skill_prompt_context=skill_prompt_context,
             repository=self.repository,
+            profile_loader=self.profile_loader,
+            install_root=install_root,
         )
         def _resolve_elephant_state(elephant_id: str):
             resolved_elephant_id = elephant_id.strip()

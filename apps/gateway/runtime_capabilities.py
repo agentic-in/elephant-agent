@@ -67,9 +67,17 @@ from packages.gateway_core import (
 )
 from packages.kernel import KernelDependencies, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
 from packages.evidence import RecallRuntime
+from packages.runtime_layout import elephant_file_path
 from packages.skills import SkillPromptContextBuilder
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, LoadedProfile, ProfileLoader, build_prompt_contract
-from packages.state import load_runtime_profile
+from packages.state import (
+    DEFAULT_ELEPHANT_IDENTITY_TEXT,
+    LoadedProfile,
+    ProfileLoader,
+    build_prompt_contract,
+    elephant_id_from_session,
+    load_runtime_profile,
+    profile_with_authored_elephant_identity,
+)
 from packages.security.runtime import SecurityPolicy
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolRuntime
@@ -125,11 +133,13 @@ class GatewayContextCapability(ContextCapability):
         profile_loader: ProfileLoader | None = None,
         repository: RuntimeStorageRepository | None = None,
         epoch_store: EpochStore | None = None,
+        install_root: Path | None = None,
     ) -> None:
         self.default_profile = profile
         self.profile_loader = profile_loader
         self.repository = repository
         self.epoch_store = epoch_store
+        self.install_root = install_root
         self.total_tokens = total_tokens
         self._last_session_id: str | None = None
         # Prompt contract is rebuilt per-turn in `assemble` so that the session's
@@ -157,16 +167,27 @@ class GatewayContextCapability(ContextCapability):
         the bound elephant — not a startup-time stub.
         """
         if self.repository is None:
-            return self.default_profile
+            return self._with_authored_identity(self.default_profile, session)
         try:
-            return load_runtime_profile(
+            elephant_id = elephant_id_from_session(session)
+            loaded = load_runtime_profile(
                 self.repository,
                 personal_model_id=getattr(session, "personal_model_id", None),
-                elephant_id=getattr(session, "elephant_id", None),
+                elephant_id=elephant_id or None,
                 profile_loader=self.profile_loader,
             )
+            return self._with_authored_identity(loaded, session)
         except Exception:
-            return self.default_profile
+            return self._with_authored_identity(self.default_profile, session)
+
+    def _with_authored_identity(self, loaded: LoadedProfile, session: Episode) -> LoadedProfile:
+        elephant_id = elephant_id_from_session(session)
+        if not elephant_id or self.install_root is None:
+            return loaded
+        return profile_with_authored_elephant_identity(
+            loaded,
+            elephant_file_path(elephant_id, install_root=self.install_root),
+        )
 
     def assemble(
         self,

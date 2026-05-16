@@ -8,9 +8,11 @@ State row.
 
 With the reset:
 
-- Identity flows exclusively from the canonical State row.
-- Gateway and CLI share the same DB and the same ``load_runtime_profile``
-  resolver.
+- Identity name/mode flows from State.
+- The authored voice paragraph comes from ``ELEPHANT.md`` when present, with
+  State as the cache/fallback.
+- Gateway and CLI share the same DB, file layout, and ``load_runtime_profile``
+  resolver plus authored-file overlay.
 - Both surfaces therefore produce a byte-identical ``### Who you are`` /
   ``### Your own voice`` for the same ``(personal_model_id, elephant_id)`` pair.
 """
@@ -21,7 +23,13 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from packages.state import build_prompt_contract, load_runtime_profile
+from packages.runtime_layout import elephant_file_path
+from packages.state import (
+    build_prompt_contract,
+    load_runtime_profile,
+    profile_with_authored_elephant_identity,
+    write_elephant_identity_file,
+)
 from packages.storage import RuntimeStorageRepository
 
 
@@ -50,8 +58,6 @@ class GatewayCliPromptParityTest(unittest.TestCase):
                 surface_bindings=("cli",),
                 elephant_identity_text="Hi — I'm Zoey. I stay curious and grounded.",
                 summary="",
-                active_task="",
-                next_step="",
                 metadata={"profile_id": "you"},
             )
 
@@ -68,16 +74,13 @@ class GatewayCliPromptParityTest(unittest.TestCase):
             "- You are Zoey, the companion this person keeps coming back to.",
             rendered,
         )
-        # "Your own voice" carries the same identity text from the State row.
+        # Without an authored file overlay, "Your own voice" uses the State cache.
         self.assertIn("Hi — I'm Zoey.", rendered)
         # Legacy default must NOT leak in.
         self.assertNotIn("You are Elephant Agent,", rendered)
 
     def test_cli_and_gateway_render_the_same_identity_block(self) -> None:
-        """Same ``(personal_model_id, elephant_id)`` → byte-identical identity block
-        across surfaces. The gateway's ``_load_profile_for_session`` and the
-        CLI's ``_load_profile`` both call :func:`load_runtime_profile`, so
-        any divergence would show up here."""
+        """Same elephant file + State pair → byte-identical identity block."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repository = self._repository(root)
@@ -94,20 +97,28 @@ class GatewayCliPromptParityTest(unittest.TestCase):
                 surface_bindings=("cli", "messaging.weixin"),
                 elephant_identity_text="Hi — I'm Hazel. Steady, exact, steady.",
                 summary="",
-                active_task="",
-                next_step="",
                 metadata={"profile_id": "you"},
             )
-
-            cli_profile = load_runtime_profile(
-                repository,
-                personal_model_id="you",
-                elephant_id="hazel",
+            write_elephant_identity_file(
+                elephant_file_path("hazel", install_root=root),
+                "<!-- hidden metadata -->\n\nHi, I'm Hazel from the authored file. I am playful and exact.",
             )
-            gateway_profile = load_runtime_profile(
-                repository,
-                personal_model_id="you",
-                elephant_id="hazel",
+
+            cli_profile = profile_with_authored_elephant_identity(
+                load_runtime_profile(
+                    repository,
+                    personal_model_id="you",
+                    elephant_id="hazel",
+                ),
+                elephant_file_path("hazel", install_root=root),
+            )
+            gateway_profile = profile_with_authored_elephant_identity(
+                load_runtime_profile(
+                    repository,
+                    personal_model_id="you",
+                    elephant_id="hazel",
+                ),
+                elephant_file_path("hazel", install_root=root),
             )
 
         cli_contract = build_prompt_contract(cli_profile, prompt_mode="full")
@@ -115,6 +126,8 @@ class GatewayCliPromptParityTest(unittest.TestCase):
         self.assertEqual(cli_contract.stable_prefix_refs, gateway_contract.stable_prefix_refs)
         rendered = "\n".join(cli_contract.stable_prefix_refs)
         self.assertIn("You are Hazel,", rendered)
+        self.assertIn("Hi, I'm Hazel from the authored file.", rendered)
+        self.assertNotIn("Hi — I'm Hazel. Steady, exact, steady.", rendered)
 
 
 if __name__ == "__main__":

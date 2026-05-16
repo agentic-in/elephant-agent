@@ -13,9 +13,9 @@ settings are NOT read from it. :class:`ProfileLoader` only surfaces the
 extension manifest so the skill and tool runtimes can reload it between
 turns.
 
-ELEPHANT.md authored identity files are runtime-inert; they are written to mirror
-``State.elephant_identity_text`` but are never re-read at runtime. See
-:mod:`packages.state.files`.
+ELEPHANT.md authored identity files own the elephant's editable voice. This
+loader reads durable State / PM rows; runtime surfaces overlay the authored file
+before building an Episode-open prompt, then freeze that prompt for the Episode.
 """
 
 from __future__ import annotations

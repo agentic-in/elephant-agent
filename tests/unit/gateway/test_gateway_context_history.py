@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from apps.gateway.runtime_capabilities import GatewayContextCapability
+from packages.runtime_layout import elephant_file_path
 from packages.context import (
     SessionContextEpoch,
     next_session_context_epoch,
@@ -14,6 +15,7 @@ from packages.context.epoch_store import FileEpochStore, InMemoryEpochStore
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import ContextBundle, EventEnvelope, ExecutionResult, PersonalModelRuntimeState, PromptMessage, PromptEnvelope
 from packages.state import CompanionSettings, build_loaded_profile_from_state, render_user_profile_text
+from packages.state import write_elephant_identity_file
 
 
 class GatewayContextHistoryTest(unittest.TestCase):
@@ -69,6 +71,35 @@ class GatewayContextHistoryTest(unittest.TestCase):
         self.assertEqual(tuple(message.role for message in envelope.messages), ("user", "assistant"))
         self.assertEqual(envelope.messages[0].content, "工作好忙")
         self.assertIn("倒倒苦水", envelope.messages[1].content)
+
+    def test_gateway_context_reads_authored_elephant_file_before_freeze(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            install_root = Path(tmpdir)
+            write_elephant_identity_file(
+                elephant_file_path("zoey", install_root=install_root),
+                "<!-- hidden metadata -->\n\nZoey is playful, precise, and alive.",
+            )
+            session = Episode(
+                episode_id="episode:wx",
+                state_id="state:zoey",
+                personal_model_id="you",
+                entry_surface="test",
+                elephant_id="",
+                status="open",
+                started_at=datetime(2026, 5, 7, 3, 0, tzinfo=timezone.utc),
+                updated_at=datetime(2026, 5, 7, 3, 2, tzinfo=timezone.utc),
+            )
+            capability = GatewayContextCapability(
+                self._loaded_profile(),
+                install_root=install_root,
+            )
+
+            bundle = capability.assemble(session, (), ())
+
+        rendered = bundle.prompt_envelope.frozen_prefix
+        self.assertIn("Zoey is playful, precise, and alive.", rendered)
+        self.assertNotIn("You are Zoey, a steady companion.", rendered)
+        self.assertNotIn("hidden metadata", rendered)
 
     def test_session_epoch_persists_with_epoch_store(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
