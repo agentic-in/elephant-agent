@@ -59,4 +59,5 @@ This document defines how the harness exposes the minimum useful context for a t
 - Keep the context pack task-first and minimal; if a reference is almost always skipped, remove it.
 - When a new surface, skill, or local rule is added, update `tools/agent/context-map.yaml` in the same change.
 - If the context pack and the canonical docs disagree, fix the canonical doc and the context map together.
-- Run `make agent-report AGENT_REPORT_AUDIT=1 CHANGED_FILES="..."` after completing a task to detect surface gaps; if the audit reports drift, update the context map before shipping.
+- Run `make agent-context-audit CHANGED_FILES="..."` after completing a task to detect surface gaps.
+- If audit output reports drift, treat it as a self-repair prompt: update `tools/agent/context-map.yaml` for path/surface gaps, update `tools/agent/task-matrix.yaml` or `tools/agent/skill-registry.yaml` if the primary skill or validation ladder is wrong, then rerun the audit before shipping.

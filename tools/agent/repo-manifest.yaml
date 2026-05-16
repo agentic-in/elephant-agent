@@ -31,6 +31,7 @@
     "make agent-validate",
     "make agent-scorecard",
     "make agent-report CHANGED_FILES=\"<changed-files>\"",
+    "make agent-context-audit CHANGED_FILES=\"<changed-files>\"",
     "make agent-lint",
     "make agent-test",
     "make agent-fast-gate",

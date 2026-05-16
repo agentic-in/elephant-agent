@@ -104,11 +104,12 @@ Worker sessions should:
 Run the smallest gate that proves the current change:
 
 1. `make agent-validate`
-2. `make agent-lint`
-3. `make agent-test`
-4. `make agent-fast-gate`
-5. `make agent-pr-gate`
-6. `make agent-ship AGENT_COMMIT_MESSAGE='...'`
+2. `make agent-context-audit CHANGED_FILES="..."`
+3. `make agent-lint`
+4. `make agent-test`
+5. `make agent-fast-gate`
+6. `make agent-pr-gate`
+7. `make agent-ship AGENT_COMMIT_MESSAGE='...'`
 
 ## Controlled Auto-Ship
 

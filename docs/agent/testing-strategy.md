@@ -6,13 +6,15 @@ Run the smallest gate that proves the current change:
 
 1. `make agent-validate`
    - manifest, doc, and contract integrity
-2. `make agent-lint`
+2. `make agent-context-audit CHANGED_FILES="..."`
+   - context-map drift prompt for changed files
+3. `make agent-lint`
    - structure checks plus Python compile smoke for harness scripts and tests, with targeted frontend typecheck for touched `apps/dashboard/**` and `apps/site/**` surfaces
-3. `make agent-test`
+4. `make agent-test`
    - harness regression tests
-4. `make agent-fast-gate`
+5. `make agent-fast-gate`
    - validate + lint + tests
-5. `make agent-pr-gate`
+6. `make agent-pr-gate`
    - report + fast gate + commit-range lint when a base ref exists
 
 ## Product And Pipeline Entry Points

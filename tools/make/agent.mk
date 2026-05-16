@@ -8,6 +8,7 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make agent-validate"
 	@echo "  make agent-scorecard"
 	@echo "  make agent-report CHANGED_FILES=\"...\""
+	@echo "  make agent-context-audit CHANGED_FILES=\"...\""
 	@echo "  make agent-lint"
 	@echo "  make agent-test"
 	@echo "  make agent-fast-gate"
@@ -27,7 +28,7 @@ agent-bootstrap: ## Install local hook path and ensure worktree root exists
 	@echo "Configured core.hooksPath=.githooks"
 
 agent-validate: ## Validate harness manifests and docs
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py validate
+	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py validate --detail "$(AGENT_VALIDATE_DETAIL)"
 
 agent-scorecard: ## Show harness governance scorecard
 	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py scorecard
@@ -35,9 +36,13 @@ agent-scorecard: ## Show harness governance scorecard
 AGENT_CONTEXT_DETAIL ?= compact
 AGENT_REPORT_FORMAT ?= text
 AGENT_REPORT_AUDIT ?=
+AGENT_VALIDATE_DETAIL ?= compact
 
 agent-report: ## Show primary surfaces and validation commands
 	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_CONTEXT_DETAIL)" --format "$(AGENT_REPORT_FORMAT)" $(if $(AGENT_REPORT_AUDIT),--audit)
+
+agent-context-audit: ## Show context-map drift warnings for changed files
+	@$(MAKE) agent-report CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)" AGENT_REPORT_AUDIT=1
 
 agent-lint: ## Run harness lint checks
 	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
@@ -65,7 +70,7 @@ agent-pr-gate: ## Reproduce the baseline PR gate locally
 		BASE_REF="origin/main"; \
 	fi; \
 	echo "Using AGENT_BASE_REF=$${BASE_REF:-<none>}"; \
-	$(MAKE) agent-report CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$$BASE_REF"; \
+	$(MAKE) agent-report CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$$BASE_REF" AGENT_REPORT_AUDIT=1; \
 	$(MAKE) agent-fast-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$$BASE_REF"; \
 	if [ -n "$$BASE_REF" ]; then \
 		$(MAKE) agent-commit-lint AGENT_BASE_REF="$$BASE_REF"; \

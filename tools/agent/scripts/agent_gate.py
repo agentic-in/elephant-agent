@@ -142,6 +142,7 @@ class ContextPack:
     validation: list[str]
     acceptance_criteria: str = ""
     audit_warnings: list[str] = field(default_factory=list)
+    context_repair_prompt: str = ""
 
 
 def load_manifest(path: Path) -> dict[str, object]:
@@ -251,14 +252,18 @@ def collect_changed_files(base_ref: str, changed_files: str, changed_files_path:
 def match_any(path: str, patterns: Iterable[str]) -> bool:
     pure = PurePosixPath(path)
     for pattern in patterns:
-        if fnmatch.fnmatch(path, pattern):
-            return True
-        if pure.match(pattern):
-            return True
         if pattern.endswith("/**"):
             prefix = pattern[:-3].rstrip("/")
             if path == prefix or path.startswith(prefix + "/"):
                 return True
+            continue
+        if "/" not in pattern:
+            if "/" not in path and fnmatch.fnmatch(path, pattern):
+                return True
+            continue
+        pattern_parts = PurePosixPath(pattern).parts
+        if pattern_parts and pure.parts and pattern_parts[0] == pure.parts[0] and pure.match(pattern):
+            return True
     return False
 
 
@@ -317,10 +322,10 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
 
     primary = matches[0] if matches else None
     primary_name = primary.name if primary else registry.get("default_skill", "repo-docs")
-    primary_summary = primary.summary if primary else ""
 
     skills = registry.get("skills", {})
     skill_data = skills.get(primary_name, {})
+    primary_summary = primary.summary if primary else skill_data.get("summary", "")
 
     # L1: read_first from manifest + skill
     read_first: list[str] = []
@@ -339,7 +344,10 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
     touched_surfaces = resolve_surfaces_for_files(changed_files)
     required_surfaces = set(skill_data.get("required_surfaces", []))
     conditional_surfaces = set(skill_data.get("conditional_surfaces", []))
-    active_surfaces = required_surfaces | (conditional_surfaces & touched_surfaces)
+    related_surfaces = required_surfaces | conditional_surfaces
+    active_surfaces = touched_surfaces & related_surfaces
+    if not active_surfaces:
+        active_surfaces = touched_surfaces or required_surfaces
     if not active_surfaces and touched_surfaces:
         active_surfaces = touched_surfaces
 
@@ -392,6 +400,7 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
         local_agents_md=local_agents,
         validation=validation,
         acceptance_criteria=acceptance,
+        context_repair_prompt=context_repair_prompt(),
     )
 
 
@@ -408,6 +417,16 @@ def audit_surface_coverage(changed_files: list[str], context_pack: ContextPack) 
     for path in unmatched:
         warnings.append(f"file does not belong to any surface: {path}")
     return warnings
+
+
+def context_repair_prompt() -> str:
+    return (
+        "Treat audit warnings as harness drift. Before shipping, update "
+        "tools/agent/context-map.yaml for path/surface gaps; update "
+        "tools/agent/task-matrix.yaml or tools/agent/skill-registry.yaml if "
+        "the primary skill, validation ladder, or required context is wrong; "
+        "then rerun make agent-context-audit CHANGED_FILES=\"...\"."
+    )
 
 
 # ─── Validation ────────────────────────────────────────────────────────────────
@@ -595,7 +614,14 @@ def resolve_rule_matches(changed_files: list[str]) -> list[RuleMatch]:
 # ─── Report output ─────────────────────────────────────────────────────────────
 
 
-def print_report(base_ref: str, changed_files: list[str], *, context_detail: str = "compact", fmt: str = "text", audit: bool = False) -> None:
+def print_report(
+    base_ref: str,
+    changed_files: list[str],
+    *,
+    context_detail: str = "compact",
+    fmt: str = "text",
+    audit: bool = False,
+) -> None:
     matches = resolve_rule_matches(changed_files)
     pack = build_context_pack(changed_files, matches)
 
@@ -673,6 +699,9 @@ def print_report(base_ref: str, changed_files: list[str], *, context_detail: str
         print("Audit Warnings")
         for warning in pack.audit_warnings:
             print(f"  - {warning}")
+        print()
+        print("Context Repair")
+        print(f"  {pack.context_repair_prompt}")
 
 
 def print_report_json(pack: ContextPack, changed_files: list[str], base_ref: str) -> None:
@@ -695,6 +724,7 @@ def print_report_json(pack: ContextPack, changed_files: list[str], base_ref: str
         "validation": pack.validation,
         "acceptance_criteria": pack.acceptance_criteria,
         "audit_warnings": pack.audit_warnings,
+        "context_repair_prompt": pack.context_repair_prompt,
     }
     print(json.dumps(output, indent=2))
 
@@ -799,6 +829,18 @@ def print_scorecard() -> None:
     print(f"  Context-map surfaces: {surface_count}")
 
 
+def print_validate_result(checks: list[str], errors: list[str], *, detail: str = "compact") -> None:
+    print("Elephant Agent Harness Validate")
+    print(f"  Checks: {len(checks)}")
+    print(f"  Errors: {len(errors)}")
+    if detail == "full":
+        for check in checks:
+            print(f"  - {check}")
+    if errors:
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+
+
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 
@@ -806,8 +848,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Elephant Agent harness gate commands.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    for name in ("validate", "scorecard"):
-        subparsers.add_parser(name)
+    validate_parser = subparsers.add_parser("validate")
+    validate_parser.add_argument("--detail", choices=["compact", "full"], default="compact")
+    subparsers.add_parser("scorecard")
 
     for name in ("report", "lint", "changed-files"):
         sub = subparsers.add_parser(name)
@@ -823,16 +866,8 @@ def main() -> int:
 
     if args.command == "validate":
         checks, errors = validate_contract()
-        print("Elephant Agent Harness Validate")
-        print(f"  Checks: {len(checks)}")
-        print(f"  Errors: {len(errors)}")
-        for check in checks:
-            print(f"  - {check}")
-        if errors:
-            for error in errors:
-                print(f"  - {error}", file=sys.stderr)
-            return 1
-        return 0
+        print_validate_result(checks, errors, detail=args.detail)
+        return 1 if errors else 0
 
     if args.command == "scorecard":
         print_scorecard()

@@ -12,7 +12,8 @@
         "CHANGELOG.md",
         "learn.md",
         "*_CODE_ANALYSIS.md",
-        "docs/**/*.md",
+        "docs/README.md",
+        "docs/system-design/**",
         "docs/paper/**"
       ],
       "read_first": [

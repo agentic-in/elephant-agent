@@ -282,6 +282,7 @@
         "apps/learning_agents/**"
       ],
       "required_surfaces": [
+        "app_scaffold",
         "test_harness",
         "deploy"
       ],

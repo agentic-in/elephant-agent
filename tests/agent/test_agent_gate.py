@@ -25,6 +25,10 @@ class AgentGateTests(unittest.TestCase):
     def test_match_any(self) -> None:
         self.assertTrue(MODULE.match_any("tools/agent/scripts/agent_gate.py", ["tools/agent/**"]))
         self.assertFalse(MODULE.match_any("README.md", ["tools/agent/**"]))
+        self.assertFalse(MODULE.match_any("tools/agent/scripts/agent_gate.py", ["scripts/**"]))
+        self.assertFalse(MODULE.match_any("docs/agent/README.md", ["README.md"]))
+        self.assertFalse(MODULE.match_any("docs/agent/README.md", ["docs/*.md"]))
+        self.assertTrue(MODULE.match_any("docs/README.md", ["docs/*.md"]))
 
     def test_parse_repo_name_from_remote_url(self) -> None:
         self.assertEqual(MODULE.parse_repo_name_from_remote_url("git@github.com:agentic-in/elephant.git"), "elephant")
@@ -150,6 +154,38 @@ class AgentGateTests(unittest.TestCase):
         self.assertIn("[cli]", output)
         self.assertIn("path: apps/cli/**", output)
 
+    def test_full_report_only_includes_touched_frontend_surface(self) -> None:
+        matches = MODULE.resolve_rule_matches(["apps/site/src/pages/index.tsx"])
+        pack = MODULE.build_context_pack(["apps/site/src/pages/index.tsx"], matches)
+
+        self.assertEqual(set(pack.surfaces), {"site"})
+
+    def test_app_scaffold_surface_covers_root_scaffold_files(self) -> None:
+        self.assertIn("app_scaffold", MODULE.resolve_surfaces_for_files(["pyproject.toml"]))
+        matches = MODULE.resolve_rule_matches(["pyproject.toml"])
+        pack = MODULE.build_context_pack(["pyproject.toml"], matches)
+
+        self.assertEqual(set(pack.surfaces), {"app_scaffold"})
+
+    def test_audit_warning_prints_context_repair_prompt(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            MODULE.print_report("", ["unknown/path.txt"], audit=True)
+
+        output = buffer.getvalue()
+        self.assertIn("Audit Warnings", output)
+        self.assertIn("Context Repair", output)
+        self.assertIn("tools/agent/context-map.yaml", output)
+
+    def test_validate_compact_hides_check_details(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            MODULE.print_validate_result(["check detail"], [], detail="compact")
+
+        output = buffer.getvalue()
+        self.assertIn("Checks: 1", output)
+        self.assertNotIn("check detail", output)
+
     def test_context_map_covers_harness_and_release_paths(self) -> None:
         matches = MODULE.resolve_rule_matches(
             [
@@ -196,6 +232,14 @@ class AgentGateTests(unittest.TestCase):
         output = buffer.getvalue()
         self.assertIn("Ship Default", output)
         self.assertIn("make agent-ship AGENT_COMMIT_MESSAGE", output)
+
+    def test_default_report_uses_default_skill_summary(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            MODULE.print_report("", ["unknown/path.txt"])
+
+        output = buffer.getvalue()
+        self.assertIn("repo-docs: Top-level docs", output)
 
     def test_task_matrix_tracks_root_build_and_ignore_files(self) -> None:
         task_matrix_text = TASK_MATRIX_PATH.read_text(encoding="utf-8")

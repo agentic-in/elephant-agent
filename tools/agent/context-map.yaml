@@ -107,7 +107,8 @@
       "CHANGELOG.md",
       "learn.md",
       "*_CODE_ANALYSIS.md",
-      "docs/**/*.md",
+      "docs/README.md",
+      "docs/system-design/**",
       "docs/paper/**"
     ],
     "agent_text": [
@@ -201,6 +202,12 @@
     ],
     "deploy": [
       "deploy/**"
+    ],
+    "app_scaffold": [
+      "pyproject.toml",
+      "scripts/**",
+      "netlify.toml",
+      "apps/*.py"
     ]
   },
   "surfaces": {
@@ -382,6 +389,16 @@
       {
         "path": "deploy/AGENTS.md",
         "reason": "Packaging, Docker, systemd, and cloud deployment assets."
+      }
+    ],
+    "app_scaffold": [
+      {
+        "path": "docs/agent/repo-map.md",
+        "reason": "Scaffold files must still land in the documented repo structure."
+      },
+      {
+        "path": "docs/agent/architecture-guardrails.md",
+        "reason": "Scaffold changes must not become product logic sinks."
       }
     ]
   },

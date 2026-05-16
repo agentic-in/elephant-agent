@@ -38,6 +38,7 @@ Elephant Agent is a Personal-Model-first (PM-first) evolving personal AI agent. 
 - `make agent-validate`
 - `make agent-scorecard`
 - `make agent-report CHANGED_FILES="..."`
+- `make agent-context-audit CHANGED_FILES="..."`
 - `make agent-lint`
 - `make agent-test`
 - `make agent-fast-gate`

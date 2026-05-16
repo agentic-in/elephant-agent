@@ -9,7 +9,8 @@ Use for:
 - `README.md`
 - `CONTRIBUTING.md`
 - `CHANGELOG.md`
-- non-agent docs under `docs/**`
+- `docs/README.md`
+- system-design docs under `docs/system-design/**`
 - paper sources and compiled paper artifacts under `docs/paper/**`
 
 Default validation:
