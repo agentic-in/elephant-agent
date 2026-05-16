@@ -252,6 +252,63 @@ class LoCoMoEvalTest(unittest.TestCase):
             self.assertEqual(output.results[0].metadata["retrieval_mode"], "semantic_observation")
             self.assertEqual(output.metrics["overall"]["retrieval_hit"], 1.0)
 
+    def test_run_eval_supports_elephant_multilayer_memory_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original_path = root / "locomo10.json"
+            original_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "sample_id": "sample-1",
+                            "conversation": {
+                                "speaker_a": "Alice",
+                                "speaker_b": "Bob",
+                                "session_1_date_time": "01 January 2024",
+                                "session_1": [
+                                    {"dia_id": "D1:1", "speaker": "Alice", "text": "I bought oat milk."},
+                                    {"dia_id": "D1:2", "speaker": "Bob", "text": "That works for coffee."},
+                                ],
+                            },
+                            "qa": [
+                                {
+                                    "question": "What did Alice buy?",
+                                    "answer": "oat milk",
+                                    "evidence": ["D1:1"],
+                                    "category": "1",
+                                }
+                            ],
+                            "observation": {
+                                "session_1_observation": {
+                                    "Alice": [["Alice bought oat milk.", "D1:1"]]
+                                }
+                            },
+                            "session_summary": {
+                                "session_1_summary": "Alice bought oat milk."
+                            },
+                            "event_summary": {},
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            output_dir = root / "out"
+            output = run_eval(
+                EvalRunConfig(
+                    dataset="locomo",
+                    dataset_path=str(original_path),
+                    output_dir=str(output_dir),
+                    top_k=1,
+                    retrieval_mode="hybrid_multilayer_query_fusion",
+                ),
+                embedding_service=FakeEmbeddingService(),
+                answer_runner=FakeAnswerRunner(),
+            )
+
+            self.assertEqual(output.results[0].predicted_answer, "oat milk")
+            self.assertEqual(output.results[0].metadata["retrieval_mode"], "hybrid_multilayer_query_fusion")
+            self.assertEqual(output.metrics["overall"]["retrieval_hit"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

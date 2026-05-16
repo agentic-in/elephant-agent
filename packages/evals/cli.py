@@ -16,6 +16,7 @@ from packages.evals.targets import (
     ElephantMemoryEvalTarget,
     ElephantModelAnswerRunner,
     LoCoMoBaselineEvalTarget,
+    is_elephant_memory_mode,
     is_baseline_mode,
 )
 
@@ -132,7 +133,7 @@ def _build_target(
     answer_runner: Any,
 ) -> Any:
     retrieval_mode = str(config.retrieval_mode or "hybrid").strip().lower()
-    if retrieval_mode == "hybrid":
+    if is_elephant_memory_mode(retrieval_mode):
         return ElephantMemoryEvalTarget(
             embedding_service=embedding_service,
             answer_runner=answer_runner,

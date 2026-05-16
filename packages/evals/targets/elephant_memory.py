@@ -63,6 +63,15 @@ _MONTHS = {
     "december": 12,
 }
 _DAY_MONTH_YEAR_RE = re.compile(r"\b(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})\b")
+_ELEPHANT_MEMORY_MODES = frozenset(
+    {
+        "hybrid",
+        "hybrid_query_fusion",
+        "hybrid_observation",
+        "hybrid_multilayer",
+        "hybrid_multilayer_query_fusion",
+    }
+)
 
 
 class EmbeddingServiceLike(Protocol):
@@ -232,10 +241,10 @@ class ElephantMemoryEvalTarget:
         self.top_k = max(1, int(top_k or 5))
         self.answer_concurrency = max(1, int(answer_concurrency or 1))
         self.answer_batch_size = max(1, int(answer_batch_size or 1))
-        self.retrieval_mode = str(retrieval_mode or "hybrid").strip().lower()
+        self.retrieval_mode = _normalize_memory_mode(retrieval_mode)
         self.answer_mode = str(answer_mode or "model").strip().lower()
-        if self.retrieval_mode != "hybrid":
-            raise ValueError("elephant eval only supports hybrid retrieval")
+        if not is_elephant_memory_mode(self.retrieval_mode):
+            raise ValueError(f"unsupported elephant memory retrieval mode: {retrieval_mode}")
         if self.answer_mode != "model":
             raise ValueError("elephant eval only supports model answer mode")
         if embedding_service is None:
@@ -333,6 +342,16 @@ class ElephantMemoryEvalTarget:
                 )
                 sandbox.repository.upsert_step(step)
                 sandbox.indexer.index_step(step)
+            for step in self._memory_steps_for_session(
+                session,
+                loop_id=loop_id,
+                episode_id=episode_id,
+                state_id=sandbox.state_id,
+                personal_model_id=sandbox.personal_model_id,
+                created_at=started_at + timedelta(hours=1),
+            ):
+                sandbox.repository.upsert_step(step)
+                sandbox.indexer.index_step(step)
 
     def _step_for_message(
         self,
@@ -378,19 +397,186 @@ class ElephantMemoryEvalTarget:
         )
 
     def _retrieve_hits(self, sandbox: _ConversationSandbox, question: EvalQuestion) -> tuple[RetrievalHit, ...]:
+        if self.retrieval_mode in {"hybrid_query_fusion", "hybrid_multilayer_query_fusion"}:
+            return self._retrieve_fused_hits(sandbox, question)
+        return self._retrieve_single_query_hits(sandbox, question.question, limit=self.top_k)
+
+    def _retrieve_single_query_hits(
+        self,
+        sandbox: _ConversationSandbox,
+        query: str,
+        *,
+        limit: int,
+    ) -> tuple[RetrievalHit, ...]:
         raw_hits = unified_recall(
             UnifiedRecallRequest(
-                query=question.question,
+                query=query,
                 scopes=("steps",),
                 personal_model_id=sandbox.personal_model_id,
                 state_id=sandbox.state_id,
-                limit=self.top_k,
+                limit=limit,
             ),
             repository=sandbox.repository,
             searcher=sandbox.searcher,
             embedding_service=sandbox.embedding_service,
         )
         return tuple(_retrieval_hit(index, hit) for index, hit in enumerate(raw_hits, start=1))
+
+    def _retrieve_fused_hits(self, sandbox: _ConversationSandbox, question: EvalQuestion) -> tuple[RetrievalHit, ...]:
+        candidates: dict[str, tuple[RetrievalHit, float]] = {}
+        query_limit = max(self.top_k * 2, self.top_k)
+        for query in _queries_for_question(question):
+            for hit in self._retrieve_single_query_hits(sandbox, query, limit=query_limit):
+                key = _retrieval_identity(hit)
+                fused_score = (1.0 / (60.0 + hit.rank)) + (hit.score * 0.01)
+                existing = candidates.get(key)
+                if existing is None:
+                    candidates[key] = (hit, fused_score)
+                    continue
+                existing_hit, existing_score = existing
+                best_hit = hit if hit.rank < existing_hit.rank else existing_hit
+                candidates[key] = (best_hit, existing_score + fused_score)
+        ranked = sorted(candidates.values(), key=lambda item: item[1], reverse=True)
+        return tuple(
+            RetrievalHit(
+                rank=index,
+                source_id=hit.source_id,
+                content=hit.content,
+                score=score,
+                kind=hit.kind,
+                when=hit.when,
+                metadata={**dict(hit.metadata), "query_fusion": "true"},
+            )
+            for index, (hit, score) in enumerate(ranked[: self.top_k], start=1)
+        )
+
+    def _memory_steps_for_session(
+        self,
+        session,
+        *,
+        loop_id: str,
+        episode_id: str,
+        state_id: str,
+        personal_model_id: str,
+        created_at: datetime,
+    ) -> tuple[Step, ...]:
+        if self.retrieval_mode in {"hybrid", "hybrid_query_fusion"}:
+            return ()
+        include_summary = self.retrieval_mode in {"hybrid_multilayer", "hybrid_multilayer_query_fusion"}
+        steps: list[Step] = []
+        if include_summary:
+            summary = str(session.metadata.get("session_summary") or "").strip()
+            if summary:
+                steps.append(
+                    self._memory_step(
+                        step_id=f"eval:summary:S{session.session_index}",
+                        loop_id=loop_id,
+                        episode_id=episode_id,
+                        state_id=state_id,
+                        personal_model_id=personal_model_id,
+                        created_at=created_at,
+                        sequence=10_000 + session.session_index,
+                        content=f"Session {session.session_index} at {session.date_time} summary: {summary}",
+                        source_id=f"S{session.session_index}",
+                        source_ids=",".join(message.message_id for message in session.messages),
+                        memory_kind="session_summary",
+                        session_index=session.session_index,
+                        session_date_time=session.date_time,
+                    )
+                )
+        for index, observation in enumerate(_loads_list(session.metadata.get("observations_json")), start=1):
+            text = str(observation.get("text") or "").strip()
+            if not text:
+                continue
+            evidence_ids = tuple(str(item).strip() for item in observation.get("evidence_ids") or () if str(item).strip())
+            speaker = str(observation.get("speaker") or "").strip()
+            steps.append(
+                self._memory_step(
+                    step_id=f"eval:observation:S{session.session_index}:{index}",
+                    loop_id=loop_id,
+                    episode_id=episode_id,
+                    state_id=state_id,
+                    personal_model_id=personal_model_id,
+                    created_at=created_at + timedelta(minutes=index),
+                    sequence=20_000 + index,
+                    content=f"Session {session.session_index} at {session.date_time} observation for {speaker}: {text}",
+                    source_id=evidence_ids[0] if evidence_ids else f"O{session.session_index}:{index}",
+                    source_ids=",".join(evidence_ids),
+                    memory_kind="observation",
+                    session_index=session.session_index,
+                    session_date_time=session.date_time,
+                    speaker=speaker,
+                )
+            )
+        for index, event in enumerate(_loads_list(session.metadata.get("events_json")), start=1):
+            text = str(event.get("text") or "").strip()
+            if not text:
+                continue
+            speaker = str(event.get("speaker") or "").strip()
+            date = str(event.get("date") or session.date_time).strip()
+            steps.append(
+                self._memory_step(
+                    step_id=f"eval:event:S{session.session_index}:{index}",
+                    loop_id=loop_id,
+                    episode_id=episode_id,
+                    state_id=state_id,
+                    personal_model_id=personal_model_id,
+                    created_at=created_at + timedelta(minutes=500 + index),
+                    sequence=30_000 + index,
+                    content=f"Session {session.session_index} event on {date} for {speaker}: {text}",
+                    source_id=f"E{session.session_index}:{index}",
+                    source_ids=",".join(message.message_id for message in session.messages),
+                    memory_kind="event_summary",
+                    session_index=session.session_index,
+                    session_date_time=session.date_time,
+                    speaker=speaker,
+                )
+            )
+        return tuple(steps)
+
+    def _memory_step(
+        self,
+        *,
+        step_id: str,
+        loop_id: str,
+        episode_id: str,
+        state_id: str,
+        personal_model_id: str,
+        created_at: datetime,
+        sequence: int,
+        content: str,
+        source_id: str,
+        source_ids: str,
+        memory_kind: str,
+        session_index: int,
+        session_date_time: str,
+        speaker: str = "",
+    ) -> Step:
+        metadata = {
+            "event_type": f"eval.memory.{memory_kind}",
+            "source_id": source_id,
+            "source_ids": source_ids,
+            "recall_source": memory_kind,
+            "session_index": str(session_index),
+            "session_date_time": session_date_time,
+            "speaker": speaker,
+            "assistant_response": content,
+        }
+        return Step(
+            step_id=step_id,
+            loop_id=loop_id,
+            episode_id=episode_id,
+            state_id=state_id,
+            personal_model_id=personal_model_id,
+            phase="observation",
+            action="emit_response",
+            status="completed",
+            sequence=sequence,
+            created_at=created_at,
+            summary=content,
+            payload_refs=(source_id,),
+            metadata=metadata,
+        )
 
     def _answer_prepared_questions(
         self,
@@ -467,6 +653,86 @@ def _retrieval_hit(rank: int, hit: Any) -> RetrievalHit:
     )
 
 
+def is_elephant_memory_mode(value: str) -> bool:
+    return _normalize_memory_mode(value) in _ELEPHANT_MEMORY_MODES
+
+
+def _normalize_memory_mode(value: object) -> str:
+    text = str(value or "hybrid").strip().lower().replace("-", "_")
+    aliases = {
+        "hybrid_fusion": "hybrid_query_fusion",
+        "query_fusion": "hybrid_query_fusion",
+        "hybrid_obs": "hybrid_observation",
+        "hybrid_observations": "hybrid_observation",
+        "hybrid_facts": "hybrid_observation",
+        "hybrid_all": "hybrid_multilayer",
+        "hybrid_multi_layer": "hybrid_multilayer",
+        "hybrid_multilayer_fusion": "hybrid_multilayer_query_fusion",
+        "hybrid_all_fusion": "hybrid_multilayer_query_fusion",
+    }
+    return aliases.get(text, text)
+
+
+def _queries_for_question(question: EvalQuestion) -> tuple[str, ...]:
+    base = question.question.strip()
+    queries = [base]
+    category = str(question.category or "").strip()
+    if category == "2":
+        queries.append(f"{base} date time session when happened relative day week month")
+    elif category == "1":
+        queries.append(f"{base} personal fact identity activity relationship preference")
+    elif category == "3":
+        queries.append(f"{base} infer likely preference goal field from evidence")
+    elif category == "4":
+        queries.append(f"{base} event detail reason awareness topic")
+    else:
+        queries.append(f"{base} memory evidence conversation detail")
+    queries.append(_keyword_query(base))
+    return tuple(dict.fromkeys(query for query in queries if query.strip()))
+
+
+def _keyword_query(value: str) -> str:
+    tokens = re.findall(r"[A-Za-z][A-Za-z'-]{2,}|\d{4}|\d{1,2}", value)
+    stop = {
+        "what",
+        "when",
+        "where",
+        "who",
+        "why",
+        "how",
+        "did",
+        "does",
+        "would",
+        "could",
+        "should",
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "was",
+        "were",
+        "is",
+        "are",
+    }
+    kept = [token for token in tokens if token.lower() not in stop]
+    return " ".join(kept[:12]) or value
+
+
+def _retrieval_identity(hit: RetrievalHit) -> str:
+    metadata = dict(hit.metadata)
+    identity = (
+        metadata.get("source_ids")
+        or metadata.get("source_id")
+        or metadata.get("dia_id")
+        or hit.source_id
+        or hit.content[:80]
+    )
+    return str(identity)
+
+
 def _source_id_from_step_id(value: object) -> str:
     text = str(value or "").strip()
     if text.startswith("eval:"):
@@ -530,6 +796,16 @@ def _parse_answer_json(value: str) -> dict[str, str]:
     if not isinstance(payload, dict):
         return {}
     return {str(key): str(value) for key, value in payload.items()}
+
+
+def _loads_list(value: object) -> list[dict[str, object]]:
+    try:
+        payload = json.loads(str(value or "[]"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
 
 
 def _chunks(

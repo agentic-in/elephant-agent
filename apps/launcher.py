@@ -235,7 +235,9 @@ def build_typer_app() -> typer.Typer:
             "--retrieval-mode",
             help=(
                 "Memory retrieval mode: hybrid, semantic_raw_dialog, semantic_session_summary, "
-                "semantic_observation, semantic_combined, full_context, or oracle_evidence."
+                "semantic_observation, semantic_combined, full_context, oracle_evidence, "
+                "hybrid_query_fusion, hybrid_observation, hybrid_multilayer, "
+                "or hybrid_multilayer_query_fusion."
             ),
         ),
         limit_conversations: int | None = typer.Option(None, "--limit-conversations", help="Optional conversation cap for smoke runs."),
