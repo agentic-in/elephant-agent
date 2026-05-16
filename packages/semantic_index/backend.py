@@ -8,8 +8,11 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import sqlite3
 from typing import Iterator, Mapping, Protocol
+
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_]\w*$")
 
 from .sqlite_vec import SQLiteVecLoadState, load_sqlite_vec_extension
 
@@ -157,14 +160,12 @@ class SQLiteVecSemanticIndex:
             _ensure_vector_table(connection, table_name, vector.dimensions)
             rowid = _vector_rowid(vector.semantic_index_entry_id)
             connection.execute(
-                f"DELETE FROM {table_name} WHERE semantic_index_entry_id = ?",
+                "DELETE FROM " + table_name + " WHERE semantic_index_entry_id = ?",
                 (vector.semantic_index_entry_id,),
             )
             connection.execute(
-                f"""
-                INSERT INTO {table_name}(rowid, semantic_index_entry_id, embedding)
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO " + table_name + "(rowid, semantic_index_entry_id, embedding)"
+                " VALUES (?, ?, ?)",
                 (rowid, vector.semantic_index_entry_id, _vector_json(vector.values)),
             )
             connection.commit()
@@ -183,12 +184,10 @@ class SQLiteVecSemanticIndex:
             if not _table_exists(connection, table_name):
                 return ()
             rows = connection.execute(
-                f"""
-                SELECT semantic_index_entry_id, distance
-                FROM {table_name}
-                WHERE embedding MATCH ? AND k = ?
-                ORDER BY distance ASC
-                """,
+                "SELECT semantic_index_entry_id, distance"
+                + " FROM " + table_name
+                + " WHERE embedding MATCH ? AND k = ?"
+                + " ORDER BY distance ASC",
                 (_vector_json(query.values), query.limit),
             ).fetchall()
         return tuple(
@@ -214,7 +213,7 @@ class SQLiteVecSemanticIndex:
             for table_name in table_names:
                 for entry_id in request.semantic_index_entry_ids:
                     cursor = connection.execute(
-                        f"DELETE FROM {table_name} WHERE rowid = ?",
+                        "DELETE FROM " + table_name + " WHERE rowid = ?",
                         (_vector_rowid(entry_id),),
                     )
                     deleted += int(cursor.rowcount)
@@ -270,10 +269,8 @@ class SQLiteVecSemanticIndex:
 
 def _ensure_vector_table(connection: sqlite3.Connection, table_name: str, dimensions: int) -> None:
     connection.execute(
-        f"""
-        CREATE VIRTUAL TABLE IF NOT EXISTS {table_name}
-        USING vec0(+semantic_index_entry_id TEXT, embedding FLOAT[{dimensions}])
-        """
+        "CREATE VIRTUAL TABLE IF NOT EXISTS " + table_name
+        + " USING vec0(+semantic_index_entry_id TEXT, embedding FLOAT[" + str(dimensions) + "])"
     )
 
 
@@ -300,7 +297,10 @@ def _vector_table_names(connection: sqlite3.Connection) -> tuple[str, ...]:
 def _vector_table_name(dimensions: int) -> str:
     if dimensions <= 0:
         raise ValueError("semantic index vector dimensions must be positive")
-    return f"semantic_index_vec_{dimensions}"
+    name = f"semantic_index_vec_{dimensions}"
+    if not _IDENTIFIER_RE.fullmatch(name):
+        raise ValueError(f"invalid table name derived from dimensions: {name}")
+    return name
 
 
 def _vector_rowid(entry_id: str) -> int:

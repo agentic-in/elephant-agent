@@ -94,15 +94,12 @@ def list_semantic_index_entries(
     if model_id is not None:
         clauses.append("model_id = ?")
         parameters.append(model_id)
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
     with self.connection() as connection:
         rows = connection.execute(
-            f"""
-            SELECT *
-            FROM semantic_index_entries
-            {where_sql}
-            ORDER BY created_at ASC, semantic_index_entry_id ASC
-            """,
+            "SELECT * FROM semantic_index_entries"
+            + (" " + where_sql if where_sql else "")
+            + " ORDER BY created_at ASC, semantic_index_entry_id ASC",
             tuple(parameters),
         ).fetchall()
     return tuple(_semantic_index_entry_from_row(row) for row in rows)
@@ -131,7 +128,7 @@ def delete_semantic_index_entries(
         raise ValueError("semantic index deletion requires at least one filter")
     with self.connection() as connection:
         cursor = connection.execute(
-            f"DELETE FROM semantic_index_entries WHERE {' AND '.join(clauses)}",
+            "DELETE FROM semantic_index_entries WHERE " + " AND ".join(clauses),
             tuple(parameters),
         )
         connection.commit()

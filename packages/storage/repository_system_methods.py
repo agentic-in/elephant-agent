@@ -313,15 +313,12 @@ def list_states(
     if status is not None:
         clauses.append("status = ?")
         parameters.append(status)
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
     with self.connection() as connection:
         rows: Sequence[object] = connection.execute(
-            f"""
-            SELECT *
-            FROM states
-            {where_sql}
-            ORDER BY created_at ASC, state_id ASC
-            """,
+            "SELECT * FROM states"
+            + (" " + where_sql if where_sql else "")
+            + " ORDER BY created_at ASC, state_id ASC",
             tuple(parameters),
         ).fetchall()
     return tuple(_state_from_row(row) for row in rows)
@@ -430,13 +427,14 @@ def load_episode(self, episode_id: str) -> Episode | None:
 
 
 def list_episodes(self, *, state_id: str | None = None) -> tuple[Episode, ...]:
-    where_sql = "WHERE state_id = ?" if state_id is not None else ""
-    parameters = (state_id,) if state_id is not None else ()
+    sql = "SELECT * FROM episodes"
+    parameters: tuple[str, ...] = ()
+    if state_id is not None:
+        sql += " WHERE state_id = ?"
+        parameters = (state_id,)
+    sql += " ORDER BY started_at ASC, episode_id ASC"
     with self.connection() as connection:
-        rows = connection.execute(
-            f"SELECT * FROM episodes {where_sql} ORDER BY started_at ASC, episode_id ASC",
-            parameters,
-        ).fetchall()
+        rows = connection.execute(sql, parameters).fetchall()
     return tuple(_episode_from_row(row) for row in rows)
 
 
@@ -485,13 +483,14 @@ def load_loop(self, loop_id: str) -> Loop | None:
 
 
 def list_loops(self, *, episode_id: str | None = None) -> tuple[Loop, ...]:
-    where_sql = "WHERE episode_id = ?" if episode_id is not None else ""
-    parameters = (episode_id,) if episode_id is not None else ()
+    sql = "SELECT * FROM loops"
+    parameters: tuple[str, ...] = ()
+    if episode_id is not None:
+        sql += " WHERE episode_id = ?"
+        parameters = (episode_id,)
+    sql += " ORDER BY started_at ASC, loop_id ASC"
     with self.connection() as connection:
-        rows = connection.execute(
-            f"SELECT * FROM loops {where_sql} ORDER BY started_at ASC, loop_id ASC",
-            parameters,
-        ).fetchall()
+        rows = connection.execute(sql, parameters).fetchall()
     return tuple(_loop_from_row(row) for row in rows)
 
 
@@ -547,13 +546,14 @@ def load_step(self, step_id: str) -> Step | None:
 
 
 def list_steps(self, *, loop_id: str | None = None) -> tuple[Step, ...]:
-    where_sql = "WHERE loop_id = ?" if loop_id is not None else ""
-    parameters = (loop_id,) if loop_id is not None else ()
+    sql = "SELECT * FROM steps"
+    parameters: tuple[str, ...] = ()
+    if loop_id is not None:
+        sql += " WHERE loop_id = ?"
+        parameters = (loop_id,)
+    sql += " ORDER BY sequence ASC, created_at ASC"
     with self.connection() as connection:
-        rows = connection.execute(
-            f"SELECT * FROM steps {where_sql} ORDER BY sequence ASC, created_at ASC",
-            parameters,
-        ).fetchall()
+        rows = connection.execute(sql, parameters).fetchall()
     return tuple(_step_from_row(row) for row in rows)
 
 
@@ -1040,19 +1040,16 @@ def list_learning_jobs(
     if episode_id is not None:
         clauses.append("episode_id = ?")
         parameters.append(episode_id)
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
     limit_sql = ""
     if limit is not None and limit > 0:
         limit_sql = " LIMIT ?"
         parameters.append(limit)
     with self.connection() as connection:
         rows: Sequence[object] = connection.execute(
-            f"""
-            SELECT *
-            FROM learning_jobs
-            {where_sql}
-            ORDER BY created_at DESC, job_id DESC{limit_sql}
-            """,
+            "SELECT * FROM learning_jobs"
+            + (" " + where_sql if where_sql else "")
+            + " ORDER BY created_at DESC, job_id DESC" + limit_sql,
             tuple(parameters),
         ).fetchall()
     return tuple(_learning_job_from_row(row) for row in rows)

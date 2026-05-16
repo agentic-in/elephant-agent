@@ -56,7 +56,7 @@ def _count_rows(database_path: Path, table: str) -> int:
     with _connection(database_path) as connection:
         if not _table_exists(connection, table):
             return 0
-        row = connection.execute(f"SELECT COUNT(*) AS count FROM {table}").fetchone()
+        row = connection.execute("SELECT COUNT(*) AS count FROM " + table).fetchone()
     return int(row["count"] if row is not None else 0)
 
 def _read_optional_text(path: Path, *, max_chars: int = 20_000) -> str:
