@@ -2847,6 +2847,15 @@ def build_typer_app() -> typer.Typer:
             limit_conversations=limit_conversations,
             limit_questions=limit_questions,
         )
+
+        def _progress(stage: str, index: int, total: int, conversation_id: str, question_count: int) -> None:
+            print(
+                f"eval {stage}: {dataset} conversation {index}/{total} "
+                f"({conversation_id}, {question_count} questions)",
+                file=sys.stderr,
+                flush=True,
+            )
+
         try:
             output = run_eval(
                 config,
@@ -2854,6 +2863,7 @@ def build_typer_app() -> typer.Typer:
                 model_provider=runtime.model_provider,
                 profile=runtime.current_profile().state,
                 model_role=model_role,
+                progress_callback=_progress,
             )
         except Exception as error:
             raise typer.BadParameter(str(error)) from error

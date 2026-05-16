@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ def run_eval(
     model_provider: Any | None = None,
     profile: Any | None = None,
     model_role: str = "strong",
+    progress_callback: Callable[[str, int, int, str, int], None] | None = None,
 ) -> EvalRunOutput:
     dataset = load_locomo_dataset(
         dataset=config.dataset,
@@ -57,14 +59,45 @@ def run_eval(
         answer_concurrency=config.answer_concurrency,
         answer_batch_size=config.answer_batch_size,
     )
-    results = target.evaluate_dataset(dataset)
-    metrics = score_locomo_results(dataset, results, top_k=config.top_k)
-    artifacts = write_eval_artifacts(
-        dataset=dataset,
-        results=results,
-        metrics=metrics,
-        config=config,
-    )
+    results_list = []
+    artifacts: dict[str, Path] = {}
+    metrics: dict[str, Any] = {}
+    total_conversations = len(dataset.conversations)
+    for index, conversation in enumerate(dataset.conversations, start=1):
+        if progress_callback is not None:
+            progress_callback(
+                "start",
+                index,
+                total_conversations,
+                conversation.conversation_id,
+                len(conversation.questions),
+            )
+        results_list.extend(target.evaluate_conversation(conversation))
+        results = tuple(results_list)
+        metrics = score_locomo_results(dataset, results, top_k=config.top_k)
+        artifacts = write_eval_artifacts(
+            dataset=dataset,
+            results=results,
+            metrics=metrics,
+            config=config,
+        )
+        if progress_callback is not None:
+            progress_callback(
+                "done",
+                index,
+                total_conversations,
+                conversation.conversation_id,
+                len(conversation.questions),
+            )
+    results = tuple(results_list)
+    if not artifacts:
+        metrics = score_locomo_results(dataset, results, top_k=config.top_k)
+        artifacts = write_eval_artifacts(
+            dataset=dataset,
+            results=results,
+            metrics=metrics,
+            config=config,
+        )
     return EvalRunOutput(
         dataset=dataset,
         results=results,
