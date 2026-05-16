@@ -98,6 +98,12 @@
         "path": "docs/agent/architecture-guardrails.md",
         "reason": "Storage and infra packages are shared dependencies; changes propagate widely."
       }
+    ],
+    "eval-harness": [
+      {
+        "path": "docs/agent/testing-strategy.md",
+        "reason": "Evaluation adapters and scorers need explicit local validation and artifact expectations."
+      }
     ]
   },
   "surface_paths": {
@@ -176,6 +182,9 @@
     ],
     "models": [
       "packages/models/**"
+    ],
+    "evals": [
+      "packages/evals/**"
     ],
     "cli": [
       "apps/cli/**",
@@ -366,6 +375,12 @@
       {
         "path": "packages/models/AGENTS.md",
         "reason": "Model provider adapters and selection logic."
+      }
+    ],
+    "evals": [
+      {
+        "path": "docs/agent/testing-strategy.md",
+        "reason": "Eval harness changes should keep repeatable reports and local validation visible."
       }
     ],
     "cli": [

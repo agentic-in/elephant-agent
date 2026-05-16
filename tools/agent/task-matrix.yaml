@@ -273,6 +273,24 @@
       "feature_tests": []
     },
     {
+      "name": "eval-harness",
+      "summary": "Reusable evaluation adapters, runners, scorers, and report writers.",
+      "doc_only": false,
+      "loop_mode": "completion",
+      "execution_plan_policy": "long_horizon",
+      "paths": [
+        "packages/evals/**"
+      ],
+      "read_first": [
+        "packages/AGENTS.md",
+        "docs/agent/testing-strategy.md"
+      ],
+      "fast_tests": [
+        "make agent-fast-gate"
+      ],
+      "feature_tests": []
+    },
+    {
       "name": "app-scaffold",
       "summary": "Catch-all for deploy, test, and config scaffolding.",
       "doc_only": false,

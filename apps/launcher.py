@@ -93,7 +93,7 @@ def build_typer_app() -> typer.Typer:
     app = typer.Typer(
         name="elephant",
         help=(
-            "Elephant Agent launcher with explicit init, wake, dashboard, herd, provider, facts, learn, skills, gateway, cron, and status entrypoints."
+            "Elephant Agent launcher with explicit init, wake, dashboard, herd, provider, eval, facts, learn, skills, gateway, cron, and status entrypoints."
         ),
         no_args_is_help=False,
         rich_markup_mode="rich",
@@ -222,6 +222,30 @@ def build_typer_app() -> typer.Typer:
     def provider_passthrough(ctx: typer.Context) -> None:
         obj = ctx.obj or {}
         raise typer.Exit(_forward_cli(["provider", *ctx.args], state_dir=obj["state_dir"]))
+
+    @app.command("eval", help=CLI_COMMAND_HELP["eval"], context_settings=passthrough_settings)
+    def eval_passthrough(
+        ctx: typer.Context,
+        dataset: str = typer.Option("locomo_refined", "--dataset", help="Dataset adapter: locomo or locomo_refined."),
+        dataset_path: Path | None = typer.Option(None, "--dataset-path", help="Path to LoCoMo file or LoCoMo-Refined public directory."),
+        output_dir: Path | None = typer.Option(None, "--output-dir", help="Directory for report.json, report.md, predictions, and traces."),
+        top_k: int = typer.Option(5, "--top-k", help="Number of retrieved evidence hits per question."),
+        limit_conversations: int | None = typer.Option(None, "--limit-conversations", help="Optional conversation cap for smoke runs."),
+        limit_questions: int | None = typer.Option(None, "--limit-questions", help="Optional question cap for smoke runs."),
+        model_role: str = typer.Option("strong", "--model-role", help="Configured model role to use for answer generation."),
+    ) -> None:
+        obj = ctx.obj or {}
+        forwarded = ["eval", "--dataset", dataset, "--top-k", str(top_k), "--model-role", model_role]
+        if dataset_path is not None:
+            forwarded.extend(("--dataset-path", str(dataset_path)))
+        if output_dir is not None:
+            forwarded.extend(("--output-dir", str(output_dir)))
+        if limit_conversations is not None:
+            forwarded.extend(("--limit-conversations", str(limit_conversations)))
+        if limit_questions is not None:
+            forwarded.extend(("--limit-questions", str(limit_questions)))
+        forwarded.extend(ctx.args)
+        raise typer.Exit(_forward_cli(forwarded, state_dir=obj["state_dir"]))
 
     @app.command("herd", help=CLI_COMMAND_HELP["herd"], context_settings=passthrough_settings)
     def herd_passthrough(ctx: typer.Context) -> None:

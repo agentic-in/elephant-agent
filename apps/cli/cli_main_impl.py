@@ -2608,6 +2608,11 @@ def _cli_runtime(state_dir: Path, *, warm_embedding: bool = True) -> CliRuntime:
     return CliRuntime.create(state_dir=resolved_state_dir, warm_embedding=warm_embedding)
 
 
+def _eval_output_dir(dataset: str) -> Path:
+    normalized = str(dataset or "eval").strip().lower().replace("-", "_")
+    return Path.cwd() / "_temp" / "evals" / normalized
+
+
 def _show_cli_banner() -> None:
     if RICH_AVAILABLE and Panel is not None and Console is not None and Group is not None:
         console = Console(highlight=False, soft_wrap=True)
@@ -2652,7 +2657,7 @@ def _print_root_cli_help() -> None:
 def build_typer_app() -> typer.Typer:
     app = typer.Typer(
         name="elephant",
-        help="Elephant Agent CLI with explicit init, wake, dashboard, herd, provider, Personal Model recall, learn, skills, gateway, cron, and status entrypoints.",
+        help="Elephant Agent CLI with explicit init, wake, dashboard, herd, provider, eval, Personal Model recall, learn, skills, gateway, cron, and status entrypoints.",
         no_args_is_help=False,
         rich_markup_mode="rich",
         add_completion=False,
@@ -2801,6 +2806,54 @@ def build_typer_app() -> typer.Typer:
         params = ctx.parent.params if ctx.parent is not None else ctx.params
         runtime = _cli_runtime(params["state_dir"], warm_embedding=False)
         _print_doctor(runtime, deep=deep)
+        raise typer.Exit(0)
+
+    @app.command("eval")
+    def eval_command(
+        ctx: typer.Context,
+        dataset: str = typer.Option("locomo_refined", "--dataset", help="Dataset adapter: locomo or locomo_refined."),
+        dataset_path: Path | None = typer.Option(None, "--dataset-path", help="Path to LoCoMo file or LoCoMo-Refined public directory."),
+        output_dir: Path | None = typer.Option(None, "--output-dir", help="Directory for report.json, report.md, predictions, and traces."),
+        top_k: int = typer.Option(5, "--top-k", help="Number of retrieved evidence hits per question."),
+        limit_conversations: int | None = typer.Option(None, "--limit-conversations", help="Optional conversation cap for smoke runs."),
+        limit_questions: int | None = typer.Option(None, "--limit-questions", help="Optional question cap for smoke runs."),
+        model_role: str = typer.Option("strong", "--model-role", help="Configured model role to use for answer generation."),
+    ) -> None:
+        params = ctx.parent.params if ctx.parent is not None else ctx.params
+        runtime = _cli_runtime(params["state_dir"])
+        active_profile = runtime.model_provider.active_profile()
+        if active_profile is None:
+            raise typer.BadParameter("elephant eval requires an active provider profile; run `elephant provider` or `elephant init` first")
+        evidence_retriever = getattr(runtime.recall_runtime, "evidence_retriever", None)
+        embedding_service = getattr(evidence_retriever, "embedding_service", None)
+        if embedding_service is None:
+            raise typer.BadParameter("elephant eval requires a configured embedding service")
+        from packages.evals.cli import default_dataset_path, print_eval_output, run_eval
+        from packages.evals.contracts import EvalRunConfig
+
+        resolved_dataset_path = Path(dataset_path).expanduser() if dataset_path is not None else default_dataset_path(dataset)
+        resolved_output_dir = Path(output_dir).expanduser() if output_dir is not None else _eval_output_dir(dataset)
+        config = EvalRunConfig(
+            dataset=dataset,
+            dataset_path=str(resolved_dataset_path),
+            output_dir=str(resolved_output_dir),
+            top_k=top_k,
+            retrieval_mode="hybrid",
+            answer_mode="model",
+            limit_conversations=limit_conversations,
+            limit_questions=limit_questions,
+        )
+        try:
+            output = run_eval(
+                config,
+                embedding_service=embedding_service,
+                model_provider=runtime.model_provider,
+                profile=runtime.current_profile().state,
+                model_role=model_role,
+            )
+        except Exception as error:
+            raise typer.BadParameter(str(error)) from error
+        print_eval_output(output)
         raise typer.Exit(0)
 
     @app.command("wake")

@@ -280,6 +280,30 @@
       ],
       "acceptance_criteria": "Storage and infra packages stay behind the repository/provider abstraction. No direct SQL in consumer packages."
     },
+    "eval-harness": {
+      "label": "Eval Harness",
+      "priority": 50,
+      "summary": "Reusable evaluation adapters, target runners, scorers, and artifact writers.",
+      "selector_paths": [
+        "packages/evals/**"
+      ],
+      "required_surfaces": [
+        "evals"
+      ],
+      "conditional_surfaces": [
+        "models",
+        "evidence",
+        "test_harness"
+      ],
+      "read_first": [
+        "packages/AGENTS.md",
+        "docs/agent/testing-strategy.md"
+      ],
+      "validation": [
+        "make agent-fast-gate"
+      ],
+      "acceptance_criteria": "Eval modules stay reusable by app surfaces and write repeatable reports without mutating user runtime state."
+    },
     "app-scaffold": {
       "label": "App Scaffold",
       "priority": 5,

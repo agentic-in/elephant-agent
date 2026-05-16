@@ -264,7 +264,7 @@ class SemanticSummaryIndexer:
         text = build_step_recall_text(step)
         if not text:
             return None
-        metadata = dict(step.metadata or {})
+        metadata = {str(key): str(value) for key, value in dict(step.metadata or {}).items()}
         return self._index(
             text=text,
             source_id=f"step:{step.step_id}",
@@ -272,6 +272,7 @@ class SemanticSummaryIndexer:
             personal_model_id=step.personal_model_id,
             state_id=step.state_id,
             metadata={
+                **metadata,
                 "kind": "step",
                 "step_id": step.step_id,
                 "loop_id": step.loop_id,
