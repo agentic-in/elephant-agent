@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,10 @@ def run_eval(
         limit_conversations=config.limit_conversations,
         limit_questions=config.limit_questions,
     )
+    start_index = max(1, int(config.start_conversation or 1))
+    end_index = int(config.end_conversation) if config.end_conversation is not None else None
+    selected_conversations = dataset.conversations[start_index - 1 : end_index]
+    dataset = replace(dataset, conversations=tuple(selected_conversations))
     resolved_answer_runner = answer_runner
     if resolved_answer_runner is None:
         if model_provider is None or profile is None:

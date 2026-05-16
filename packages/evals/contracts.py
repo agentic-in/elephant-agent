@@ -100,6 +100,8 @@ class EvalRunConfig:
     answer_mode: str = "model"
     answer_concurrency: int = 1
     answer_batch_size: int = 1
+    start_conversation: int = 1
+    end_conversation: int | None = None
     limit_conversations: int | None = None
     limit_questions: int | None = None
 
