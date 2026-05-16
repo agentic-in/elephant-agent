@@ -166,6 +166,8 @@ class LoCoMoEvalTest(unittest.TestCase):
                     dataset_path=str(public_dir),
                     output_dir=str(output_dir),
                     top_k=2,
+                    answer_concurrency=2,
+                    answer_batch_size=2,
                 ),
                 embedding_service=FakeEmbeddingService(),
                 answer_runner=FakeAnswerRunner(),

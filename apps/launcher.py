@@ -233,9 +233,23 @@ def build_typer_app() -> typer.Typer:
         limit_conversations: int | None = typer.Option(None, "--limit-conversations", help="Optional conversation cap for smoke runs."),
         limit_questions: int | None = typer.Option(None, "--limit-questions", help="Optional question cap for smoke runs."),
         model_role: str = typer.Option("strong", "--model-role", help="Configured model role to use for answer generation."),
+        answer_concurrency: int = typer.Option(1, "--answer-concurrency", help="Concurrent model answer calls per conversation."),
+        answer_batch_size: int = typer.Option(1, "--answer-batch-size", help="Questions per model answer request."),
     ) -> None:
         obj = ctx.obj or {}
-        forwarded = ["eval", "--dataset", dataset, "--top-k", str(top_k), "--model-role", model_role]
+        forwarded = [
+            "eval",
+            "--dataset",
+            dataset,
+            "--top-k",
+            str(top_k),
+            "--model-role",
+            model_role,
+            "--answer-concurrency",
+            str(answer_concurrency),
+            "--answer-batch-size",
+            str(answer_batch_size),
+        ]
         if dataset_path is not None:
             forwarded.extend(("--dataset-path", str(dataset_path)))
         if output_dir is not None:

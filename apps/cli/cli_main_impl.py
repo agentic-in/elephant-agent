@@ -2818,6 +2818,8 @@ def build_typer_app() -> typer.Typer:
         limit_conversations: int | None = typer.Option(None, "--limit-conversations", help="Optional conversation cap for smoke runs."),
         limit_questions: int | None = typer.Option(None, "--limit-questions", help="Optional question cap for smoke runs."),
         model_role: str = typer.Option("strong", "--model-role", help="Configured model role to use for answer generation."),
+        answer_concurrency: int = typer.Option(1, "--answer-concurrency", help="Concurrent model answer calls per conversation."),
+        answer_batch_size: int = typer.Option(1, "--answer-batch-size", help="Questions per model answer request."),
     ) -> None:
         params = ctx.parent.params if ctx.parent is not None else ctx.params
         runtime = _cli_runtime(params["state_dir"])
@@ -2840,6 +2842,8 @@ def build_typer_app() -> typer.Typer:
             top_k=top_k,
             retrieval_mode="hybrid",
             answer_mode="model",
+            answer_concurrency=answer_concurrency,
+            answer_batch_size=answer_batch_size,
             limit_conversations=limit_conversations,
             limit_questions=limit_questions,
         )

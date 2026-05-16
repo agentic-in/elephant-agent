@@ -98,6 +98,8 @@ class EvalRunConfig:
     top_k: int = 5
     retrieval_mode: str = "hybrid"
     answer_mode: str = "model"
+    answer_concurrency: int = 1
+    answer_batch_size: int = 1
     limit_conversations: int | None = None
     limit_questions: int | None = None
 

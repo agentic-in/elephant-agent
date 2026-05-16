@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 import tempfile
+import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -109,7 +111,6 @@ class ElephantModelAnswerRunner:
         self.personal_model_id = personal_model_id or str(getattr(profile, "profile_id", "eval-profile") or "eval-profile")
 
     def answer_question(self, question: EvalQuestion, hits: tuple[RetrievalHit, ...]) -> str:
-        evidence_block = _render_evidence_block(hits)
         system_prompt = (
             "You are answering a memory evaluation question for Elephant Agent.\n"
             "Use only the provided retrieved evidence.\n"
@@ -119,27 +120,84 @@ class ElephantModelAnswerRunner:
         )
         user_prompt = (
             f"Question: {question.question}\n\n"
-            f"Retrieved evidence:\n{evidence_block}\n\n"
+            f"Retrieved evidence:\n{_render_evidence_block(hits)}\n\n"
             "Final answer:"
         )
+        return self._generate(
+            request_id=question.question_id,
+            question_ids=(question.question_id,),
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+    def answer_questions(
+        self,
+        items: tuple[tuple[EvalQuestion, tuple[RetrievalHit, ...]], ...],
+    ) -> tuple[str, ...]:
+        if len(items) <= 1:
+            return tuple(self.answer_question(question, hits) for question, hits in items)
+        system_prompt = (
+            "You are answering memory evaluation questions for Elephant Agent.\n"
+            "Use only each question's provided retrieved evidence.\n"
+            "If a question's evidence is insufficient, answer exactly: I don't know\n"
+            "Return only a valid JSON object mapping each question_id to one short answer string.\n"
+            "Do not include markdown, citations, or explanation."
+        )
+        blocks = []
+        question_ids: list[str] = []
+        for question, hits in items:
+            question_ids.append(question.question_id)
+            blocks.append(
+                "\n".join(
+                    (
+                        f"question_id: {question.question_id}",
+                        f"question: {question.question}",
+                        "retrieved_evidence:",
+                        _render_evidence_block(hits, max_chars=700),
+                    )
+                )
+            )
+        user_prompt = (
+            "Answer these questions as JSON.\n\n"
+            + "\n\n---\n\n".join(blocks)
+            + "\n\nJSON object:"
+        )
+        text = self._generate(
+            request_id="batch:" + _safe_id(":".join(question_ids)),
+            question_ids=tuple(question_ids),
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+        parsed = _parse_answer_json(text)
+        if set(question_ids).issubset(parsed):
+            return tuple(str(parsed.get(question.question_id) or "I don't know").strip() or "I don't know" for question, _ in items)
+        return tuple(self.answer_question(question, hits) for question, hits in items)
+
+    def _generate(
+        self,
+        *,
+        request_id: str,
+        question_ids: tuple[str, ...],
+        system_prompt: str,
+        user_prompt: str,
+    ) -> str:
+        now = datetime.now(timezone.utc)
         episode = Episode(
-            episode_id=f"eval-answer:{_safe_id(question.question_id)}",
+            episode_id=f"eval-answer:{_safe_id(request_id)}",
             state_id=self.state_id,
             personal_model_id=self.personal_model_id,
             entry_surface="eval.locomo.answer",
             status="closed",
-            started_at=datetime.now(timezone.utc),
-            ended_at=datetime.now(timezone.utc),
+            started_at=now,
+            ended_at=now,
             metadata={
-                "question_id": question.question_id,
-                "conversation_id": question.conversation_id,
+                "question_ids": ",".join(question_ids),
             },
         )
         context = ContextBundle(
-            bundle_id=f"eval-context:{_safe_id(question.question_id)}",
+            bundle_id=f"eval-context:{_safe_id(request_id)}",
             episode_id=episode.episode_id,
             token_budget=4096,
-            evidence_refs=tuple(hit.source_id for hit in hits if hit.source_id),
             prompt_envelope=PromptEnvelope(
                 frozen_prefix=system_prompt,
                 messages=(PromptMessage(role="user", content=user_prompt),),
@@ -168,8 +226,12 @@ class ElephantMemoryEvalTarget:
         top_k: int = 5,
         retrieval_mode: str = "hybrid",
         answer_mode: str = "model",
+        answer_concurrency: int = 1,
+        answer_batch_size: int = 1,
     ) -> None:
         self.top_k = max(1, int(top_k or 5))
+        self.answer_concurrency = max(1, int(answer_concurrency or 1))
+        self.answer_batch_size = max(1, int(answer_batch_size or 1))
         self.retrieval_mode = str(retrieval_mode or "hybrid").strip().lower()
         self.answer_mode = str(answer_mode or "model").strip().lower()
         if self.retrieval_mode != "hybrid":
@@ -191,7 +253,11 @@ class ElephantMemoryEvalTarget:
         sandbox = self._create_sandbox()
         try:
             self._ingest_conversation(sandbox, conversation)
-            return tuple(self._evaluate_question(sandbox, question) for question in conversation.questions)
+            prepared = tuple(
+                (question, self._retrieve_hits(sandbox, question))
+                for question in conversation.questions
+            )
+            return self._answer_prepared_questions(prepared)
         finally:
             sandbox.cleanup()
 
@@ -311,7 +377,7 @@ class ElephantMemoryEvalTarget:
             metadata=metadata,
         )
 
-    def _evaluate_question(self, sandbox: _ConversationSandbox, question: EvalQuestion) -> EvalQuestionResult:
+    def _retrieve_hits(self, sandbox: _ConversationSandbox, question: EvalQuestion) -> tuple[RetrievalHit, ...]:
         raw_hits = unified_recall(
             UnifiedRecallRequest(
                 query=question.question,
@@ -324,8 +390,47 @@ class ElephantMemoryEvalTarget:
             searcher=sandbox.searcher,
             embedding_service=sandbox.embedding_service,
         )
-        hits = tuple(_retrieval_hit(index, hit) for index, hit in enumerate(raw_hits, start=1))
+        return tuple(_retrieval_hit(index, hit) for index, hit in enumerate(raw_hits, start=1))
+
+    def _answer_prepared_questions(
+        self,
+        prepared: tuple[tuple[EvalQuestion, tuple[RetrievalHit, ...]], ...],
+    ) -> tuple[EvalQuestionResult, ...]:
+        if self.answer_concurrency <= 1 or len(prepared) <= 1:
+            return tuple(result for chunk in _chunks(prepared, self.answer_batch_size) for result in self._answer_chunk(chunk))
+        chunks = tuple(_chunks(prepared, self.answer_batch_size))
+        workers = min(self.answer_concurrency, len(chunks))
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="elephant-eval-answer") as executor:
+            futures = tuple(
+                executor.submit(self._answer_chunk, chunk)
+                for chunk in chunks
+            )
+            return tuple(result for future in futures for result in future.result())
+
+    def _answer_chunk(
+        self,
+        chunk: tuple[tuple[EvalQuestion, tuple[RetrievalHit, ...]], ...],
+    ) -> tuple[EvalQuestionResult, ...]:
+        batch_answer = getattr(self.answer_runner, "answer_questions", None)
+        if callable(batch_answer) and len(chunk) > 1:
+            predicted_answers = tuple(str(answer).strip() or "I don't know" for answer in batch_answer(chunk))
+            if len(predicted_answers) == len(chunk):
+                return tuple(
+                    self._result_for_question(question, hits, predicted_answer)
+                    for (question, hits), predicted_answer in zip(chunk, predicted_answers)
+                )
+        return tuple(self._answer_question(question, hits) for question, hits in chunk)
+
+    def _answer_question(self, question: EvalQuestion, hits: tuple[RetrievalHit, ...]) -> EvalQuestionResult:
         predicted_answer = self.answer_runner.answer_question(question, hits)
+        return self._result_for_question(question, hits, predicted_answer)
+
+    def _result_for_question(
+        self,
+        question: EvalQuestion,
+        hits: tuple[RetrievalHit, ...],
+        predicted_answer: str,
+    ) -> EvalQuestionResult:
         return EvalQuestionResult(
             question_id=question.question_id,
             conversation_id=question.conversation_id,
@@ -393,19 +498,45 @@ def _parse_session_datetime(value: str) -> datetime | None:
     return datetime(year, month, day, tzinfo=timezone.utc)
 
 
-def _render_evidence_block(hits: tuple[RetrievalHit, ...]) -> str:
+def _render_evidence_block(hits: tuple[RetrievalHit, ...], *, max_chars: int = 1200) -> str:
     if not hits:
         return "No retrieved evidence."
     lines = []
     for hit in hits:
         source = hit.source_id or f"rank-{hit.rank}"
-        content = _clean_evidence_text(hit.content)
+        content = _clean_evidence_text(hit.content, max_chars=max_chars)
         lines.append(f"[{hit.rank}] {source}: {content}")
     return "\n".join(lines)
 
 
-def _clean_evidence_text(value: str) -> str:
-    return " ".join(str(value or "").split()).strip()[:1200]
+def _clean_evidence_text(value: str, *, max_chars: int) -> str:
+    return " ".join(str(value or "").split()).strip()[:max_chars]
+
+
+def _parse_answer_json(value: str) -> dict[str, str]:
+    text = str(value or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start : end + 1]
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): str(value) for key, value in payload.items()}
+
+
+def _chunks(
+    items: tuple[tuple[EvalQuestion, tuple[RetrievalHit, ...]], ...],
+    size: int,
+) -> tuple[tuple[tuple[EvalQuestion, tuple[RetrievalHit, ...]], ...], ...]:
+    capped = max(1, int(size or 1))
+    return tuple(tuple(items[index : index + capped]) for index in range(0, len(items), capped))
 
 
 def _safe_id(value: str) -> str:

@@ -54,6 +54,8 @@ def run_eval(
         top_k=config.top_k,
         retrieval_mode=config.retrieval_mode,
         answer_mode=config.answer_mode,
+        answer_concurrency=config.answer_concurrency,
+        answer_batch_size=config.answer_batch_size,
     )
     results = target.evaluate_dataset(dataset)
     metrics = score_locomo_results(dataset, results, top_k=config.top_k)
