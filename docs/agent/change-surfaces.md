@@ -38,7 +38,8 @@ Use for:
 
 - `tools/agent/**`
 - `tools/make/agent.mk`
-- `.githooks/**`
+- `.claude/**` cleanup or ignore-policy changes
+- `.githooks/**` cleanup or local hook bootstrap changes
 
 Default validation:
 

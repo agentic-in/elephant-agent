@@ -8,10 +8,13 @@ The harness has four layers:
    - short entrypoint for coding agents
 2. `docs/agent/**`
    - human-readable system of record
-3. `tools/agent/**`, `tools/make/agent.mk`, `.github/workflows/**`, `.githooks/**`
+3. `tools/agent/**`, `tools/make/agent.mk`, `.github/workflows/**`
    - executable contract and guardrails
 4. local `AGENTS.md` files under future hotspot directories
    - narrow supplements for non-obvious subsystems, not competing top-level contracts
+
+Local hook files live under `.githooks/` after `make agent-bootstrap`. They are
+generated local state, not a tracked source-of-truth layer.
 
 ## Source Of Truth Policy
 

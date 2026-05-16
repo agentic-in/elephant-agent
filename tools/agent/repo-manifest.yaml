@@ -59,7 +59,6 @@
     "tools/make/agent.mk",
     ".github/workflows/ci.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
-    ".githooks/commit-msg",
     "apps/README.md",
     "packages/README.md",
     "tests/README.md"

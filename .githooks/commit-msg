@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-exec python3 tools/agent/scripts/commit_msg_lint.py message --file "$1"

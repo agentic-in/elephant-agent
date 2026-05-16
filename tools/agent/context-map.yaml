@@ -123,6 +123,7 @@
       "Makefile",
       "tools/agent/**",
       "tools/make/agent.mk",
+      ".claude/**",
       ".githooks/**"
     ],
     "release_ops": [

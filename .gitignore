@@ -19,6 +19,9 @@ elephant_agent.egg-info/
 build/
 .git/
 .agents/
+.claude/
+claude/
+.githooks/
 # Local state skill trees (~/.elephant/skills/*, NOT the `packages/skills/` source tree).
 # Anchoring with `!packages/skills/` below re-admits the source tree.
 skills/

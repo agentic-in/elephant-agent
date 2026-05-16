@@ -24,8 +24,10 @@ agent-help: ## Show help for agent-specific targets
 
 agent-bootstrap: ## Install local hook path and ensure worktree root exists
 	@git config core.hooksPath .githooks
-	@mkdir -p "$(WORKTREE_ROOT)"
-	@echo "Configured core.hooksPath=.githooks"
+	@mkdir -p .githooks "$(WORKTREE_ROOT)"
+	@printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' '' 'exec python3 tools/agent/scripts/commit_msg_lint.py message --file "$$1"' > .githooks/commit-msg
+	@chmod +x .githooks/commit-msg
+	@echo "Configured local core.hooksPath=.githooks"
 
 agent-validate: ## Validate harness manifests and docs
 	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py validate --detail "$(AGENT_VALIDATE_DETAIL)"
