@@ -14,7 +14,12 @@ import sys
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Sequence
+from typing import IO, Sequence
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
 
 import typer
 
@@ -26,6 +31,7 @@ DAEMON_TARGET = "unified"
 _DAEMON_RECORD_NAME = "daemon.runtime.json"
 _DAEMON_PID_NAME = "daemon.pid"
 _DAEMON_LOG_NAME = "daemon.log"
+_DAEMON_LOCK_NAME = "daemon.lock"
 
 
 def _daemon_pid_path(state_dir: Path) -> Path:
@@ -38,6 +44,10 @@ def _daemon_record_path(state_dir: Path) -> Path:
 
 def _daemon_log_path(state_dir: Path) -> Path:
     return state_dir / _DAEMON_LOG_NAME
+
+
+def _daemon_lock_path(state_dir: Path) -> Path:
+    return state_dir / _DAEMON_LOCK_NAME
 
 
 def _read_pid(path: Path) -> int | None:
@@ -84,6 +94,54 @@ def _remove_file_if_exists(path: Path) -> None:
         path.unlink()
     except FileNotFoundError:
         pass
+
+
+def _acquire_daemon_lock(state_dir: Path, *, blocking: bool = True) -> IO[str] | None:
+    """Acquire an exclusive startup lock to serialize concurrent daemon starts.
+
+    Uses ``fcntl.flock`` on *daemon.lock* so that two ``daemon start`` commands
+    racing from different terminals cannot both pass the PID-check / PID-write
+    window (TOCTOU race).
+
+    Args:
+        blocking: When *True* (default) the call blocks until the lock is
+            available.  When *False* the call returns *None* immediately if
+            the lock cannot be acquired (used by ``_start_detached``).
+
+    Returns:
+        The open lock file object — the caller **must** keep it alive while
+        the critical section is in progress and call
+        :func:`_release_daemon_lock` when done.  Returns *None* only when
+        *blocking* is *False* and the lock is held by another process.
+    """
+    state_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = _daemon_lock_path(state_dir)
+    lock_fd = lock_path.open("w", encoding="utf-8")
+
+    if fcntl is None:
+        # No fcntl (e.g. Windows) — no actual locking, just return the fd.
+        return lock_fd
+
+    flags = fcntl.LOCK_EX if blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        fcntl.flock(lock_fd.fileno(), flags)
+    except OSError:
+        lock_fd.close()
+        return None
+
+    return lock_fd
+
+
+def _release_daemon_lock(lock_fd: IO[str] | None) -> None:
+    """Release the daemon startup lock previously acquired via :func:`_acquire_daemon_lock`."""
+    if lock_fd is None:
+        return
+    if fcntl is not None:
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+    lock_fd.close()
 
 
 def command_main(
@@ -199,28 +257,51 @@ def _run_foreground(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
     from apps.daemon import run_daemon_foreground
 
     state_dir.mkdir(parents=True, exist_ok=True)
-
-    # Write runtime record
-    pid = os.getpid()
+    pid_path = _daemon_pid_path(state_dir)
     record_path = _daemon_record_path(state_dir)
-    _write_record(record_path, {
-        "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
-        "service_key": DAEMON_SERVICE_KEY,
-        "target": DAEMON_TARGET,
-        "status": "running",
-        "pid": pid,
-        "pid_path": str(_daemon_pid_path(state_dir)),
-        "log_path": str(_daemon_log_path(state_dir)),
-        "record_path": str(record_path),
-        "state_dir": str(state_dir),
-        "cli_state_dir": str(cli_state_dir),
-        "host": host,
-        "port": port,
-        "started_at": _utc_now_iso(),
-    })
 
-    # Write PID file
-    _daemon_pid_path(state_dir).write_text(f"{pid}\n", encoding="utf-8")
+    # ── Singleton guard: acquire lock, then check PID ──
+    # Blocking lock — will wait briefly if the parent of a --detach spawn
+    # still holds it; once released we proceed and see our own PID in the file.
+    lock_fd = _acquire_daemon_lock(state_dir, blocking=True)
+    if lock_fd is None:
+        # Should not happen with blocking=True, but be safe.
+        print("Another Elephant daemon start is in progress.")
+        return 1
+
+    try:
+        existing_pid = _read_pid(pid_path)
+        if (
+            existing_pid is not None
+            and existing_pid != os.getpid()
+            and _pid_is_running(existing_pid)
+        ):
+            print(f"Elephant daemon is already running with pid {existing_pid}.")
+            return 1
+
+        # Write PID file (under lock — prevents TOCTOU race)
+        pid = os.getpid()
+        pid_path.write_text(f"{pid}\n", encoding="utf-8")
+
+        # Write runtime record
+        _write_record(record_path, {
+            "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
+            "service_key": DAEMON_SERVICE_KEY,
+            "target": DAEMON_TARGET,
+            "status": "running",
+            "pid": pid,
+            "pid_path": str(pid_path),
+            "log_path": str(_daemon_log_path(state_dir)),
+            "record_path": str(record_path),
+            "state_dir": str(state_dir),
+            "cli_state_dir": str(cli_state_dir),
+            "host": host,
+            "port": port,
+            "started_at": _utc_now_iso(),
+        })
+    finally:
+        # Release startup lock — PID file now provides singleton protection.
+        _release_daemon_lock(lock_fd)
 
     try:
         return run_daemon_foreground(
@@ -231,7 +312,7 @@ def _run_foreground(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
             log_level=log_level,
         )
     finally:
-        _remove_file_if_exists(_daemon_pid_path(state_dir))
+        _remove_file_if_exists(pid_path)
         record = _load_record(record_path) or {}
         record.update({"status": "stopped", "stopped_at": _utc_now_iso(), "pid": None})
         _write_record(record_path, record)
@@ -244,54 +325,65 @@ def _start_detached(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
     record_path = _daemon_record_path(state_dir)
     log_path = _daemon_log_path(state_dir)
 
-    # Check if already running
-    existing_pid = _read_pid(pid_path)
-    if _pid_is_running(existing_pid):
-        print(f"Elephant daemon is already running with pid {existing_pid}.")
+    # ── Singleton guard: acquire lock (non-blocking), then check PID ──
+    lock_fd = _acquire_daemon_lock(state_dir, blocking=False)
+    if lock_fd is None:
+        print("Another Elephant daemon start is in progress.")
         return 1
 
-    command = [
-        sys.executable,
-        "-m",
-        "apps.launcher",
-        "daemon",
-        "start",
-        "--state-dir", str(state_dir),
-        "--cli-state-dir", str(cli_state_dir),
-        "--host", host,
-        "--port", str(port),
-        "--log-level", log_level,
-    ]
+    try:
+        existing_pid = _read_pid(pid_path)
+        if _pid_is_running(existing_pid):
+            print(f"Elephant daemon is already running with pid {existing_pid}.")
+            return 1
 
-    started_at = _utc_now_iso()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            sys.executable,
+            "-m",
+            "apps.launcher",
+            "daemon",
+            "start",
+            "--state-dir", str(state_dir),
+            "--cli-state-dir", str(cli_state_dir),
+            "--host", host,
+            "--port", str(port),
+            "--log-level", log_level,
+        ]
 
-    with log_path.open("ab") as log_stream:
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=log_stream,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        started_at = _utc_now_iso()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
-    _write_record(record_path, {
-        "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
-        "service_key": DAEMON_SERVICE_KEY,
-        "target": DAEMON_TARGET,
-        "status": "starting",
-        "pid": process.pid,
-        "pid_path": str(pid_path),
-        "log_path": str(log_path),
-        "record_path": str(record_path),
-        "command": command,
-        "state_dir": str(state_dir),
-        "cli_state_dir": str(cli_state_dir),
-        "host": host,
-        "port": port,
-        "started_at": started_at,
-    })
+        with log_path.open("ab") as log_stream:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=log_stream,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+
+        # Write PID file + record (still under lock — eliminates TOCTOU race)
+        pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
+        _write_record(record_path, {
+            "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
+            "service_key": DAEMON_SERVICE_KEY,
+            "target": DAEMON_TARGET,
+            "status": "starting",
+            "pid": process.pid,
+            "pid_path": str(pid_path),
+            "log_path": str(log_path),
+            "record_path": str(record_path),
+            "command": command,
+            "state_dir": str(state_dir),
+            "cli_state_dir": str(cli_state_dir),
+            "host": host,
+            "port": port,
+            "started_at": started_at,
+        })
+    finally:
+        # Release startup lock.  The PID file is now written and the child
+        # process will re-acquire this lock inside its own _run_foreground().
+        _release_daemon_lock(lock_fd)
 
     time.sleep(0.4)
     return_code = process.poll()
@@ -515,9 +607,19 @@ def daemon_is_running(state_dir: Path) -> bool:
 
 
 def _probe_daemon_http(state_dir: Path) -> bool:
-    """Try to reach the daemon's /healthz endpoint as a liveness fallback."""
-    record = _load_record(_daemon_record_path(state_dir)) or {}
-    port = record.get("port", 8900)
+    """Try to reach the daemon's /healthz endpoint as a liveness fallback.
+
+    Only probes when the runtime record file exists — this avoids false
+    positives in test environments where a random tmp_path happens to reach
+    a real daemon on the default port.
+    """
+    record_path = _daemon_record_path(state_dir)
+    if not record_path.exists():
+        return False
+    record = _load_record(record_path) or {}
+    port = record.get("port")
+    if port is None:
+        return False
     host = record.get("host", "0.0.0.0")
     addr = host if host != "0.0.0.0" else "127.0.0.1"
     try:
@@ -535,8 +637,13 @@ def _probe_daemon_http(state_dir: Path) -> bool:
 
 def _pid_from_healthz(state_dir: Path) -> int | None:
     """Retrieve the daemon PID from the /healthz endpoint."""
-    record = _load_record(_daemon_record_path(state_dir)) or {}
-    port = record.get("port", 8900)
+    record_path = _daemon_record_path(state_dir)
+    if not record_path.exists():
+        return None
+    record = _load_record(record_path) or {}
+    port = record.get("port")
+    if port is None:
+        return None
     host = record.get("host", "0.0.0.0")
     addr = host if host != "0.0.0.0" else "127.0.0.1"
     try:

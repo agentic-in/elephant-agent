@@ -397,7 +397,7 @@ class GatewayCliControlService:
         return GatewayCliControlResult(
             body=(
                 f"Unknown command `/{command}`.\n"
-                "Try /help, /elephant list, /elephant create <name>, /elephant current, /clear, or /status."
+                "Try /help, /elephant list, /elephant use <name>, /elephant current, /clear, or /status."
             ),
             summary="unknown command",
         )
@@ -498,7 +498,7 @@ class GatewayCliControlService:
                 body=(
                     "Usage:\n"
                     "- /elephant list\n"
-                    "- /elephant create <name>\n"
+                    "- /elephant use <name>\n"
                     "- /elephant current"
                 ),
                 summary="missing elephant subcommand",
@@ -548,10 +548,10 @@ class GatewayCliControlService:
                 session_id=session.episode_id,
                 summary="current elephant",
             )
-        if action == "create":
+        if action in ("use", "switch", "create"):
             if not remainder:
                 return GatewayCliControlResult(
-                    body="Usage: /elephant create <name>\nTry /elephant list first.",
+                    body="Usage: /elephant use <name>\nTry /elephant list first.",
                     summary="missing elephant id",
                 )
             current_elephant_id, current_session, _selection_mode = self._current_binding(inbound)
@@ -592,7 +592,7 @@ class GatewayCliControlService:
             body=(
                 "Usage:\n"
                 "- /elephant list\n"
-                "- /elephant create <name>\n"
+                "- /elephant use <name>\n"
                 "- /elephant current"
             ),
             summary="unknown elephant subcommand",
@@ -726,7 +726,7 @@ class GatewayCliControlService:
                 lines.append(f"  {summary}")
         lines.append(
             f"Plain text does not route until this {self.binding_subject} is pinned. "
-            f"Send `/elephant create <name>` when you want to bind this {self.binding_subject} to a specific elephant."
+            f"Send `/elephant use <name>` when you want to bind this {self.binding_subject} to a specific elephant."
         )
         return "\n".join(lines)
 
@@ -740,7 +740,7 @@ class GatewayCliControlService:
         return (
             f"This {self.binding_subject} is not pinned yet. Plain text will not continue until you bind it.\n"
             "Send `/elephant list` to inspect the local herd this bridge can see.\n"
-            "Send `/elephant create <name>` when you want to pin this conversation to an elephant.\n\n"
+            "Send `/elephant use <name>` when you want to pin this conversation to an elephant.\n\n"
             + self._elephant_listing()
         )
 
@@ -749,7 +749,7 @@ class GatewayCliControlService:
             (
                 f"{self.surface_label} remote control commands:",
                 "- /elephant list · list the local Elephant Agent herd this bridge can see",
-                f"- /elephant create <name> · pin this {self.binding_subject} to an elephant",
+                f"- /elephant use <name> · pin this {self.binding_subject} to an elephant",
                 f"- /elephant current · inspect the elephant currently handling this {self.binding_subject}",
                 f"- /status · inspect the elephant currently handling this {self.binding_subject}",
                 f"- /clear · close this Episode and open a fresh one on the same elephant",
@@ -856,7 +856,7 @@ class GatewayCliControlService:
 
         Returns a forward-to-runtime result when auto-binding is possible, otherwise ``None``
         so the caller can fall back to the selection hint. Multiple herd always require an
-        explicit ``/elephant create <name>``.
+        explicit ``/elephant use <name>``.
         """
         if self.app is None:
             return None

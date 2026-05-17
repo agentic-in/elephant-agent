@@ -487,19 +487,28 @@ def _start_via_daemon(args: Namespace) -> int:
     All IM adapters, cron, supervisor, and learning worker now run inside a
     single daemon process.  When ``gateway <adapter> start --detach`` is
     invoked we redirect to ``elephant daemon start --detach``.
+
+    If the daemon is already running, we dynamically start the requested
+    adapter via the daemon's HTTP API instead of just printing a notice.
     """
     from apps.daemon_command import (
         daemon_is_running,
         daemon_pid_path,
         daemon_record_path,
         start_daemon_detached,
+        _read_pid,
+        _load_record,
+        _pid_from_healthz,
     )
 
     state_dir = Path(args.state_dir)
 
-    # If daemon is already running, inform the user
+    # If daemon is already running, start the specific adapter via API
     if daemon_is_running(state_dir):
-        from apps.daemon_command import _read_pid, _load_record, _pid_from_healthz
+        service_key = getattr(args, "service_key", None)
+        if service_key:
+            return _start_adapter_via_daemon_api(args, service_key)
+        # No specific adapter — just report daemon status
         pid = _read_pid(daemon_pid_path(state_dir))
         if pid is None:
             pid = _pid_from_healthz(state_dir)
@@ -524,6 +533,104 @@ def _start_via_daemon(args: Namespace) -> int:
     )
 
 
+def _resolve_daemon_http_addr(state_dir: Path) -> tuple[str, int]:
+    """Resolve the daemon HTTP address from runtime record."""
+    from apps.daemon_command import _load_record, _daemon_record_path
+    record_path = _daemon_record_path(state_dir)
+    record = _load_record(record_path) if record_path.exists() else {}
+    record = record or {}
+    host = record.get("host", "0.0.0.0")
+    port = record.get("port", 8900)
+    # Use loopback when bound to all interfaces
+    addr = host if host != "0.0.0.0" else "127.0.0.1"
+    return addr, port
+
+
+def _start_adapter_via_daemon_api(args: Namespace, service_key: str) -> int:
+    """Dynamically start a single adapter in a running daemon via HTTP API."""
+    import urllib.request
+    import urllib.error
+
+    state_dir = Path(args.state_dir)
+    addr, port = _resolve_daemon_http_addr(state_dir)
+
+    url = f"http://{addr}:{port}/api/adapters/{service_key}/start"
+    try:
+        req = urllib.request.Request(url, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = {}
+        try:
+            body = json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            pass
+        # HTTP 403 from daemon means "skipped" (e.g. no credentials)
+        if body.get("status") == "skipped":
+            reason = body.get("reason", "unknown")
+            print(f"{service_key} adapter skipped: {reason}")
+            print(f"Configure credentials first: elephant gateway {service_key} add")
+            return 1
+        reason = body.get("reason", f"HTTP {exc.code}")
+        print(f"Failed to start {service_key} adapter: {reason}")
+        return 1
+    except Exception as exc:
+        print(f"Failed to reach daemon: {exc}")
+        return 1
+
+    status = result.get("status", "unknown")
+    if status == "running":
+        print(f"{service_key} adapter started successfully.")
+    elif status == "already_running":
+        print(f"{service_key} adapter is already running.")
+    elif status == "skipped":
+        reason = result.get("reason", "unknown")
+        print(f"{service_key} adapter skipped: {reason}")
+        print(f"Configure credentials first: elephant gateway {service_key} add")
+        return 1
+    else:
+        reason = result.get("reason", "unknown")
+        print(f"{service_key} adapter failed to start: {reason}")
+        return 1
+    return 0
+
+
+def _stop_adapter_via_daemon_api(args: Namespace, service_key: str) -> int:
+    """Dynamically stop a single adapter in a running daemon via HTTP API."""
+    import urllib.request
+    import urllib.error
+
+    state_dir = Path(args.state_dir)
+    addr, port = _resolve_daemon_http_addr(state_dir)
+
+    url = f"http://{addr}:{port}/api/adapters/{service_key}/stop"
+    try:
+        req = urllib.request.Request(url, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = {}
+        try:
+            body = json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            pass
+        reason = body.get("reason", f"HTTP {exc.code}")
+        print(f"Failed to stop {service_key} adapter: {reason}")
+        return 1
+    except Exception as exc:
+        print(f"Failed to reach daemon: {exc}")
+        return 1
+
+    status = result.get("status", "unknown")
+    if status == "stopped":
+        print(f"{service_key} adapter stopped.")
+    elif status == "not_running":
+        print(f"{service_key} adapter is not running.")
+    else:
+        print(f"{service_key} adapter: {status}")
+    return 0
+
+
 def _daemon_is_running_for_state(args: Namespace) -> bool:
     """Check if the unified daemon is running for the given state directory."""
     from apps.daemon_command import daemon_is_running
@@ -532,7 +639,16 @@ def _daemon_is_running_for_state(args: Namespace) -> bool:
 
 
 def _stop_via_daemon(args: Namespace) -> int:
-    """Redirect stop to the unified daemon."""
+    """Redirect stop to the unified daemon.
+
+    When the daemon is running, stop the specific adapter via HTTP API
+    rather than stopping the entire daemon process.
+    """
+    service_key = getattr(args, "service_key", None)
+    if service_key and _daemon_is_running_for_state(args):
+        return _stop_adapter_via_daemon_api(args, service_key)
+
+    # Fallback: stop the entire daemon
     from apps.daemon_command import stop_daemon
 
     print("Stopping unified Elephant daemon...")
@@ -544,7 +660,19 @@ def _stop_via_daemon(args: Namespace) -> int:
 
 
 def _restart_via_daemon(args: Namespace) -> int:
-    """Redirect restart to the unified daemon."""
+    """Redirect restart to the unified daemon.
+
+    When the daemon is running, restart the specific adapter via HTTP API
+    (stop then start) rather than restarting the entire daemon process.
+    """
+    service_key = getattr(args, "service_key", None)
+    if service_key and _daemon_is_running_for_state(args):
+        rc = _stop_adapter_via_daemon_api(args, service_key)
+        if rc != 0:
+            return rc
+        return _start_adapter_via_daemon_api(args, service_key)
+
+    # Fallback: restart the entire daemon
     from apps.daemon_command import restart_daemon
 
     host = getattr(args, "host", "0.0.0.0") or "0.0.0.0"
@@ -647,7 +775,8 @@ def command_main(
         help="Add or update a Feishu account.",
     )
     _add_feishu_add_options(feishu_setup)
-    feishu_setup.set_defaults(command_action="add_feishu", service_key="feishu", auto_start=False)
+    feishu_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    feishu_setup.set_defaults(command_action="add_feishu", service_key="feishu", auto_start=True)
 
     feishu_remove = feishu_subparsers.add_parser(
         "remove",
@@ -736,7 +865,8 @@ def command_main(
         help="Add or update a Discord account.",
     )
     _add_discord_add_options(discord_setup)
-    discord_setup.set_defaults(command_action="add_discord", service_key="discord", auto_start=False)
+    discord_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    discord_setup.set_defaults(command_action="add_discord", service_key="discord", auto_start=True)
 
     discord_remove = discord_subparsers.add_parser(
         "remove",
@@ -820,7 +950,8 @@ def command_main(
 
     dingding_setup = dingding_subparsers.add_parser("setup", parents=[common], help="Add or update a DingDing account.")
     _add_dingding_add_options(dingding_setup)
-    dingding_setup.set_defaults(command_action="add_dingding", service_key="dingding", auto_start=False)
+    dingding_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    dingding_setup.set_defaults(command_action="add_dingding", service_key="dingding", auto_start=True)
 
     dingding_remove = dingding_subparsers.add_parser("remove", parents=[common], help="Remove a DingDing account.")
     _add_required_account_argument(dingding_remove, help_text="DingDing account id to remove.")
@@ -859,7 +990,8 @@ def command_main(
 
     weixin_setup = weixin_subparsers.add_parser("setup", parents=[common], help="Add or update a WeChat account.")
     _add_weixin_add_options(weixin_setup)
-    weixin_setup.set_defaults(command_action="add_weixin", service_key="weixin", auto_start=False)
+    weixin_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    weixin_setup.set_defaults(command_action="add_weixin", service_key="weixin", auto_start=True)
 
     weixin_remove = weixin_subparsers.add_parser("remove", parents=[common], help="Remove a WeChat account.")
     _add_required_account_argument(weixin_remove, help_text="WeChat account id to remove.")
@@ -906,7 +1038,8 @@ def command_main(
 
     wecom_setup = wecom_subparsers.add_parser("setup", parents=[common], help="Add or update a WeCom account.")
     _add_wecom_add_options(wecom_setup)
-    wecom_setup.set_defaults(command_action="add_wecom", service_key="wecom", auto_start=False)
+    wecom_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    wecom_setup.set_defaults(command_action="add_wecom", service_key="wecom", auto_start=True)
 
     wecom_remove = wecom_subparsers.add_parser("remove", parents=[common], help="Remove a WeCom account.")
     _add_required_account_argument(wecom_remove, help_text="WeCom account id to remove.")

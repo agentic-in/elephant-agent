@@ -234,7 +234,7 @@ def _run_add_discord(args: Namespace) -> int:
         allow_guild_ids = list(wizard_state.allow_guild_ids)
         allow_channel_ids = list(wizard_state.allow_channel_ids)
 
-    auto_start = bool(getattr(args, "auto_start", False)) or use_wizard
+    auto_start = (bool(getattr(args, "auto_start", False)) or use_wizard) and not getattr(args, "no_start", False)
     args.account_id = account_id
     existing_account = _find_discord_account(existing_accounts, account_id=account_id)
     bot_token_env_var = _resolved_discord_bot_token_env_var(
@@ -429,7 +429,7 @@ def _run_add_feishu(args: Namespace) -> int:
         enabled = wizard_state.enabled
         allow_group_chats = wizard_state.allow_group_chats
 
-    auto_start = bool(getattr(args, "auto_start", False)) or use_wizard
+    auto_start = (bool(getattr(args, "auto_start", False)) or use_wizard) and not getattr(args, "no_start", False)
     args.account_id = account_id
     existing_account = _find_feishu_account(existing_accounts, account_id=account_id)
     app_id_env_var = _resolved_feishu_secret_env_var(
@@ -639,7 +639,7 @@ def _run_add_dingding(args: Namespace) -> int:
             _print_gateway_setup_paused("DingDing"); return 0
         account_id, transport, client_id_value, client_secret_value, robot_code_value = ws.account_id, ws.transport, ws.client_id_value, ws.client_secret_value, ws.robot_code_value
         enabled, allow_group_chats = ws.enabled, ws.allow_group_chats
-    auto_start = bool(getattr(args, "auto_start", False)) or use_wizard
+    auto_start = (bool(getattr(args, "auto_start", False)) or use_wizard) and not getattr(args, "no_start", False)
     args.account_id = account_id
     existing_account = _find_dingding_account(existing_accounts, account_id=account_id)
     client_id_env_var = _resolved_dingding_secret_env_var(explicit_env_var=args.client_id_env_var, existing_account=existing_account, account_id=account_id, secret_key="client_id")
@@ -749,7 +749,7 @@ def _run_add_weixin(args: Namespace) -> int:
     allow_group_chats = bool(args.allow_group_chats) or bool(control_payload.get("allow_group_chats") is True)
     use_wizard = bool(args.wizard) if args.wizard is not None else _interactive_shell_supported()
 
-    auto_start = bool(getattr(args, "auto_start", False)) or use_wizard
+    auto_start = (bool(getattr(args, "auto_start", False)) or use_wizard) and not getattr(args, "no_start", False)
     control_payload.pop("default_elephant_id", None)
     control_payload.pop("default_session_id", None)
     control_payload.pop("auto_create_elephant", None)
@@ -837,7 +837,7 @@ def _run_add_wecom(args: Namespace) -> int:
             _print_gateway_setup_paused("WeCom"); return 0
         account_id, transport, bot_id_value, secret_value = ws.account_id, ws.transport, ws.bot_id_value, ws.secret_value
         enabled, allow_group_chats = ws.enabled, ws.allow_group_chats
-    auto_start = bool(getattr(args, "auto_start", False)) or use_wizard
+    auto_start = (bool(getattr(args, "auto_start", False)) or use_wizard) and not getattr(args, "no_start", False)
     args.account_id = account_id
     existing_account = _find_wecom_account(existing_accounts, account_id=account_id)
     bot_id_env_var = _resolved_wecom_secret_env_var(explicit_env_var=args.bot_id_env_var, existing_account=existing_account, account_id=account_id, secret_key="bot_id")
