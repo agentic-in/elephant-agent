@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("elephant.daemon")
@@ -18,6 +19,9 @@ def create_daemon_aiohttp_app(*, daemon: Any):
         GET  /api/adapters     → list adapters and their statuses
         POST /api/adapters/{key}/start → dynamically start an adapter
         POST /api/adapters/{key}/stop  → dynamically stop an adapter
+        ANY  /v1/{path:.*}     → Dashboard API (dispatch bridge)
+        GET  /dashboard/{path:.*} → Dashboard static assets
+        GET  /                  → SPA fallback (index.html)
 
     Returns:
         ``(app, access_log)`` tuple for use with ``AppRunner``.
@@ -33,6 +37,7 @@ def create_daemon_aiohttp_app(*, daemon: Any):
     # Enable access logging for request-level observability
     access_log = logging.getLogger("aiohttp.access")
 
+    # ── Daemon management routes ──
     app.router.add_get("/healthz", _handle_healthz)
     app.router.add_get("/api/adapters", _handle_adapters_list)
     app.router.add_post("/api/adapters/{key}/start", _handle_adapter_start)
@@ -41,7 +46,181 @@ def create_daemon_aiohttp_app(*, daemon: Any):
     # Register HTTP routes from GatewayHttpService instances
     _register_gateway_http_routes(app, daemon)
 
+    # ── Dashboard API bridge (dispatch → aiohttp) ──
+    api_app = getattr(daemon, "_dashboard_api_app", None)
+    if api_app is not None:
+        app.router.add_route("*", "/v1/{path:.*}", _handle_dashboard_api)
+        logger.info("dashboard API bridge enabled at /v1/")
+
+    # ── Dashboard static assets ──
+    static_dir = _resolve_dashboard_static_dir(daemon)
+    if static_dir is not None:
+        # Serve at /dashboard/… so the URL is /dashboard/assets/…, /dashboard/favicon.png, etc.
+        app.router.add_get("/dashboard/{path:.*}", _handle_dashboard_static)
+        # Also serve /assets/… and /favicon.png from the dist root so that
+        # HTML references using absolute paths (e.g. <script src="/assets/…">)
+        # resolve correctly even when the SPA is served under /dashboard/.
+        app.router.add_get("/assets/{path:.*}", _handle_dashboard_assets)
+        app.router.add_get("/favicon.png", _handle_dashboard_favicon)
+        app.router.add_get("/", _handle_dashboard_spa_fallback)
+        app["dashboard_static_dir"] = static_dir
+        logger.info("dashboard static assets served from %s", static_dir)
+
     return app, access_log
+
+
+# ── Dashboard API Bridge ──────────────────────────────────────────
+
+
+async def _handle_dashboard_api(request: Any) -> Any:
+    """Bridge aiohttp requests to ElephantAPIApp.dispatch().
+
+    The API app's ``dispatch(method, path, body) -> APIResponse`` method
+    is framework-agnostic — it accepts plain ``str``/``bytes`` and returns
+    a dataclass with ``status_code``, ``payload``, and ``headers``.  We
+    adapt the aiohttp request to that interface and convert the response
+    back to an aiohttp ``web.Response``.
+    """
+    from aiohttp import web
+
+    daemon = request.app["daemon"]
+    api_app = getattr(daemon, "_dashboard_api_app", None)
+    if api_app is None:
+        return web.json_response({"error": "dashboard API not available"}, status=503)
+
+    method = request.method
+    # dispatch() expects paths like /v1/providers/... but the route
+    # capture group only contains the part after /v1/.
+    sub_path = request.match_info.get("path", "")
+    path_info = "/v1/" + sub_path if sub_path else "/v1/"
+
+    body = await request.read()
+    body_bytes = body if body else None
+
+    try:
+        response = api_app.dispatch(method, path_info, body_bytes)
+    except Exception as exc:
+        logger.error("dashboard API dispatch failed: %s", exc, exc_info=True)
+        return web.json_response({"error": "internal_error", "detail": str(exc)}, status=500)
+
+    # Build aiohttp response from APIResponse
+    resp = web.json_response(response.payload, status=response.status_code)
+    for header_name, header_value in response.headers:
+        if header_name.lower() != "content-type":
+            resp.headers[header_name] = header_value
+    return resp
+
+
+# ── Dashboard Static Assets ───────────────────────────────────────
+
+
+def _resolve_dashboard_static_dir(daemon: Any) -> Path | None:
+    """Locate the dashboard ``dist/`` directory.
+
+    Checks (in order):
+      1. ``apps/dashboard/dist/`` relative to the repo root (dev checkout).
+      2. ``<install_root>/dashboard/dist/`` (installed package).
+
+    Returns *None* when no static assets are found (non-fatal — the
+    dashboard is an optional surface).
+    """
+    # Dev checkout: apps/dashboard/dist/
+    repo_root = Path(__file__).resolve().parents[1]
+    dev_dist = repo_root / "apps" / "dashboard" / "dist"
+    if (dev_dist / "index.html").is_file():
+        return dev_dist
+
+    # Installed package: <install_root>/dashboard/dist/
+    try:
+        from packages.runtime_layout import infer_install_root_from_state_dir
+        install_root = infer_install_root_from_state_dir(daemon.cli_state_dir)
+        installed_dist = install_root / "dashboard" / "dist"
+        if (installed_dist / "index.html").is_file():
+            return installed_dist
+    except Exception:
+        pass
+
+    return None
+
+
+async def _handle_dashboard_static(request: Any) -> Any:
+    """Serve a dashboard static asset file."""
+    from aiohttp import web
+
+    static_dir: Path | None = request.app.get("dashboard_static_dir")
+    if static_dir is None:
+        return web.json_response({"error": "dashboard assets not available"}, status=404)
+
+    relative = request.match_info.get("path", "index.html") or "index.html"
+    candidate = (static_dir / relative).resolve()
+
+    # Path traversal protection
+    if static_dir.resolve() not in candidate.parents and candidate != static_dir.resolve():
+        candidate = static_dir / "index.html"
+
+    if not candidate.is_file():
+        # SPA fallback: serve index.html for unknown routes
+        candidate = static_dir / "index.html"
+
+    if not candidate.is_file():
+        return web.json_response({"error": "dashboard assets not found"}, status=404)
+
+    return web.FileResponse(candidate)
+
+
+async def _handle_dashboard_assets(request: Any) -> Any:
+    """Serve files from the ``assets/`` subdirectory of the dashboard dist."""
+    from aiohttp import web
+
+    static_dir: Path | None = request.app.get("dashboard_static_dir")
+    if static_dir is None:
+        return web.json_response({"error": "dashboard assets not available"}, status=404)
+
+    relative = request.match_info.get("path", "")
+    if not relative:
+        return web.json_response({"error": "not found"}, status=404)
+
+    candidate = (static_dir / "assets" / relative).resolve()
+
+    # Path traversal protection
+    assets_dir = (static_dir / "assets").resolve()
+    if assets_dir not in candidate.parents and candidate != assets_dir:
+        return web.json_response({"error": "not found"}, status=404)
+
+    if not candidate.is_file():
+        return web.json_response({"error": "not found"}, status=404)
+
+    return web.FileResponse(candidate)
+
+
+async def _handle_dashboard_favicon(request: Any) -> Any:
+    """Serve ``favicon.png`` from the dashboard dist root."""
+    from aiohttp import web
+
+    static_dir: Path | None = request.app.get("dashboard_static_dir")
+    if static_dir is None:
+        return web.json_response({"error": "dashboard assets not available"}, status=404)
+
+    favicon = static_dir / "favicon.png"
+    if not favicon.is_file():
+        return web.json_response({"error": "favicon not found"}, status=404)
+
+    return web.FileResponse(favicon)
+
+
+async def _handle_dashboard_spa_fallback(request: Any) -> Any:
+    """Serve ``index.html`` for the root path (SPA entry point)."""
+    from aiohttp import web
+
+    static_dir: Path | None = request.app.get("dashboard_static_dir")
+    if static_dir is None:
+        return web.json_response({"error": "dashboard assets not available"}, status=404)
+
+    index = static_dir / "index.html"
+    if not index.is_file():
+        return web.json_response({"error": "dashboard assets not found"}, status=404)
+
+    return web.FileResponse(index)
 
 
 def _register_gateway_http_routes(app: Any, daemon: Any) -> None:

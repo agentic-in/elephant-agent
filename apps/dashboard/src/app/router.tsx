@@ -22,9 +22,10 @@ import { PersonalModelMapPage } from "../routes/console/PersonalModelMapPage";
 import { ChatPage } from "../routes/chat/ChatPage";
 import { DashboardShell } from "../shell/DashboardShell";
 
-export const router = createBrowserRouter([
-  {
-    path: "/",
+export const router = createBrowserRouter(
+  [
+    {
+      path: "/",
     element: <DashboardShell />,
     children: [
       { index: true, element: <PersonalModelMapPage /> },
@@ -50,4 +51,6 @@ export const router = createBrowserRouter([
       { path: "usage-logs", element: <UsageLogsPage /> },
     ],
   },
-]);
+  ],
+  { basename: "/dashboard" },
+);

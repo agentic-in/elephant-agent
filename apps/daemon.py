@@ -49,6 +49,7 @@ class ServiceDaemon:
     _http_services: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _adapter_locks: dict[str, asyncio.Lock] = field(default_factory=dict, init=False, repr=False)
     _http_app: Any = field(default=None, init=False, repr=False)
+    _dashboard_api_app: Any = field(default=None, init=False, repr=False)
     _registered_http_service_keys: list[str] = field(default_factory=list, init=False, repr=False)
 
     # ── Lifecycle ──────────────────────────────────────────────
@@ -71,6 +72,7 @@ class ServiceDaemon:
 
         # Start services in order
         await self._start_gateway_app()
+        await self._start_dashboard_api()
         await self._start_im_adapters()  # Discover services before HTTP server
         await self._start_http_server()  # HTTP server gets routes from discovered services
         await self._start_cron_scheduler()
@@ -187,6 +189,29 @@ class ServiceDaemon:
             logger.error("GatewayApp initialization failed: %s", exc)
             self._service_statuses["gateway_app"] = DaemonServiceStatus(
                 name="gateway_app", status="failed", last_error=str(exc)
+            )
+
+    # ── Dashboard API ───────────────────────────────────────────
+
+    async def _start_dashboard_api(self) -> None:
+        """Build the ElephantAPIApp for the dashboard /v1/ API bridge.
+
+        The app's ``dispatch(method, path, body) -> APIResponse`` method
+        is called directly by the aiohttp handler — no WSGI involved.
+        """
+        try:
+            from apps.api import create_app
+
+            database_path = self.cli_state_dir / "elephant.sqlite3"
+            self._dashboard_api_app = create_app(database_path=database_path)
+            self._service_statuses["dashboard_api"] = DaemonServiceStatus(
+                name="dashboard_api", status="running", started_at=datetime.now(UTC).isoformat()
+            )
+            logger.info("Dashboard API initialized (database=%s)", database_path)
+        except Exception as exc:
+            logger.warning("Dashboard API initialization skipped: %s", exc)
+            self._service_statuses["dashboard_api"] = DaemonServiceStatus(
+                name="dashboard_api", status="skipped", last_error=str(exc)
             )
 
     # ── IM Adapters ────────────────────────────────────────────
