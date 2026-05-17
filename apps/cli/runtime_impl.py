@@ -152,6 +152,8 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             global_config_path,
             state_dir=state_dir,
         )
+        from packages.observability import setup_from_config
+        setup_from_config(global_config, state_dir=str(state_dir))
         active_provider_profile = load_provider_profile(state_dir, config_path=global_config_path)
         active_provider_profile_id = None
         active_provider_id = None

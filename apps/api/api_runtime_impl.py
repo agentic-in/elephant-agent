@@ -115,6 +115,9 @@ class ElephantAPIApp:
         self.repository = RuntimeStorageRepository(config.database_path)
         self.repository.bootstrap()
         runtime_state_dir = self.repository.database_path.parent
+        _obs_cfg = load_global_config(global_config_path_for_state_dir(runtime_state_dir), state_dir=runtime_state_dir)
+        from packages.observability import setup_from_config
+        setup_from_config(_obs_cfg, state_dir=str(runtime_state_dir))
         install_root = config.install_root or infer_install_root_from_state_dir(runtime_state_dir)
         sync_builtin_skill_shelf(destination_root=install_root / "skills" / "builtin")
         self.profile_loader = ProfileLoader(install_root)

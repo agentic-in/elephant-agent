@@ -14,6 +14,7 @@
         "*_CODE_ANALYSIS.md",
         "docs/README.md",
         "docs/system-design/**",
+        "docs/observability/**",
         "docs/paper/**"
       ],
       "read_first": [
@@ -261,6 +262,7 @@
         "packages/operator/**",
         "packages/security/**",
         "packages/telemetry/**",
+        "packages/observability/**",
         "packages/runtime_config.py",
         "packages/runtime_layout.py"
       ],

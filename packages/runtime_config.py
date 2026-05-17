@@ -76,6 +76,13 @@ def default_global_config(*, state_dir: str | Path) -> dict[str, Any]:
             "first_language": "en",
         },
         "personal_model_questions": default_personal_model_question_config(),
+        "observability": {
+            "enabled": True,
+            "log_level": "INFO",
+            "log_file": "",
+            "otel_endpoint": "",
+            "service_name": "elephant-agent",
+        },
         "extensions": {},
     }
 
@@ -101,6 +108,11 @@ def global_config_schema() -> list[dict[str, Any]]:
         {"path": "personal_model_questions.proactive_ask.idle_threshold_minutes", "type": "number", "label": "Idle threshold (minutes)", "section": "Personal Model"},
         {"path": "personal_model_questions.proactive_ask.daily_max", "type": "number", "label": "Daily max questions", "section": "Personal Model"},
         {"path": "personal_model_questions.proactive_ask.quiet_hours", "type": "string_list", "label": "Quiet hours [start, end]", "section": "Personal Model"},
+        {"path": "observability.enabled", "type": "boolean", "label": "Observability enabled", "section": "Observability"},
+        {"path": "observability.log_level", "type": "string", "label": "Log level", "section": "Observability"},
+        {"path": "observability.log_file", "type": "string", "label": "Log file path", "section": "Observability"},
+        {"path": "observability.otel_endpoint", "type": "string", "label": "OTLP endpoint", "section": "Observability"},
+        {"path": "observability.service_name", "type": "string", "label": "Service name", "section": "Observability"},
     ]
 
 

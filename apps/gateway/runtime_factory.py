@@ -204,6 +204,12 @@ def build_gateway_app(
         ephemeral_home = Path(tempfile.mkdtemp(prefix="elephant-gateway-home-"))
     resolved_state_dir = Path(state_dir) if state_dir is not None else None
 
+    if resolved_state_dir is not None:
+        from packages.runtime_config import load_global_config, global_config_path_for_state_dir
+        _gw_cfg = load_global_config(global_config_path_for_state_dir(resolved_state_dir), state_dir=resolved_state_dir)
+        from packages.observability import setup_from_config
+        setup_from_config(_gw_cfg, state_dir=str(resolved_state_dir))
+
     # The extension-manifest loader surfaces skill / tool overrides (profile.json
     # on disk). Identity does NOT flow through it — it flows from the DB.
     if resolved_state_dir is not None:
