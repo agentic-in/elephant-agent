@@ -10,7 +10,9 @@ from typing import Mapping
 
 COPILOT_REASONING_EFFORTS_GPT5 = ("minimal", "low", "medium", "high")
 COPILOT_REASONING_EFFORTS_O_SERIES = ("low", "medium", "high")
-ANTHROPIC_REASONING_EFFORTS = ("low", "medium", "high", "xhigh")
+ANTHROPIC_REASONING_EFFORTS = ("low", "medium", "high", "max")
+ANTHROPIC_REASONING_EFFORTS_OPUS_47 = ("low", "medium", "high", "xhigh", "max")
+ANTHROPIC_REASONING_EFFORTS_BASE = ("low", "medium", "high")
 OPENAI_REASONING_EFFORTS_GPT5 = ("minimal", "low", "medium", "high")
 OPENAI_REASONING_EFFORTS_O_SERIES = ("low", "medium", "high")
 
@@ -528,7 +530,7 @@ _DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         required_secret_keys=("api_key",),
         required_config_keys=("model_id",),
         capability_flags=("chat",),
-        model_hints=("MiniMax-M2.7", "MiniMax-M2.7-highspeed"),
+        model_hints=("MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"),
         supports_custom_base_url=False,
         listing_priority=70,
         provider_kind="first_party",
@@ -538,7 +540,7 @@ _DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         base_url_env_var="MINIMAX_BASE_URL",
         metadata={
             "surface": "first_party",
-            "unsupported_capabilities": "streaming,reasoning,embeddings",
+            "unsupported_capabilities": "reasoning,embeddings",
         },
     ),
     ProviderDefinition(
@@ -552,7 +554,7 @@ _DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         required_secret_keys=("api_key",),
         required_config_keys=("model_id",),
         capability_flags=("chat",),
-        model_hints=("MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M1-80k"),
+        model_hints=("MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"),
         supports_custom_base_url=False,
         listing_priority=72,
         provider_kind="first_party",
@@ -562,7 +564,7 @@ _DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
         base_url_env_var="MINIMAX_CN_BASE_URL",
         metadata={
             "surface": "first_party",
-            "unsupported_capabilities": "streaming,reasoning,embeddings",
+            "unsupported_capabilities": "reasoning,embeddings",
         },
     ),
     ProviderDefinition(
@@ -890,7 +892,11 @@ def reasoning_efforts_for(
     if normalized_provider in {"anthropic", "claude-code"}:
         if "haiku" in normalized_model:
             return ()
-        return ANTHROPIC_REASONING_EFFORTS
+        if "opus-4-7" in normalized_model or "opus-4.7" in normalized_model:
+            return ANTHROPIC_REASONING_EFFORTS_OPUS_47
+        if "4-6" in normalized_model or "4.6" in normalized_model:
+            return ANTHROPIC_REASONING_EFFORTS
+        return ANTHROPIC_REASONING_EFFORTS_BASE
     return ()
 
 

@@ -190,7 +190,7 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
         self.assertFalse(self.resolution.supports_streaming)
         self.assertTrue(self.resolution.supports_tools)
         self.assertTrue(self.resolution.supports_reasoning)
-        self.assertEqual(self.resolution.reasoning_efforts, ("low", "medium", "high", "xhigh"))
+        self.assertEqual(self.resolution.reasoning_efforts, ("low", "medium", "high"))
         self.assertEqual(self.resolution.capability_flags, ("chat",))
         self.assertEqual(request.endpoint_path, "/v1/messages")
         self.assertEqual(request.request_family, "messages")

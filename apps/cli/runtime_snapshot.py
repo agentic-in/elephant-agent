@@ -927,8 +927,8 @@ def _event_payload(event: EventEnvelope | None) -> dict[str, Any] | None:
     }
 
 
-def _iso(value: datetime) -> str:
-    return value.isoformat()
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
 
 
 def _utc_now() -> datetime:

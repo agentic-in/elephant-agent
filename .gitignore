@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .coverage
 .venv/
+.vscode/
 .venv-agent/
 .agent-harness/
 .elephant-api.sqlite3

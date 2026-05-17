@@ -43,9 +43,10 @@ from .http import JSONHTTPTransport, UrllibJSONHTTPTransport
 ANTHROPIC_API_VERSION = "2023-06-01"
 ANTHROPIC_ENDPOINT_PATH = "/v1/messages"
 ANTHROPIC_REQUEST_FAMILY = "messages"
-THINKING_BUDGET = {"xhigh": 32000, "high": 16000, "medium": 8000, "low": 4000}
+THINKING_BUDGET = {"max": 64000, "xhigh": 32000, "high": 16000, "medium": 8000, "low": 4000}
 ADAPTIVE_EFFORT_MAP = {
-    "xhigh": "max",
+    "max": "max",
+    "xhigh": "xhigh",
     "high": "high",
     "medium": "medium",
     "low": "low",
@@ -655,7 +656,7 @@ class AnthropicMessagesModelAdapter(ModelAdapter):
 
     def _supports_adaptive_thinking(self, model_id: str) -> bool:
         normalized = model_id.lower()
-        return "4.6" in normalized or "4-6" in normalized
+        return any(v in normalized for v in ("4.6", "4-6", "4.7", "4-7"))
 
 
 class AnthropicMessagesProviderCapability(ModelProviderCapability):
