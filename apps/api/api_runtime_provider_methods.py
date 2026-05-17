@@ -62,7 +62,7 @@ from .api_runtime_support import (
     APIResponse,
     APIEpisodeCreationResult,
     APIEpisodeInspection,
-    APIEpisodeResumeResult,
+    APIEpisodeTransitionResult,
     APILoopRecord,
     APILoopResult,
     _coerce_str_tuple,
@@ -206,7 +206,7 @@ def _provider_probe(
         personal_model_id=profile.profile_id,
         entry_surface="api",
         elephant_id="provider-test",
-        status="active",
+        status="open",
         started_at=_now(),
         updated_at=_now(),
     )

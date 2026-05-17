@@ -24,6 +24,7 @@ from apps.cli.wizard import (
     _wizard_text_prompt,
     WIZARD_MAX_VISIBLE_CHOICES,
     WIZARD_BACK,
+    WIZARD_CANCEL,
     WizardChoice,
     _wizard_choice_fragments,
     _wizard_choice_label,
@@ -363,7 +364,7 @@ class InitQuestionDesignTest(unittest.TestCase):
                 "inner_landscape",
                 "value_anchor",
                 "pressure_pattern",
-                "test.recovery.style",
+                "recovery_style",
                 "decision_compass",
             },
         )
@@ -440,7 +441,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
         text = "".join(fragment for _, fragment in _wizard_choice_fragments("Choose", "Prompt", choices, selected=0))
 
-        self.assertIn("› 🤝 Companion\n  Steady and present.\n  🛠️ Operator\n  Direct and durable.\n", text)
+        self.assertIn("› 🤝  Companion\n  Steady and present.\n  🛠️  Operator\n  Direct and durable.\n", text)
         self.assertNotIn("Steady and present.\n\n  Operator", text)
         self.assertIn("Enter confirms", text)
 
@@ -1086,7 +1087,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
             exit_code = cli_main._run_brain(runtime, args)
 
         self.assertEqual(exit_code, 0)
-        runtime.set_local_embedding_provider.assert_called_once_with()
+        runtime.set_local_embedding_provider.assert_called_once_with(source="huggingface")
         print_card.assert_called_once()
 
     def test_run_brain_configures_openai_compatible_embedding_provider(self) -> None:
@@ -1297,7 +1298,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
             mock.patch.object(cli_main, "_prompt_hobbies", return_value=""),
             mock.patch.object(cli_main, "_prompt_starter_question", return_value=""),
             mock.patch.object(cli_main, "_prompt_optional_text", return_value=""),
-            mock.patch.object(cli_main, "run_provider_selection_wizard", return_value=WIZARD_BACK),
+            mock.patch.object(cli_main, "run_provider_selection_wizard", return_value=WIZARD_CANCEL),
         ):
             state = _run_interactive_birth_wizard(
                 runtime,
@@ -1618,6 +1619,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
             model_id="openai/gpt-4o-mini",
             api_key="sk-cli-test-123",
             embedding_provider="local",
+            embedding_source="local-default",
             embedding_base_url="",
             embedding_model="",
             embedding_dimensions=None,
@@ -1646,7 +1648,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
                 context_window_mode="auto",
                 context_window_tokens=128000,
             )),
-            mock.patch.object(cli_main, "_persist_init_curiosity_config"),
+            mock.patch.object(cli_main, "_persist_init_question_config"),
             mock.patch.object(cli_main, "_bootstrap_personal_model_from_init"),
             mock.patch.object(cli_main, "_play_creating_transition"),
             mock.patch.object(cli_main, "_prompt_im_onboarding"),
@@ -1728,7 +1730,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
         )
 
         with (
-            mock.patch.object(cli_main, "_resolve_growth_session", return_value=("session-atlas", "Opened elephant atlas")),
+            mock.patch.object(cli_main, "_open_growth_episode", return_value=("episode-atlas", "Opened elephant atlas")),
             mock.patch.object(cli_main, "_interactive_shell_supported", return_value=True),
             mock.patch.object(cli_main, "ProductizedShell", return_value=shell) as productized_shell,
         ):
@@ -1738,66 +1740,69 @@ class WizardChoiceMenuTest(unittest.TestCase):
         runtime.prepare_session_surface.assert_not_called()
         productized_shell.assert_called_once_with(
             runtime,
-            session_id="session-atlas",
+            session_id="episode-atlas",
             opened="Opened elephant atlas",
             debug=False,
         )
 
-    def test_resolve_growth_session_reuses_active_elephant_thread(self) -> None:
+    def test_open_growth_episode_opens_next_episode_for_open_elephant(self) -> None:
         runtime = mock.Mock()
-        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-active", status="active")
+        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-parent", status="open", exit_summary="")
+        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-child", status="open"))
 
-        session_id, opened = cli_main._resolve_growth_session(runtime, elephant_id="atlas")
+        episode_id, opened = cli_main._open_growth_episode(runtime, elephant_id="atlas")
 
-        self.assertEqual(session_id, "episode-active")
+        self.assertEqual(episode_id, "episode-child")
         self.assertEqual(opened, "Opened elephant atlas")
-        runtime.resume.assert_not_called()
+        runtime.open_next_episode.assert_called_once_with("episode-parent", reason="wake_boundary", summary="")
 
-    def test_resolve_growth_session_resumes_closed_elephant_thread(self) -> None:
+    def test_open_growth_episode_opens_next_episode_for_closed_elephant(self) -> None:
         runtime = mock.Mock()
-        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-parent", status="closed")
-        runtime.resume.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-child", status="active"))
+        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-parent", status="closed", exit_summary="parent handoff")
+        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-child", status="open"))
 
-        session_id, opened = cli_main._resolve_growth_session(runtime, elephant_id="atlas")
+        episode_id, opened = cli_main._open_growth_episode(runtime, elephant_id="atlas")
 
-        self.assertEqual(session_id, "episode-child")
+        self.assertEqual(episode_id, "episode-child")
         self.assertEqual(opened, "Opened elephant atlas")
-        runtime.resume.assert_called_once_with("episode-parent")
+        runtime.open_next_episode.assert_called_once_with("episode-parent", reason="wake_boundary", summary="parent handoff")
 
     def test_resolve_growth_session_prefers_current_elephant_snapshot_when_multiple_prompting_is_disabled(self) -> None:
         runtime = mock.Mock()
         runtime.elephant_id_for_session.return_value = "atlas"
         runtime.list_herd.return_value = (
-            SimpleNamespace(elephant_id="atlas", latest_session_id="episode-atlas", session_count=1, latest_status="active"),
-            SimpleNamespace(elephant_id="beta", latest_session_id="episode-beta", session_count=1, latest_status="active"),
+            SimpleNamespace(elephant_id="atlas", latest_session_id="episode-atlas", session_count=1, latest_status="open"),
+            SimpleNamespace(elephant_id="beta", latest_session_id="episode-beta", session_count=1, latest_status="open"),
         )
-        current_session = SimpleNamespace(episode_id="episode-current", elephant_id="atlas", status="active")
+        current_session = SimpleNamespace(episode_id="episode-current", elephant_id="atlas", status="open", exit_summary="")
+        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-next", status="open"))
 
         with mock.patch.object(cli_elephant_support, "_current_elephant_session", return_value=current_session):
-            session_id, opened = cli_main._resolve_growth_session(runtime, prompt_for_multiple=False)
+            episode_id, opened = cli_main._open_growth_episode(runtime, prompt_for_multiple=False)
 
-        self.assertEqual(session_id, "episode-current")
+        self.assertEqual(episode_id, "episode-next")
         self.assertEqual(opened, "Opened elephant atlas")
-        runtime.resume.assert_not_called()
+        runtime.open_next_episode.assert_called_once_with("episode-current", reason="wake_boundary", summary="")
 
     def test_resolve_growth_session_prompts_for_multiple_elephants_in_interactive_mode(self) -> None:
         runtime = mock.Mock()
         runtime.list_herd.return_value = (
-            SimpleNamespace(elephant_id="atlas", latest_session_id="episode-atlas", session_count=2, latest_status="active"),
-            SimpleNamespace(elephant_id="beta", latest_session_id="episode-beta", session_count=3, latest_status="active"),
+            SimpleNamespace(elephant_id="atlas", latest_session_id="episode-atlas", session_count=2, latest_status="open"),
+            SimpleNamespace(elephant_id="beta", latest_session_id="episode-beta", session_count=3, latest_status="open"),
         )
         runtime.elephant_id_for_session.return_value = "atlas"
-        runtime.inspect_session.return_value = SimpleNamespace(episode_id="episode-beta", status="active")
-        current_session = SimpleNamespace(episode_id="episode-current", elephant_id="atlas", status="active")
+        runtime.inspect_session.return_value = SimpleNamespace(episode_id="episode-beta", status="open", exit_summary="")
+        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-beta-next", status="open"))
+        current_session = SimpleNamespace(episode_id="episode-current", elephant_id="atlas", status="open")
         selected_elephant = runtime.list_herd.return_value[1]
 
         with (
             mock.patch.object(cli_elephant_support, "_current_elephant_session", return_value=current_session),
             mock.patch.object(cli_elephant_support, "_prompt_elephant_choice", return_value=selected_elephant) as prompt_elephant_choice,
         ):
-            session_id, opened = cli_main._resolve_growth_session(runtime, prompt_for_multiple=True)
+            episode_id, opened = cli_main._open_growth_episode(runtime, prompt_for_multiple=True)
 
-        self.assertEqual(session_id, "episode-beta")
+        self.assertEqual(episode_id, "episode-beta-next")
         self.assertEqual(opened, "Opened elephant beta")
         prompt_elephant_choice.assert_called_once_with(
             runtime,
@@ -1805,21 +1810,20 @@ class WizardChoiceMenuTest(unittest.TestCase):
             preferred_elephant_id="atlas",
         )
         runtime.inspect_session.assert_called_once_with("episode-beta")
-        runtime.resume.assert_not_called()
         runtime.schedule_learning_for_session.assert_not_called()
 
     def test_resolve_growth_session_does_not_queue_boundary_learning_when_opening_different_elephant(self) -> None:
         runtime = mock.Mock()
-        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-beta", status="active")
-        current_session = SimpleNamespace(episode_id="episode-atlas", elephant_id="atlas", status="active")
+        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-beta", status="open", exit_summary="")
+        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-beta-next", status="open"))
+        current_session = SimpleNamespace(episode_id="episode-atlas", elephant_id="atlas", status="open")
         runtime.elephant_id_for_session.return_value = "atlas"
 
         with mock.patch.object(cli_elephant_support, "_current_elephant_session", return_value=current_session):
-            session_id, opened = cli_main._resolve_growth_session(runtime, elephant_id="beta")
+            episode_id, opened = cli_main._open_growth_episode(runtime, elephant_id="beta")
 
-        self.assertEqual(session_id, "episode-beta")
+        self.assertEqual(episode_id, "episode-beta-next")
         self.assertEqual(opened, "Opened elephant beta")
-        runtime.resume.assert_not_called()
         runtime.schedule_learning_for_session.assert_not_called()
 
 

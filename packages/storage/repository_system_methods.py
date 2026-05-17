@@ -707,16 +707,18 @@ def refresh_episode_state(
     return updated
 
 
-def record_episode_resume(
+def record_episode_transition(
     self,
     parent_episode_id: str,
     child_episode_id: str,
-    resumed_at: datetime,
+    transitioned_at: datetime,
+    *,
+    reason: str = "",
 ) -> None:
     parent = self.load_episode(parent_episode_id)
     if parent is None:
         raise KeyError(parent_episode_id)
-    resume_count = int(parent.metadata.get("resume_count", "0") or 0) + 1
+    transition_count = int(parent.metadata.get("transition_count", "0") or 0) + 1
     self.upsert_episode(
         Episode(
             episode_id=parent.episode_id,
@@ -726,12 +728,17 @@ def record_episode_resume(
             status=parent.status,
             started_at=parent.started_at,
             ended_at=parent.ended_at,
+            updated_at=parent.updated_at,
             exit_summary=parent.exit_summary,
+            elephant_id=parent.elephant_id,
+            parent_episode_id=parent.parent_episode_id,
+            interruption_state=parent.interruption_state,
             metadata={
                 **dict(parent.metadata),
-                "resume_count": str(resume_count),
+                "transition_count": str(transition_count),
                 "last_child_episode_id": child_episode_id,
-                "updated_at": _iso(resumed_at),
+                "last_transition_at": _iso(transitioned_at),
+                "last_transition_reason": reason,
             },
         )
     )

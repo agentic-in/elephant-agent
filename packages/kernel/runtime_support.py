@@ -123,6 +123,16 @@ class KernelStoragePort(Protocol):
     def list_episodes(self, *, state_id: str | None = None) -> tuple[Episode, ...]:
         """List Episodes."""
 
+    def record_episode_transition(
+        self,
+        parent_episode_id: str,
+        child_episode_id: str,
+        transitioned_at: datetime,
+        *,
+        reason: str = "",
+    ) -> None:
+        """Record a parent-to-child Episode transition."""
+
     def upsert_loop(self, loop: Loop) -> None:
         """Persist a Loop."""
 
@@ -181,7 +191,7 @@ class KernelSourceRequest:
     source_payload: Mapping[str, Any] = field(default_factory=dict)
     source_event_id: str | None = None
     route_profile_id: str | None = None
-    route_status: str = "active"
+    route_status: str = "open"
     route_interruption_state: str | None = None
     route_started_at: datetime | None = None
     request_id: str = field(default_factory=lambda: f"kernel-source-{uuid4().hex}")

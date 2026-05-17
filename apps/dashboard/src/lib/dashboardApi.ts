@@ -416,12 +416,12 @@ export function createDashboardSession(
     display_name: string;
     mode: string;
     elephant_id?: string;
-    session_id?: string;
+    episode_id?: string;
   },
   options: OperatorApiRequestOptions = {},
 ): Promise<unknown> {
   return requestOperatorApi<unknown>(
-    "/v1/sessions",
+    "/v1/episodes",
     {
       method: "POST",
       body: JSON.stringify(payload),
@@ -616,7 +616,7 @@ export function unprotectPersonalModelClaim(
 }
 
 export function sendDashboardTurn(
-  sessionId: string,
+  episodeId: string,
   payload: {
     prompt: string;
     tool_name?: string;
@@ -625,7 +625,7 @@ export function sendDashboardTurn(
   options: OperatorApiRequestOptions = {},
 ): Promise<unknown> {
   return requestOperatorApi<unknown>(
-    `/v1/sessions/${encodeURIComponent(sessionId)}/turns`,
+    `/v1/episodes/${encodeURIComponent(episodeId)}/loops`,
     {
       method: "POST",
       body: JSON.stringify(payload),

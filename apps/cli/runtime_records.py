@@ -53,6 +53,31 @@ def _hidden_elephant_id(elephant_id: str) -> bool:
     return str(elephant_id or "").strip().startswith("learn-live")
 
 
+def _user_visible_episode(episode: Episode) -> bool:
+    metadata = dict(episode.metadata)
+    if metadata.get("episode_kind") == "sub_agent":
+        return False
+    if metadata.get("transition_reason") == "sub_agent_child":
+        return False
+    if str(episode.entry_surface or "").endswith(":sub_agent"):
+        return False
+    return True
+
+
+def _episode_opened_key(episode: Episode) -> tuple[datetime, str]:
+    return (
+        episode.started_at or episode.updated_at or datetime.min.replace(tzinfo=timezone.utc),
+        episode.episode_id,
+    )
+
+
+def _latest_lineage_leaf(episodes: tuple[Episode, ...]) -> Episode:
+    parent_ids = {episode.parent_episode_id for episode in episodes if episode.parent_episode_id}
+    leaves = tuple(episode for episode in episodes if episode.episode_id not in parent_ids)
+    candidates = leaves or episodes
+    return max(candidates, key=_episode_opened_key)
+
+
 class CliRuntimeRecordsMixin:
     def inspect_session(self, session_id: str) -> Episode:
         return self._load_session(session_id)
@@ -63,20 +88,25 @@ class CliRuntimeRecordsMixin:
     def list_herd(self, *, limit: int = 12) -> tuple[EggSummary, ...]:
         grouped: dict[str, list[Episode]] = {}
         for session in self._list_sessions():
+            if not _user_visible_episode(session):
+                continue
             elephant_id = self.elephant_id_for_session(session)
             if _hidden_elephant_id(elephant_id):
                 continue
             grouped.setdefault(elephant_id, []).append(session)
-        herd = tuple(
-            EggSummary(
-                elephant_id=elephant_id,
-                latest_session_id=sessions[0].episode_id,
-                latest_status=sessions[0].status,
-                updated_at=sessions[0].updated_at,
-                session_count=len(sessions),
+        herd_items: list[EggSummary] = []
+        for elephant_id, sessions in grouped.items():
+            latest = _latest_lineage_leaf(tuple(sessions))
+            herd_items.append(
+                EggSummary(
+                    elephant_id=elephant_id,
+                    latest_session_id=latest.episode_id,
+                    latest_status=latest.status,
+                    updated_at=latest.updated_at,
+                    session_count=len(sessions),
+                )
             )
-            for elephant_id, sessions in grouped.items()
-        )
+        herd = tuple(herd_items)
         ordered = tuple(sorted(herd, key=lambda item: (item.updated_at or datetime.min.replace(tzinfo=timezone.utc), item.elephant_id), reverse=True))
         return ordered[:limit]
 
@@ -84,10 +114,13 @@ class CliRuntimeRecordsMixin:
         target = elephant_id.strip()
         if not target:
             return None
+        candidates: list[Episode] = []
         for session in self._list_sessions():
+            if not _user_visible_episode(session):
+                continue
             if self.elephant_id_for_session(session) == target:
-                return session
-        return None
+                candidates.append(session)
+        return _latest_lineage_leaf(tuple(candidates)) if candidates else None
 
     def session_ids_for_elephant(self, elephant_id: str) -> tuple[str, ...]:
         target = elephant_id.strip()
@@ -96,7 +129,7 @@ class CliRuntimeRecordsMixin:
         return tuple(
             session.episode_id
             for session in self._list_sessions()
-            if self.elephant_id_for_session(session) == target
+            if _user_visible_episode(session) and self.elephant_id_for_session(session) == target
         )
 
     def state_for_elephant(self, elephant_id: str):
@@ -253,8 +286,7 @@ class CliRuntimeRecordsMixin:
         episodes = sorted(
             self.repository.list_episodes(),
             key=lambda episode: (
-                episode.metadata.get("updated_at", ""),
-                (episode.ended_at or episode.started_at).isoformat(),
+                _episode_opened_key(episode)[0].isoformat(),
                 episode.episode_id,
             ),
             reverse=True,

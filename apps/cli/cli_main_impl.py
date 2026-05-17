@@ -932,7 +932,10 @@ def _learned_init_entries(language: str, bootstrap_state: object) -> list[tuple[
     mbti = str(getattr(bootstrap_state, "mbti", "") or "").strip().upper()
     if mbti:
         traits = _mbti_traits(mbti, language=language)
-        text = f"{mbti}；{traits}" if traits else mbti
+        if is_zh:
+            text = f"MBTI：{mbti}；特征参考：{traits}" if traits else f"MBTI：{mbti}"
+        else:
+            text = f"MBTI: {mbti}; trait reference: {traits}" if traits else f"MBTI: {mbti}"
         entries.append((text, {"field": "mbti", "mbti_traits": traits, **_INIT_FIELD_MODEL_HINTS["mbti"]}))
     add("hobbies", getattr(bootstrap_state, "hobbies", ""))
     for field_id, value in _init_care_entries(bootstrap_state):
@@ -2030,7 +2033,7 @@ def _run_elephant(runtime: CliRuntime, args: argparse.Namespace) -> int:
         _print_elephant_created(runtime, session.episode_id)
         try:
             outcome = runtime.explain_next_step(session_id=session.episode_id, prompt=args.message)
-        except RuntimeError as error:
+        except Exception as error:
             _print_provider_turn_failed(runtime, error, session_id=session.episode_id)
             return 1
         _print_assistant_turn(runtime, outcome)
@@ -2549,9 +2552,9 @@ def _run_grow(runtime: CliRuntime, args: argparse.Namespace) -> int:
         return 1
 
     try:
-        session_id, opened = _resolve_growth_session(
+        episode_id, opened = _open_growth_episode(
             runtime,
-            session_id=getattr(args, "session_id", None),
+            episode_id=getattr(args, "episode_id", None),
             elephant_id=args.elephant_id,
             prompt_for_multiple=args.message is None and _interactive_shell_supported(),
         )
@@ -2567,19 +2570,19 @@ def _run_grow(runtime: CliRuntime, args: argparse.Namespace) -> int:
         return 1
 
     if args.message is not None:
-        runtime.prepare_session_surface(session_id)
+        runtime.prepare_session_surface(episode_id)
         try:
-            outcome = runtime.explain_next_step(session_id=session_id, prompt=args.message)
+            outcome = runtime.explain_next_step(session_id=episode_id, prompt=args.message)
         except RuntimeError as error:
-            _print_provider_turn_failed(runtime, error, session_id=session_id)
+            _print_provider_turn_failed(runtime, error, session_id=episode_id)
             return 1
         _print_assistant_turn(runtime, outcome)
         return 0
 
     if _interactive_shell_supported():
-        return ProductizedShell(runtime, session_id=session_id, opened=opened, debug=args.debug).run()
-    runtime.prepare_session_surface(session_id)
-    return _run_stream_grow_loop(runtime, session_id, sys.stdin)
+        return ProductizedShell(runtime, session_id=episode_id, opened=opened, debug=args.debug).run()
+    runtime.prepare_session_surface(episode_id)
+    return _run_stream_grow_loop(runtime, episode_id, sys.stdin)
 
 def _run_stream_grow_loop(runtime: CliRuntime, session_id: str, stream: Iterable[str]) -> int:
     for line in stream:
@@ -2806,7 +2809,7 @@ def build_typer_app() -> typer.Typer:
     @app.command("wake")
     def wake_command(
         ctx: typer.Context,
-        elephant_id: str | None = typer.Option(None, "--elephant-id", help="Open the latest session for a known elephant."),
+        elephant_id: str | None = typer.Option(None, "--elephant-id", help="Open the next Episode for a known elephant."),
         debug: bool = typer.Option(False, "--debug", help="Show runtime diagnostics inside the wake surface."),
         message: str | None = typer.Option(None, "--message", help="Run one wake turn and exit."),
     ) -> None:

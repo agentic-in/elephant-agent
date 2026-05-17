@@ -354,7 +354,7 @@ class _WebPageStubServer:
 
 class CliSurfaceE2ETest(unittest.TestCase):
     def setUp(self) -> None:
-        self.tempdir = tempfile.TemporaryDirectory()
+        self.tempdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.stub = _ProviderStubServer().start()
         self.web_stub = _WebPageStubServer().start()
         self.root = Path(self.tempdir.name)
@@ -525,10 +525,10 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("elephant init", overview.stdout)
         self.assertIn("elephant wake", overview.stdout)
         self.assertIn("• herd", overview.stdout)
-        self.assertIn("elephant status", overview.stdout)
-        self.assertIn("elephant skills", overview.stdout)
-        self.assertIn("elephant gateway", overview.stdout)
-        self.assertIn("elephant dashboard", overview.stdout)
+        self.assertIn("• status", overview.stdout)
+        self.assertIn("• skills", overview.stdout)
+        self.assertIn("• gateway", overview.stdout)
+        self.assertIn("• dashboard", overview.stdout)
         self.assertNotIn("elephant chat", overview.stdout)
         self.assertNotIn("elephant providers", overview.stdout)
         self.assertNotIn("state_dir", overview.stdout)
@@ -578,15 +578,16 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("cache_hit_rate · 28.6% (2/7 input tokens cached)", turn.stdout)
         self.assertIsNotNone(self.stub.last_payload)
         system_prompt = str(self.stub.last_payload["messages"][0]["content"])  # type: ignore[index]
-        self.assertIn("### System Layer Contract", system_prompt)
-        self.assertIn("You are Demo, the active elephant identity", system_prompt)
-        self.assertIn("### Elephant Identity", system_prompt)
-        self.assertIn("### Episode Continuity", system_prompt)
-        self.assertIn("Stay truthful and bounded", system_prompt)
-        self.assertIn("### Loop Execution Board", system_prompt)
+        self.assertIn("### Who you are", system_prompt)
+        self.assertIn("You are Demo", system_prompt)
+        self.assertIn("### Your own voice", system_prompt)
+        self.assertIn("### What I know so far", system_prompt)
         self.assertIn("### Understanding tools", system_prompt)
-        self.assertNotIn("### State Write Policy", system_prompt)
-        self.assertIn("When write tools are available, use them for concrete durable deltas", system_prompt)
+        self.assertIn("Use `tool.personal_model.search`", system_prompt)
+        self.assertIn("Use `tool.conversation.search`", system_prompt)
+        self.assertIn("### Runtime paths", system_prompt)
+        self.assertNotIn("### Episode resume", system_prompt)
+        self.assertNotIn("sub-agent child Episode opened", system_prompt)
         self.assertNotIn("OpenAI-compatible provider adapter", system_prompt)
         self.assertNotIn("Never claim to be Claude Code", system_prompt)
         self.assertNotIn("generic provider shell", turn.stdout)
@@ -719,13 +720,15 @@ class CliSurfaceE2ETest(unittest.TestCase):
         for needle in ("Welcome back !", "Gateway setup"):
             self.assertNotIn(needle, setup.stdout)
 
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        runtime = CliRuntime.create(state_dir=self.state_dir)
+        state = runtime.state_for_elephant("aeon")
+        self.assertIsNotNone(state)
+        assert state is not None
         manifest_expectations = (
-            (manifest["display_name"], "Aeon"),
-            (manifest["mode"], "companion"),
-            (manifest["companion"]["initiative"], "gentle"),
-            (manifest["companion"]["personality_preset"], "companion"),
-            (manifest["companion"]["personality"], ["steady", "present", "grounded"]),
+            (state.elephant_name, "Aeon"),
+            (state.identity_mode, "companion"),
+            (state.initiative, "gentle"),
+            (state.working_style, "companion"),
         )
         for observed, expected in manifest_expectations:
             self.assertEqual(observed, expected)
@@ -809,7 +812,7 @@ class CliSurfaceE2ETest(unittest.TestCase):
             "• dashboard",
             "• herd",
             "• provider",
-            "• memory",
+            "• facts",
             "• reflect",
             "• skills",
             "• gateway",
@@ -945,7 +948,7 @@ class CliSurfaceE2ETest(unittest.TestCase):
         seed_session = runtime.latest_session_for_elephant("seed")
         self.assertIsNotNone(seed_session)
         assert seed_session is not None
-        growth = runtime.inspect_growth(session_id=seed_session.session_id)
+        growth = runtime.inspect_growth(session_id=seed_session.episode_id)
 
         self.assertIn("live-chat:hello there", turn.stdout)
         self.assertGreaterEqual(growth.level, 1)
@@ -985,15 +988,21 @@ class CliSurfaceE2ETest(unittest.TestCase):
         seed_session = runtime.latest_session_for_elephant("seed")
         self.assertIsNotNone(seed_session)
         assert seed_session is not None
-        growth = runtime.inspect_growth(session_id=seed_session.session_id)
+        growth = runtime.inspect_growth(session_id=seed_session.episode_id)
         history_messages = json.loads(runtime.snapshot_path.read_text(encoding="utf-8"))["session_context_epoch"][
             "history_messages"
         ]
+        self.assertIsNotNone(seed_session.parent_episode_id)
+        assert seed_session.parent_episode_id is not None
+        parent = runtime.inspect_session(seed_session.parent_episode_id)
 
         self.assertIn("live-chat:second turn", second_turn.stdout)
-        self.assertIn(seed_session.session_id, runtime.session_ids_for_elephant("seed"))
-        self.assertTrue(any(message["content"] == "hello there" for message in history_messages))
-        self.assertTrue(any(message["content"] == "second turn" for message in history_messages))
+        self.assertIn(seed_session.episode_id, runtime.session_ids_for_elephant("seed"))
+        self.assertEqual(parent.status, "closed")
+        self.assertIsNotNone(parent.parent_episode_id)
+        self.assertEqual(parent.metadata.get("closed_reason"), "wake_boundary")
+        self.assertFalse(any(message["content"] == "hello there" for message in history_messages))
+        self.assertTrue(any("second turn" in message["content"] for message in history_messages))
         self.assertGreaterEqual(growth.level, 1)
         self.assertGreaterEqual(growth.state.growth_score, 100)
         self.assertGreaterEqual(growth.progress_percent, 0)
@@ -1031,14 +1040,14 @@ class CliSurfaceE2ETest(unittest.TestCase):
         seed_session = runtime.latest_session_for_elephant("seed")
         self.assertIsNotNone(seed_session)
         assert seed_session is not None
-        growth = runtime.inspect_growth(session_id=seed_session.session_id)
+        growth = runtime.inspect_growth(session_id=seed_session.episode_id)
 
         self.assertGreaterEqual(growth.level, 1)
         self.assertGreaterEqual(growth.state.total_dialogues, 2)
         self.assertGreaterEqual(growth.state.total_experiences, 2)
         self.assertGreater(growth.state.total_tokens, 0)
 
-    def test_default_interactive_entry_reuses_single_herd_directly(self) -> None:
+    def test_wake_interactive_entry_opens_single_herd_directly(self) -> None:
         self._run(
             "init",
             "--non-interactive",
@@ -1056,6 +1065,7 @@ class CliSurfaceE2ETest(unittest.TestCase):
 
         shell = self._run_in_tty(
             "",
+            "wake",
             followup_text="/exit\n",
         )
         self.assertIn("Elephant Agent", shell)
@@ -1084,10 +1094,11 @@ class CliSurfaceE2ETest(unittest.TestCase):
 
         shell = self._run_in_tty(
             "beta\n",
+            "wake",
             followup_text="/exit\n",
         )
-        self.assertIn("Elephant Agent CLI", shell)
-        self.assertIn("elephant wake", shell)
+        self.assertIn("Choose elephant", shell)
+        self.assertIn("Elephant Agent", shell)
         self.assertNotIn("This Episode", shell)
         self.assertIn("Beta", shell)
 
@@ -1369,7 +1380,7 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIsNone(refreshed.repository.load_state("state:atlas"))
         self.assertIsNotNone(refreshed.repository.load_personal_model("you"))
 
-    def test_memory_cli_lists_and_deletes_personal_model_facts(self) -> None:
+    def test_facts_cli_lists_and_deletes_personal_model_facts(self) -> None:
         self._run(
             "init",
             "--non-interactive",
@@ -1389,10 +1400,10 @@ class CliSurfaceE2ETest(unittest.TestCase):
         session = runtime.latest_session_for_elephant("seed")
         self.assertIsNotNone(session)
         assert session is not None
-        listed = self._run("memory")
+        listed = self._run("facts")
         self.assertIn("Elephant Agent understanding", listed.stdout)
-        self.assertIn("facts · 0", listed.stdout)
-        self.assertIn("<no Personal Model entries>", listed.stdout)
+        self.assertIn("facts ·", listed.stdout)
+        self.assertIn("status_breakdown", listed.stdout)
 
         fact_id = "fact:stale-preference"
         runtime.repository.upsert_personal_model_fact(
@@ -1408,11 +1419,11 @@ class CliSurfaceE2ETest(unittest.TestCase):
                 metadata={"topic": "identity.style.preference.cleanup"},
             )
         )
-        populated = self._run("memory")
+        populated = self._run("facts")
         self.assertIn(fact_id, populated.stdout)
         self.assertIn("cleanup stale preference", populated.stdout)
 
-        deleted = self._run("memory", "delete", fact_id, "--reason", "cleanup stale preference")
+        deleted = self._run("facts", "delete", fact_id, "--reason", "cleanup stale preference")
         self.assertIn("cleanup stale preference", deleted.stdout)
 
         refreshed = CliRuntime.create(state_dir=self.state_dir)
@@ -1422,7 +1433,7 @@ class CliSurfaceE2ETest(unittest.TestCase):
         assert entry is not None
         self.assertEqual(entry.status, "deleted")
 
-        visible = self._run("memory")
+        visible = self._run("facts")
         self.assertNotIn(fact_id, visible.stdout)
         self.assertNotIn("status=deleted", visible.stdout)
 
@@ -1515,18 +1526,18 @@ class CliSurfaceE2ETest(unittest.TestCase):
         ):
             installed = runtime.install_skill_source(
                 "github:openai/skills/search-skill",
-                session_id=session.session_id,
+                session_id=session.episode_id,
             )
             refreshed = runtime.install_skill_source(
                 "skills-sh:openai/skills/search-skill",
-                session_id=session.session_id,
+                session_id=session.episode_id,
             )
             migrated = runtime.install_skill_source(
                 "clawhub:search-skill",
-                session_id=session.session_id,
+                session_id=session.episode_id,
             )
 
-        inspected = runtime.inspect_skill("search-skill", session_id=session.session_id)
+        inspected = runtime.inspect_skill("search-skill", session_id=session.episode_id)
 
         self.assertEqual(installed.metadata.get("install_action"), "install")
         self.assertEqual(installed.metadata.get("source_id"), "github")

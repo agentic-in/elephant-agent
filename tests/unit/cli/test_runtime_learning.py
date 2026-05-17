@@ -180,7 +180,11 @@ class CliRuntimeLearningTest(unittest.TestCase):
             state_dir.mkdir(parents=True, exist_ok=True)
             runtime = CliRuntime.create(state_dir=state_dir)
             session = runtime.create_elephant(elephant_id="atlas")
-            child = runtime.resume(session.episode_id).episode
+            child = runtime.open_next_episode(
+                session.episode_id,
+                reason="learning_child",
+                summary="learning child Episode opened",
+            ).episode
             job = runtime.schedule_learning_for_session(session_id=session.episode_id, trigger="manual", start_worker=False)
             agent_result = SimpleNamespace(
                 status="completed",

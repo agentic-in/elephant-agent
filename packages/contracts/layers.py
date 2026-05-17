@@ -22,6 +22,7 @@ def _ensure_text_tuple(values: tuple[str, ...], *, name: str) -> None:
 
 _STEP_PHASES = frozenset({"observation", "reasoning", "acting"})
 _STEP_STATUSES = frozenset({"planned", "completed", "failed", "cancelled"})
+_EPISODE_STATUSES = frozenset({"open", "paused", "closed"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,12 +94,6 @@ class Episode:
     elephant_id: str = ""
     parent_episode_id: str | None = None
     interruption_state: str | None = None
-
-    @property
-    def session_id(self) -> str:
-        """Backward-compatible alias for surfaces that still name episodes sessions."""
-
-        return self.episode_id
     metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -107,6 +102,10 @@ class Episode:
         _ensure_non_empty_text(self.personal_model_id, name="episode personal model id")
         _ensure_non_empty_text(self.entry_surface, name="episode entry surface")
         _ensure_non_empty_text(self.status, name="episode status")
+        if self.status not in _EPISODE_STATUSES:
+            raise ValueError(
+                f"episode status must be one of {sorted(_EPISODE_STATUSES)}: {self.status}"
+            )
 
 
 @dataclass(frozen=True, slots=True)

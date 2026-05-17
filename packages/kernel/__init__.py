@@ -19,6 +19,7 @@ from .runtime import (
     KernelSourceRequest,
     KernelStoragePort,
 )
+from .episode_state_machine import EpisodeTransition, close_episode, open_next_episode
 
 __all__ = [
     "KernelDependencies",
@@ -28,6 +29,9 @@ __all__ = [
     "KernelStageRecord",
     "KernelSourceRequest",
     "KernelStoragePort",
+    "EpisodeTransition",
+    "close_episode",
+    "open_next_episode",
     "ReconciliationPipeline",
     "StateReconciler",
     "TurnSignal",

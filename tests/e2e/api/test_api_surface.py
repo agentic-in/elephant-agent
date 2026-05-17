@@ -264,10 +264,13 @@ class APISurfaceE2ETest(unittest.TestCase):
             payload["extra_headers"] = extra_headers
         return payload
 
-    def test_session_lifecycle_inspection_and_resume(self) -> None:
+    def test_episode_lifecycle_inspection_and_next(self) -> None:
+        legacy_sessions = self.app.dispatch("GET", "/v1/sessions/session-1")
+        self.assertEqual(legacy_sessions.status_code, 404)
+
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-companion",
@@ -279,46 +282,46 @@ class APISurfaceE2ETest(unittest.TestCase):
                         base_url=self.stub.openai_base_url,
                         extra_headers={"x-tenant": "elephant"},
                     ),
-                    "session_id": "session-1",
+                    "episode_id": "session-1",
                 }
             ),
         )
         self.assertEqual(created.status_code, 201)
-        self.assertEqual(created.payload["session"]["session_id"], "session-1")
+        self.assertEqual(created.payload["episode"]["episode_id"], "session-1")
 
-        inspected = self.app.dispatch("GET", "/v1/sessions/session-1")
+        inspected = self.app.dispatch("GET", "/v1/episodes/session-1")
         self.assertEqual(inspected.status_code, 200)
-        self.assertEqual(inspected.payload["session"]["status"], "active")
-        self.assertEqual(inspected.payload["lineage"], [inspected.payload["session"]])
-        self.assertEqual(inspected.payload["latest_turn"], None)
+        self.assertEqual(inspected.payload["episode"]["status"], "open")
+        self.assertEqual(inspected.payload["lineage"], [inspected.payload["episode"]])
+        self.assertEqual(inspected.payload["latest_loop"], None)
         self.assertEqual(inspected.payload["progression"]["ring_index"], 1)
         self.assertEqual(inspected.payload["progression"]["stage_title"], "learning the path")
 
         interrupted = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-1/interrupt",
+            "/v1/episodes/session-1/interrupt",
             body=self._body({"interruption_state": "user-paused"}),
         )
         self.assertEqual(interrupted.status_code, 200)
-        self.assertEqual(interrupted.payload["session"]["status"], "interrupted")
+        self.assertEqual(interrupted.payload["episode"]["status"], "paused")
 
-        resumed = self.app.dispatch(
+        next_episode = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-1/resume",
-            body=self._body({"child_session_id": "session-2"}),
+            "/v1/episodes/session-1/next",
+            body=self._body({"child_episode_id": "session-2"}),
         )
-        self.assertEqual(resumed.status_code, 200)
-        self.assertEqual(resumed.payload["session"]["session_id"], "session-2")
-        self.assertEqual(resumed.payload["parent"]["session_id"], "session-1")
+        self.assertEqual(next_episode.status_code, 200)
+        self.assertEqual(next_episode.payload["episode"]["episode_id"], "session-2")
+        self.assertEqual(next_episode.payload["parent_episode"]["episode_id"], "session-1")
         self.assertEqual(
-            [item["session_id"] for item in resumed.payload["lineage"]],
+            [item["episode_id"] for item in next_episode.payload["lineage"]],
             ["session-1", "session-2"],
         )
 
     def test_kernel_backed_turn_execution_and_controlled_tool_path(self) -> None:
         self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-companion",
@@ -330,13 +333,13 @@ class APISurfaceE2ETest(unittest.TestCase):
                         base_url=self.stub.openai_base_url,
                         extra_headers={"x-tenant": "elephant"},
                     ),
-                    "session_id": "session-turn",
+                    "episode_id": "session-turn",
                 }
             ),
         )
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-turn/turns",
+            "/v1/episodes/session-turn/loops",
             body=self._body(
                 {
                     "prompt": "What should we do next?",
@@ -345,8 +348,8 @@ class APISurfaceE2ETest(unittest.TestCase):
             ),
         )
         self.assertEqual(turn.status_code, 200)
-        self.assertEqual(turn.payload["session"]["session_id"], "session-turn")
-        self.assertEqual(turn.payload["outcome"]["event"]["session_id"], "session-turn")
+        self.assertEqual(turn.payload["episode"]["episode_id"], "session-turn")
+        self.assertEqual(turn.payload["outcome"]["event"]["episode_id"], "session-turn")
         self.assertEqual(turn.payload["outcome"]["event"]["payload"]["state_query"], "Continue the release plan")
         self.assertEqual(turn.payload["outcome"]["state"]["elephant_id"], "elephant-1")
         self.assertNotIn("active_task", turn.payload["outcome"]["state"])
@@ -366,7 +369,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         tool_turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-turn/turns",
+            "/v1/episodes/session-turn/loops",
             body=self._body(
                 {
                     "prompt": "Run the controlled path",
@@ -379,12 +382,12 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(tool_turn.payload["outcome"]["execution"]["outcome"], "success")
         self.assertEqual(tool_turn.payload["outcome"]["execution"]["side_effects"], ["code", "python", "sandbox"])
         self.assertIn("hello api tool", tool_turn.payload["outcome"]["execution"]["summary"])
-        self.assertEqual(tool_turn.payload["latest_turn"]["request"]["tool_name"], "tool.code.execute")
-        self.assertEqual(tool_turn.payload["inspection"]["latest_turn"]["request"]["tool_name"], "tool.code.execute")
+        self.assertEqual(tool_turn.payload["latest_loop"]["request"]["tool_name"], "tool.code.execute")
+        self.assertEqual(tool_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"], "tool.code.execute")
 
         clarify_turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-turn/turns",
+            "/v1/episodes/session-turn/loops",
             body=self._body(
                 {
                     "prompt": "Use beta",
@@ -400,52 +403,52 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(clarify_turn.status_code, 200)
         self.assertEqual(clarify_turn.payload["outcome"]["execution"]["outcome"], "success")
         self.assertIn("user_response: beta", clarify_turn.payload["outcome"]["execution"]["summary"])
-        self.assertEqual(clarify_turn.payload["latest_turn"]["request"]["tool_name"], "tool.clarify")
+        self.assertEqual(clarify_turn.payload["latest_loop"]["request"]["tool_name"], "tool.clarify")
 
-        inspect = self.app.dispatch("GET", "/v1/sessions/session-turn")
+        inspect = self.app.dispatch("GET", "/v1/episodes/session-turn")
         self.assertEqual(inspect.status_code, 200)
-        self.assertEqual(inspect.payload["latest_turn"]["request"]["tool_name"], "tool.clarify")
-        self.assertEqual(inspect.payload["lineage"][0]["session_id"], "session-turn")
+        self.assertEqual(inspect.payload["latest_loop"]["request"]["tool_name"], "tool.clarify")
+        self.assertEqual(inspect.payload["lineage"][0]["episode_id"], "session-turn")
         self.assertTrue(inspect.payload["recall_items"])
         self.assertEqual(inspect.payload["recall_items"][0]["source_kind"], "step")
 
         for method, route in (
-            ("GET", "/v1/sessions/session-turn/goals"),
-            ("POST", "/v1/sessions/session-turn/goals"),
-            ("GET", "/v1/sessions/session-turn/goals/work-launch"),
-            ("PATCH", "/v1/sessions/session-turn/goals/work-launch"),
+            ("GET", "/v1/episodes/session-turn/goals"),
+            ("POST", "/v1/episodes/session-turn/goals"),
+            ("GET", "/v1/episodes/session-turn/goals/work-launch"),
+            ("PATCH", "/v1/episodes/session-turn/goals/work-launch"),
         ):
             with self.subTest(method=method, route=route):
                 self.assertEqual(self.app.dispatch(method, route, body=self._body({})).status_code, 404)
 
-        profile_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/profile")
+        profile_surface = self.app.dispatch("GET", "/v1/episodes/session-turn/profile")
         self.assertEqual(profile_surface.status_code, 200)
-        self.assertEqual(profile_surface.payload["profile"]["profile_id"], "profile-companion")
+        self.assertEqual(profile_surface.payload["personal_model"]["profile_id"], "profile-companion")
 
-        work_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/activity")
+        work_surface = self.app.dispatch("GET", "/v1/episodes/session-turn/activity")
         self.assertEqual(work_surface.status_code, 404)
 
-        recall_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/recall/evidence")
+        recall_surface = self.app.dispatch("GET", "/v1/episodes/session-turn/recall/evidence")
         self.assertEqual(recall_surface.status_code, 200)
         self.assertTrue(recall_surface.payload["evidence"])
 
-        procedure_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/procedure")
+        procedure_surface = self.app.dispatch("GET", "/v1/episodes/session-turn/procedure")
         self.assertEqual(procedure_surface.status_code, 404)
 
-        audit_surface = self.app.dispatch("GET", "/v1/sessions/session-turn/audit")
+        audit_surface = self.app.dispatch("GET", "/v1/episodes/session-turn/audit")
         self.assertEqual(audit_surface.status_code, 404)
 
     def test_api_chat_runtime_exposes_model_tools_and_skill_context(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-api-tools",
                     "display_name": "Elephant Agent",
                     "mode": "companion",
                     "elephant_id": "elephant-api-tools",
-                    "session_id": "session-api-tools",
+                    "episode_id": "session-api-tools",
                 }
             ),
         )
@@ -471,7 +474,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("tool.skill.manage", model_visible)
 
         bundle = self.app.context.assemble(session, (), ())
-        self.assertIn("### Evidence tools", bundle.prompt_envelope.frozen_prefix)
+        self.assertIn("### Understanding tools", bundle.prompt_envelope.frozen_prefix)
         self.assertIn("Use `tool.personal_model.search`", bundle.rendered_prompt)
 
         result = self.app.kernel.dependencies.tools.invoke(
@@ -486,26 +489,26 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_canonical_state_routes_expose_identity_user_relationship_and_continuity(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-state",
                     "display_name": "Elephant Agent",
                     "mode": "companion",
                     "elephant_id": "elephant-state",
-                    "session_id": "session-state",
+                    "episode_id": "session-state",
                 }
             ),
         )
         self.assertEqual(created.status_code, 201)
 
-        identity = self.app.dispatch("GET", "/v1/sessions/session-state/identity")
+        identity = self.app.dispatch("GET", "/v1/episodes/session-state/identity")
         self.assertEqual(identity.status_code, 200)
         self.assertEqual(identity.payload["identity"]["display_name"], "Elephant Agent")
 
         updated_identity = self.app.dispatch(
             "PATCH",
-            "/v1/sessions/session-state/identity",
+            "/v1/episodes/session-state/identity",
             body=self._body(
                 {
                     "display_name": "Atlas",
@@ -522,7 +525,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         updated_user = self.app.dispatch(
             "PATCH",
-            "/v1/sessions/session-state/user",
+            "/v1/episodes/session-state/user",
             body=self._body(
                 {
                     "fields": {
@@ -539,7 +542,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         updated_relationship = self.app.dispatch(
             "PATCH",
-            "/v1/sessions/session-state/relationship",
+            "/v1/episodes/session-state/relationship",
             body=self._body({"text": "Keep replies concise and grounded."}),
         )
         self.assertEqual(updated_relationship.status_code, 200)
@@ -548,9 +551,9 @@ class APISurfaceE2ETest(unittest.TestCase):
             updated_relationship.payload["relationship"]["continuity_notes"],
         )
 
-        continuity = self.app.dispatch("GET", "/v1/sessions/session-state/continuity")
+        continuity = self.app.dispatch("GET", "/v1/episodes/session-state/continuity")
         self.assertEqual(continuity.status_code, 200)
-        self.assertEqual(continuity.payload["profile"]["profile_id"], "profile-state")
+        self.assertEqual(continuity.payload["personal_model"]["profile_id"], "profile-state")
         self.assertEqual(continuity.payload["identity"]["display_name"], "Atlas")
         self.assertEqual(continuity.payload["user"]["preferred_name"], "Bit")
         self.assertIn(
@@ -630,20 +633,20 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_turn_without_seed_graph_does_not_form_a_goal_from_prompt_alone(self) -> None:
         self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-companion",
                     "display_name": "Elephant Agent",
                     "mode": "companion",
-                    "session_id": "session-auto-work",
+                    "episode_id": "session-auto-work",
                 }
             ),
         )
 
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-auto-work/turns",
+            "/v1/episodes/session-auto-work/loops",
             body=self._body({"prompt": "Implement the current-work lifecycle in Elephant Agent."}),
         )
 
@@ -656,20 +659,20 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_turn_does_not_mutate_profile_without_explicit_profile_surface(self) -> None:
         self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-turn-profile-guard",
                     "display_name": "Elephant Agent",
                     "mode": "companion",
-                    "session_id": "session-turn-profile-guard",
+                    "episode_id": "session-turn-profile-guard",
                 }
             ),
         )
 
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-turn-profile-guard/turns",
+            "/v1/episodes/session-turn-profile-guard/loops",
             body=self._body(
                 {
                     "prompt": "Call me Bit. I'm building durable agent systems. Please keep replies concise and grounded for future turns.",
@@ -678,7 +681,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertEqual(turn.status_code, 200)
 
-        continuity = self.app.dispatch("GET", "/v1/sessions/session-turn-profile-guard/continuity")
+        continuity = self.app.dispatch("GET", "/v1/episodes/session-turn-profile-guard/continuity")
         self.assertEqual(continuity.status_code, 200)
         self.assertIsNone(continuity.payload["user"]["preferred_name"])
         self.assertEqual(continuity.payload["user"]["communication_preferences"], [])
@@ -688,20 +691,20 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_turn_without_seed_graph_uses_explicit_state_query(self) -> None:
         self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-companion-explicit",
                     "display_name": "Elephant Agent",
                     "mode": "companion",
-                    "session_id": "session-explicit-work",
+                    "episode_id": "session-explicit-work",
                 }
             ),
         )
 
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-explicit-work/turns",
+            "/v1/episodes/session-explicit-work/loops",
             body=self._body(
                 {
                     "prompt": "Implement the current-work lifecycle in Elephant Agent.",
@@ -717,7 +720,7 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_openai_provider_profile_uses_first_party_runtime_resolution(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-openai",
@@ -731,7 +734,7 @@ class APISurfaceE2ETest(unittest.TestCase):
                         reference_id="secret-openai-token",
                         env_var="ELEPHANT_OPENAI_API_KEY",
                     ),
-                    "session_id": "session-openai",
+                    "episode_id": "session-openai",
                 }
             ),
         )
@@ -739,7 +742,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-openai/turns",
+            "/v1/episodes/session-openai/loops",
             body=self._body({"prompt": "Summarize the next release step."}),
         )
         self.assertEqual(turn.status_code, 200)
@@ -755,7 +758,7 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_anthropic_provider_profile_uses_native_messages_runtime(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-anthropic",
@@ -769,7 +772,7 @@ class APISurfaceE2ETest(unittest.TestCase):
                         reference_id="secret-anthropic-token",
                         env_var="ELEPHANT_ANTHROPIC_API_KEY",
                     ),
-                    "session_id": "session-anthropic",
+                    "episode_id": "session-anthropic",
                 }
             ),
         )
@@ -777,7 +780,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-anthropic/turns",
+            "/v1/episodes/session-anthropic/loops",
             body=self._body({"prompt": "Explain the provider boundary."}),
         )
         self.assertEqual(turn.status_code, 200)
@@ -907,13 +910,13 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-defaulted",
                     "display_name": "Elephant Agent",
                     "mode": "companion",
-                    "session_id": "session-defaulted",
+                    "episode_id": "session-defaulted",
                 }
             ),
         )
@@ -921,7 +924,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         turn = self.app.dispatch(
             "POST",
-            "/v1/sessions/session-defaulted/turns",
+            "/v1/episodes/session-defaulted/loops",
             body=self._body({"prompt": "What should we do next?"}),
         )
         self.assertEqual(turn.status_code, 200)
@@ -1134,13 +1137,13 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_internal_dashboard_exposes_cli_linked_control_surfaces(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-console",
                     "display_name": "Console Elephant",
                     "mode": "companion",
-                    "session_id": "session-console",
+                    "episode_id": "session-console",
                     "preferences": ["brief"],
                 }
             ),
@@ -1732,13 +1735,13 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_internal_dashboard_keeps_durable_state_after_episode_delete(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-orphan",
                     "display_name": "Orphan Elephant",
                     "mode": "companion",
-                    "session_id": "session-orphan",
+                    "episode_id": "session-orphan",
                 }
             ),
         )
@@ -1761,13 +1764,13 @@ class APISurfaceE2ETest(unittest.TestCase):
     def test_internal_dashboard_excludes_personal_model_growth_state_lanes(self) -> None:
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-stale-growth",
                     "display_name": "Fresh Elephant",
                     "mode": "companion",
-                    "session_id": "session-stale-growth",
+                    "episode_id": "session-stale-growth",
                 }
             ),
         )
@@ -2147,13 +2150,13 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(defaulted.status_code, 200)
         created = self.app.dispatch(
             "POST",
-            "/v1/sessions",
+            "/v1/episodes",
             body=self._body(
                 {
                     "profile_id": "profile-dashboard-legacy",
                     "display_name": "Legacy lane",
                     "mode": "companion",
-                    "session_id": "session-dashboard-legacy",
+                    "episode_id": "session-dashboard-legacy",
                 }
             ),
         )

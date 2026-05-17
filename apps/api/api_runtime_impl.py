@@ -74,7 +74,7 @@ from .api_runtime_support import (
     APIEpisodeCreationResult,
     APIEpisodeInspection,
     APIEpisodeLifecycleResult,
-    APIEpisodeResumeResult,
+    APIEpisodeTransitionResult,
     APILoopRecord,
     APILoopResult,
 )
@@ -316,7 +316,7 @@ ElephantAPIApp.upsert_provider_key = _provider_methods.upsert_provider_key
 ElephantAPIApp.delete_provider_key = _provider_methods.delete_provider_key
 ElephantAPIApp.create_episode = _surface_methods.create_episode
 ElephantAPIApp.interrupt_episode = _surface_methods.interrupt_episode
-ElephantAPIApp.resume_episode = _surface_methods.resume_episode
+ElephantAPIApp.open_next_episode = _surface_methods.open_next_episode
 ElephantAPIApp.list_recall_evidence = _surface_methods.list_recall_evidence
 ElephantAPIApp.inspect_identity = _surface_methods.inspect_identity
 ElephantAPIApp.update_identity_state = _surface_methods.update_identity_state
@@ -378,7 +378,7 @@ __all__ = [
     "APIEpisodeCreationResult",
     "APIEpisodeInspection",
     "APIEpisodeLifecycleResult",
-    "APIEpisodeResumeResult",
+    "APIEpisodeTransitionResult",
     "APILoopRecord",
     "APILoopResult",
     "ElephantAPIApp",

@@ -8,10 +8,8 @@ import os
 from pathlib import Path
 import threading
 from typing import Any
-from uuid import uuid4
 
 from apps.provider_runtime import capture_runtime_secret_env, load_provider_profile
-from apps.episode_runtime import EpisodeResumeResult
 from packages.models import SurfaceModelProviderCapability
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import (
@@ -85,10 +83,10 @@ from .runtime_turns import (
     create_elephant_session as _create_runtime_elephant_session,
     explain_next_step as _explain_runtime_next_step,
     generate_opening_reply as _generate_runtime_opening_reply,
-    resume_episode as _resume_runtime_session,
+    inspect_wake_continuity as _inspect_runtime_wake_continuity,
+    open_next_episode as _open_runtime_next_episode,
     run_turn as _run_runtime_turn,
     start_episode as _start_runtime_session,
-    wake as _wake_runtime,
 )
 
 @dataclass(frozen=True, slots=True)
@@ -354,76 +352,21 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             seed_elephant_identity_file_text=_default_elephant_identity_file_text,
         )
 
-    def resume(self, session_id: str, *, resumed_session_id: str | None = None) -> EpisodeResumeResult:
-        return _resume_runtime_session(
+    def open_next_episode(
+        self,
+        episode_id: str,
+        *,
+        next_episode_id: str | None = None,
+        reason: str = "wake_boundary",
+        summary: str = "",
+    ):
+        return _open_runtime_next_episode(
             self,
-            session_id,
-            resumed_session_id=resumed_session_id,
+            episode_id,
+            next_episode_id=next_episode_id,
+            reason=reason,
+            summary=summary,
         )
-
-    def start_fresh_episode(self, previous_session_id: str):
-        """Close the previous Episode and start a new one on the same elephant.
-
-        Used by the shell's `/clear` command: the user asked for a clean
-        break, so we explicitly close the previous Episode row
-        (status="closed", ended_at=now) and start a new Episode with a
-        fresh id. The dashboard history then shows both the closed prior
-        Episode and the new active one, which is what the user expects
-        to see when they "clear" the conversation.
-
-        Returns the new Episode.
-        """
-        from datetime import datetime, timezone
-
-        from packages.kernel.episode_state_machine import close_episode
-
-        previous = self.repository.load_episode(previous_session_id)
-        if previous is None:
-            raise KeyError(previous_session_id)
-        now = datetime.now(timezone.utc)
-
-        # Use unified close path — guarantees learning + indexing
-        close_episode(
-            self.repository,
-            previous_session_id,
-            reason="shell_clear",
-            summary=(previous.exit_summary or "").strip() or "/clear requested a fresh Episode",
-            current=now,
-            semantic_summary_indexer=getattr(self, "_semantic_summary_indexer", None),
-        )
-        # close_episode only enqueues; an explicit worker start is needed to consume the job
-        self._ensure_learning_worker_if_needed()
-
-        # Start a new episode on the same elephant + personal model.
-        profile = self._load_profile(previous.personal_model_id)
-        profile_state = profile.state
-        elephant_id = previous.elephant_id or ""
-        new_episode = Episode(
-            episode_id=uuid4().hex,
-            state_id=previous.state_id,
-            personal_model_id=previous.personal_model_id,
-            entry_surface="cli",
-            status="open",
-            started_at=now,
-            updated_at=now,
-            elephant_id=elephant_id,
-            parent_episode_id=previous_session_id,
-        )
-        self.repository.upsert_episode(new_episode)
-        self._write_snapshot(
-            profile=profile_state,
-            session=new_episode,
-            work_items=(),
-            recall_items=(),
-            plan=None,
-            execution=None,
-            delivery=None,
-            stages=(),
-            event=None,
-            elephant_identity_text=profile.elephant_identity_text,
-            state_focus=None,
-        )
-        return new_episode
 
     def explain_next_step(
         self,
@@ -523,11 +466,10 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             apply_growth=apply_growth,
         )
 
-    def wake(self, session_id: str, *, inspect_only: bool = False) -> WakeProgressionResult:
-        return _wake_runtime(
+    def inspect_wake_continuity(self, episode_id: str) -> WakeProgressionResult:
+        return _inspect_runtime_wake_continuity(
             self,
-            session_id,
-            inspect_only=inspect_only,
+            episode_id,
             result_cls=WakeProgressionResult,
         )
 

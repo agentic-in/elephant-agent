@@ -249,9 +249,9 @@ def build_parser() -> argparse.ArgumentParser:
     def _add_wake_parser(name: str, *, hidden: bool = False) -> None:
         wake = subparsers.add_parser(
             name,
-            help=argparse.SUPPRESS if hidden else "Enter an existing Elephant Agent elephant through the branded TUI or run one provider-backed turn.",
+            help=argparse.SUPPRESS if hidden else "Open the next Elephant Agent Episode through the branded TUI or run one provider-backed turn.",
         )
-        wake.add_argument("--elephant-id", default=None, help="Open the latest session for a known elephant.")
+        wake.add_argument("--elephant-id", default=None, help="Open the next Episode for a known elephant.")
         wake.add_argument("--debug", action="store_true", help="Show runtime diagnostics inside the wake surface.")
         wake.add_argument("--message", default=None, help="Run one wake turn and exit.")
 

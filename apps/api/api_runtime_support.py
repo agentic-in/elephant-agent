@@ -173,7 +173,7 @@ class APIEpisodeLifecycleResult:
 
 
 @dataclass(frozen=True, slots=True)
-class APIEpisodeResumeResult:
+class APIEpisodeTransitionResult:
     parent_episode: Episode
     episode: Episode
     lineage: tuple[Episode, ...]

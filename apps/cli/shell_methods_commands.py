@@ -760,7 +760,7 @@ def _append_status(self) -> None:
     provider_doctor = self.runtime.provider_doctor()
     security_doctor = self.runtime.security_doctor()
     try:
-        wake_outcome = self.runtime.wake(self.session_id, inspect_only=True)
+        wake_outcome = self.runtime.inspect_wake_continuity(self.session_id)
     except Exception:
         wake_lines = [
             "loop_mode: foreground",

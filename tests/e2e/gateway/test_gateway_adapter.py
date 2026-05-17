@@ -59,12 +59,13 @@ from packages.gateway_core import (
     GatewayIdentityKey,
     GatewayInboundMessage,
     GatewayOutboundMessage,
+    GatewayRouteState,
     GatewaySenderRef,
 )
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import EvidenceRetrievalRequest
-from packages.evidence import parse_step_replay_record
 from packages.models import SurfaceModelProviderCapability
+from packages.runtime_config import global_config_path_for_state_dir, load_global_config, save_provider_to_config, write_global_config
 from packages.security.runtime import PolicyDecision
 from packages.storage import RuntimeStorageRepository
 
@@ -91,7 +92,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             return_value=False,
         )
         self.ensure_parser_feishu_sdk = self.ensure_parser_feishu_sdk_patcher.start()
-        self.tempdir = tempfile.TemporaryDirectory()
+        self.tempdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self.tempdir.name)
         self.profile_dir = root / "profile"
         self.state_dir = root / "state"
@@ -185,7 +186,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        provider_manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))["provider_profile"]
+        provider_manifest = self._read_runtime_manifest()["provider_profile"]
         provider_profile = provider_profile_from_payload(provider_manifest)
         cli_repository = RuntimeStorageRepository(self.state_dir / "elephant.sqlite3")
         cli_repository.bootstrap()
@@ -222,6 +223,13 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         (gateway_profile_dir / "profile.json").write_text(json.dumps(minimal_manifest), encoding="utf-8")
         (cli_profile_dir / "profile.json").write_text(json.dumps(minimal_manifest), encoding="utf-8")
         (default_profile_dir / "profile.json").write_text((self.profile_dir / "profile.json").read_text(encoding="utf-8"), encoding="utf-8")
+        default_state_dir = default_home / "herd"
+        default_state_dir.mkdir(parents=True)
+        save_provider_to_config(
+            global_config_path_for_state_dir(default_state_dir),
+            state_dir=default_state_dir,
+            provider_payload=self._read_runtime_manifest()["provider_profile"],
+        )
 
         with mock.patch.dict(os.environ, {"ELEPHANT_HOME": str(default_home)}, clear=False):
             app = _build_app(
@@ -240,18 +248,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
     def test_gateway_default_state_dir_uses_cli_runtime_personal_model(self) -> None:
         cli_state_dir = Path(self.tempdir.name) / "cli-shared-state"
         gateway_state_dir = cli_state_dir / "gateway"
-        cli_repository = RuntimeStorageRepository(cli_state_dir / "elephant.sqlite3")
-        cli_repository.bootstrap()
-        cli_repository.ensure_default_personal_model(personal_model_id="personal-model:zoey")
-        state = cli_repository.create_state(
-            personal_model_id="personal-model:zoey",
-            state_id="state:zoey",
-            elephant_id="zoey",
-            elephant_name="Zoey",
-            state_anchor="elephant:zoey",
-            surface_bindings=("cli",),
-        )
-
         app = _build_app(
             SimpleNamespace(
                 profile_dir=self.profile_dir,
@@ -260,7 +256,16 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 cli_state_dir=cli_state_dir,
             )
         )
-        self.assertEqual(app.repository.database_path, cli_state_dir / "elephant.sqlite3")
+        self.assertEqual(app.repository.database_path, gateway_state_dir / "elephant.sqlite3")
+        app.repository.ensure_default_personal_model(personal_model_id="personal-model:zoey")
+        state = app.repository.create_state(
+            personal_model_id="personal-model:zoey",
+            state_id="state:zoey",
+            elephant_id="zoey",
+            elephant_name="Zoey",
+            state_anchor="elephant:zoey",
+            surface_bindings=("gateway",),
+        )
         inbound = GatewayInboundMessage(
             event_id="evt-bind-zoey",
             account=GatewayAccountRef(adapter_id=WEIXIN_ADAPTER_ID, account_id="ops-weixin"),
@@ -278,13 +283,13 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         stale = replace(session, personal_model_id="personal-model:old", elephant_id="old")
         app.repository.upsert_episode_state(stale)
-        switched_state = cli_repository.create_state(
+        switched_state = app.repository.create_state(
             personal_model_id="personal-model:leah",
             state_id="state:leah",
             elephant_id="leah",
             elephant_name="Leah",
             state_anchor="elephant:leah",
-            surface_bindings=("cli",),
+            surface_bindings=("gateway",),
         )
         app.core.bind_elephant(inbound, elephant_id="leah", state_id=switched_state.state_id)
         switched_session = app._ensure_runtime_session(app.core.route_inbound(inbound))
@@ -335,11 +340,36 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         # build_gateway_app now infers the install root from state_dir and reads
         # the extension manifest from that root.
         (Path(self.tempdir.name) / "profile.json").write_text(serialized, encoding="utf-8")
+        config_path = global_config_path_for_state_dir(self.state_dir)
+        config = load_global_config(config_path, state_dir=self.state_dir)
+        if isinstance(payload.get("gateway"), dict):
+            config["gateway"] = dict(payload["gateway"])
+        else:
+            config.pop("gateway", None)
+        write_global_config(config_path, config)
+        if isinstance(payload.get("provider_profile"), dict):
+            save_provider_to_config(
+                config_path,
+                state_dir=self.state_dir,
+                provider_payload=payload["provider_profile"],
+            )
 
     def _provider_profile(self):
         payload = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
         provider_payload = payload.get("provider_profile")
         return provider_profile_from_payload(provider_payload) if isinstance(provider_payload, dict) else None
+
+    def _read_runtime_manifest(self) -> dict[str, object]:
+        payload = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        config = load_global_config(
+            global_config_path_for_state_dir(self.state_dir),
+            state_dir=self.state_dir,
+        )
+        if isinstance(config.get("gateway"), dict):
+            payload["gateway"] = dict(config["gateway"])
+        if isinstance(config.get("extensions"), dict):
+            payload["extensions"] = dict(config["extensions"])
+        return payload
 
     def _build(self):
         return build_gateway_app(
@@ -542,12 +572,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 route=SimpleNamespace(
                     inbound=inbound,
                     identity=identity,
-                    session=Episode(
-                        episode_id=session_id,
-                        state_id="state:test",
-                        personal_model_id="profile:operator",
-                        entry_surface="test",
-                        elephant_id="",
+                    session=GatewayRouteState(
+                        session_id=session_id,
+                        profile_id="profile:operator",
                         status="open",
                         started_at=now,
                         updated_at=now,
@@ -620,12 +647,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "feishu",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                 ]
@@ -636,7 +659,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("Configured Feishu IM", rendered)
         self.assertIn("elephant gateway feishu start", rendered)
 
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         self.assertIn("provider_profile", manifest)
         feishu = manifest["gateway"]["adapters"]["feishu"]
         self.assertTrue(feishu["enabled"])
@@ -761,12 +784,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "discord",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                     "--no-wizard",
@@ -797,7 +816,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("elephant gateway discord start", rendered)
         self.ensure_discord_sdk.assert_called_with(reason="Discord setup")
 
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         discord = manifest["gateway"]["adapters"]["discord"]
         self.assertTrue(discord["enabled"])
         self.assertEqual(discord["surface"], "gateway")
@@ -841,12 +860,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "discord",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                 ]
@@ -862,7 +877,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         auto_start.assert_called_once()
         self.assertEqual(auto_start.call_args.kwargs["transport"], "gateway")
 
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         discord = manifest["gateway"]["adapters"]["discord"]
         account = discord["accounts"][0]
         self.assertEqual(account["account_id"], DEFAULT_GATEWAY_ACCOUNT_ID)
@@ -885,12 +900,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "discord",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                     "--no-wizard",
@@ -902,7 +913,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         discord = manifest["gateway"]["adapters"]["discord"]
         self.assertEqual(len(discord["accounts"]), 1)
         account = discord["accounts"][0]
@@ -918,12 +929,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "discord",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                     "--no-wizard",
@@ -937,7 +944,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         discord = manifest["gateway"]["adapters"]["discord"]
         self.assertTrue(discord["enabled"])
         self.assertFalse(discord["accounts"][0]["enabled"])
@@ -950,12 +957,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "feishu",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                     "--account-id",
@@ -971,7 +974,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         self.assertEqual(manifest["provider_profile"]["profile_id"], "provider-openrouter")
         feishu = manifest["gateway"]["adapters"]["feishu"]
         self.assertTrue(feishu["enabled"])
@@ -1029,12 +1032,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 [
                     "feishu",
                     "setup",
-                    "--profile-dir",
-                    str(self.profile_dir),
                     "--state-dir",
                     str(self.state_dir),
-                    "--cli-profile-dir",
-                    str(self.profile_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
                     "--no-wizard",
@@ -1071,7 +1070,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
     def test_im_setup_command_can_capture_raw_credentials(self) -> None:
         self._update_manifest(lambda payload: payload.pop("gateway", None))
-        scripted_answers = iter(["1", "wizard-app-id-789"])
+        scripted_answers = iter(["3", "wizard-app-id-789"])
 
         output = io.StringIO()
         with (
@@ -1092,7 +1091,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("Feishu setup is complete.", rendered)
         auto_start.assert_called_once()
         self.assertEqual(auto_start.call_args.kwargs["transport"], "long-connection")
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         feishu = manifest["gateway"]["adapters"]["feishu"]
         account = feishu["accounts"][0]
         self.assertEqual(account["account_id"], DEFAULT_GATEWAY_ACCOUNT_ID)
@@ -1126,7 +1125,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
     def test_im_setup_command_does_not_capture_elephant_defaults(self) -> None:
         self._update_manifest(lambda payload: payload.pop("gateway", None))
-        scripted_answers = iter(["1", "wizard-app-id-single"])
+        scripted_answers = iter(["3", "wizard-app-id-single"])
 
         with (
             mock.patch("apps.gateway.gateway_main_setup_impl._start_feishu_runtime_after_setup", return_value=0),
@@ -1140,7 +1139,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        manifest = json.loads((self.profile_dir / "profile.json").read_text(encoding="utf-8"))
+        manifest = self._read_runtime_manifest()
         feishu = manifest["gateway"]["adapters"]["feishu"]
         self.assertNotIn("default_elephant_id", feishu.get("control", {}))
         self.assertNotIn("default_session_id", feishu.get("control", {}))
@@ -1157,7 +1156,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         rendered = json.loads(output.getvalue())
         control = rendered["feishu"]["control"]
-        self.assertEqual(control["profile_dir"], str(self.profile_dir))
+        self.assertNotIn("profile_dir", control)
         self.assertEqual(control["state_dir"], str(self.state_dir))
 
     def test_gateway_feishu_help_lists_runtime_commands(self) -> None:
@@ -1167,7 +1166,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_info.exception.code, 0)
         rendered = output.getvalue()
-        self.assertIn("{setup,remove,start,status,stop,restart,logs,describe,doctor}", rendered)
+        self.assertIn("{setup,remove,start,status,stop,restart,logs,describe,doctor,message}", rendered)
         self.assertIn("setup               Add or update a Feishu account.", rendered)
         self.assertIn("remove              Remove a Feishu account.", rendered)
         self.assertIn("status              Show Feishu status.", rendered)
@@ -1365,6 +1364,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         with (
             mock.patch("apps.gateway.__main__.os.kill", side_effect=fake_kill),
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
+            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1383,7 +1383,12 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(record["status"], "running")
         self.assertEqual(record["pid"], 54321)
         self.assertIsNone(record["last_exit_code"])
-        popen.assert_called_once()
+        launcher_calls = [
+            call
+            for call in popen.call_args_list
+            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+        ]
+        self.assertEqual(len(launcher_calls), 1)
 
     def test_gateway_feishu_start_detach_spawns_background_process(self) -> None:
         class FakeProcess:
@@ -1395,6 +1400,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
+            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1421,8 +1427,13 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(runtime_record["runtime_id"], "feishu:long-connection")
         self.assertEqual(runtime_record["status"], "running")
         self.assertEqual(runtime_record["pid"], 43210)
-        popen.assert_called_once()
-        command = popen.call_args.args[0]
+        launcher_calls = [
+            call
+            for call in popen.call_args_list
+            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+        ]
+        self.assertEqual(len(launcher_calls), 1)
+        command = launcher_calls[0].args[0]
         self.assertEqual(command[:6], [sys.executable, "-m", "apps.launcher", "gateway", "feishu", "start"])
         self.assertNotIn("--detach", command)
         self.assertEqual(command[command.index("--transport") + 1], "long-connection")
@@ -1446,6 +1457,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         with (
             mock.patch.dict("os.environ", {}, clear=True),
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
+            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1456,8 +1468,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
+        launcher_calls = [
+            call
+            for call in popen.call_args_list
+            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+        ]
+        self.assertEqual(len(launcher_calls), 1)
         self.assertEqual(
-            popen.call_args.kwargs["env"]["ELEPHANT_OPENROUTER_API_KEY"],
+            launcher_calls[0].kwargs["env"]["ELEPHANT_OPENROUTER_API_KEY"],
             "sk-persisted-456",
         )
 
@@ -1466,8 +1484,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         summary = app.setup_summary()
 
-        self.assertEqual(summary["profile_id"], "profile:operator")
-        self.assertEqual(summary["profile_dir"], str(self.profile_dir))
+        self.assertEqual(summary["profile_id"], "you")
         self.assertEqual(summary["state_dir"], str(self.state_dir))
         self.assertEqual(summary["adapters"]["chat_bot"], CHAT_BOT_ADAPTER_ID)
         self.assertEqual(summary["adapters"]["feishu"], FEISHU_ADAPTER_ID)
@@ -1576,9 +1593,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         session = app._ensure_runtime_session(app.core.route_inbound(inbound))
 
         bundle = app.kernel.dependencies.context.assemble(session, (), ())
-        self.assertIn("### Capability Disclosure", bundle.prompt_envelope.frozen_prefix)
-        self.assertIn("call `tool.skill.list`", bundle.rendered_prompt)
-        self.assertIn("call `tool.skill.view` with its `skill_id`", bundle.rendered_prompt)
+        self.assertIn("### Understanding tools", bundle.prompt_envelope.frozen_prefix)
+        self.assertIn("Use `tool.personal_model.search`", bundle.rendered_prompt)
 
         assert app.kernel.dependencies.tools is not None
         result = app.kernel.dependencies.tools.invoke(
@@ -1618,8 +1634,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             "tool.personal_model.update",
             {
                 "action": "remember",
-                "lens": "rapport",
-                "topic": "assistant.reply.style",
+                "lens": "identity",
+                "topic": "identity.style.reply",
                 "text": "User prefers concise replies.",
                 "reason": "user explicitly stated this preference",
             },
@@ -1923,7 +1939,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_info.exception.code, 0)
         rendered = output.getvalue()
-        self.assertIn("{setup,remove,start,status,stop,restart,logs,describe,doctor}", rendered)
+        self.assertIn("{setup,remove,start,status,stop,restart,logs,describe,doctor,message}", rendered)
         self.assertIn("setup               Add or update a Discord account.", rendered)
         self.assertIn("remove              Remove a Discord account.", rendered)
         self.assertIn("status              Show Discord status.", rendered)
@@ -1955,6 +1971,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
+            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1980,13 +1997,18 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(runtime_record["runtime_id"], "discord:gateway")
         self.assertEqual(runtime_record["status"], "running")
         self.assertEqual(runtime_record["pid"], 54322)
-        popen.assert_called_once()
-        command = popen.call_args.args[0]
+        launcher_calls = [
+            call
+            for call in popen.call_args_list
+            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+        ]
+        self.assertEqual(len(launcher_calls), 1)
+        command = launcher_calls[0].args[0]
         self.assertEqual(command[:6], [sys.executable, "-m", "apps.launcher", "gateway", "discord", "start"])
         self.assertNotIn("--detach", command)
         self.assertEqual(command[command.index("--transport") + 1], "gateway")
         self.assertEqual(command[command.index("--state-dir") + 1], str(self.state_dir))
-        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertTrue(launcher_calls[0].kwargs["start_new_session"])
 
     def test_discord_service_dispatch_event_delivers_dm_reply_with_mentions_suppressed(self) -> None:
         self._update_manifest(
@@ -2137,7 +2159,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             app=app,
             environ={"ELEPHANT_TEST_DISCORD_BOT_TOKEN": "discord-token-123"},
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         delivery_transport = self._FakeDiscordDeliveryTransport()
@@ -2300,7 +2321,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 WeixinGatewayService(
                     app=app,
                     cli_runtime_factory=lambda profile_dir, state_dir: FakeCliRuntime(),
-                    default_cli_profile_dir=str(self.profile_dir),
                     default_cli_state_dir=str(self.state_dir),
                 ),
                 WEIXIN_ADAPTER_ID,
@@ -2323,7 +2343,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 WecomGatewayService(
                     app=app,
                     cli_runtime_factory=lambda profile_dir, state_dir: FakeCliRuntime(),
-                    default_cli_profile_dir=str(self.profile_dir),
                     default_cli_state_dir=str(self.state_dir),
                     environ={"ELEPHANT_TEST_WECOM_BOT_ID": "bot-id", "ELEPHANT_TEST_WECOM_SECRET": "secret"},
                 ),
@@ -3146,13 +3165,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertNotEqual(first.delivery.outbound.body, "ack: hello")
         first_records = app.recall_evidence_records(first.route.session.session_id)
         self.assertEqual(
-            tuple(record.content for record in first_records if record.kind == "episodic"),
+            tuple(record.metadata.get("raw_user_query") for record in first_records if record.kind == "effective_user_query"),
             ("hello",),
         )
-        self.assertEqual(len(tuple(record for record in first_records if record.kind == "decision")), 1)
-        structured_turns = tuple(parse_step_replay_record(record) for record in first_records if record.kind == "structured_turn")
-        self.assertEqual(len(structured_turns), 1)
-        self.assertEqual(structured_turns[0].observation.summary, "hello")
+        self.assertEqual(len(tuple(record for record in first_records if record.kind == "emit_response")), 1)
 
         restarted_app, restarted_chat, _ = self._build()
         second = restarted_chat.receive_text(
@@ -3178,20 +3194,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         assert second.delivery.outbound is not None
         second_records = restarted_app.recall_evidence_records(second.route.session.session_id)
         self.assertEqual(
-            tuple(record.content for record in second_records if record.kind == "episodic"),
+            tuple(record.metadata.get("raw_user_query") for record in second_records if record.kind == "effective_user_query"),
             ("hello", "follow-up"),
         )
-        self.assertEqual(len(tuple(record for record in second_records if record.kind == "decision")), 2)
-        structured_turns = tuple(
-            parse_step_replay_record(record)
-            for record in second_records
-            if record.kind == "structured_turn"
-        )
-        self.assertEqual(len(structured_turns), 2)
-        self.assertEqual(
-            tuple(turn.observation.summary for turn in structured_turns),
-            ("hello", "follow-up"),
-        )
+        self.assertEqual(len(tuple(record for record in second_records if record.kind == "emit_response")), 2)
         self.assertEqual(len(restarted_app.identity_records()), 1)
         self.assertEqual(len(restarted_app.session_records()), 1)
 
@@ -3725,7 +3731,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 
@@ -3932,7 +3937,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 
@@ -4173,7 +4177,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_SUPPORT_APP_SECRET": "support-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         self._bind_cli_control_conversation(
@@ -4181,14 +4184,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             account_id="ops-feishu",
             conversation_id="oc_service_ops",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
         self._bind_cli_control_conversation(
             service,
             account_id="support-feishu",
             conversation_id="oc_service_support",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
 
         ops_result = service.dispatch_event(
@@ -4791,7 +4794,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         self._bind_cli_control_conversation(
@@ -4799,7 +4801,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             account_id="ops-feishu",
             conversation_id="oc_ws_1",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
 
         description = service.describe()
@@ -4987,7 +4989,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         self._bind_cli_control_conversation(
@@ -4995,7 +4996,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             account_id="ops-feishu",
             conversation_id="oc_ws_dedupe_1",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
 
         try:
@@ -5154,7 +5155,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         self._bind_cli_control_conversation(
@@ -5162,7 +5162,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             account_id="ops-feishu",
             conversation_id="oc_blocked_1",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
 
         try:
@@ -5368,7 +5368,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
             async_worker_count=2,
         )
@@ -5377,7 +5376,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             account_id="ops-feishu",
             conversation_id="oc_serial",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
 
         try:
@@ -5521,7 +5520,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
             async_worker_count=2,
         )
@@ -5654,7 +5652,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: FakeCliRuntime(),
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         self._bind_cli_control_conversation(
@@ -5811,7 +5808,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
         self._bind_cli_control_conversation(
@@ -5819,7 +5815,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             account_id="ops-feishu",
             conversation_id="oc_recovery_1",
             elephant_id="demo",
-            session_id=fake_runtime.demo_session.session_id,
+            session_id=fake_runtime.demo_session.episode_id,
         )
 
         try:
@@ -5999,7 +5995,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 
@@ -6167,7 +6162,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 
@@ -6200,7 +6194,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         rendered_listing = str(list_result.delivery_request["body"]["content"])
         self.assertIn("Available local Elephant Agent herd", rendered_listing)
         self.assertIn("demo", rendered_listing)
-        self.assertIn("active", rendered_listing)
+        self.assertIn("open", rendered_listing)
         self.assertIn("/elephant create <name>", rendered_listing)
 
         bind_result = service.dispatch_event(
@@ -6261,7 +6255,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         assert current_result.delivery_request is not None
         rendered_current = str(current_result.delivery_request["body"]["content"])
         self.assertIn("Current elephant: `demo`", rendered_current)
-        self.assertIn("route_status: `active`", rendered_current)
+        self.assertIn("route_status: `open`", rendered_current)
 
         follow_up = service.dispatch_event(
             {
@@ -6375,7 +6369,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 
@@ -6551,7 +6544,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 
@@ -6731,7 +6723,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "ELEPHANT_TEST_FEISHU_APP_SECRET": "super-secret",
             },
             cli_runtime_factory=lambda profile_dir, state_dir: fake_runtime,
-            default_cli_profile_dir=str(self.profile_dir),
             default_cli_state_dir=str(self.state_dir),
         )
 

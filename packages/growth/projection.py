@@ -490,8 +490,8 @@ def _active_challenge_tracks(
         tracks.append(
             ProgressionChallengeTrack(
                 track_id="recovery-chain",
-                label="Carry the resumed path",
-                summary=f"Keep {wake_action or 'the resumed lane'} connected to the Personal Model.",
+                label="Carry the next path",
+                summary=f"Keep {wake_action or 'the next lane'} connected to the Personal Model.",
                 status="active",
             )
         )

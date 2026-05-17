@@ -348,7 +348,7 @@ class CliRuntimeProviderMixin:
                 personal_model_id=profile.profile_id,
                 entry_surface="cli",
                 elephant_id="provider-test",
-                status="active",
+                status="open",
                 started_at=_utc_now(),
                 updated_at=_utc_now(),
             )
@@ -363,7 +363,7 @@ class CliRuntimeProviderMixin:
             personal_model_id=profile.profile_id,
             entry_surface="cli",
             elephant_id="provider-test",
-            status="active",
+            status="open",
             started_at=_utc_now(),
             updated_at=_utc_now(),
         )

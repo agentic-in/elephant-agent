@@ -120,7 +120,16 @@ def _gateway_provider_profile_for(args: Namespace):
     
     state_dir = Path(cli_state_dir)
     config_path = global_config_path_for_state_dir(state_dir)
-    return load_provider_profile(state_dir, config_path=config_path)
+    profile = load_provider_profile(state_dir, config_path=config_path)
+    if profile is not None:
+        return profile
+    fallback_state_dir = default_cli_state_dir()
+    if fallback_state_dir != state_dir:
+        return load_provider_profile(
+            fallback_state_dir,
+            config_path=global_config_path_for_state_dir(fallback_state_dir),
+        )
+    return None
 
 
 def _build_app(args: Namespace, *, registry=None):

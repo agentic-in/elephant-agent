@@ -244,18 +244,9 @@ def open_episode_lifecycle(
             policy=policy,
             current=current,
         )
+        if loaded is not None and loaded.status == "closed":
+            raise ValueError(f"closed episode cannot be reopened: {loaded.episode_id}")
         episode = _ensure_opening_resume_snapshot(episode, identity.state)
-        if policy != "single_turn" and episode.status == "closed":
-            metadata = {**dict(episode.metadata), "reopened_reason": "session_managed_turn"}
-            if "closed_reason" in metadata:
-                metadata["previous_closed_reason"] = str(metadata.pop("closed_reason"))
-            episode = replace(
-                episode,
-                status="open",
-                ended_at=None,
-                metadata=metadata,
-            )
-            is_new = True
         # First turn: episode was just created or has never been updated
         # beyond its initial creation (started_at == updated_at).
         if not is_new and episode.started_at is not None and episode.updated_at is not None:

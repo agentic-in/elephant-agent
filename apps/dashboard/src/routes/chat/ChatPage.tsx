@@ -1031,7 +1031,7 @@ export function ChatPage(): React.JSX.Element {
           display_name: composeProfile.displayName,
           mode: composeProfile.mode,
           elephant_id: composeProfile.eggId,
-          session_id: targetSessionId,
+          episode_id: targetSessionId,
         });
       }
       await sendDashboardTurn(
