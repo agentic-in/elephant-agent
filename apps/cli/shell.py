@@ -1,7 +1,17 @@
+"""Lazy facade for apps.cli.shell_impl (PEP 562)."""
+
 from __future__ import annotations
 
-import sys as _sys
-import apps.cli.shell_impl as _impl
+from typing import Any
 
-if __spec__ is not None:
-    _sys.modules[__spec__.name] = _impl
+
+def __getattr__(name: str) -> Any:
+    import apps.cli.shell_impl as _impl
+
+    return getattr(_impl, name)
+
+
+def __dir__() -> list[str]:
+    import apps.cli.shell_impl as _impl
+
+    return list(_impl.__all__) + ["__all__"]
