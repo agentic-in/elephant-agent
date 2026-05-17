@@ -17,22 +17,12 @@ from packages.contracts.runtime import (
     EpisodeContinuityState,
     PersonalModelRuntimeState,
 )
+from packages.kernel.episode_state_machine import EpisodeTransition, open_next_episode
 from packages.storage import RuntimeStorageRepository
 
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-@dataclass(frozen=True, slots=True)
-class EpisodeResumeResult:
-    parent: Episode
-    episode: Episode
-    lineage: tuple[Episode, ...]
-
-    @property
-    def session(self) -> Episode:
-        return self.episode
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,33 +110,23 @@ class EpisodeLifecycleService:
         self.repository.upsert_episode(updated)
         return updated
 
-    def resume_episode(
+    def open_next_episode(
         self,
         episode_id: str,
         *,
-        resumed_at: datetime | None = None,
+        opened_at: datetime | None = None,
         child_episode_id: str | None = None,
-    ) -> EpisodeResumeResult:
-        timestamp = resumed_at or _utc_now()
-        parent = self.repository.load_episode(episode_id)
-        if parent is None:
-            raise KeyError(episode_id)
-        resumed_episode = Episode(
-            episode_id=child_episode_id or uuid4().hex,
-            state_id=parent.state_id,
-            personal_model_id=parent.personal_model_id,
-            entry_surface=parent.entry_surface,
-            status="open",
-            started_at=timestamp,
-            updated_at=timestamp,
-            elephant_id=parent.elephant_id,
-            parent_episode_id=parent.episode_id,
+        reason: str = "next_episode",
+        summary: str = "",
+    ) -> EpisodeTransition:
+        return open_next_episode(
+            self.repository,
+            episode_id,
+            reason=reason,
+            summary=summary,
+            current=opened_at or _utc_now(),
+            episode_id=child_episode_id,
         )
-        self.repository.upsert_episode(resumed_episode)
-        self.repository.record_episode_resume(parent.episode_id, resumed_episode.episode_id, timestamp)
-        updated_parent = self.repository.load_episode(parent.episode_id) or parent
-        lineage = self.repository.episode_lineage(resumed_episode.episode_id)
-        return EpisodeResumeResult(parent=updated_parent, episode=resumed_episode, lineage=lineage)
 
     def episode_lineage(self, episode_id: str) -> tuple[Episode, ...]:
         return self.repository.episode_lineage(episode_id)
@@ -196,6 +176,5 @@ def install_app_episode_runtime(repository: RuntimeStorageRepository) -> Episode
 
 __all__ = [
     "EpisodeLifecycleService",
-    "EpisodeResumeResult",
     "install_app_episode_runtime",
 ]

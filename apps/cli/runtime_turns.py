@@ -20,6 +20,7 @@ from packages.kernel import (
 )
 from packages.context.compress import split_for_compress, _deterministic_summary
 from packages.kernel.context_compaction import projection_compaction_detail
+from packages.kernel.episode_state_machine import open_next_episode as _open_next_episode
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
 from packages.state import (
     ensure_elephant_identity_file,
@@ -184,39 +185,26 @@ def create_elephant_session(
     return session
 
 
-def resume_episode(
+def open_next_episode(
     runtime: CliRuntime,
-    session_id: str,
+    episode_id: str,
     *,
-    resumed_session_id: str | None = None,
+    next_episode_id: str | None = None,
+    reason: str = "wake_boundary",
+    summary: str = "",
 ):
-    from apps.episode_runtime import EpisodeResumeResult
-
     now = datetime.now(timezone.utc)
-    parent = runtime.repository.load_episode(session_id)
-    if parent is None:
-        raise KeyError(session_id)
-    # If parent episode elephant_id is empty, infer from state_id: state:milo -> milo.
-    resolved_elephant_id = parent.elephant_id
-    if not resolved_elephant_id and parent.state_id.startswith("state:"):
-        resolved_elephant_id = parent.state_id[len("state:"):]
-    resumed_episode = Episode(
-        episode_id=resumed_session_id or uuid4().hex,
-        state_id=parent.state_id,
-        personal_model_id=parent.personal_model_id,
-        entry_surface=parent.entry_surface,
-        elephant_id=resolved_elephant_id,
-        status="open",
-        started_at=now,
-        updated_at=now,
-        parent_episode_id=parent.episode_id,
+    transition = _open_next_episode(
+        runtime.repository,
+        episode_id,
+        reason=reason,
+        summary=summary,
+        current=now,
+        episode_id=next_episode_id,
+        semantic_summary_indexer=getattr(runtime, "_semantic_summary_indexer", None),
     )
-    runtime.repository.upsert_episode(resumed_episode)
-    runtime.repository.record_episode_resume(parent.episode_id, resumed_episode.episode_id, now)
-    updated_parent = runtime.repository.load_episode(parent.episode_id) or parent
-    lineage = runtime.repository.episode_lineage(resumed_episode.episode_id)
-    result = EpisodeResumeResult(parent=updated_parent, episode=resumed_episode, lineage=lineage)
-    session = result.episode
+    runtime._ensure_learning_worker_if_needed()
+    session = transition.episode
     profile = runtime._load_profile(session.personal_model_id)
     runtime._write_snapshot(
         profile=profile.state,
@@ -231,7 +219,7 @@ def resume_episode(
         elephant_identity_text=profile.elephant_identity_text,
         state_focus=None,
     )
-    return result
+    return transition
 
 
 def explain_next_step(
@@ -818,8 +806,8 @@ def _projection_thread_focus(work_items: tuple[Any, ...]) -> str:
     return str(getattr(active_work_item, "title", "") or "").strip() if active_work_item is not None else ""
 
 
-def wake(runtime: CliRuntime, session_id: str, *, inspect_only: bool = False, result_cls):
-    session = runtime._load_session(session_id)
+def inspect_wake_continuity(runtime: CliRuntime, episode_id: str, *, result_cls):
+    session = runtime._load_session(episode_id)
     profile = runtime._load_profile(session.personal_model_id)
     recovery = runtime._planning_recall_evidence_recovery(session)
     state = runtime.current_elephant_state()
@@ -842,29 +830,15 @@ def wake(runtime: CliRuntime, session_id: str, *, inspect_only: bool = False, re
         repository=runtime.repository,
         recall_runtime=runtime.recall_runtime,
         observation=wake_observation,
-        inspect_only=inspect_only,
+        inspect_only=True,
     )
-    if not inspect_only:
-        runtime._write_snapshot(
-            profile=profile.state,
-            session=session,
-            work_items=(),
-            recall_items=recovery.recall_items,
-            plan=plan,
-            execution=None,
-            delivery=None,
-            stages=(),
-            event=rationale_event,
-            elephant_identity_text=profile.elephant_identity_text,
-            state_focus=None,
-        )
     return result_cls(
         profile=profile.state,
         session=session,
         wake_action="continue" if state_focus else "idle",
         wake_summary=wake_summary,
         state_focus=state_focus,
-        applied=not inspect_only,
+        applied=False,
         plan=plan,
         reconciliation=reconciliation,
         retrieval=recovery.retrieval,

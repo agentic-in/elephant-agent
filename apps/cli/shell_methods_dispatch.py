@@ -479,12 +479,12 @@ def _handle_slash_command(self, raw_command: str) -> bool:
         learning_detail = "episode closed · learning queued"
         # Close the previous episode explicitly so the dashboard / history
         # shows a clean break, then start a fresh Episode on the same elephant.
-        # The old behavior called `runtime.resume(...)` which created a
-        # child episode with the parent still marked `active` — the result
-        # was a long tail of never-closed episodes and no visible separation
-        # between the wake before /clear and the wake after.
         previous_episode = self.runtime.inspect_session(previous_session_id)
-        fresh_session = self.runtime.start_fresh_episode(previous_session_id)
+        fresh_session = self.runtime.open_next_episode(
+            previous_session_id,
+            reason="shell_clear",
+            summary=(previous_episode.exit_summary or "").strip() or "/clear requested a fresh Episode",
+        ).episode
         self.session_id = fresh_session.episode_id
         self.opened = f"Reopened elephant {self.runtime.elephant_id_for_session(fresh_session)}"
         self.transcript.clear()

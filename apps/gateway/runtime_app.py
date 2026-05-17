@@ -79,6 +79,10 @@ from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolRuntime
 from .plugins import GatewayAdapterDescriptor, GatewayPluginRegistry
 
+
+def _episode_status_from_route(status: str) -> str:
+    return "paused" if str(status or "").strip() == "paused" else "open"
+
 CHAT_BOT_ADAPTER_ID = "messaging.chat-bot"
 WEBHOOK_ADAPTER_ID = "messaging.webhook"
 TELEGRAM_ADAPTER_ID = "messaging.telegram"
@@ -189,7 +193,7 @@ class GatewayApp:
                 source_event_type=event.event_type,
                 source_payload=dict(event.payload),
                 source_event_id=event.event_id,
-                route_status=session.status,
+                route_status=_episode_status_from_route(session.status),
                 route_interruption_state=session.interruption_state,
                 route_started_at=session.started_at,
                 state_id=route.identity.state_id,
@@ -271,7 +275,7 @@ class GatewayApp:
                     "allow_embeddings": "false",
                 },
                 source_event_id=event_id,
-                route_status=session.status,
+                route_status=_episode_status_from_route(session.status),
                 route_interruption_state=session.interruption_state,
                 route_started_at=session.started_at,
                 state_id=record.state_id,
@@ -626,7 +630,7 @@ class GatewayApp:
             elephant_id=resolved_elephant_id
             or (existing.elephant_id if existing is not None and existing.elephant_id else "")
             or "",
-            status=session.status,
+            status=_episode_status_from_route(session.status),
             started_at=existing.started_at if existing is not None else session.started_at,
             updated_at=session.updated_at,
             parent_episode_id=existing.parent_episode_id if existing is not None else None,
@@ -658,7 +662,7 @@ class GatewayApp:
             personal_model_id=session.profile_id,
             entry_surface="gateway",
             elephant_id="",
-            status=session.status,
+            status=_episode_status_from_route(session.status),
             started_at=session.started_at,
             updated_at=session.updated_at,
             interruption_state=session.interruption_state,
@@ -687,7 +691,7 @@ class GatewayApp:
                 or (existing.elephant_id if existing is not None else None)
                 or ""
             ),
-            status=route_session.status,
+            status=_episode_status_from_route(route_session.status),
             started_at=existing.started_at if existing is not None else route_session.started_at,
             updated_at=route_session.updated_at,
             parent_episode_id=existing.parent_episode_id if existing is not None else None,

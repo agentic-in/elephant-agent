@@ -165,7 +165,7 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("continue the launch plan", bundle.rendered_prompt)
         self.assertNotIn("recover the active launch work", bundle.rendered_prompt)
 
-    def test_start_fresh_episode_indexes_closed_episode_summary(self) -> None:
+    def test_open_next_episode_indexes_closed_episode_summary(self) -> None:
         runtime = self._runtime()
         session = runtime.start()
         indexed: list[Episode] = []
@@ -176,7 +176,11 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         object.__setattr__(runtime, "_semantic_summary_indexer", _Indexer())
 
-        next_episode = runtime.start_fresh_episode(session.episode_id)
+        next_episode = runtime.open_next_episode(
+            session.episode_id,
+            reason="shell_clear",
+            summary="/clear requested a fresh Episode",
+        ).episode
 
         self.assertEqual(next_episode.parent_episode_id, session.episode_id)
         self.assertEqual(len(indexed), 1)
@@ -228,20 +232,20 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("personal-model-behavior-contract", bundle.rendered_prompt)
         self.assertNotIn("### Behaviors this person has asked you to keep", bundle.rendered_prompt)
 
-    def test_resume_keeps_parent_link_without_legacy_graph_copy(self) -> None:
+    def test_open_next_episode_keeps_parent_link(self) -> None:
         runtime = self._runtime()
         parent = runtime.start()
 
-        resumed = runtime.resume(parent.episode_id).session
+        resumed = runtime.open_next_episode(parent.episode_id).episode
 
         self.assertEqual(resumed.parent_episode_id, parent.episode_id)
 
-    def test_multiple_resumes_keep_lineage_without_shared_goal_graph(self) -> None:
+    def test_multiple_next_episodes_keep_lineage(self) -> None:
         runtime = self._runtime()
         parent = runtime.start()
 
-        first_child = runtime.resume(parent.episode_id).session
-        second_child = runtime.resume(parent.episode_id).session
+        first_child = runtime.open_next_episode(parent.episode_id).episode
+        second_child = runtime.open_next_episode(parent.episode_id).episode
 
         self.assertEqual(first_child.parent_episode_id, parent.episode_id)
         self.assertEqual(second_child.parent_episode_id, parent.episode_id)
@@ -1337,7 +1341,7 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotEqual(stored.status, "closed")
         self.assertEqual(runtime.repository.list_learning_jobs(episode_id=session.episode_id), ())
 
-    def test_cli_turn_reopens_closed_wake_episode_without_boundary_learning(self) -> None:
+    def test_cli_turn_continues_from_next_episode_without_reopening_closed_parent(self) -> None:
         runtime = self._runtime()
         session = runtime.start()
         episode = runtime.repository.load_episode(session.episode_id)
@@ -1348,19 +1352,26 @@ class CliRuntimeCognitionTest(unittest.TestCase):
                 episode,
                 status="closed",
                 ended_at=datetime.now(timezone.utc),
+                exit_summary="final parent summary",
                 metadata={**dict(episode.metadata), "closed_reason": "final_response"},
             )
         )
 
-        outcome = runtime.explain_next_step(session_id=session.episode_id, prompt="continue this wake thread")
+        transition = runtime.open_next_episode(session.episode_id, reason="wake_boundary")
+        outcome = runtime.explain_next_step(session_id=transition.episode.episode_id, prompt="continue this wake thread")
 
-        stored = runtime.repository.load_episode(session.episode_id)
-        self.assertIsNotNone(stored)
-        assert stored is not None
+        stored_parent = runtime.repository.load_episode(session.episode_id)
+        self.assertIsNotNone(stored_parent)
+        assert stored_parent is not None
+        stored_child = runtime.repository.load_episode(transition.episode.episode_id)
+        self.assertIsNotNone(stored_child)
+        assert stored_child is not None
         self.assertNotEqual(outcome.episode.status, "closed")
-        self.assertNotEqual(stored.status, "closed")
-        self.assertEqual(stored.metadata.get("previous_closed_reason"), "final_response")
+        self.assertEqual(stored_parent.status, "closed")
+        self.assertEqual(stored_child.parent_episode_id, session.episode_id)
+        self.assertEqual(stored_child.metadata.get("opening_resume_snapshot"), "final parent summary")
         self.assertEqual(runtime.repository.list_learning_jobs(episode_id=session.episode_id), ())
+        self.assertEqual(runtime.repository.list_learning_jobs(episode_id=transition.episode.episode_id), ())
 
     def test_state_focus_runtime_status_surfaces_loaded_runtime_state(self) -> None:
         runtime = self._runtime()
@@ -1390,7 +1401,7 @@ class CliRuntimeCognitionTest(unittest.TestCase):
                     display_name="Shared Search",
                     summary="Search before editing.",
                     instruction_text="Always search local files before editing files.",
-                    session_id=session_a.session_id,
+                    session_id=session_a.episode_id,
                 )
 
                 runtime_b = self._runtime(

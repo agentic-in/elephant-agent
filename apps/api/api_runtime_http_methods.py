@@ -32,8 +32,6 @@ from .api_runtime_support import (
 from .api_runtime_http_dispatch_helpers import (
     _cron_job_system_kind,
     _elephant_id_from_name,
-    _session_compat_payload,
-    _session_compat_aliases,
     _cron_payload,
     _cron_skill_ids,
     _cron_job_record,
@@ -86,6 +84,7 @@ def run_loop(
             personal_model_id=route_state.personal_model_id if route_state is not None else episode.personal_model_id,
             state_id=route_state.state_id if route_state is not None else None,
             episode_id=episode.episode_id,
+            episode_policy="api_session",
             state_query=state_query,
             tool_name=tool_name,
             tool_arguments=dict(tool_arguments or {}),
@@ -154,8 +153,6 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
             return self._dispatch_operator(method, parts[1:], body)
         if parts[0] == "herd":
             return _dispatch_elephants(self, method, parts[1:], body)
-        if parts[0] == "sessions":
-            return _dispatch_sessions_compat(self, method, parts[1:], body)
         if parts[0] == "episodes":
             return self._dispatch_episodes(method, parts[1:], body)
         if parts[0] == "states":
@@ -289,69 +286,11 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         shutil.rmtree(elephant_file_path(state.elephant_id, install_root=self.config.install_root), ignore_errors=True)
         return APIResponse(200, _jsonable({"elephant_id": state.elephant_id, "deleted": True, "deleted_sessions": deleted_sessions}))
     return APIResponse(404, {"error": "not_found"})
-def _dispatch_sessions_compat(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
-    if method.upper() == "POST" and len(parts) == 0:
-        payload = _read_json_bytes(body)
-        result = self.create_episode(
-            personal_model_id=str(payload.get("personal_model_id") or payload["profile_id"]),
-            display_name=str(payload["display_name"]),
-            mode=str(payload["mode"]),
-            elephant_id=payload.get("elephant_id"),
-            elephant_path=payload.get("elephant_path"),
-            preferences=tuple(payload.get("preferences", ())),
-            enabled_capabilities=tuple(payload.get("enabled_capabilities", ())),
-            provider_profile=payload.get("provider_profile"),
-            episode_id=payload.get("episode_id") or payload.get("session_id"),
-        )
-        return APIResponse(201, _session_compat_payload(result.to_record()))
-    if len(parts) < 1:
-        return APIResponse(404, {"error": "not_found"})
-    episode_id = parts[0]
-    if method.upper() == "GET" and len(parts) == 1:
-        return APIResponse(200, _session_compat_payload(self.inspect_episode(episode_id).to_record()))
-    if method.upper() == "POST" and len(parts) == 2 and parts[1] == "interrupt":
-        payload = _read_json_bytes(body)
-        result = self.interrupt_episode(episode_id, interruption_state=str(payload["interruption_state"]))
-        return APIResponse(200, _session_compat_payload(result.to_record()))
-    if method.upper() == "POST" and len(parts) == 2 and parts[1] == "resume":
-        payload = _read_json_bytes(body)
-        result = self.resume_episode(
-            episode_id,
-            child_episode_id=payload.get("child_episode_id") or payload.get("child_session_id"),
-        )
-        return APIResponse(200, _session_compat_payload(result.to_record()))
-    if method.upper() == "POST" and len(parts) == 2 and parts[1] == "turns":
-        payload = _read_json_bytes(body)
-        result = self.run_loop(
-            episode_id,
-            prompt=str(payload["prompt"]),
-            state_query=payload.get("state_query"),
-            tool_name=payload.get("tool_name"),
-            tool_arguments=payload.get("tool_arguments"),
-            delivery_payload=payload.get("delivery_payload"),
-        )
-        return APIResponse(200, _session_compat_payload(result.to_record()))
-    if method.upper() == "GET" and len(parts) == 2 and parts[1] == "profile":
-        inspection = self.inspect_episode(episode_id)
-        return APIResponse(200, _session_compat_payload({"profile": inspection.personal_model}))
-    if len(parts) == 2 and parts[1] in {"identity", "user", "relationship", "continuity"}:
-        state_id = _session_state_id(self, episode_id)
-        response = self._dispatch_states(method, (state_id, parts[1]), body)
-        return APIResponse(response.status_code, _session_compat_payload(response.payload), headers=response.headers)
-    response = self._dispatch_episodes(method, parts, body)
-    if response.status_code == 404:
-        return response
-    return APIResponse(response.status_code, _session_compat_payload(response.payload), headers=response.headers)
-def _session_state_id(self, episode_id: str) -> str:
-    episode = self.repository.load_episode(episode_id)
-    if episode is None:
-        raise KeyError(episode_id)
-    return episode.state_id
 def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if method.upper() == "POST" and len(parts) == 0:
         payload = _read_json_bytes(body)
         result = self.create_episode(
-            personal_model_id=str(payload["personal_model_id"]),
+            personal_model_id=str(payload.get("personal_model_id") or payload["profile_id"]),
             display_name=str(payload["display_name"]),
             mode=str(payload["mode"]),
             elephant_id=payload.get("elephant_id"),
@@ -371,9 +310,9 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
         payload = _read_json_bytes(body)
         result = self.interrupt_episode(episode_id, interruption_state=str(payload["interruption_state"]))
         return APIResponse(200, _jsonable(result.to_record()))
-    if method.upper() == "POST" and len(parts) == 2 and parts[1] == "resume":
+    if method.upper() == "POST" and len(parts) == 2 and parts[1] == "next":
         payload = _read_json_bytes(body)
-        result = self.resume_episode(episode_id, child_episode_id=payload.get("child_episode_id"))
+        result = self.open_next_episode(episode_id, child_episode_id=payload.get("child_episode_id"))
         return APIResponse(200, _jsonable(result.to_record()))
     if method.upper() == "POST" and len(parts) == 2 and parts[1] == "loops":
         payload = _read_json_bytes(body)
@@ -386,6 +325,14 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
             delivery_payload=payload.get("delivery_payload"),
         )
         return APIResponse(200, _jsonable(result.to_record()))
+    if method.upper() == "GET" and len(parts) == 2 and parts[1] == "profile":
+        inspection = self.inspect_episode(episode_id)
+        return APIResponse(200, _jsonable({"personal_model": inspection.personal_model}))
+    if len(parts) == 2 and parts[1] in {"identity", "user", "relationship", "continuity"}:
+        episode = self.repository.load_episode(episode_id)
+        if episode is None:
+            raise KeyError(episode_id)
+        return self._dispatch_states(method, (episode.state_id, parts[1]), body)
     if len(parts) == 2 and parts[1] == "recall":
         if method.upper() == "GET":
             return APIResponse(200, _jsonable({"episode_id": episode_id, "recall": self.inspect_recall_evidence_surface(episode_id)}))

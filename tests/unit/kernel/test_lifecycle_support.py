@@ -150,7 +150,7 @@ class KernelLifecycleSupportTests(unittest.TestCase):
         self.assertEqual(lifecycle.episode.status, "open")
         self.assertEqual(lifecycle.episode.metadata.get("policy"), "session_managed")
 
-    def test_session_managed_turn_reopens_previously_closed_explicit_episode(self) -> None:
+    def test_explicit_closed_episode_cannot_be_reopened(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
             repository.bootstrap()
@@ -173,27 +173,23 @@ class KernelLifecycleSupportTests(unittest.TestCase):
             )
             repository.upsert_episode(closed)
 
-            lifecycle = open_episode_lifecycle(
-                repository,
-                KernelSourceRequest(
-                    route_id=closed.episode_id,
-                    episode_id=closed.episode_id,
-                    surface="cli",
-                    prompt="continue in the existing wake TUI",
-                ),
-                KernelRuntimeIdentity(personal_model=model, state=state),
-                current=datetime(2026, 4, 24, 10, 2, tzinfo=timezone.utc),
-            )
+            with self.assertRaisesRegex(ValueError, "closed episode cannot be reopened"):
+                open_episode_lifecycle(
+                    repository,
+                    KernelSourceRequest(
+                        route_id=closed.episode_id,
+                        episode_id=closed.episode_id,
+                        surface="cli",
+                        prompt="continue in the existing wake TUI",
+                    ),
+                    KernelRuntimeIdentity(personal_model=model, state=state),
+                    current=datetime(2026, 4, 24, 10, 2, tzinfo=timezone.utc),
+                )
             stored = repository.load_episode(closed.episode_id)
 
-        self.assertFalse(lifecycle.close_on_completion)
-        self.assertEqual(lifecycle.episode.status, "open")
-        self.assertIsNone(lifecycle.episode.ended_at)
-        self.assertEqual(lifecycle.episode.metadata.get("previous_closed_reason"), "final_response")
-        self.assertEqual(lifecycle.episode.metadata.get("reopened_reason"), "session_managed_turn")
         self.assertIsNotNone(stored)
         assert stored is not None
-        self.assertEqual(stored.status, "open")
+        self.assertEqual(stored.status, "closed")
 
     def test_close_episode_does_not_foreground_update_state_continuation_note(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

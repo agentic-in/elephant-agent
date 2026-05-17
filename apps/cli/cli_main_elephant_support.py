@@ -89,6 +89,11 @@ from .cli_main_support import *  # noqa: F401,F403
 
 
 def _current_elephant_session(runtime: CliRuntime):
+    current_state = runtime.current_elephant_state()
+    if current_state is not None:
+        session = runtime.latest_session_for_elephant(current_state.elephant_id)
+        if session is not None:
+            return session
     snapshot = runtime._load_snapshot()
     if not isinstance(snapshot, Mapping):
         return None
@@ -97,17 +102,11 @@ def _current_elephant_session(runtime: CliRuntime):
         return None
     session_id = str(session_payload.get("episode_id") or "").strip()
     if not session_id:
-        current_state = runtime.current_elephant_state()
-        if current_state is None:
-            return None
-        return runtime.latest_session_for_elephant(current_state.elephant_id)
+        return None
     try:
         return runtime.inspect_session(session_id)
     except Exception:
-        current_state = runtime.current_elephant_state()
-        if current_state is None:
-            return None
-        return runtime.latest_session_for_elephant(current_state.elephant_id)
+        return None
 
 
 def _select_elephant(runtime: CliRuntime, elephant_id: str):
@@ -408,35 +407,37 @@ def _prompt_elephant_choice(
                 return elephant
         print("  enter an elephant number or elephant id from the list above")
 
-def _resolve_growth_session(
+def _open_growth_episode(
     runtime: CliRuntime,
     *,
-    session_id: str | None = None,
+    episode_id: str | None = None,
     elephant_id: str | None = None,
     prompt_for_multiple: bool | None = None,
 ) -> tuple[str, str]:
-    def open_or_resume(selected):
-        status = str(getattr(selected, "status", "") or "").strip().lower()
-        if status == "open":
-            return selected
-        return runtime.resume(selected.episode_id).episode
+    def open_next(selected):
+        return runtime.open_next_episode(
+            selected.episode_id,
+            reason="wake_boundary",
+            summary=(getattr(selected, "exit_summary", "") or "").strip(),
+        ).episode
 
     current = _current_elephant_session(runtime)
-    if session_id is not None:
-        selected = runtime.inspect_session(session_id)
-        return selected.episode_id, "Opened existing"
+    if episode_id is not None:
+        selected = runtime.inspect_session(episode_id)
+        opened = open_next(selected)
+        return opened.episode_id, "Opened elephant"
     if elephant_id is not None:
         selected = runtime.latest_session_for_elephant(elephant_id)
         if selected is None:
             raise ValueError(f"unknown elephant: {elephant_id}")
-        opened = open_or_resume(selected)
+        opened = open_next(selected)
         return opened.episode_id, f"Opened elephant {elephant_id}"
     herd = runtime.list_herd(limit=16)
     if not herd:
         raise LookupError("no-herd")
     if len(herd) == 1:
         selected = runtime.inspect_session(herd[0].latest_session_id)
-        opened = open_or_resume(selected)
+        opened = open_next(selected)
         return opened.episode_id, f"Opened elephant {herd[0].elephant_id}"
     interactive_prompt = _interactive_shell_supported() if prompt_for_multiple is None else prompt_for_multiple
     if interactive_prompt:
@@ -448,10 +449,10 @@ def _resolve_growth_session(
         if selected is WIZARD_BACK:
             raise _WizardCancelledError("wake")
         selected_session = runtime.inspect_session(selected.latest_session_id)
-        opened = open_or_resume(selected_session)
+        opened = open_next(selected_session)
         return opened.episode_id, f"Opened elephant {selected.elephant_id}"
     if current is not None:
-        opened = open_or_resume(current)
+        opened = open_next(current)
         return opened.episode_id, f"Opened elephant {runtime.elephant_id_for_session(current)}"
     raise ValueError("multiple herd are available; pass --elephant-id or enter wake from an interactive TTY")
 
@@ -596,7 +597,7 @@ __all__ = [
     "_print_elephant_retire_paused",
     "_print_all_herd_retired",
     "_prompt_elephant_choice",
-    "_resolve_growth_session",
+    "_open_growth_episode",
     "_select_elephant",
     "_print_elephant_blocked",
     "_print_grow_blocked",

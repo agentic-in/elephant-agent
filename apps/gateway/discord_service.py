@@ -836,8 +836,6 @@ class DiscordGatewayService:
         self._outbound_drain_stop.set()
         thread = self._outbound_drain_thread
         self._outbound_drain_thread = None
-        if idle_thread is not None and idle_thread.is_alive():
-            idle_thread.join(timeout=5.0)
         if thread is not None and thread.is_alive():
             thread.join(timeout=5.0)
 

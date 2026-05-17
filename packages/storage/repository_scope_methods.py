@@ -240,7 +240,7 @@ def _read_auth_profiles_payload(self) -> dict[str, dict[str, object]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-    except FileNotFoundError:
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
     if not isinstance(data, dict):
         return {}
@@ -263,7 +263,7 @@ def _read_auth_secret_values_payload(self) -> dict[str, dict[str, object]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-    except FileNotFoundError:
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
     if not isinstance(data, dict):
         return {}

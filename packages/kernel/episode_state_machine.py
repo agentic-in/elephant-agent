@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from dataclasses import replace
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from packages.contracts.layers import Episode
 
 from .runtime_support import KernelStoragePort
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeTransition:
+    parent_episode: Episode
+    episode: Episode
+    lineage: tuple[Episode, ...]
 
 
 def close_episode(
@@ -85,6 +94,109 @@ def close_episode(
             pass
 
     return closed
+
+
+def _continuation_note(value: object) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _opening_resume_metadata(
+    storage: KernelStoragePort,
+    parent: Episode,
+    *,
+    reason: str,
+    current: datetime,
+) -> dict[str, str]:
+    state = storage.load_state(parent.state_id)
+    state_note = _continuation_note(getattr(state, "current_context_note", "")) if state is not None else ""
+    summary = _continuation_note(parent.exit_summary)
+    note = summary or state_note
+    metadata = {
+        "transition_reason": reason,
+        "parent_episode_id": parent.episode_id,
+        "opened_at": current.isoformat(),
+    }
+    if note:
+        metadata["opening_resume_snapshot"] = note
+        metadata["opening_resume_source"] = "parent.exit_summary" if summary else "state.current_context_note"
+        metadata["opening_resume_state_id"] = parent.state_id
+    return metadata
+
+
+def _lineage(storage: KernelStoragePort, episode_id: str) -> tuple[Episode, ...]:
+    lineage: list[Episode] = []
+    seen: set[str] = set()
+    current = storage.load_episode(episode_id)
+    while current is not None and current.episode_id not in seen:
+        lineage.append(current)
+        seen.add(current.episode_id)
+        parent_id = current.parent_episode_id
+        if parent_id is None:
+            break
+        current = storage.load_episode(parent_id)
+    return tuple(reversed(lineage))
+
+
+def open_next_episode(
+    storage: KernelStoragePort,
+    previous_episode_id: str,
+    *,
+    reason: str,
+    summary: str = "",
+    current: datetime | None = None,
+    episode_id: str | None = None,
+    entry_surface: str | None = None,
+    semantic_summary_indexer: object | None = None,
+) -> EpisodeTransition:
+    """Close the previous Episode if needed and open the next Episode/Session.
+
+    One user-visible session is one Episode. This transition is the canonical
+    way to move from an existing Episode to the next conversation window.
+    """
+    if current is None:
+        current = datetime.now(timezone.utc)
+
+    previous = storage.load_episode(previous_episode_id)
+    if previous is None:
+        raise KeyError(f"episode not found: {previous_episode_id}")
+
+    close_summary = (summary or previous.exit_summary).strip()
+    parent = previous
+    if previous.status != "closed":
+        parent = close_episode(
+            storage,
+            previous.episode_id,
+            reason=reason,
+            summary=close_summary,
+            current=current,
+            semantic_summary_indexer=semantic_summary_indexer,
+        )
+
+    state = storage.load_state(parent.state_id)
+    next_episode = Episode(
+        episode_id=episode_id or uuid4().hex,
+        state_id=parent.state_id,
+        personal_model_id=parent.personal_model_id,
+        entry_surface=entry_surface or parent.entry_surface,
+        status="open",
+        started_at=current,
+        updated_at=current,
+        elephant_id=parent.elephant_id or (getattr(state, "elephant_id", "") if state is not None else ""),
+        parent_episode_id=parent.episode_id,
+        metadata=_opening_resume_metadata(storage, parent, reason=reason, current=current),
+    )
+    storage.upsert_episode(next_episode)
+
+    record_transition = getattr(storage, "record_episode_transition", None)
+    if callable(record_transition):
+        record_transition(parent.episode_id, next_episode.episode_id, current, reason=reason)
+
+    refreshed = storage.load_episode(next_episode.episode_id) or next_episode
+    return EpisodeTransition(
+        parent_episode=storage.load_episode(parent.episode_id) or parent,
+        episode=refreshed,
+        lineage=_lineage(storage, refreshed.episode_id),
+    )
 
 
 def _trigger_from_reason(reason: str) -> str:

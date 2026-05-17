@@ -31,6 +31,10 @@ def _optional_text(value: object) -> str | None:
     return text or None
 
 
+def _episode_status_from_route(status: str) -> str:
+    return "paused" if str(status or "").strip() == "paused" else "open"
+
+
 def _abbreviate_identifier(value: str, *, head: int = 12, tail: int = 6) -> str:
     text = value.strip()
     if not text:
@@ -81,9 +85,6 @@ class CliRuntimeLike(Protocol):
     ) -> Any:
         ...
 
-    def wake(self, session_id: str, *, inspect_only: bool = False) -> Any:
-        ...
-
     def compact_session_context(
         self,
         session_id: str,
@@ -103,7 +104,14 @@ class CliRuntimeLike(Protocol):
     ) -> Any:
         ...
 
-    def start_fresh_episode(self, previous_session_id: str) -> Episode:
+    def open_next_episode(
+        self,
+        episode_id: str,
+        *,
+        next_episode_id: str | None = None,
+        reason: str = "wake_boundary",
+        summary: str = "",
+    ) -> Any:
         ...
 
     def elephant_id_for_session(self, session: Episode) -> str:
@@ -399,21 +407,7 @@ class GatewayCliControlService:
         *,
         inbound: GatewayInboundMessage,
     ) -> GatewayCliControlResult:
-        """Close this Episode and open a fresh one on the same elephant.
-
-        IM mode keeps a single Episode per binding, so without /clear a
-        conversation accumulates forever on one Loop. /clear mirrors the CLI
-        `/clear` behaviour: schedule a learning job on the current Episode,
-        mark it closed, then start a brand-new Episode (no parent linkage)
-        on the same elephant, and rewrite the gateway identity/session so the
-        next plain-text message routes into the fresh Loop.
-
-        We intentionally do NOT call `runtime.resume(...)` here: resume is
-        for continuing an interrupted Episode and produces a child with
-        `parent_episode_id` pointing at the old one while the parent stays
-        `active` — the dashboard then renders both as one continuous
-        conversation, which is the opposite of what /clear means.
-        """
+        """Close this Episode and open the next Episode for the binding."""
         elephant_id, session, _selection_mode = self._current_binding(inbound)
         if elephant_id is None or session is None:
             return GatewayCliControlResult(
@@ -426,7 +420,12 @@ class GatewayCliControlService:
         previous_episode_id = session.episode_id
         runtime = self.runtime()
 
-        fresh_session = runtime.start_fresh_episode(previous_episode_id)
+        previous = runtime.inspect_session(previous_episode_id)
+        fresh_session = runtime.open_next_episode(
+            previous_episode_id,
+            reason="shell_clear",
+            summary=(previous.exit_summary or "").strip() or "/clear requested a fresh Episode",
+        ).episode
         learning_detail = "episode closed · learning queued"
         new_episode_id = fresh_session.episode_id
 
@@ -839,7 +838,7 @@ class GatewayCliControlService:
                 personal_model_id=session.profile_id,
                 entry_surface="gateway",
                 elephant_id=identity.elephant_id or "",
-                status=session.status,
+                status=_episode_status_from_route(session.status),
                 started_at=session.started_at,
                 updated_at=session.updated_at,
                 interruption_state=session.interruption_state,

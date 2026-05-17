@@ -138,8 +138,13 @@ class _GatewayFallbackSecretStore:
         return self.resolve(reference).value
 
 
-def _candidate_cli_state_dirs(resolved_state_dir: Path | None) -> tuple[Path, ...]:
+def _candidate_cli_state_dirs(
+    resolved_state_dir: Path | None,
+    resolved_control_state_dir: Path | None = None,
+) -> tuple[Path, ...]:
     candidates: list[Path] = []
+    if resolved_control_state_dir is not None:
+        candidates.append(resolved_control_state_dir)
     if resolved_state_dir is not None:
         candidates.append(resolved_state_dir)
     candidates.append(default_cli_state_dir())
@@ -154,7 +159,8 @@ def _gateway_provider_credential_resolver(
     *,
     runtime_repository: RuntimeStorageRepository,
     resolved_state_dir: Path | None,
-    runtime_environ: Mapping[str, str] | None,
+    resolved_control_state_dir: Path | None = None,
+    runtime_environ: Mapping[str, str] | None = None,
 ) -> ProfileCredentialResolver:
     stores: list[SecretStore] = [
         EncryptedRepositorySecretStore(
@@ -165,7 +171,7 @@ def _gateway_provider_credential_resolver(
             environ=runtime_environ,
         )
     ]
-    for state_dir in _candidate_cli_state_dirs(resolved_state_dir):
+    for state_dir in _candidate_cli_state_dirs(resolved_state_dir, resolved_control_state_dir):
         database_path = state_dir / "elephant.sqlite3"
         secret_key_path = state_dir / "provider-secrets.key"
         if not database_path.exists() or not secret_key_path.exists():
@@ -429,6 +435,7 @@ def build_gateway_app(
         credential_resolver=_gateway_provider_credential_resolver(
             runtime_repository=runtime_repository,
             resolved_state_dir=resolved_state_dir,
+            resolved_control_state_dir=resolved_control_state_dir,
             runtime_environ=runtime_environ,
         ),
         tool_runtime=tool_runtime,

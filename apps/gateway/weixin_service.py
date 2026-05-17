@@ -473,8 +473,6 @@ class WeixinGatewayService:
     async def stop_gateway(self) -> None:
         """Stop the long-polling loop and cleanup."""
         self._running = False
-        if idle_thread is not None and idle_thread.is_alive():
-            idle_thread.join(timeout=5.0)
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
             try:

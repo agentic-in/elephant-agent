@@ -11,6 +11,7 @@ from packages.contracts import Episode, State
 from packages.contracts.runtime import RecallEvidence, PersonalModelRuntimeState
 from packages.evidence.recall_runtime import RecallRuntime
 from packages.growth import ProgressionProjectionBuilder
+from packages.kernel.episode_state_machine import open_next_episode as _open_next_episode
 from packages.state.persistence import resolve_runtime_state
 from packages.storage.repository_support import canonical_personal_model_id
 from packages.operator.runtime import (
@@ -25,7 +26,7 @@ from .api_runtime_support import (
     APIEpisodeCreationResult,
     APIEpisodeInspection,
     APIEpisodeLifecycleResult,
-    APIEpisodeResumeResult,
+    APIEpisodeTransitionResult,
     APILoopRecord,
     APILoopResult,
     _now,
@@ -133,7 +134,7 @@ def create_episode(
         personal_model_id=personal_model.profile_id,
         entry_surface="api",
         elephant_id=resolved_elephant_id,
-        status="active",
+        status="open",
         started_at=timestamp,
         updated_at=timestamp,
     )
@@ -157,37 +158,27 @@ def create_episode(
 def interrupt_episode(self, episode_id: str, *, interruption_state: str) -> APIEpisodeLifecycleResult:
     episode = self.repository.refresh_episode_state(
         episode_id,
-        status="interrupted",
+        status="paused",
         interruption_state=interruption_state,
         updated_at=_now(),
     )
     return APIEpisodeLifecycleResult(episode=episode)
 
 
-def resume_episode(self, episode_id: str, *, child_episode_id: str | None = None) -> APIEpisodeResumeResult:
-    timestamp = _now()
-    parent = self.repository.load_episode_state(episode_id)
-    if parent is None:
-        raise KeyError(episode_id)
-    resumed_episode = Episode(
-        episode_id=child_episode_id or uuid4().hex,
-        state_id=parent.state_id,
-        personal_model_id=parent.personal_model_id,
+def open_next_episode(self, episode_id: str, *, child_episode_id: str | None = None) -> APIEpisodeTransitionResult:
+    transition = _open_next_episode(
+        self.repository,
+        episode_id,
+        reason="api_next_episode",
+        current=_now(),
+        episode_id=child_episode_id,
         entry_surface="api",
-        elephant_id=parent.elephant_id or "",
-        status="active",
-        started_at=timestamp,
-        updated_at=timestamp,
-        parent_episode_id=parent.episode_id,
+        semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None),
     )
-    self.repository.upsert_episode_state(resumed_episode)
-    self.repository.record_episode_resume(parent.episode_id, resumed_episode.episode_id, timestamp)
-    updated_parent = self.repository.load_episode_state(parent.episode_id) or parent
-    lineage = self.repository.episode_lineage(resumed_episode.episode_id)
-    return APIEpisodeResumeResult(
-        parent_episode=updated_parent,
-        episode=resumed_episode,
-        lineage=lineage,
+    return APIEpisodeTransitionResult(
+        parent_episode=transition.parent_episode,
+        episode=transition.episode,
+        lineage=transition.lineage,
     )
 
 
@@ -401,7 +392,7 @@ def inspect_episode(self, episode_id: str) -> APIEpisodeInspection:
         procedures=procedures,
         active_work_item=None,
         continuity_mode="background" if episode.parent_episode_id is not None else "foreground",
-        wake_action="resume" if episode.parent_episode_id is not None else "",
+        wake_action="next_episode" if episode.parent_episode_id is not None else "",
     )
     return APIEpisodeInspection(
         personal_model=personal_model,

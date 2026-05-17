@@ -11,6 +11,7 @@ import traceback
 from typing import Any
 from uuid import uuid4
 
+from packages.contracts.layers import Episode
 from packages.contracts.runtime import ExecutionResult
 from packages.cron import CronJob
 from packages.tools.runtime import ToolInvocation, ToolLifecycleEvent
@@ -302,8 +303,8 @@ def _prepare_sub_agent_child(
     system_prompt: str = "",
     learning_agent: bool = False,
 ) -> Mapping[str, Any]:
-    resume_result = runtime.resume(parent_session_id)
-    child_session_id = resume_result.episode.episode_id
+    child = _open_sub_agent_child_episode(runtime, parent_session_id)
+    child_session_id = child.episode_id
     prompt = task if system_prompt.strip() else _compose_sub_agent_prompt(
         runtime,
         task=task,
@@ -322,6 +323,31 @@ def _prepare_sub_agent_child(
         "allowed_tools": tuple(dict.fromkeys(item.strip() for item in allowed_tools if item.strip())),
         "learning_agent": learning_agent,
     }
+
+
+def _open_sub_agent_child_episode(runtime: Any, parent_session_id: str) -> Episode:
+    parent = runtime.repository.load_episode(parent_session_id)
+    if parent is None:
+        raise KeyError(f"episode not found: {parent_session_id}")
+    now = datetime.now(timezone.utc)
+    child = Episode(
+        episode_id=uuid4().hex,
+        state_id=parent.state_id,
+        personal_model_id=parent.personal_model_id,
+        entry_surface=f"{parent.entry_surface}:sub_agent",
+        elephant_id=parent.elephant_id,
+        status="open",
+        started_at=now,
+        updated_at=now,
+        parent_episode_id=parent.episode_id,
+        metadata={
+            "episode_kind": "sub_agent",
+            "parent_episode_id": parent.episode_id,
+            "opened_at": now.isoformat(),
+        },
+    )
+    runtime.repository.upsert_episode(child)
+    return child
 
 
 def _run_prepared_sub_agent_child(
@@ -352,6 +378,9 @@ def _run_prepared_sub_agent_child(
     )
     try:
         child_runtime = _create_child_runtime(runtime)
+        isolated_snapshot = runtime.paths.state_dir / "sub-agent-snapshots" / f"{child_session_id}.json"
+        isolated_snapshot.parent.mkdir(parents=True, exist_ok=True)
+        object.__setattr__(child_runtime, "snapshot_path", isolated_snapshot)
         object.__setattr__(child_runtime, "sub_agent_active", True)
         unsubscribe = _relay_child_tool_events(runtime, child_runtime)
         child_runtime.prepare_session_surface(child_session_id)
