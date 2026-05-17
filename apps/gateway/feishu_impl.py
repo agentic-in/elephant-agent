@@ -132,6 +132,8 @@ class FeishuGatewayService(FeishuDispatchMixin):
         init=False,
         repr=False,
     )
+    _daemon_task: asyncio.Task | None = field(default=None, init=False, repr=False)
+    _daemon_bridge_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _scheduled_job_keys: set[str] = field(default_factory=set, init=False, repr=False)
     _conversation_locks: dict[str, threading.Lock] = field(
         default_factory=dict,
@@ -462,6 +464,16 @@ class FeishuGatewayService(FeishuDispatchMixin):
             payload_body["delivery_request_path"] = result.delivery_request.get("path", "")
         return "200 OK", payload_body
 
+    def has_credentials(self) -> bool:
+        """Return True if at least one account can be resolved with current environment."""
+        for config in self.account_configs:
+            try:
+                resolve_feishu_account(config, environ=self.environ)
+                return True
+            except (LookupError, RuntimeError):
+                continue
+        return False
+
     def describe(self) -> Mapping[str, object]:
         async_summary = self._async_summary()
         accounts: list[dict[str, object]] = []
@@ -759,8 +771,6 @@ class FeishuGatewayService(FeishuDispatchMixin):
         self._outbound_drain_stop.set()
         thread = self._outbound_drain_thread
         self._outbound_drain_thread = None
-        if idle_thread is not None and idle_thread.is_alive():
-            idle_thread.join(timeout=5.0)
         if thread is not None and thread.is_alive():
             thread.join(timeout=5.0)
 
@@ -823,6 +833,61 @@ class FeishuGatewayService(FeishuDispatchMixin):
             body,
             {"Authorization": f"Bearer {token}"},
         )
+
+    # ── DaemonService ──────────────────────────────────────────
+
+    async def start_daemon_task(self, *, loop: Any) -> asyncio.Task | None:
+        """Start Feishu gateway as a daemon task.
+
+        Since lark.ws.Client.start() is synchronous and blocking, we run it
+        in a bridge thread. The daemon task monitors the bridge thread's health.
+        """
+        import asyncio as _asyncio
+
+        # Start the outbound drain thread (same as standalone mode)
+        self.start_outbound_drain()
+
+        # Start async workers for background processing
+        self._ensure_async_workers()
+
+        # Start long-connection in a bridge thread
+        stop_event = threading.Event()
+
+        def _run_long_connection() -> None:
+            try:
+                self.start_long_connection()
+            except Exception as exc:
+                LOGGER.error("[feishu] long-connection bridge thread failed: %s", exc)
+
+        bridge = threading.Thread(
+            target=_run_long_connection,
+            name="feishu-long-connection-bridge",
+            daemon=True,
+        )
+        bridge.start()
+        self._daemon_bridge_thread = bridge
+
+        # Return a monitoring task that watches the bridge thread
+        async def _monitor() -> None:
+            while bridge.is_alive() and not stop_event.is_set():
+                await _asyncio.sleep(1.0)
+
+        task = _asyncio.create_task(_monitor(), name="feishu-daemon-monitor")
+        self._daemon_task = task
+        return task
+
+    async def stop_daemon_task(self) -> None:
+        """Gracefully stop the Feishu daemon task."""
+        self.stop_outbound_drain()
+        self.shutdown_async_processing()
+
+        if self._daemon_task is not None and not self._daemon_task.done():
+            self._daemon_task.cancel()
+            try:
+                await self._daemon_task
+            except asyncio.CancelledError:
+                pass
+        self._daemon_task = None
 
 def register_feishu_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
     registry.register_service(

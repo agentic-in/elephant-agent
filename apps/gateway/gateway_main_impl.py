@@ -186,13 +186,28 @@ def _add_message_subparser(
     parser.set_defaults(command_action="message", service_key=service_key)
 
 
+def _guard_daemon_running(args: Namespace) -> int | None:
+    """If the unified daemon is already running, redirect the user to it.
+
+    Legacy ``gateway <adapter> start`` (without --detach) would launch a
+    standalone foreground process that conflicts with the daemon.  When the
+    daemon is alive we intercept and delegate instead.
+    """
+    if _daemon_is_running_for_state(args):
+        return _start_via_daemon(args)
+    return None
+
+
 def _run_start(service: FeishuGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
 
     if transport == "long-connection":
         service.prepare_managed_runtime(action="startup", target=transport)
     if args.detach:
-        return _run_start_detached(args, service=service, target=transport)
+        return _start_via_daemon(args)
+    guarded = _guard_daemon_running(args)
+    if guarded is not None:
+        return guarded
 
     if transport == "long-connection":
         account_label = args.account_id or "<default>"
@@ -223,7 +238,10 @@ def _run_discord_start(service: DiscordGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
     service.prepare_managed_runtime(action="startup", target=transport)
     if args.detach:
-        return _run_start_detached(args, service=service, target=transport)
+        return _start_via_daemon(args)
+    guarded = _guard_daemon_running(args)
+    if guarded is not None:
+        return guarded
 
     account_label = args.account_id or "<all enabled>"
     print("Starting Elephant Agent Gateway Discord gateway transport")
@@ -235,7 +253,10 @@ def _run_dingding_start(service: DingdingGatewayService, args: Namespace) -> int
     transport = _resolve_runtime_target_argument(args, service=service)
     service.prepare_managed_runtime(action="startup", target=transport)
     if args.detach:
-        return _run_start_detached(args, service=service, target=transport)
+        return _start_via_daemon(args)
+    guarded = _guard_daemon_running(args)
+    if guarded is not None:
+        return guarded
 
     account_label = args.account_id or "<all enabled>"
     print("Starting Elephant Agent Gateway DingDing stream transport")
@@ -247,7 +268,10 @@ def _run_weixin_start(service: WeixinGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
     service.prepare_managed_runtime(action="startup", target=transport)
     if args.detach:
-        return _run_start_detached(args, service=service, target=transport)
+        return _start_via_daemon(args)
+    guarded = _guard_daemon_running(args)
+    if guarded is not None:
+        return guarded
 
     account_label = args.account_id or "<default>"
     print("Starting Elephant Agent Gateway WeChat iLink transport")
@@ -436,7 +460,10 @@ def _run_wecom_start(service: WecomGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
     service.prepare_managed_runtime(action="startup", target=transport)
     if args.detach:
-        return _run_start_detached(args, service=service, target=transport)
+        return _start_via_daemon(args)
+    guarded = _guard_daemon_running(args)
+    if guarded is not None:
+        return guarded
 
     account_label = args.account_id or "<all enabled>"
     print("Starting Elephant Agent Gateway WeCom WebSocket transport")
@@ -445,14 +472,92 @@ def _run_wecom_start(service: WecomGatewayService, args: Namespace) -> int:
     return 0
 
 def _start_wecom_runtime_after_setup(args: Namespace, *, transport: str) -> int:
-    service = _build_wecom_service(args)
     start_args = Namespace(**vars(args))
     start_args.runtime_target = transport or "configured"
     start_args.account_id = None
     start_args.detach = True
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    return _run_restart(start_args, service=service)
+    return _start_via_daemon(start_args)
+
+
+def _start_via_daemon(args: Namespace) -> int:
+    """Start the unified Elephant daemon instead of a per-adapter detached process.
+
+    All IM adapters, cron, supervisor, and learning worker now run inside a
+    single daemon process.  When ``gateway <adapter> start --detach`` is
+    invoked we redirect to ``elephant daemon start --detach``.
+    """
+    from apps.daemon_command import (
+        daemon_is_running,
+        daemon_pid_path,
+        daemon_record_path,
+        start_daemon_detached,
+    )
+
+    state_dir = Path(args.state_dir)
+
+    # If daemon is already running, inform the user
+    if daemon_is_running(state_dir):
+        from apps.daemon_command import _read_pid, _load_record, _pid_from_healthz
+        pid = _read_pid(daemon_pid_path(state_dir))
+        if pid is None:
+            pid = _pid_from_healthz(state_dir)
+        record = _load_record(daemon_record_path(state_dir)) or {}
+        host = record.get("host", "0.0.0.0")
+        port = record.get("port", 8900)
+        print(f"Elephant daemon is already running (pid {pid}).")
+        print(f"All configured IM adapters are managed by the daemon.")
+        print(f"  HTTP: http://{host}:{port}/healthz")
+        print(f"  Stop: elephant daemon stop")
+        print(f"  Status: elephant daemon status")
+        return 0
+
+    # Start the daemon — use args.host/port if available, otherwise defaults
+    host = getattr(args, "host", "0.0.0.0") or "0.0.0.0"
+    port = int(getattr(args, "port", 8900) or 8900)
+    return start_daemon_detached(
+        state_dir,
+        Path(args.cli_state_dir),
+        host=host,
+        port=port,
+    )
+
+
+def _daemon_is_running_for_state(args: Namespace) -> bool:
+    """Check if the unified daemon is running for the given state directory."""
+    from apps.daemon_command import daemon_is_running
+
+    return daemon_is_running(Path(args.state_dir))
+
+
+def _stop_via_daemon(args: Namespace) -> int:
+    """Redirect stop to the unified daemon."""
+    from apps.daemon_command import stop_daemon
+
+    print("Stopping unified Elephant daemon...")
+    return stop_daemon(
+        Path(args.state_dir),
+        timeout=float(getattr(args, "timeout", 10.0) or 10.0),
+        force=bool(getattr(args, "force", False)),
+    )
+
+
+def _restart_via_daemon(args: Namespace) -> int:
+    """Redirect restart to the unified daemon."""
+    from apps.daemon_command import restart_daemon
+
+    host = getattr(args, "host", "0.0.0.0") or "0.0.0.0"
+    port = int(getattr(args, "port", 8900) or 8900)
+    print("Restarting unified Elephant daemon...")
+    return restart_daemon(
+        Path(args.state_dir),
+        Path(args.cli_state_dir),
+        host=host,
+        port=port,
+        timeout=float(getattr(args, "timeout", 10.0) or 10.0),
+        force=bool(getattr(args, "force", False)),
+    )
 
 def _http_services(
     services: Mapping[str, object],
@@ -924,9 +1029,15 @@ def command_main(
     if action == "status":
         return _run_status(args, service=ensure_managed_service())
     if action == "stop":
-        return _run_stop(args, service=ensure_managed_service())
+        if _daemon_is_running_for_state(args):
+            return _stop_via_daemon(args)
+        print("Elephant daemon is not running. Nothing to stop.")
+        return 0
     if action == "restart":
-        return _run_restart(args, service=ensure_managed_service())
+        if _daemon_is_running_for_state(args):
+            return _restart_via_daemon(args)
+        # No daemon running — start a fresh daemon
+        return _start_via_daemon(args)
     if action == "logs":
         return _run_logs(args, service=ensure_managed_service())
     if action == "message":

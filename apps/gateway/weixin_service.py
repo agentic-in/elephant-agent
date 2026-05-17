@@ -151,6 +151,7 @@ class WeixinGatewayService:
     _resolved_allow_from: tuple[str, ...] = field(default=(), init=False)
     _resolved_group_allow_from: tuple[str, ...] = field(default=(), init=False)
     _split_multiline_messages: bool = field(default=False, init=False)
+    _daemon_task: asyncio.Task | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         if not self.account_configs:
@@ -215,6 +216,26 @@ class WeixinGatewayService:
         if self.app.state_dir is not None:
             return str(self.app.state_dir)
         return str(default_gateway_state_dir())
+
+    def has_credentials(self) -> bool:
+        """Return True if at least one account has credentials.
+
+        Weixin credentials come from manifest token or local storage, not env vars.
+        We mirror the checks in start_gateway() to detect usable accounts.
+        """
+        from packages.gateway_core.runtime import DEFAULT_GATEWAY_ACCOUNT_ID
+
+        state_dir = self._state_dir()
+        for config in self.account_configs:
+            # Check config.token first
+            if config.token and config.account_id and config.account_id != DEFAULT_GATEWAY_ACCOUNT_ID:
+                return True
+            # Check local storage
+            if config.account_id:
+                saved = load_weixin_account(state_dir, config.account_id)
+                if saved and saved.get("token"):
+                    return True
+        return False
 
     def describe(self) -> Mapping[str, object]:
         configured_transport: str | None = None
@@ -473,8 +494,6 @@ class WeixinGatewayService:
     async def stop_gateway(self) -> None:
         """Stop the long-polling loop and cleanup."""
         self._running = False
-        if idle_thread is not None and idle_thread.is_alive():
-            idle_thread.join(timeout=5.0)
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
             try:
@@ -907,6 +926,25 @@ class WeixinGatewayService:
         account_id: str | None = None,
     ) -> WeixinGatewayEventResult:
         raise RuntimeError("iLink transport does not support HTTP callbacks; use start_gateway() instead")
+
+    # ── DaemonService ──────────────────────────────────────────
+
+    async def start_daemon_task(self, *, loop: Any) -> asyncio.Task | None:
+        """Start WeChat iLink gateway as a daemon task in the unified event loop."""
+        task = asyncio.create_task(self.start_gateway(), name="weixin-daemon")
+        self._daemon_task = task
+        return task
+
+    async def stop_daemon_task(self) -> None:
+        """Gracefully stop the WeChat daemon task."""
+        if self._daemon_task is not None and not self._daemon_task.done():
+            self._daemon_task.cancel()
+            try:
+                await self._daemon_task
+            except asyncio.CancelledError:
+                pass
+        self._daemon_task = None
+        await self.stop_gateway()
 
 
 def _outbound_queue_for_state_dir(state_dir: str) -> GatewayOutboundQueue:

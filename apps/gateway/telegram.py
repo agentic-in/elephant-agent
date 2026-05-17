@@ -198,6 +198,16 @@ class TelegramGatewayService:
     def http_paths(self) -> tuple[str, ...]:
         return self.event_paths
 
+    def has_credentials(self) -> bool:
+        """Return True if at least one account can be resolved with current environment."""
+        for config in self.account_configs:
+            try:
+                resolve_telegram_account(config, environ=self.environ)
+                return True
+            except (LookupError, RuntimeError):
+                continue
+        return False
+
     def describe(self) -> Mapping[str, object]:
         accounts: list[dict[str, object]] = []
         for config in self.account_configs:
@@ -362,6 +372,15 @@ class TelegramGatewayService:
     def _external_message_id(self, response: Mapping[str, object]) -> str:
         result = _mapping(response.get("result")) or {}
         return str(result.get("message_id") or "")
+
+    # ── DaemonService ──────────────────────────────────────────
+
+    async def start_daemon_task(self, *, loop: Any) -> None:
+        """Telegram is webhook-only; no long-running task needed."""
+        return None
+
+    async def stop_daemon_task(self) -> None:
+        """No-op for webhook-only service."""
 
 
 def register_telegram_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:

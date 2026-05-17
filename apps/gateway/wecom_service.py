@@ -120,6 +120,7 @@ class WecomGatewayService:
     _resolved_group_policy: str = field(default="disabled", init=False)
     _resolved_allow_from: tuple[str, ...] = field(default=(), init=False)
     _resolved_group_allow_from: tuple[str, ...] = field(default=(), init=False)
+    _daemon_task: asyncio.Task | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         if not self.account_configs:
@@ -184,6 +185,16 @@ class WecomGatewayService:
         if self.app.state_dir is not None:
             return str(self.app.state_dir)
         return str(default_gateway_state_dir())
+
+    def has_credentials(self) -> bool:
+        """Return True if at least one account can be resolved with current environment."""
+        for config in self.account_configs:
+            try:
+                resolve_wecom_account(config, environ=self.environ)
+                return True
+            except (LookupError, RuntimeError):
+                continue
+        return False
 
     def describe(self) -> Mapping[str, object]:
         configured_transport: str | None = None
@@ -920,6 +931,25 @@ class WecomGatewayService:
                 "runtime_surface": "cli-runtime",
             },
         )
+
+    # ── DaemonService ──────────────────────────────────────────
+
+    async def start_daemon_task(self, *, loop: Any) -> asyncio.Task | None:
+        """Start WeCom WebSocket gateway as a daemon task in the unified event loop."""
+        task = asyncio.create_task(self.start_gateway(), name="wecom-daemon")
+        self._daemon_task = task
+        return task
+
+    async def stop_daemon_task(self) -> None:
+        """Gracefully stop the WeCom daemon task."""
+        if self._daemon_task is not None and not self._daemon_task.done():
+            self._daemon_task.cancel()
+            try:
+                await self._daemon_task
+            except asyncio.CancelledError:
+                pass
+        self._daemon_task = None
+        await self.stop_gateway()
 
 
 def _safe_id(value: str) -> str:

@@ -238,6 +238,25 @@ def build_typer_app() -> typer.Typer:
         obj = ctx.obj or {}
         raise typer.Exit(_forward_cli(["reflect", *ctx.args], state_dir=obj["state_dir"]))
 
+    @app.command(
+        "daemon",
+        help="Run all Elephant services (IM gateways, cron, supervisor, learning) in a single process.",
+        context_settings=passthrough_settings,
+        add_help_option=False,
+    )
+    def daemon_command(ctx: typer.Context) -> None:
+        from apps.daemon_command import command_main as daemon_command_main
+
+        obj = ctx.obj or {}
+        # Forward all args including --help/-h to the daemon sub-app
+        args = list(ctx.args)
+        raise typer.Exit(
+            daemon_command_main(
+                args,
+                default_state_dir=obj["state_dir"],
+            )
+        )
+
     return app
 
 
