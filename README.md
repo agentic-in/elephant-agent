@@ -8,7 +8,6 @@
     <strong>Elephants never forget.</strong><br />
     Personal-Model-first self-evolving AI agent · Curiosity at your pace · Reflect after the turn.
   </p>
-  <a href="https://www.producthunt.com/products/elephant-agent?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-elephant-agent" target="_blank" rel="noopener noreferrer"><img alt="Elephant Agent - Personal-Model First Self Evolving AI Agent | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1147826&amp;theme=light&amp;t=1778915959428"></a>
   <p>
     <a href="https://elephant.agentic-in.ai/">Website</a>
     ·
