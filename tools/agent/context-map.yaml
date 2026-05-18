@@ -110,6 +110,7 @@
       "docs/README.md",
       "docs/system-design/**",
       "docs/observability/**",
+      "docs/design/**",
       "docs/paper/**"
     ],
     "agent_text": [

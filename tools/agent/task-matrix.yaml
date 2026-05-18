@@ -15,6 +15,7 @@
         "docs/README.md",
         "docs/system-design/**",
         "docs/observability/**",
+        "docs/design/**",
         "docs/paper/**"
       ],
       "read_first": [
