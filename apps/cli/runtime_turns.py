@@ -573,12 +573,6 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
             protected_tail_turns=1,
         )
     if not to_summarize:
-        # Ultimate fallback: no user boundary (rare), treat the first 80% as compressible content
-        if history_count >= 4:
-            cut = max(1, int(history_count * 0.6))
-            to_summarize = frozen_epoch.history_messages[:cut]
-            tail = frozen_epoch.history_messages[cut:]
-    if not to_summarize:
         log.warning("compress skipped: nothing to summarize (msgs=%d)",
                     history_count)
         _emit_compress_skip_stage(runtime, outcome, f"nothing_to_summarize_{history_count}", usage_tokens)

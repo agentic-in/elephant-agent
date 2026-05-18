@@ -11,10 +11,11 @@ completed context into a reference summary.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Callable, Protocol
+from typing import Protocol
 
 from packages.contracts.runtime import PromptMessage
 
+from .projection_support import message_groups, tool_call_id
 from .session_projection import (
     SessionContextEpoch,
     compact_session_context_epoch,
@@ -163,8 +164,7 @@ def split_for_compress(
     total = len(messages)
     if total < 2:
         return (), messages
-    if total < 4:
-        return messages[:-1], messages[-1:]
+    groups = message_groups(messages)
 
     # Find user-message boundaries
     user_starts: list[int] = []
@@ -172,43 +172,119 @@ def split_for_compress(
         if msg.role == "user" and msg.content.strip():
             user_starts.append(i)
 
-    # Normal multi-turn case: 3+ user turns → keep last 2 intact
+    # Normal multi-turn case: 3+ user turns -> keep last 2 intact
     if len(user_starts) > protected_tail_turns:
         tail_start = user_starts[-protected_tail_turns]
         # Ensure we're actually compressing a meaningful amount (>30%)
         if tail_start > total * 0.3:
-            return messages[:tail_start], messages[tail_start:]
+            selected_groups = {
+                group_index
+                for group_index, (start, _end) in enumerate(groups)
+                if start >= tail_start
+            }
+            to_summarize, tail = _split_by_tail_groups(messages, groups, selected_groups)
+            if to_summarize:
+                return to_summarize, tail
 
     # Few turns OR the normal split didn't compress enough:
-    # Use aggressive compression — keep first user + last N messages
+    # Use aggressive compression: keep first user + last N messages.
     # This handles "1 user query → 100 tool calls → assistant response"
     keep_tail_count = max(6, min(total // 3, 20))  # Keep 1/3 but max 20 messages
     tail_start_idx = max(1, total - keep_tail_count)
 
-    # Always include the first user message
-    tail_indices: set[int] = {0}
-    # Keep the last N messages
-    for i in range(tail_start_idx, total):
-        tail_indices.add(i)
-    # Also keep any user/assistant content messages (they're rare and valuable)
-    for i in range(1, tail_start_idx):
-        msg = messages[i]
-        if msg.role == "user" and msg.content.strip():
-            tail_indices.add(i)
-        elif msg.role == "assistant" and msg.content.strip() and not msg.tool_calls:
-            tail_indices.add(i)
+    tail_groups: set[int] = set()
+    _add_group_containing_index(groups, tail_groups, 0)
+    for group_index, (_start, end) in enumerate(groups):
+        if end > tail_start_idx:
+            tail_groups.add(group_index)
+    # Also keep any user/assistant content messages (they're rare and valuable).
+    for group_index, (start, end) in enumerate(groups):
+        if start >= tail_start_idx:
+            continue
+        group_messages = messages[start:end]
+        if any(msg.role == "user" and msg.content.strip() for msg in group_messages):
+            tail_groups.add(group_index)
+        elif any(
+            msg.role == "assistant" and msg.content.strip() and not msg.tool_calls
+            for msg in group_messages
+        ):
+            tail_groups.add(group_index)
 
-    tail = tuple(messages[i] for i in sorted(tail_indices))
-    to_summarize = tuple(messages[i] for i in range(total) if i not in tail_indices)
+    to_summarize, tail = _split_by_tail_groups(messages, groups, tail_groups)
     if to_summarize:
         return to_summarize, tail
 
-    # Ultimate fallback: compress first 60%
-    if total >= 4:
-        cut = max(1, int(total * 0.6))
-        return messages[:cut], messages[cut:]
+    # Group-boundary fallback: compress the first 60% without splitting a
+    # provider-visible tool call/result group.
+    cut = max(1, int(total * 0.6))
+    tail_start = _group_boundary_after_index(groups, cut)
+    tail_groups = {
+        group_index
+        for group_index, (start, _end) in enumerate(groups)
+        if start >= tail_start
+    }
+    return _split_by_tail_groups(messages, groups, tail_groups)
 
-    return (), messages
+
+def _split_by_tail_groups(
+    messages: tuple[PromptMessage, ...],
+    groups: tuple[tuple[int, int], ...],
+    selected_groups: set[int],
+) -> tuple[tuple[PromptMessage, ...], tuple[PromptMessage, ...]]:
+    tail_indices: set[int] = set()
+    for group_index in sorted(selected_groups):
+        if group_index < 0 or group_index >= len(groups):
+            continue
+        start, end = groups[group_index]
+        if not _preservable_live_group(messages[start:end]):
+            continue
+        tail_indices.update(range(start, end))
+    tail = tuple(message for index, message in enumerate(messages) if index in tail_indices)
+    to_summarize = tuple(message for index, message in enumerate(messages) if index not in tail_indices)
+    return to_summarize, tail
+
+
+def _preservable_live_group(group: tuple[PromptMessage, ...]) -> bool:
+    if not group:
+        return False
+    first = group[0]
+    if first.role == "tool":
+        return False
+    if first.role != "assistant" or not first.tool_calls:
+        return True
+
+    tool_messages = tuple(message for message in group[1:] if message.role == "tool")
+    if not tool_messages:
+        return False
+    call_ids = {
+        call_id
+        for call in first.tool_calls
+        if (call_id := tool_call_id(call))
+    }
+    if not call_ids:
+        return True
+    result_ids = {message.tool_call_id for message in tool_messages if message.tool_call_id}
+    return call_ids.issubset(result_ids)
+
+
+def _add_group_containing_index(
+    groups: tuple[tuple[int, int], ...],
+    selected_groups: set[int],
+    index: int,
+) -> None:
+    for group_index, (start, end) in enumerate(groups):
+        if start <= index < end:
+            selected_groups.add(group_index)
+            return
+
+
+def _group_boundary_after_index(groups: tuple[tuple[int, int], ...], index: int) -> int:
+    for start, end in groups:
+        if start >= index:
+            return start
+        if start < index < end:
+            return end
+    return groups[-1][1] if groups else index
 
 
 def _deterministic_summary(

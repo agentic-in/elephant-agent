@@ -177,7 +177,7 @@ def tool_call_name(call: Mapping[str, object]) -> str:
 
 
 def tool_call_id(call: Mapping[str, object]) -> str:
-    return str(call.get("id") or call.get("tool_call_id") or "").strip()
+    return str(call.get("id") or call.get("call_id") or call.get("tool_call_id") or "").strip()
 
 
 def message_groups(messages: tuple[PromptMessage, ...]) -> tuple[tuple[int, int], ...]:
