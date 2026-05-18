@@ -55,9 +55,11 @@ class ProviderRetryTest(unittest.TestCase):
         transport = UrllibJSONHTTPTransport()
         attempts: list[int] = []
         sleeps: list[float] = []
+        timeouts: list[float] = []
 
         def fake_urlopen(req, *, timeout):
             attempts.append(1)
+            timeouts.append(timeout)
             if len(attempts) < 3:
                 raise _http_error(429, headers={"Retry-After": "2"})
             return _FakeResponse(status=200, body=b'{"ok": true}', headers={"content-type": "application/json"})
@@ -77,6 +79,7 @@ class ProviderRetryTest(unittest.TestCase):
         self.assertEqual(len(sleeps), 2)
         for sleep_seconds in sleeps:
             self.assertAlmostEqual(sleep_seconds, 2.0, places=2)
+        self.assertEqual(timeouts, [transport.timeout_seconds] * 3)
 
     def test_post_json_permanent_4xx_raises_provider_http_error(self) -> None:
         transport = UrllibJSONHTTPTransport()
@@ -101,6 +104,7 @@ class ProviderRetryTest(unittest.TestCase):
     def test_post_json_stream_retries_before_first_chunk(self) -> None:
         transport = UrllibJSONHTTPTransport()
         attempts: list[int] = []
+        timeouts: list[float] = []
 
         stream_lines = [
             b"event: content_block_delta\n",
@@ -114,6 +118,7 @@ class ProviderRetryTest(unittest.TestCase):
 
         def fake_urlopen(req, *, timeout):
             attempts.append(1)
+            timeouts.append(timeout)
             if len(attempts) < 2:
                 # Connection refused before any bytes arrive -> retry path.
                 raise error.URLError("connection refused")
@@ -130,6 +135,7 @@ class ProviderRetryTest(unittest.TestCase):
             ):
                 chunks.append(chunk)
         self.assertGreaterEqual(len(attempts), 2)
+        self.assertEqual(timeouts, [transport.stream_timeout_seconds] * len(timeouts))
         texts = [chunk.payload.get("delta", {}).get("text", "") for chunk in chunks]
         self.assertEqual("".join(texts), "Hello world")
 

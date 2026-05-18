@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from html import unescape as html_unescape
 import json
 import re
@@ -14,9 +15,9 @@ from urllib import error, request
 from packages.harness.retry_policy import RetryPolicy, Retryable, with_retry
 
 
-DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS = 10 * 60
+DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS = 120.0
 DEFAULT_PROVIDER_HTTP_CONNECT_SECONDS = 15.0
-DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS = 60.0
+DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS = 30.0
 DEFAULT_PROVIDER_RETRY_POLICY = RetryPolicy(
     max_attempts=5,
     base_backoff_s=1.0,
@@ -167,10 +168,15 @@ class UrllibJSONHTTPTransport:
         self,
         *,
         timeout_seconds: float = DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS,
+        stream_timeout_seconds: float = DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS,
         retry_policy: RetryPolicy | None = None,
     ) -> None:
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = max(1.0, float(timeout_seconds))
+        self.stream_timeout_seconds = max(1.0, float(stream_timeout_seconds))
         self.retry_policy = retry_policy or DEFAULT_PROVIDER_RETRY_POLICY
+
+    def _deadline(self, *, timeout_seconds: float) -> datetime:
+        return datetime.now(timezone.utc) + timedelta(seconds=max(1.0, float(timeout_seconds)))
 
     def post_json(
         self,
@@ -186,7 +192,11 @@ class UrllibJSONHTTPTransport:
         def _attempt() -> JSONHTTPResponse:
             return self._post_json_once(url=url, headers=request_headers, body=body)
 
-        return with_retry(_attempt, policy=self.retry_policy)
+        return with_retry(
+            _attempt,
+            policy=self.retry_policy,
+            deadline=self._deadline(timeout_seconds=self.timeout_seconds),
+        )
 
     def _post_json_once(
         self,
@@ -249,6 +259,17 @@ class UrllibJSONHTTPTransport:
             url=url or getattr(exc, "url", None),
             headers=headers_dict,
             retry_after_s=retry_after_s,
+        )
+
+    def _error_message(self, exc: error.HTTPError, *, url: str | None = None) -> str:
+        try:
+            body = exc.read().decode("utf-8", errors="replace").strip()
+        except Exception:  # pragma: no cover - defensive fallback
+            body = ""
+        return self._status_error_message(
+            status_code=int(exc.code),
+            body=body,
+            url=url or getattr(exc, "url", None),
         )
 
     def _status_error_message(
@@ -401,7 +422,7 @@ class UrllibJSONHTTPTransport:
                 f"provider request failed for {url}: curl is unavailable for TLS fallback"
             )
         status_marker = "__ELEPHANT_STATUS__:"
-        max_time = max(1, int(round(self.timeout_seconds)))
+        max_time = max(1, int(round(self.stream_timeout_seconds)))
         connect_timeout = max(1, min(10, max_time))
         command = [
             curl,
@@ -536,7 +557,11 @@ class UrllibJSONHTTPTransport:
                 first_chunk = None
             return generator, first_chunk
 
-        generator, first_chunk = with_retry(_open_and_peek, policy=self.retry_policy)
+        generator, first_chunk = with_retry(
+            _open_and_peek,
+            policy=self.retry_policy,
+            deadline=self._deadline(timeout_seconds=self.stream_timeout_seconds),
+        )
 
         accumulated: list[str] = []
         if first_chunk is not None:
@@ -577,7 +602,7 @@ class UrllibJSONHTTPTransport:
             method="POST",
         )
         try:
-            with request.urlopen(http_request, timeout=self.timeout_seconds) as response:
+            with request.urlopen(http_request, timeout=self.stream_timeout_seconds) as response:
                 event_name: str | None = None
                 data_lines: list[str] = []
                 for raw_line in response:

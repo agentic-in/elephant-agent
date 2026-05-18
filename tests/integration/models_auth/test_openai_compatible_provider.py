@@ -21,6 +21,7 @@ from packages.models.provider_runtime import ProviderRuntimeResolver
 from packages.models.reasoning_parser import split_reasoning_and_content
 from packages.models.providers.http import (
     DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS,
+    DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS,
     JSONHTTPStreamChunk,
     UrllibJSONHTTPTransport,
 )
@@ -1324,11 +1325,13 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
 
 
 class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
-    def test_default_timeout_allows_long_live_model_responses(self) -> None:
+    def test_default_timeouts_bound_stalled_model_responses(self) -> None:
         transport = UrllibJSONHTTPTransport()
 
         self.assertEqual(transport.timeout_seconds, DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS)
-        self.assertEqual(transport.timeout_seconds, 600)
+        self.assertEqual(transport.timeout_seconds, 120.0)
+        self.assertEqual(transport.stream_timeout_seconds, DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS)
+        self.assertEqual(transport.stream_timeout_seconds, 30.0)
 
     def test_html_http_errors_are_summarized_with_codex_reauth_hint(self) -> None:
         transport = UrllibJSONHTTPTransport()
@@ -1379,7 +1382,7 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("--write-out", command)
         self.assertIn("--max-time", command)
-        self.assertEqual(command[command.index("--max-time") + 1], "600")
+        self.assertEqual(command[command.index("--max-time") + 1], "120")
         self.assertIn("https://example.test/v1/chat/completions", command)
 
     def test_retries_with_curl_on_tls_unexpected_eof(self) -> None:
@@ -1426,6 +1429,8 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
         self.assertEqual(chunks[0].payload["delta"], "hello")
         command = run.call_args.args[0]
         self.assertIn("--write-out", command)
+        self.assertIn("--max-time", command)
+        self.assertEqual(command[command.index("--max-time") + 1], "30")
         self.assertIn("https://api.githubcopilot.com/v1/responses", command)
 
 
