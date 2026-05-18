@@ -734,7 +734,7 @@ def unified_recall(
                 query,
                 request_id="unified-recall-query",
                 task="query",
-                latency_mode="fast",
+                latency_mode="balanced",
             )
             query_vector = tuple(getattr(vector, "values", ()) or ())
             query_dimensions = int(getattr(vector, "dimensions", 0) or 0) or None
