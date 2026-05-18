@@ -1,245 +1,181 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import tempfile
 import unittest
 from unittest import mock
 
 from apps import dashboard_command
+from apps.daemon_command import _daemon_record_path
 
 
-def _plan() -> dashboard_command.DashboardLaunchPlan:
-    return dashboard_command.DashboardLaunchPlan(
-        state_dir=Path("/tmp/elephant-state"),
-        profile_dir=Path("/tmp/elephant-profile"),
-        api_database=Path("/tmp/elephant-state/elephant.sqlite3"),
-        api_host="127.0.0.1",
-        api_port=8000,
-        ui_host="127.0.0.1",
-        ui_port=4174,
-        dashboard_assets_present=True,
-        dashboard_static_assets_present=True,
-        frontend_dependencies_present=True,
-        npm_available=True,
-    )
+class _FakeResponse:
+    def __init__(self, payload: dict[str, object], *, status: int = 200) -> None:
+        self._payload = payload
+        self.status = status
 
+    def __enter__(self) -> "_FakeResponse":
+        return self
 
-def _packaged_plan() -> dashboard_command.DashboardLaunchPlan:
-    return dashboard_command.DashboardLaunchPlan(
-        state_dir=Path("/tmp/elephant-state"),
-        profile_dir=Path("/tmp/elephant-profile"),
-        api_database=Path("/tmp/elephant-state/elephant.sqlite3"),
-        api_host="127.0.0.1",
-        api_port=8000,
-        ui_host="127.0.0.1",
-        ui_port=4174,
-        dashboard_assets_present=False,
-        dashboard_static_assets_present=True,
-        frontend_dependencies_present=False,
-        npm_available=False,
-    )
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload).encode("utf-8")
 
 
 class DashboardCommandTest(unittest.TestCase):
-    def test_reuses_existing_healthy_api_when_requested(self) -> None:
-        ui_process = mock.Mock()
-        ui_process.poll.side_effect = [None, None, None]
-        ui_process.returncode = 0
-
-        with (
-            mock.patch.object(
-                dashboard_command,
-                "_api_health_payload",
-                return_value={"service": "elephant-api", "status": "ok"},
-            ),
-            mock.patch.object(dashboard_command, "_api_dashboard_ready", return_value=True),
-            mock.patch.object(dashboard_command, "_api_port_occupied", return_value=True),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command.subprocess, "Popen", return_value=ui_process) as popen,
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(
-                _plan(),
-                open_browser=False,
-                build_frontend=False,
-                reuse_api=True,
+    def test_try_daemon_dashboard_url_requires_health_and_dashboard_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            state_dir = Path(tempdir) / "herd"
+            state_dir.mkdir()
+            _daemon_record_path(state_dir).write_text(
+                json.dumps({"host": "0.0.0.0", "port": 9876}),
+                encoding="utf-8",
             )
 
-        self.assertEqual(result, 0)
-        self.assertEqual(popen.call_count, 1)
-        self.assertEqual(popen.call_args.args[0][0], "npm")
-        self.assertEqual(popen.call_args.kwargs["env"]["ELEPHANT_DASHBOARD_API_AUTO_START"], "0")
+            with mock.patch.object(
+                dashboard_command.urllib.request,
+                "urlopen",
+                side_effect=[
+                    _FakeResponse({"status": "running"}),
+                    _FakeResponse({"dashboard": {}}),
+                ],
+            ) as urlopen:
+                url = dashboard_command._try_daemon_dashboard_url(
+                    dashboard_command.DashboardLaunchPlan(state_dir=state_dir),
+                )
 
-    def test_default_starts_fresh_api_when_requested_port_has_healthy_api(self) -> None:
-        api_process = mock.Mock()
-        api_process.poll.return_value = None
-        api_process.returncode = 0
-        ui_process = mock.Mock()
-        ui_process.poll.return_value = None
-        ui_process.returncode = 0
+        self.assertEqual(url, "http://127.0.0.1:9876/dashboard/")
+        self.assertEqual(urlopen.call_count, 2)
 
-        with (
-            mock.patch.object(
-                dashboard_command,
-                "_api_health_payload",
-                return_value={"service": "elephant-api", "status": "ok"},
-            ),
-            mock.patch.object(dashboard_command, "_api_dashboard_ready", return_value=True),
-            mock.patch.object(dashboard_command, "_api_port_occupied", side_effect=[True, False]),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command.subprocess, "Popen", side_effect=[api_process, ui_process]) as popen,
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(
-                _plan(),
-                open_browser=False,
-                build_frontend=False,
+    def test_try_daemon_dashboard_url_returns_none_without_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            url = dashboard_command._try_daemon_dashboard_url(
+                dashboard_command.DashboardLaunchPlan(state_dir=Path(tempdir) / "missing"),
             )
 
-        self.assertEqual(result, 0)
-        self.assertEqual(popen.call_count, 2)
-        self.assertEqual(popen.call_args_list[0].args[0][6], "8001")
-        self.assertEqual(popen.call_args_list[1].kwargs["env"]["VITE_ELEPHANT_API_BASE_URL"], "http://127.0.0.1:8001")
+        self.assertIsNone(url)
 
-    def test_unhealthy_occupied_api_port_uses_next_free_port(self) -> None:
-        api_process = mock.Mock()
-        api_process.poll.return_value = None
-        api_process.returncode = 0
-        ui_process = mock.Mock()
-        ui_process.poll.return_value = None
-        ui_process.returncode = 0
+    def test_try_daemon_dashboard_url_rejects_non_dashboard_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            state_dir = Path(tempdir) / "herd"
+            state_dir.mkdir()
+            _daemon_record_path(state_dir).write_text(
+                json.dumps({"host": "127.0.0.1", "port": 9877}),
+                encoding="utf-8",
+            )
 
-        with (
-            mock.patch.object(dashboard_command, "_api_health_payload", return_value=None),
-            mock.patch.object(dashboard_command, "_api_port_occupied", side_effect=[True, False]),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command.subprocess, "Popen", side_effect=[api_process, ui_process]) as popen,
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(_plan(), open_browser=False, build_frontend=False)
+            with mock.patch.object(
+                dashboard_command.urllib.request,
+                "urlopen",
+                side_effect=[
+                    _FakeResponse({"status": "running"}),
+                    _FakeResponse({"not_dashboard": {}}),
+                ],
+            ):
+                url = dashboard_command._try_daemon_dashboard_url(
+                    dashboard_command.DashboardLaunchPlan(state_dir=state_dir),
+                )
 
-        self.assertEqual(result, 0)
-        self.assertEqual(popen.call_count, 2)
-        self.assertEqual(popen.call_args_list[0].args[0][6], "8001")
-        self.assertEqual(popen.call_args_list[1].kwargs["env"]["VITE_ELEPHANT_API_BASE_URL"], "http://127.0.0.1:8001")
+        self.assertIsNone(url)
 
-    def test_launch_redirects_api_and_ui_output_to_state_log_files(self) -> None:
-        api_process = mock.Mock()
-        api_process.poll.return_value = None
-        api_process.returncode = 0
-        ui_process = mock.Mock()
-        ui_process.poll.return_value = None
-        ui_process.returncode = 0
-        api_log = mock.Mock()
-        ui_log = mock.Mock()
+    def test_ensure_frontend_dist_uses_existing_dashboard_build(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            dist_dir = Path(tempdir) / "dist"
+            index = dist_dir / "index.html"
+            dist_dir.mkdir()
+            index.write_text("<html></html>", encoding="utf-8")
 
-        with (
-            mock.patch.object(dashboard_command, "_api_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command, "_open_dashboard_log", side_effect=[api_log, ui_log]) as open_log,
-            mock.patch.object(dashboard_command.subprocess, "Popen", side_effect=[api_process, ui_process]) as popen,
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(_plan(), open_browser=False, build_frontend=False)
+            with (
+                mock.patch.object(dashboard_command, "DASHBOARD_DIST_DIR", dist_dir),
+                mock.patch.object(dashboard_command, "DASHBOARD_DIST_INDEX", index),
+            ):
+                self.assertTrue(dashboard_command._ensure_frontend_dist(skip_build=True))
 
-        self.assertEqual(result, 0)
-        self.assertEqual(open_log.call_args_list[0].kwargs["kind"], "api")
-        self.assertEqual(open_log.call_args_list[1].kwargs["kind"], "ui")
-        self.assertIs(popen.call_args_list[0].kwargs["stdout"], api_log)
-        self.assertIs(popen.call_args_list[1].kwargs["stdout"], ui_log)
-        self.assertIs(popen.call_args_list[0].kwargs["stderr"], dashboard_command.subprocess.STDOUT)
-        self.assertIs(popen.call_args_list[1].kwargs["stderr"], dashboard_command.subprocess.STDOUT)
-        api_log.close.assert_called_once_with()
-        ui_log.close.assert_called_once_with()
+    def test_ensure_frontend_dist_skip_build_reports_missing_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            dist_dir = Path(tempdir) / "dist"
+            index = dist_dir / "index.html"
 
-    def test_occupied_ui_port_uses_next_free_port(self) -> None:
-        api_process = mock.Mock()
-        api_process.poll.return_value = None
-        api_process.returncode = 0
-        ui_process = mock.Mock()
-        ui_process.poll.return_value = None
-        ui_process.returncode = 0
+            with (
+                mock.patch.object(dashboard_command, "DASHBOARD_DIST_DIR", dist_dir),
+                mock.patch.object(dashboard_command, "DASHBOARD_DIST_INDEX", index),
+            ):
+                self.assertFalse(dashboard_command._ensure_frontend_dist(skip_build=True))
 
-        with (
-            mock.patch.object(dashboard_command, "_api_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=True),
-            mock.patch.object(dashboard_command, "_port_occupied", side_effect=lambda _host, port: port == 4174),
-            mock.patch.object(dashboard_command.subprocess, "Popen", side_effect=[api_process, ui_process]) as popen,
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(_plan(), open_browser=False, build_frontend=False)
+    def test_ensure_frontend_dist_builds_when_dependencies_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            app_dir = root / "dashboard"
+            dist_dir = app_dir / "dist"
+            index = dist_dir / "index.html"
+            (app_dir / "node_modules").mkdir(parents=True)
 
-        self.assertEqual(result, 0)
-        self.assertEqual(popen.call_args_list[1].args[0][-1], "--strictPort")
-        self.assertIn("4175", popen.call_args_list[1].args[0])
+            def fake_build(*_args: object, **_kwargs: object) -> mock.Mock:
+                dist_dir.mkdir()
+                index.write_text("<html></html>", encoding="utf-8")
+                return mock.Mock(returncode=0)
 
-    def test_builds_frontend_before_launch(self) -> None:
-        api_process = mock.Mock()
-        api_process.poll.return_value = None
-        api_process.returncode = 0
-        ui_process = mock.Mock()
-        ui_process.poll.return_value = None
-        ui_process.returncode = 0
+            with (
+                mock.patch.object(dashboard_command, "DASHBOARD_APP_DIR", app_dir),
+                mock.patch.object(dashboard_command, "DASHBOARD_DIST_DIR", dist_dir),
+                mock.patch.object(dashboard_command, "DASHBOARD_DIST_INDEX", index),
+                mock.patch.object(dashboard_command.shutil, "which", return_value="/usr/bin/npm"),
+                mock.patch.object(dashboard_command.subprocess, "run", side_effect=fake_build) as run,
+                mock.patch.object(dashboard_command, "_print_cli_card"),
+            ):
+                self.assertTrue(dashboard_command._ensure_frontend_dist())
+
+        run.assert_called_once()
+
+    def test_run_dashboard_opens_daemon_dashboard_when_available(self) -> None:
+        plan = dashboard_command.DashboardLaunchPlan(state_dir=Path("/tmp/elephant-herd"))
 
         with (
-            mock.patch.object(dashboard_command, "_run_frontend_build", return_value=0) as build,
-            mock.patch.object(dashboard_command, "_api_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command.subprocess, "Popen", side_effect=[api_process, ui_process]),
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(_plan(), open_browser=False)
-
-        self.assertEqual(result, 0)
-        build.assert_called_once_with()
-
-    def test_packaged_dashboard_uses_static_server_without_npm(self) -> None:
-        ui_process = mock.Mock()
-        ui_process.poll.side_effect = [None, None, None]
-        ui_process.returncode = 0
-
-        with (
-            mock.patch.object(dashboard_command, "_api_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command.subprocess, "Popen", return_value=ui_process) as popen,
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, KeyboardInterrupt]),
-            mock.patch.object(dashboard_command, "_print_cli_card"),
-        ):
-            result = dashboard_command._run_dashboard(_packaged_plan(), open_browser=False)
-
-        self.assertEqual(result, 0)
-        self.assertEqual(popen.call_count, 1)
-        command = popen.call_args.args[0]
-        self.assertEqual(command[:3], [dashboard_command.sys.executable, "-m", "apps.dashboard_static_server"])
-        self.assertIn("--static-dir", command)
-
-    def test_browser_opens_by_default(self) -> None:
-        ui_process = mock.Mock()
-        ui_process.poll.side_effect = [None, None, None]
-        ui_process.returncode = 0
-        with (
-            mock.patch.object(dashboard_command, "_api_health_payload", return_value={"service": "elephant-api", "status": "ok"}),
-            mock.patch.object(dashboard_command, "_api_dashboard_ready", return_value=True),
-            mock.patch.object(dashboard_command, "_ui_port_occupied", return_value=False),
-            mock.patch.object(dashboard_command.subprocess, "Popen", return_value=ui_process),
-            mock.patch.object(dashboard_command.time, "sleep", side_effect=[None, KeyboardInterrupt]),
+            mock.patch.object(dashboard_command, "_ensure_frontend_dist", return_value=True),
+            mock.patch.object(
+                dashboard_command,
+                "_try_daemon_dashboard_url",
+                return_value="http://127.0.0.1:8900/dashboard/",
+            ),
             mock.patch.object(dashboard_command.webbrowser, "open", return_value=True) as open_browser,
             mock.patch.object(dashboard_command, "_print_cli_card"),
         ):
-            result = dashboard_command._run_dashboard(
-                _plan(),
-                open_browser=True,
-                build_frontend=False,
-                reuse_api=True,
-            )
+            result = dashboard_command._run_dashboard(plan, open_browser=True)
 
         self.assertEqual(result, 0)
-        open_browser.assert_called_once_with("http://127.0.0.1:4174")
+        open_browser.assert_called_once_with("http://127.0.0.1:8900/dashboard/")
+
+    def test_run_dashboard_guides_user_when_daemon_is_not_running(self) -> None:
+        plan = dashboard_command.DashboardLaunchPlan(state_dir=Path("/tmp/elephant-herd"))
+
+        with (
+            mock.patch.object(dashboard_command, "_ensure_frontend_dist", return_value=True),
+            mock.patch.object(dashboard_command, "_try_daemon_dashboard_url", return_value=None),
+            mock.patch.object(dashboard_command, "_print_cli_card") as print_card,
+        ):
+            result = dashboard_command._run_dashboard(plan, open_browser=False)
+
+        self.assertEqual(result, 1)
+        self.assertEqual(print_card.call_args.args[0], "Elephant Agent dashboard")
+        self.assertIn("served by the Elephant daemon", print_card.call_args.args[1])
+
+    def test_run_dashboard_does_not_probe_daemon_without_frontend_assets(self) -> None:
+        plan = dashboard_command.DashboardLaunchPlan(state_dir=Path("/tmp/elephant-herd"))
+
+        with (
+            mock.patch.object(dashboard_command, "DASHBOARD_DIST_INDEX", Path("/tmp/missing-dashboard-index.html")),
+            mock.patch.object(dashboard_command, "_ensure_frontend_dist", return_value=False),
+            mock.patch.object(dashboard_command, "_try_daemon_dashboard_url") as probe,
+            mock.patch.object(dashboard_command, "_print_cli_card") as print_card,
+        ):
+            result = dashboard_command._run_dashboard(plan, open_browser=False)
+
+        self.assertEqual(result, 1)
+        probe.assert_not_called()
+        self.assertIn("assets are not available", print_card.call_args.args[1])
 
 
 if __name__ == "__main__":

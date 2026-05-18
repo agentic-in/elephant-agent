@@ -68,7 +68,7 @@ class PreviewDeploySmokeTest(unittest.TestCase):
             index_text,
         )
         self.assertIn(
-            '<meta data-rh="true" name="description" content="Elephant Agent is personal-model-first AI: it turns memory into correctable understanding, then gets curious at your pace."',
+            '<meta data-rh="true" name="description" content="Elephant Agent starts from you, grows a correctable Personal Model, and self-evolves through curiosity and reflection."',
             index_text,
         )
         self.assertIn(

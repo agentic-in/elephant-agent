@@ -9,6 +9,8 @@ import tempfile
 import time
 import unittest
 
+from tests.e2e.support.processes import find_free_port, wait_for_json
+
 try:
     import pty
 except ImportError:  # pragma: no cover - Windows fallback
@@ -200,10 +202,9 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
         self.assertTrue(self._elephant_bin().exists())
 
         help_output = self._run_elephant("--help")
-        self.assertIn(
-            "{init,status,provider,herd,memory,wake,skills,gateway,cron,dashboard}",
-            help_output.stdout,
-        )
+        for command_name in ("init", "status", "provider", "herd", "wake", "skills", "gateway", "cron", "dashboard"):
+            with self.subTest(command_name=command_name):
+                self.assertIn(command_name, help_output.stdout)
         self.assertNotIn("chat", help_output.stdout)
 
         initialized = self._run_elephant(
@@ -213,7 +214,7 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
             self.provider_id,
             "--base-url",
             self.base_url,
-            "--default-model",
+            "--model-id",
             self.model_id,
             "--secret-env-var",
             "ELEPHANT_LIVE_PROVIDER_API_KEY",
@@ -257,8 +258,8 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
         self.assertIn(f"provider_id: {self.provider_id}", wake.stdout)
         self.assertIn(f"provider_model_id: {self.model_id}", wake.stdout)
 
-        memory = self._run_elephant("memory", timeout=120)
-        self.assertIn("Elephant Agent memory", memory.stdout)
+        facts = self._run_elephant("facts", timeout=120)
+        self.assertTrue(facts.stdout.strip())
 
         skills = self._run_elephant("skills", "active", timeout=120)
         self.assertIn("Elephant Agent skills", skills.stdout)
@@ -270,9 +271,45 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
         self.assertTrue(gateway.stdout.strip())
 
         if self.dashboard_index.exists():
-            dashboard = self._run_elephant("dashboard", "--dry-run", "--no-open", timeout=120)
-            self.assertIn("Elephant Agent dashboard", dashboard.stdout)
-            self.assertIn("ready_to_launch ·", dashboard.stdout)
+            daemon_port = find_free_port()
+            state_dir = self.home_dir / "herd"
+            try:
+                daemon = self._run_elephant(
+                    "daemon",
+                    "start",
+                    "--state-dir",
+                    str(state_dir),
+                    "--cli-state-dir",
+                    str(state_dir),
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(daemon_port),
+                    "--detach",
+                    timeout=120,
+                )
+                self.assertIn("Elephant daemon is now running", daemon.stdout)
+                daemon_base = f"http://127.0.0.1:{daemon_port}"
+                wait_for_json(f"{daemon_base}/healthz", timeout_seconds=45)
+                dashboard = self._run_elephant("dashboard", "--no-open", "--skip-build", timeout=120)
+                self.assertIn("Elephant Agent dashboard", dashboard.stdout)
+                self.assertIn(f"{daemon_base}/dashboard/", dashboard.stdout)
+            finally:
+                self._run_checked(
+                    [
+                        str(self._elephant_bin()),
+                        "daemon",
+                        "stop",
+                        "--state-dir",
+                        str(state_dir),
+                        "--timeout",
+                        "5",
+                        "--force",
+                    ],
+                    env=self._env(),
+                    cwd=self.root,
+                    timeout=30,
+                )
         else:
             dashboard_help = self._run_elephant("dashboard", "--help", timeout=120)
             self.assertIn("dashboard", dashboard_help.stdout)

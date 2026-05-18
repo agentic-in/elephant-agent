@@ -25,7 +25,9 @@ validation and GitHub Actions share the same contract:
 - `make build-and-test`
   - root CI contract: harness validation + lint + full Python test discovery + site/dashboard typecheck and build
 - `make e2e`
-  - deterministic e2e matrix for API, CLI, deploy, gateway, and voice surfaces
+  - deterministic e2e matrix for API, CLI, deploy, gateway, and installed
+    user-journey surfaces; this builds the dashboard before running browser
+    coverage for the daemon-served dashboard
 - `make test-live-provider-smoke`
   - optional secret-backed live smoke for release/design-closure dispatches; it
     runs both the runtime module provider smoke and a real editable install of
@@ -46,6 +48,10 @@ The repo currently validates both the harness and the product-facing runtime sur
 - public docs/site build
 - operator dashboard build
 - deterministic e2e and release certification contracts
+- installed user-journey e2e: creates a fresh venv, runs `pip install -e .`,
+  configures a mock OpenAI-compatible provider, exercises installed `elephant`
+  CLI commands, starts the unified daemon, opens the daemon-served dashboard,
+  and sends a dashboard chat turn through the mock provider
 - optional installed-command live smoke: when
   `ELEPHANT_LIVE_PROVIDER_BASE_URL`, `ELEPHANT_LIVE_PROVIDER_MODEL`, and
   `ELEPHANT_LIVE_PROVIDER_API_KEY` are set, the workflow creates a fresh venv,

@@ -35,6 +35,7 @@ DETERMINISTIC_SCENARIO_MODULES = (
 INSTALL_SURFACE_MODULES = (
     "tests.e2e.deploy.test_public_install_script",
     "tests.e2e.deploy.test_install_distribution",
+    "tests.e2e.deploy.test_installed_user_journey",
 )
 
 LIVE_PROVIDER_SMOKE_TARGETS = (
@@ -134,6 +135,7 @@ class ReleaseCertificationContractsTest(unittest.TestCase):
         self.assertIn("agent-pr-gate", text)
         self.assertIn("test-live-provider-smoke", text)
         self.assertIn("test-live-installed-smoke", text)
+        self.assertIn("test-installed-user-journey", text)
 
         for target in RESET_API_E2E_TARGETS:
             with self.subTest(target=target):

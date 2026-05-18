@@ -651,6 +651,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     str(self.state_dir),
                     "--cli-state-dir",
                     str(self.state_dir),
+                    "--no-start",
                 ]
             )
 
@@ -791,6 +792,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "--no-wizard",
                     "--account-id",
                     "ops-discord",
+                    "--no-start",
                     "--bot-token-env-var",
                     "ELEPHANT_TEST_DISCORD_BOT_TOKEN",
                     "--bot-token",
@@ -907,6 +909,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "--no-wizard",
                     "--account-id",
                     "ops-discord",
+                    "--no-start",
                     "--bot-token",
                     "discord-token-ops",
                 ]
@@ -936,6 +939,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "--no-wizard",
                     "--account-id",
                     "ops-discord",
+                    "--no-start",
                     "--bot-token",
                     "discord-token-ops",
                     "--enabled",
@@ -965,6 +969,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "ops-feishu",
                     "--transport",
                     "long-connection",
+                    "--no-start",
                     "--app-id-env-var",
                     "ELEPHANT_UPDATED_FEISHU_APP_ID",
                     "--app-secret-env-var",
@@ -1037,6 +1042,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "--cli-state-dir",
                     str(self.state_dir),
                     "--no-wizard",
+                    "--no-start",
                     "--app-id",
                     "cli-app-id-123",
                     "--app-secret",
@@ -1259,48 +1265,8 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("recorded_status: running", rendered)
 
     def test_gateway_feishu_stop_updates_runtime_record_and_cleans_pid(self) -> None:
-        pid_path = self.state_dir / "feishu-long-connection.pid"
-        record_path = self.state_dir / "feishu-long-connection.runtime.json"
-        pid_path.write_text("43210\n", encoding="utf-8")
-        record_path.write_text(
-            json.dumps(
-                {
-                    "runtime_id": "feishu:long-connection",
-                    "service_key": "feishu",
-                    "transport": "long-connection",
-                    "status": "running",
-                    "pid": 43210,
-                    "pid_path": str(pid_path),
-                    "log_path": str(self.state_dir / "feishu-long-connection.log"),
-                    "record_path": str(record_path),
-                    "command": [sys.executable, "-m", "apps.launcher", "gateway", "start"],
-                    "profile_dir": str(self.profile_dir),
-                    "state_dir": str(self.state_dir),
-                    "cli_profile_dir": str(self.profile_dir),
-                    "cli_state_dir": str(self.state_dir),
-                    "started_at": "2026-04-13T03:58:00+00:00",
-                }
-            ),
-            encoding="utf-8",
-        )
-        process_state = {"running": True}
-
-        def fake_kill(pid: int, sig: int) -> None:
-            self.assertEqual(pid, 43210)
-            if sig == 0:
-                if process_state["running"]:
-                    return None
-                raise OSError("process exited")
-            if sig == signal.SIGTERM:
-                process_state["running"] = False
-                return None
-            raise AssertionError(f"unexpected signal: {sig}")
-
         output = io.StringIO()
-        with (
-            mock.patch("apps.gateway.__main__.os.kill", side_effect=fake_kill),
-            redirect_stdout(output),
-        ):
+        with redirect_stdout(output):
             exit_code = command_main(
                 ["feishu", "stop", "--transport", "long-connection", "--timeout", "0.1"],
                 default_state_dir=self.state_dir,
@@ -1308,52 +1274,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        self.assertIn("Stopped Elephant Agent Gateway Feishu long-connection transport.", output.getvalue())
-        self.assertFalse(pid_path.exists())
-        record = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(record["status"], "stopped")
-        self.assertIsNone(record["pid"])
-        self.assertEqual(record["last_exit_code"], 0)
-        self.assertIsNotNone(record["stopped_at"])
+        self.assertIn("Elephant daemon is not running. Nothing to stop.", output.getvalue())
+        self.assertFalse((self.state_dir / "daemon.pid").exists())
 
     def test_gateway_feishu_restart_replaces_existing_background_runtime(self) -> None:
-        pid_path = self.state_dir / "feishu-long-connection.pid"
-        record_path = self.state_dir / "feishu-long-connection.runtime.json"
-        pid_path.write_text("43210\n", encoding="utf-8")
-        record_path.write_text(
-            json.dumps(
-                {
-                    "runtime_id": "feishu:long-connection",
-                    "service_key": "feishu",
-                    "transport": "long-connection",
-                    "status": "running",
-                    "pid": 43210,
-                    "pid_path": str(pid_path),
-                    "log_path": str(self.state_dir / "feishu-long-connection.log"),
-                    "record_path": str(record_path),
-                    "command": [sys.executable, "-m", "apps.launcher", "gateway", "start"],
-                    "profile_dir": str(self.profile_dir),
-                    "state_dir": str(self.state_dir),
-                    "cli_profile_dir": str(self.profile_dir),
-                    "cli_state_dir": str(self.state_dir),
-                    "started_at": "2026-04-13T03:58:00+00:00",
-                }
-            ),
-            encoding="utf-8",
-        )
-        process_state = {"running": True}
-
-        def fake_kill(pid: int, sig: int) -> None:
-            self.assertEqual(pid, 43210)
-            if sig == 0:
-                if process_state["running"]:
-                    return None
-                raise OSError("process exited")
-            if sig == signal.SIGTERM:
-                process_state["running"] = False
-                return None
-            raise AssertionError(f"unexpected signal: {sig}")
-
         class FakeProcess:
             pid = 54321
 
@@ -1362,9 +1286,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         output = io.StringIO()
         with (
-            mock.patch("apps.gateway.__main__.os.kill", side_effect=fake_kill),
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
-            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1376,19 +1298,22 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         rendered = output.getvalue()
-        self.assertIn("Restarting Elephant Agent Gateway Feishu long-connection transport.", rendered)
-        self.assertIn("Elephant Agent Gateway Feishu long-connection transport is now running in the background.", rendered)
+        self.assertIn("Elephant daemon is now running in the background.", rendered)
+        pid_path = self.state_dir / "daemon.pid"
+        record_path = self.state_dir / "daemon.runtime.json"
         self.assertEqual(pid_path.read_text(encoding="utf-8").strip(), "54321")
         record = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(record["status"], "running")
         self.assertEqual(record["pid"], 54321)
-        self.assertIsNone(record["last_exit_code"])
         launcher_calls = [
             call
             for call in popen.call_args_list
-            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+            if len(call.args) >= 1 and call.args[0][:4] == [sys.executable, "-m", "apps.launcher", "daemon"]
         ]
         self.assertEqual(len(launcher_calls), 1)
+        command = launcher_calls[0].args[0]
+        self.assertEqual(command[command.index("--state-dir") + 1], str(self.state_dir))
+        self.assertEqual(command[command.index("--cli-state-dir") + 1], str(self.state_dir))
 
     def test_gateway_feishu_start_detach_spawns_background_process(self) -> None:
         class FakeProcess:
@@ -1400,7 +1325,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
-            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1412,41 +1336,33 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         rendered = output.getvalue()
-        self.assertIn("Elephant Agent Gateway Feishu long-connection transport is now running in the background.", rendered)
+        self.assertIn("Elephant daemon is now running in the background.", rendered)
         self.assertIn("PID: 43210", rendered)
-        self.assertIn("Runtime record: ", rendered)
-        self.assertIn("Follow logs: elephant gateway feishu logs <account-id> --follow", rendered)
-        pid_path = self.state_dir / "feishu-long-connection.pid"
-        log_path = self.state_dir / "feishu-long-connection.log"
-        record_path = self.state_dir / "feishu-long-connection.runtime.json"
+        self.assertIn("HTTP: http://127.0.0.1:8788", rendered)
+        pid_path = self.state_dir / "daemon.pid"
+        log_path = self.state_dir / "daemon.log"
+        record_path = self.state_dir / "daemon.runtime.json"
         self.assertTrue(pid_path.exists())
         self.assertEqual(pid_path.read_text(encoding="utf-8").strip(), "43210")
         self.assertTrue(log_path.exists())
         self.assertTrue(record_path.exists())
         runtime_record = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(runtime_record["runtime_id"], "feishu:long-connection")
+        self.assertEqual(runtime_record["runtime_id"], "daemon:unified")
         self.assertEqual(runtime_record["status"], "running")
         self.assertEqual(runtime_record["pid"], 43210)
         launcher_calls = [
             call
             for call in popen.call_args_list
-            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+            if len(call.args) >= 1 and call.args[0][:4] == [sys.executable, "-m", "apps.launcher", "daemon"]
         ]
         self.assertEqual(len(launcher_calls), 1)
         command = launcher_calls[0].args[0]
-        self.assertEqual(command[:6], [sys.executable, "-m", "apps.launcher", "gateway", "feishu", "start"])
-        self.assertNotIn("--detach", command)
-        self.assertEqual(command[command.index("--transport") + 1], "long-connection")
+        self.assertEqual(command[:5], [sys.executable, "-m", "apps.launcher", "daemon", "start"])
         self.assertEqual(command[command.index("--state-dir") + 1], str(self.state_dir))
+        self.assertEqual(command[command.index("--cli-state-dir") + 1], str(self.state_dir))
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
-    def test_gateway_feishu_start_detach_merges_cli_runtime_local_secrets(self) -> None:
-        runtime_secret_path = runtime_local_secret_env_path(self.state_dir)
-        runtime_secret_path.write_text(
-            json.dumps({"ELEPHANT_OPENROUTER_API_KEY": "sk-persisted-456"}),
-            encoding="utf-8",
-        )
-
+    def test_gateway_feishu_start_detach_launches_unified_daemon_with_cli_state(self) -> None:
         class FakeProcess:
             pid = 43211
 
@@ -1457,7 +1373,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         with (
             mock.patch.dict("os.environ", {}, clear=True),
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
-            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1471,13 +1386,13 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         launcher_calls = [
             call
             for call in popen.call_args_list
-            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+            if len(call.args) >= 1 and call.args[0][:4] == [sys.executable, "-m", "apps.launcher", "daemon"]
         ]
         self.assertEqual(len(launcher_calls), 1)
-        self.assertEqual(
-            launcher_calls[0].kwargs["env"]["ELEPHANT_OPENROUTER_API_KEY"],
-            "sk-persisted-456",
-        )
+        command = launcher_calls[0].args[0]
+        self.assertEqual(command[command.index("--state-dir") + 1], str(self.state_dir))
+        self.assertEqual(command[command.index("--cli-state-dir") + 1], str(self.state_dir))
+        self.assertNotIn("env", launcher_calls[0].kwargs)
 
     def test_setup_reuses_profile_bundle_and_provider_profile(self) -> None:
         app, chat_adapter, webhook_adapter = self._build()
@@ -1971,7 +1886,6 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         output = io.StringIO()
         with (
             mock.patch("apps.gateway.__main__.subprocess.Popen", return_value=FakeProcess()) as popen,
-            mock.patch("apps.gateway.__main__.subprocess.run", return_value=SimpleNamespace(stdout="", stderr="", returncode=0)),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
@@ -1983,31 +1897,30 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         rendered = output.getvalue()
-        self.assertIn("Elephant Agent Gateway Discord gateway transport is now running in the background.", rendered)
+        self.assertIn("Elephant daemon is now running in the background.", rendered)
         self.assertIn("PID: 54322", rendered)
-        self.assertIn("Follow logs: elephant gateway discord logs <account-id> --follow", rendered)
-        pid_path = self.state_dir / "discord-gateway.pid"
-        log_path = self.state_dir / "discord-gateway.log"
-        record_path = self.state_dir / "discord-gateway.runtime.json"
+        self.assertIn("HTTP: http://0.0.0.0:8900", rendered)
+        pid_path = self.state_dir / "daemon.pid"
+        log_path = self.state_dir / "daemon.log"
+        record_path = self.state_dir / "daemon.runtime.json"
         self.assertTrue(pid_path.exists())
         self.assertEqual(pid_path.read_text(encoding="utf-8").strip(), "54322")
         self.assertTrue(log_path.exists())
         self.assertTrue(record_path.exists())
         runtime_record = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(runtime_record["runtime_id"], "discord:gateway")
+        self.assertEqual(runtime_record["runtime_id"], "daemon:unified")
         self.assertEqual(runtime_record["status"], "running")
         self.assertEqual(runtime_record["pid"], 54322)
         launcher_calls = [
             call
             for call in popen.call_args_list
-            if len(call.args) >= 1 and call.args[0][:3] == [sys.executable, "-m", "apps.launcher"]
+            if len(call.args) >= 1 and call.args[0][:4] == [sys.executable, "-m", "apps.launcher", "daemon"]
         ]
         self.assertEqual(len(launcher_calls), 1)
         command = launcher_calls[0].args[0]
-        self.assertEqual(command[:6], [sys.executable, "-m", "apps.launcher", "gateway", "discord", "start"])
-        self.assertNotIn("--detach", command)
-        self.assertEqual(command[command.index("--transport") + 1], "gateway")
+        self.assertEqual(command[:5], [sys.executable, "-m", "apps.launcher", "daemon", "start"])
         self.assertEqual(command[command.index("--state-dir") + 1], str(self.state_dir))
+        self.assertEqual(command[command.index("--cli-state-dir") + 1], str(self.state_dir))
         self.assertTrue(launcher_calls[0].kwargs["start_new_session"])
 
     def test_discord_service_dispatch_event_delivers_dm_reply_with_mentions_suppressed(self) -> None:
@@ -6195,7 +6108,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("Available local Elephant Agent herd", rendered_listing)
         self.assertIn("demo", rendered_listing)
         self.assertIn("open", rendered_listing)
-        self.assertIn("/elephant create <name>", rendered_listing)
+        self.assertIn("/elephant use <name>", rendered_listing)
 
         bind_result = service.dispatch_event(
             {
@@ -6763,7 +6676,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         rendered_text = rendered_post["body"]["elements"][0]["content"]
         self.assertIn("This conversation is not pinned yet.", rendered_text)
         self.assertIn("/elephant list", rendered_text)
-        self.assertIn("/elephant create <name>", rendered_text)
+        self.assertIn("/elephant use <name>", rendered_text)
 
     def test_interruption_state_is_preserved_when_chat_resumes(self) -> None:
         app, chat_adapter, _ = self._build()

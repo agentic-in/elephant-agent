@@ -35,8 +35,8 @@ description: "The public CLI stays intentionally direct while still exposing ski
 | `elephant gateway feishu restart` | Restarts the configured Feishu runtime in the background. |
 | `elephant gateway feishu logs ops-feishu --follow` | Tails one Feishu account log and keeps streaming new output. |
 | `elephant gateway discord setup --account-id ops-discord --bot-token-env-var ELEPHANT_DISCORD_BOT_TOKEN` | Adds or updates one Discord account configuration. |
-| `elephant dashboard --dry-run` | Prints the local dashboard launch plan against the live CLI state database. |
-| `elephant dashboard` | Launches the local read-only dashboard when this install includes `apps/dashboard` frontend assets and dependencies. |
+| `elephant daemon start` | Starts the unified local daemon that serves IM adapters, cron, learning, and the dashboard HTTP surface. |
+| `elephant dashboard` | Opens the daemon-served dashboard when frontend assets are built and the local daemon is running. |
 | `elephant upgrade` | Backs up state, stops managed gateway/cron runtimes, upgrades the package, bootstraps storage, and restarts prior runtimes. |
 
 ## Installers

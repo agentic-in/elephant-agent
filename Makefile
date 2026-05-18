@@ -2,7 +2,7 @@
 	site-help site-install site-dev site-preview site-build site-typecheck \
 	dashboard-help dashboard-install dashboard-dev dashboard-build dashboard-typecheck \
 	pipeline-help web-install web-build web-typecheck \
-	test-e2e test-release-e2e test-release-contracts test-release-scenarios test-integration-scenarios test-design-closure-reset-matrix test-install-surfaces test-live-installed-smoke test-live-provider-smoke \
+	test-e2e test-installed-user-journey test-release-e2e test-release-contracts test-release-scenarios test-integration-scenarios test-design-closure-reset-matrix test-install-surfaces test-live-installed-smoke test-live-provider-smoke \
 	package-build package-verify build-and-test e2e release design-closure
 
 PYTHON ?= python3
@@ -92,11 +92,16 @@ test-e2e:
 		tests.e2e.api.test_api_surface \
 		tests.e2e.cli.test_cli_surface \
 		tests.e2e.deploy.test_editable_install \
+		tests.e2e.deploy.test_installed_user_journey \
 		tests.e2e.deploy.test_installed_command_smoke \
 		tests.e2e.deploy.test_install_distribution \
 		tests.e2e.deploy.test_preview_deploy \
 		tests.e2e.deploy.test_runtime_topology \
 		tests.e2e.gateway.test_gateway_adapter
+
+test-installed-user-journey: dashboard-build
+	@"$(PYTHON)" -m unittest \
+		tests.e2e.deploy.test_installed_user_journey
 
 test-release-e2e:
 	@"$(PYTHON)" -m unittest \
@@ -177,7 +182,7 @@ build-and-test:
 	@$(MAKE) web-typecheck
 	@$(MAKE) web-build
 
-e2e:
+e2e: web-build
 	@$(MAKE) test-e2e
 
 release:

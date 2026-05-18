@@ -60,6 +60,12 @@ jobs:
             uv run make build-and-test AGENT_BASE_REF="$BASE_REF"
           fi
 
+      - name: Install browser runtime for dashboard e2e
+        run: uv run python -m playwright install chromium
+
+      - name: Run deterministic e2e matrix
+        run: uv run make e2e
+
       - name: Lint commit range
         if: github.event_name == 'pull_request'
         run: |

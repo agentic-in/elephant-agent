@@ -487,7 +487,7 @@ def _gateway_birth_lines(elephant_name: str) -> tuple[str, ...]:
         "wire IM · elephant gateway setup",
         "inspect readiness · elephant gateway doctor",
         "inspect skill packages · elephant skills",
-        "launch operator dashboard · elephant dashboard --dry-run",
+        "launch operator dashboard · elephant daemon start && elephant dashboard",
     )
 
 def _prompt_im_onboarding(runtime: CliRuntime, *, elephant_name: str) -> None:

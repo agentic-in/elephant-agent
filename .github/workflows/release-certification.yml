@@ -1,0 +1,85 @@
+name: Release Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_live_provider:
+        description: "Run the optional secret-backed live provider smoke"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      live_provider_base_url:
+        description: "Operator-managed OpenAI-compatible base URL"
+        required: false
+        default: "REPLACE_BEFORE_RUN"
+        type: string
+      live_provider_model:
+        description: "Live provider model id, expected to start with tke/"
+        required: false
+        default: "tke/REPLACE_BEFORE_RUN"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-certification:
+    runs-on: ubuntu-latest
+    env:
+      ELEPHANT_LIVE_PROVIDER_BASE_URL: ${{ inputs.live_provider_base_url }}
+      ELEPHANT_LIVE_PROVIDER_MODEL: ${{ inputs.live_provider_model }}
+      ELEPHANT_LIVE_PROVIDER_API_KEY: ${{ secrets.ELEPHANT_LIVE_PROVIDER_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install project dependencies
+        run: uv sync --frozen
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            apps/site/package-lock.json
+            apps/dashboard/package-lock.json
+
+      - name: Install web dependencies
+        run: make web-install
+
+      - name: Install browser runtime for dashboard e2e
+        run: uv run python -m playwright install chromium
+
+      - name: Resolve base ref
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          echo "BASE_REF=origin/main" >> "$GITHUB_ENV"
+
+      - name: Run canonical system-layer reset release contract
+        run: uv run make release AGENT_BASE_REF="$BASE_REF"
+
+      - name: Build dashboard assets for installed smoke
+        if: inputs.run_live_provider == 'true'
+        run: make dashboard-build
+
+      - name: Run live provider smoke
+        if: inputs.run_live_provider == 'true'
+        run: uv run make test-live-provider-smoke

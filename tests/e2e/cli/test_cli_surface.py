@@ -848,13 +848,16 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("skill_id · search-skill", viewed.stdout)
         self.assertIn("Search before editing.", viewed.stdout)
 
-    def test_launcher_dashboard_dry_run_describes_operator_surface(self) -> None:
-        dry_run = self._run_launcher("dashboard", "--dry-run")
-        self.assertIn("Elephant Agent dashboard", dry_run.stdout)
-        self.assertIn("api_database ·", dry_run.stdout)
-        self.assertIn("api_url · http://127.0.0.1:8000", dry_run.stdout)
-        self.assertIn("ui_url · http://127.0.0.1:4174", dry_run.stdout)
-        self.assertIn("ready_to_launch ·", dry_run.stdout)
+    def test_launcher_dashboard_guides_to_daemon_surface(self) -> None:
+        dashboard = self._run_launcher("dashboard", "--no-open", "--skip-build", check=False)
+        self.assertEqual(dashboard.returncode, 1)
+        self.assertIn("Elephant Agent dashboard", dashboard.stdout)
+        self.assertTrue(
+            "dashboard frontend assets are not available" in dashboard.stdout
+            or "dashboard is served by the Elephant daemon" in dashboard.stdout
+        )
+        self.assertNotIn("api_url · http://127.0.0.1:8000", dashboard.stdout)
+        self.assertNotIn("ui_url · http://127.0.0.1:4174", dashboard.stdout)
 
     def test_grow_shell_rejects_removed_profile_command(self) -> None:
         self._run(

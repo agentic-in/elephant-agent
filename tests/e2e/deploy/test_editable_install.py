@@ -76,7 +76,7 @@ class EditableInstallSmokeTest(unittest.TestCase):
         self.assertTrue(payload["feishu"]["control"]["enabled"])
         self.assertEqual(payload["feishu"]["control"]["runtime"], "shared-runtime")
 
-        im = self._run("gateway", "feishu", "setup", "--no-wizard", env=env)
+        im = self._run("gateway", "feishu", "setup", "--no-wizard", "--no-start", env=env)
         self.assertIn("Configured Feishu IM", im.stdout)
         self.assertIn("elephant gateway feishu start", im.stdout)
 

@@ -11,10 +11,8 @@ WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
 CANONICAL_DESIGN_DOCS = (
     ROOT / "docs" / "system-design" / "README.md",
     ROOT / "docs" / "system-design" / "system-layer-model.md",
-    ROOT / "docs" / "agent" / "plans" / "system-layer-reset.md",
-    ROOT / "docs" / "agent" / "task-cards" / "system-layer-reset-t9-dashboard.md",
-    ROOT / "docs" / "agent" / "task-cards" / "system-layer-reset-t10-tests.md",
-    ROOT / "docs" / "agent" / "task-cards" / "system-layer-reset-t11-release-certification.md",
+    ROOT / "docs" / "agent" / "plans" / "README.md",
+    ROOT / "docs" / "agent" / "task-cards" / "README.md",
 )
 DELETED_HISTORICAL_DOCS = (
     ROOT / "docs" / "system-design" / "target-architecture.md",
@@ -52,6 +50,10 @@ LIVE_PROVIDER_SMOKE_TARGETS = (
     "tests.e2e.deploy.test_installed_command_smoke.InstalledCommandLiveSmokeTest",
 )
 
+INSTALLED_USER_JOURNEY_TARGETS = (
+    "tests.e2e.deploy.test_installed_user_journey",
+)
+
 
 class DesignClosureContractsTest(unittest.TestCase):
     def test_design_closure_matrix_no_longer_tracks_deleted_voice_or_planning_modules(self) -> None:
@@ -78,9 +80,15 @@ class DesignClosureContractsTest(unittest.TestCase):
         text = MAKEFILE_PATH.read_text(encoding="utf-8")
 
         self.assertIn("test-release-e2e", text)
+        self.assertIn("test-installed-user-journey", text)
         self.assertIn("test-design-closure-reset-matrix", text)
 
-        for target in (*CONTRACT_MODULES, *RESET_API_E2E_TARGETS, *DESIGN_CLOSURE_MATRIX_TARGETS):
+        for target in (
+            *CONTRACT_MODULES,
+            *RESET_API_E2E_TARGETS,
+            *INSTALLED_USER_JOURNEY_TARGETS,
+            *DESIGN_CLOSURE_MATRIX_TARGETS,
+        ):
             with self.subTest(target=target):
                 self.assertIn(target, text)
 
@@ -118,11 +126,13 @@ class DesignClosureContractsTest(unittest.TestCase):
         makefile_text = MAKEFILE_PATH.read_text(encoding="utf-8")
         self.assertIn("test-live-provider-smoke", makefile_text)
         self.assertIn("test-live-installed-smoke", makefile_text)
+        self.assertIn("test-installed-user-journey", makefile_text)
         self.assertIn("test-release-e2e", makefile_text)
         self.assertIn("test-design-closure-reset-matrix", makefile_text)
         for target in (
             *CONTRACT_MODULES,
             *RESET_API_E2E_TARGETS,
+            *INSTALLED_USER_JOURNEY_TARGETS,
             *DESIGN_CLOSURE_MATRIX_TARGETS,
             *LIVE_PROVIDER_SMOKE_TARGETS,
         ):

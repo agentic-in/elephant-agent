@@ -5,7 +5,7 @@ contributors, or worktrees.
 
 Current active plan:
 
-- [Understanding System Reset](understanding-system-reset.md)
+- none
 
 Rules:
 
