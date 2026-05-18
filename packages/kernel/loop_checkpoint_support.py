@@ -86,6 +86,7 @@ class LoopCheckpointService:
             max_wall_time_seconds=self.budget.max_wall_time_seconds,
             created_at=current,
             updated_at=current,
+            heartbeat_at=current,
         )
 
     def resume_loop(
@@ -94,11 +95,13 @@ class LoopCheckpointService:
         *,
         now: datetime | None = None,
     ) -> LoopState:
+        current = now or _utc_now()
         return replace(
             run,
             status="active",
             phase="resume",
-            updated_at=now or _utc_now(),
+            updated_at=current,
+            heartbeat_at=current,
             waiting_reason=None,
         )
 
@@ -109,11 +112,13 @@ class LoopCheckpointService:
         summary: str,
         now: datetime | None = None,
     ) -> LoopState:
+        current = now or _utc_now()
         return replace(
             run,
             status="completed",
             phase="done",
-            updated_at=now or _utc_now(),
+            updated_at=current,
+            heartbeat_at=current,
             waiting_reason=None,
             continuation_prompt=None,
             last_summary=_compact(summary, limit=800),
@@ -127,11 +132,13 @@ class LoopCheckpointService:
         reason: str = "failed",
         now: datetime | None = None,
     ) -> LoopState:
+        current = now or _utc_now()
         return replace(
             run,
             status="failed",
             phase="done",
-            updated_at=now or _utc_now(),
+            updated_at=current,
+            heartbeat_at=current,
             waiting_reason=reason,
             continuation_prompt=None,
             last_summary=_compact(summary, limit=800),
@@ -218,7 +225,12 @@ class LoopCheckpointService:
             idempotency_key=idempotency_key,
         )
         pending = tuple(call for call in run.pending_tool_calls if call.call_id != call_id)
-        return replace(run, pending_tool_calls=(*pending, entry), updated_at=current)
+        return replace(
+            run,
+            pending_tool_calls=(*pending, entry),
+            updated_at=current,
+            heartbeat_at=current,
+        )
 
     def clear_pending_tool(
         self,
@@ -231,7 +243,7 @@ class LoopCheckpointService:
         pending = tuple(call for call in run.pending_tool_calls if call.call_id != call_id)
         if len(pending) == len(run.pending_tool_calls):
             return run
-        return replace(run, pending_tool_calls=pending, updated_at=current)
+        return replace(run, pending_tool_calls=pending, updated_at=current, heartbeat_at=current)
 
     def mark_partial_assistant(
         self,
@@ -250,7 +262,7 @@ class LoopCheckpointService:
         if partial is not None:
             stripped = partial.strip()
             normalized = stripped if stripped else None
-        return replace(run, partial_assistant=normalized, updated_at=current)
+        return replace(run, partial_assistant=normalized, updated_at=current, heartbeat_at=current)
 
     def record_model_turn(
         self,
@@ -267,6 +279,7 @@ class LoopCheckpointService:
             step_count=run.step_count + 1,
             model_turn_count=run.model_turn_count + 1,
             updated_at=current,
+            heartbeat_at=current,
             last_summary=_compact(summary, limit=800),
         )
         step = LoopStep(
@@ -297,6 +310,7 @@ class LoopCheckpointService:
             phase="context",
             step_count=run.step_count + 1,
             updated_at=current,
+            heartbeat_at=current,
         )
         step = LoopStep(
             step_id=_checkpoint_step_id(run.run_id, updated.step_count),
@@ -327,6 +341,7 @@ class LoopCheckpointService:
             step_count=run.step_count + 1,
             tool_call_count=run.tool_call_count + 1,
             updated_at=current,
+            heartbeat_at=current,
             last_summary=_compact(result.summary, limit=800),
         )
         content = "\n".join(

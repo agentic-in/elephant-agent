@@ -24,6 +24,7 @@ import unittest
 
 from packages.contracts import Loop
 from packages.contracts.runtime import (
+    ExecutionResult,
     LoopState,
     PendingToolCall,
     RetryState,
@@ -267,6 +268,40 @@ class LoopCheckpointServiceHarnessTest(unittest.TestCase):
             prompt="do the thing",
             now=now,
         )
+
+    def test_start_loop_stamps_initial_heartbeat(self) -> None:
+        now = _now()
+        run = self._fresh_run(now)
+        self.assertEqual(run.heartbeat_at, now)
+        self.assertEqual(run.updated_at, now)
+
+    def test_step_records_refresh_heartbeat(self) -> None:
+        service = LoopCheckpointService()
+        now = _now()
+        run = self._fresh_run(now)
+
+        context_at = now + timedelta(seconds=1)
+        after_context, _ = service.record_context_prompt(run, system_prompt="system", now=context_at)
+        self.assertEqual(after_context.heartbeat_at, context_at)
+
+        model_at = now + timedelta(seconds=2)
+        after_model, _ = service.record_model_turn(after_context, summary="model", now=model_at)
+        self.assertEqual(after_model.heartbeat_at, model_at)
+
+        tool_at = now + timedelta(seconds=3)
+        after_tool, _ = service.record_tool_step(
+            after_model,
+            tool_name="tool.echo",
+            arguments={"text": "hello"},
+            result=ExecutionResult(
+                execution_id="exec-1",
+                episode_id="ep-1",
+                outcome="success",
+                summary="ok",
+            ),
+            now=tool_at,
+        )
+        self.assertEqual(after_tool.heartbeat_at, tool_at)
 
     def test_park_stamps_wait_condition_and_heartbeat(self) -> None:
         service = LoopCheckpointService()
