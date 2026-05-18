@@ -288,7 +288,7 @@ class PersonalModelUnderstandingSurface:
                 query,
                 request_id="personal-model-search-query",
                 task="query",
-                latency_mode="fast",
+                latency_mode="balanced",
             )
             values = tuple(getattr(vector, "values", ()) or ())
             dimensions = int(getattr(vector, "dimensions", 0) or 0) or None

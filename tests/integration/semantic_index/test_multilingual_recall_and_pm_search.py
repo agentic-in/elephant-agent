@@ -104,6 +104,46 @@ class _CJKCapableStubEmbeddingService:
         )
 
 
+class _DimensionAwareSemanticStubEmbeddingService:
+    """Stub that exposes the production fast/balanced dimension split.
+
+    The production semantic indexer writes with latency_mode=balanced (256d).
+    Query-time recall must use the same dimensionality; otherwise sqlite-vec
+    searches an empty 64d table and silently falls back to lexical signals.
+    """
+
+    def __init__(self, provider_id: str = "stub", model_id: str = "stub-embed") -> None:
+        self._provider_id = provider_id
+        self._model_id = model_id
+        default = type("_D", (), {"provider_id": provider_id, "model_id": model_id})()
+        self.registry = type("_R", (), {"default": staticmethod(lambda: default)})()
+
+    def embed_text(self, text: str, **kwargs) -> EmbeddingVector:
+        latency_mode = str(kwargs.get("latency_mode") or "balanced").lower()
+        dimensions = 64 if latency_mode == "fast" else 256
+        lowered = text.casefold()
+        values = [0.0] * dimensions
+        if (
+            "日语歌" in text
+            or "city pop" in lowered
+            or "anime pronunciation" in lowered
+            or "pronunciation practice" in lowered
+        ):
+            values[7] = 1.0
+        elif "多语言测试经验" in text or "infj" in lowered or "pressure pattern" in lowered:
+            values[53] = 1.0
+        else:
+            values[127 % dimensions] = 1.0
+        return EmbeddingVector(
+            text_index=0,
+            values=tuple(values),
+            dimensions=dimensions,
+            provider_id=self._provider_id,
+            model_id=self._model_id,
+            source_text=text,
+        )
+
+
 # ── Test fixture helpers ─────────────────────────────────────────────────
 
 @dataclass
@@ -596,6 +636,158 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
             claims = tuple(result.get("claims") or ())
             self.assertTrue(claims, "lexical fallback should still find matches")
             self.assertEqual(claims[0]["ref"], "dg:citywalk")
+
+    # ── 11. Production dimension split regression ─────────────────────
+
+    def test_foreground_pm_search_uses_index_dimensions_under_noise(self) -> None:
+        """Foreground PM writes should be immediately semantically visible."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state_dir = root / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            repository = RuntimeStorageRepository(state_dir / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-dims", elephant_name="Dims")
+            embedding_service = _DimensionAwareSemanticStubEmbeddingService()
+            bundle = build_semantic_index_bundle(repository=repository, state_dir=state_dir)
+            indexer = SemanticSummaryIndexer(
+                semantic_index=bundle.service,
+                embedding_service=embedding_service,
+                repository=repository,
+            )
+            surface = PersonalModelUnderstandingSurface(
+                repository=repository,
+                semantic_summary_indexer=indexer,
+                semantic_searcher=bundle.searcher,
+                embedding_service=embedding_service,
+            )
+
+            for i in range(30):
+                surface.update_personal_model(
+                    "session-dims",
+                    action="remember",
+                    lens="journey",
+                    topic=f"journey.noise.case{i}",
+                    text=f"存量背景 {i}: 多语言测试经验、过渡期、INFJ、压力模式和任务复盘。",
+                    personal_model_id=state.personal_model_id,
+                )
+            update = surface.update_personal_model(
+                "session-dims",
+                action="remember",
+                lens="identity",
+                topic="identity.private.marker",
+                text="我最近在学习日语歌的发音，并且喜欢周末听 City Pop。",
+                personal_model_id=state.personal_model_id,
+            )
+            target_ref = str(update["claim"]["ref"])
+            entries = repository.list_semantic_index_entries(
+                personal_model_id=state.personal_model_id,
+                owner_scope="personal_model",
+            )
+            self.assertEqual({entry.dimensions for entry in entries}, {256})
+
+            result = surface.search_personal_model(
+                "session-dims",
+                query="anime pronunciation practice",
+                personal_model_id=state.personal_model_id,
+                limit=5,
+            )
+            claims = tuple(result.get("claims") or ())
+            self.assertTrue(claims)
+            self.assertEqual(claims[0]["ref"], target_ref)
+
+    def test_conversation_search_uses_index_dimensions_under_noise(self) -> None:
+        """Conversation recall should use the same dimensions as indexed Steps."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state_dir = root / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            repository = RuntimeStorageRepository(state_dir / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-conv-dims", elephant_name="ConvDims")
+            embedding_service = _DimensionAwareSemanticStubEmbeddingService()
+            bundle = build_semantic_index_bundle(repository=repository, state_dir=state_dir)
+            indexer = SemanticSummaryIndexer(
+                semantic_index=bundle.service,
+                embedding_service=embedding_service,
+                repository=repository,
+            )
+            episode = Episode(
+                episode_id="episode-conv-dims",
+                state_id=state.state_id,
+                personal_model_id=state.personal_model_id,
+                entry_surface="test",
+                status="closed",
+                started_at=_NOW,
+                ended_at=_NOW,
+            )
+            loop = Loop(
+                loop_id="loop-conv-dims",
+                episode_id=episode.episode_id,
+                state_id=state.state_id,
+                personal_model_id=state.personal_model_id,
+                trigger_type="turn.received",
+                status="closed",
+                started_at=_NOW,
+                ended_at=_NOW,
+            )
+            repository.upsert_episode(episode)
+            repository.upsert_loop(loop)
+            for i in range(30):
+                step = Step(
+                    step_id=f"step-noise-{i}",
+                    loop_id=loop.loop_id,
+                    episode_id=episode.episode_id,
+                    state_id=state.state_id,
+                    personal_model_id=state.personal_model_id,
+                    phase="observation",
+                    action="record_input",
+                    status="completed",
+                    sequence=i,
+                    created_at=_NOW,
+                    summary=f"存量背景 {i}: 多语言测试经验、过渡期、INFJ、压力模式和任务复盘。",
+                    metadata={
+                        "event_type": "turn.received",
+                        "user_query": f"存量背景 {i}: 多语言测试经验、过渡期、INFJ、压力模式和任务复盘。",
+                    },
+                )
+                repository.upsert_step(step)
+                indexer.index_step(step)
+            target = Step(
+                step_id="step-target-citypop",
+                loop_id=loop.loop_id,
+                episode_id=episode.episode_id,
+                state_id=state.state_id,
+                personal_model_id=state.personal_model_id,
+                phase="observation",
+                action="record_input",
+                status="completed",
+                sequence=99,
+                created_at=_NOW,
+                summary="我最近在学习日语歌的发音，并且喜欢周末听 City Pop。",
+                metadata={
+                    "event_type": "turn.received",
+                    "user_query": "我最近在学习日语歌的发音，并且喜欢周末听 City Pop。",
+                },
+            )
+            repository.upsert_step(target)
+            indexer.index_step(target)
+
+            hits = unified_recall(
+                UnifiedRecallRequest(
+                    query="anime pronunciation practice",
+                    scopes=("steps",),
+                    personal_model_id=state.personal_model_id,
+                    state_id=state.state_id,
+                    limit=5,
+                ),
+                repository=repository,
+                searcher=bundle.searcher,
+                embedding_service=embedding_service,
+            )
+            self.assertTrue(hits)
+            self.assertEqual(dict(hits[0].extra_metadata or {}).get("step_id"), target.step_id)
+            self.assertIn("vector", dict(hits[0].extra_metadata or {}).get("semantic_reasons", ""))
 
 
 if __name__ == "__main__":
