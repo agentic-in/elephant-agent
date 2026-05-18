@@ -11,13 +11,13 @@ import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-import tempfile
 from threading import Lock
 from typing import Any, Callable, Literal, Mapping, Protocol, runtime_checkable
 
 from packages.capabilities.runtime import CapabilityDescriptor, ToolCapability
 from packages.contracts.runtime import ExecutionResult
 from packages.security import ApprovalClass, PolicyDecision, SecurityPolicy, SecurityRequest, evaluate_with_telemetry
+from .local_roots import default_local_allowed_roots
 
 
 @dataclass(frozen=True, slots=True)
@@ -896,7 +896,7 @@ def _security_request_for_tool(
 def _default_context(session_id: str, requester: ToolRequester | None) -> ToolRuntimeContext:
     return ToolRuntimeContext(
         cwd=Path.cwd(),
-        allowed_roots=(Path.home(), Path(tempfile.gettempdir())),
+        allowed_roots=default_local_allowed_roots(),
         env={},
         surface_id=f"session:{session_id}",
         surface_kind="session",

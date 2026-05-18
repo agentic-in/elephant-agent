@@ -57,6 +57,7 @@ from packages.tools import (
 from packages.tools.adapters import DeliveryMessageSurfaceAdapter, StructuredClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.tools.browser_backend import create_playwright_browser_backend
+from packages.tools.local_roots import default_local_allowed_roots
 
 from .capabilities import (
     APIContextCapability,
@@ -221,7 +222,7 @@ class ElephantAPIApp:
             state = _resolve_elephant_state(elephant_id)
             return ToolRuntimeContext(
                 cwd=Path.cwd(),
-                allowed_roots=(Path.home(), Path("/tmp")),
+                allowed_roots=default_local_allowed_roots(),
                 env={},
                 surface_id=f"api:{session_id}",
                 surface_kind="api",

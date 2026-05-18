@@ -9,13 +9,13 @@ import os
 import select
 from pathlib import Path
 import subprocess
-import tempfile
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from packages.contracts.runtime import ExecutionResult
 from packages.cron import CronRuntime
 from packages.skills import SkillDefinition, SkillHubEntry, SkillManifestLoadRecord
+from .local_roots import default_local_allowed_roots
 from .runtime import ToolInvocation
 
 class PersonalModelUnderstandingSurface(Protocol):
@@ -540,9 +540,7 @@ class BuiltinToolDependencies:
     sub_agents_surface: SubAgentsSurface | None = None
     process_manager: InMemoryProcessManager = field(default_factory=InMemoryProcessManager)
     todo_store: InMemorySessionTodoStore = field(default_factory=InMemorySessionTodoStore)
-    additional_allowed_roots: tuple[Path, ...] = field(
-        default_factory=lambda: (Path.home(), Path(tempfile.gettempdir()))
-    )
+    additional_allowed_roots: tuple[Path, ...] = field(default_factory=default_local_allowed_roots)
     web_user_agent: str = "Elephant Agent/2.0 (+https://github.com/agentic-in/elephant)"
     code_tool_allowlist: tuple[str, ...] = (
         "tool.file.read",

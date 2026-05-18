@@ -31,6 +31,7 @@ from packages.tools import (
     build_tool_fallback_prompt,
     register_builtin_tools,
 )
+from packages.tools.local_roots import default_local_allowed_roots
 
 
 class _FakeUrlopenResponse:
@@ -781,6 +782,38 @@ class BuiltinToolsV2Test(unittest.TestCase):
             self.assertIn("1|alpha", read.summary)
             self.assertIn("2|gamma", read.summary)
             self.assertIn("plan.txt:2:gamma", searched.summary)
+
+    def test_file_tools_can_write_to_posix_tmp_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            runtime = self._make_builtin_runtime(cwd=cwd)
+            target = Path("/tmp") / f"elephant-tool-test-{os.getpid()}-{id(self)}.txt"
+            target.unlink(missing_ok=True)
+            self.addCleanup(target.unlink, missing_ok=True)
+
+            written = runtime.invoke(
+                "tool.file.write",
+                {
+                    "path": str(target),
+                    "content": "tmp ok\n",
+                },
+                session_id="session-posix-tmp-file",
+            )
+            read = runtime.invoke(
+                "tool.file.read",
+                {"path": str(target)},
+                session_id="session-posix-tmp-file",
+            )
+
+            self.assertEqual(written.outcome, "success")
+            self.assertIn("1|tmp ok", read.summary)
+
+    def test_default_local_allowed_roots_include_posix_tmp(self) -> None:
+        with mock.patch("packages.tools.local_roots.tempfile.gettempdir", return_value="/var/folders/example/T"):
+            roots = default_local_allowed_roots()
+
+        self.assertIn(Path("/tmp").resolve(), roots)
+        self.assertIn(Path("/var/folders/example/T").resolve(), roots)
 
     def test_file_tools_can_access_configured_roots_outside_primary_root(self) -> None:
         with tempfile.TemporaryDirectory() as local_tmpdir, tempfile.TemporaryDirectory() as external_tmpdir:

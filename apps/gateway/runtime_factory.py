@@ -97,6 +97,7 @@ from packages.tools import (
 from packages.tools.adapters import StructuredClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.tools.browser_backend import create_playwright_browser_backend
+from packages.tools.local_roots import default_local_allowed_roots
 from .platforms import BUILTIN_GATEWAY_PLATFORMS
 from .plugins import GatewayPluginRegistry
 from .runtime_adapters import ChatBotMessagingAdapter, WebhookMessagingAdapter
@@ -377,7 +378,7 @@ def build_gateway_app(
         cwd = _elephant_file_root_for_session(session_id)
         return ToolRuntimeContext(
             cwd=cwd,
-            allowed_roots=(Path.home(), Path(tempfile.gettempdir())),
+            allowed_roots=default_local_allowed_roots(),
             env={},
             surface_id=f"gateway:{session_id}",
             surface_kind="gateway",
