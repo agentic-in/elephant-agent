@@ -267,6 +267,7 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                 "kilocode",
                 "ollama",
                 "vllm",
+                "vllm-semantic-router",
             }.issubset(provider_ids)
         )
         self.assertEqual(openai_compatible.transport_id, "openai_chat_compatible")
