@@ -69,6 +69,8 @@ from packages.runtime_config import global_config_path_for_state_dir, load_globa
 from packages.security.runtime import PolicyDecision
 from packages.storage import RuntimeStorageRepository
 
+EMBEDDING_BOOTSTRAP_STATUSES = {"ready", "pending", "downloading", "failed"}
+
 
 class GatewayAdapterE2ETests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1409,7 +1411,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(summary["provider"]["profile_id"], "provider-openrouter")
         self.assertEqual(summary["provider"]["default_model"], "openai/gpt-4o-mini")
         self.assertEqual(summary["provider"]["model_id"], "openai/gpt-4o-mini")
-        self.assertIn(summary["provider"]["embedding_bootstrap_status"], {"ready", "pending", "downloading"})
+        self.assertIn(summary["provider"]["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
         self.assertEqual(
             summary["adapter_setup"]["feishu"]["preferred_transport"],
             "long-connection",

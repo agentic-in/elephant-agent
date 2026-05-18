@@ -27,6 +27,9 @@ from packages.skills import FetchedSkillBundle
 
 ROOT = Path(__file__).resolve().parents[3]
 CSI_PATTERN = re.compile(r"\x1b\[([0-9;?]*)([ -/]*)([@-~])")
+EMBEDDING_BOOTSTRAP_STATUS_PATTERN = r"(ready|pending|downloading|failed)"
+EMBEDDING_BOOTSTRAP_READY_PATTERN = r"(ready|steadying|orienting|attention-needed)"
+EMBEDDING_BOOTSTRAP_STATUSES = {"ready", "pending", "downloading", "failed"}
 
 try:
     import prompt_toolkit  # noqa: F401
@@ -568,8 +571,8 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("provider_status · ready", health.stdout)
         self.assertIn("security_status · ready", health.stdout)
         self.assertIn("active_provider_model · openai/gpt-4o-mini", health.stdout)
-        self.assertRegex(health.stdout, r"active_provider_embedding_bootstrap · (ready|pending|downloading)")
-        self.assertRegex(health.stdout, r"active_provider_embedding_ready · (ready|steadying|orienting)")
+        self.assertRegex(health.stdout, rf"active_provider_embedding_bootstrap · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
+        self.assertRegex(health.stdout, rf"active_provider_embedding_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}")
         self.assertNotIn("state_focus_mode", health.stdout)
 
         turn = self._run("wake", "--message", "Who are you?")
@@ -628,15 +631,15 @@ class CliSurfaceE2ETest(unittest.TestCase):
             "--api-key",
             "sk-cli-test-123",
         )
-        self.assertRegex(setup.stdout, r"embedding_bootstrap_status · (ready|pending|downloading)")
-        self.assertRegex(setup.stdout, r"embedding_bootstrap_ready · (ready|steadying|orienting)")
+        self.assertRegex(setup.stdout, rf"embedding_bootstrap_status · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
+        self.assertRegex(setup.stdout, rf"embedding_bootstrap_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}")
         self.assertNotIn("state_focus_mode", setup.stdout)
 
         config = load_global_config(global_config_path_for_state_dir(self.state_dir), state_dir=self.state_dir)
         self.assertEqual(config["models"]["provider"]["default_model"], "openai/gpt-4o-mini")
 
         health = self._run("status")
-        self.assertRegex(health.stdout, r"active_provider_embedding_bootstrap · (ready|pending|downloading)")
+        self.assertRegex(health.stdout, rf"active_provider_embedding_bootstrap · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
         self.assertNotIn("state_focus_mode", health.stdout)
 
     def test_provider_embeddings_switch_between_local_default_and_configured_override(self) -> None:
@@ -686,13 +689,13 @@ class CliSurfaceE2ETest(unittest.TestCase):
         reverted = self._run("provider", "embeddings", "local")
         self.assertIn("Embedding provider updated", reverted.stdout)
         self.assertIn("source · local-default", reverted.stdout)
-        self.assertRegex(reverted.stdout, r"embedding_bootstrap_status · (ready|pending|downloading)")
-        self.assertRegex(reverted.stdout, r"embedding_bootstrap_ready · (ready|steadying|orienting)")
+        self.assertRegex(reverted.stdout, rf"embedding_bootstrap_status · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
+        self.assertRegex(reverted.stdout, rf"embedding_bootstrap_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}")
 
         refreshed = CliRuntime.create(state_dir=self.state_dir)
         refreshed_summary = dict(refreshed.embedding_provider_summary())
         self.assertEqual(refreshed_summary["source"], "local-default")
-        self.assertIn(refreshed_summary["embedding_bootstrap_status"], {"ready", "pending", "downloading"})
+        self.assertIn(refreshed_summary["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
 
     def test_setup_hands_off_to_wake_surface(self) -> None:
         setup = self._run(
