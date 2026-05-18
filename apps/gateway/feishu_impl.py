@@ -73,12 +73,13 @@ DEFAULT_FEISHU_FAILURE_BODY = "处理失败，请稍后重试。"
 HttpJsonRequester = Callable[[str, str, Mapping[str, object], Mapping[str, str]], Mapping[str, object]]
 FeishuWSClientFactory = Callable[[Any, str, str, object, object | None], object]
 
-LOGGER = logging.getLogger(__name__)
-
 from .feishu_accounts import *  # noqa: F401,F403
 from .feishu_dispatch import FeishuDispatchMixin
 from .feishu_stores import *  # noqa: F401,F403
 from .feishu_support import *  # noqa: F401,F403
+
+LOGGER = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class FeishuGatewayService(FeishuDispatchMixin):
