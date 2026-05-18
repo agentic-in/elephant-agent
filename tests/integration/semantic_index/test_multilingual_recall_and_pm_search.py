@@ -115,12 +115,15 @@ class _DimensionAwareSemanticStubEmbeddingService:
     def __init__(self, provider_id: str = "stub", model_id: str = "stub-embed") -> None:
         self._provider_id = provider_id
         self._model_id = model_id
+        self.requested_dimensions: list[int | None] = []
         default = type("_D", (), {"provider_id": provider_id, "model_id": model_id})()
         self.registry = type("_R", (), {"default": staticmethod(lambda: default)})()
 
     def embed_text(self, text: str, **kwargs) -> EmbeddingVector:
         latency_mode = str(kwargs.get("latency_mode") or "balanced").lower()
-        dimensions = 64 if latency_mode == "fast" else 256
+        explicit_dimensions = kwargs.get("dimensions")
+        dimensions = int(explicit_dimensions) if explicit_dimensions else (64 if latency_mode == "fast" else 256)
+        self.requested_dimensions.append(explicit_dimensions)
         lowered = text.casefold()
         values = [0.0] * dimensions
         if (
@@ -695,6 +698,7 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
             claims = tuple(result.get("claims") or ())
             self.assertTrue(claims)
             self.assertEqual(claims[0]["ref"], target_ref)
+            self.assertIn(256, embedding_service.requested_dimensions)
 
     def test_conversation_search_uses_index_dimensions_under_noise(self) -> None:
         """Conversation recall should use the same dimensions as indexed Steps."""
@@ -788,6 +792,7 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
             self.assertTrue(hits)
             self.assertEqual(dict(hits[0].extra_metadata or {}).get("step_id"), target.step_id)
             self.assertIn("vector", dict(hits[0].extra_metadata or {}).get("semantic_reasons", ""))
+            self.assertIn(256, embedding_service.requested_dimensions)
 
 
 if __name__ == "__main__":

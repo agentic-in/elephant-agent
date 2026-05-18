@@ -279,7 +279,37 @@ class PersonalModelUnderstandingSurface:
                 )
             except Exception:
                 continue
-    def _query_vector(self, query: str) -> tuple[tuple[float, ...], int | None]:
+    def _indexed_query_dimensions(
+        self,
+        *,
+        owner_scope: str,
+        personal_model_id: str = "",
+        state_id: str = "",
+    ) -> int | None:
+        list_entries = getattr(self.repository, "list_semantic_index_entries", None)
+        if not callable(list_entries):
+            return None
+        try:
+            entries = list_entries(
+                owner_scope=owner_scope,
+                personal_model_id=personal_model_id or None,
+                state_id=state_id or None,
+            )
+        except Exception:
+            return None
+        counts: dict[int, int] = {}
+        for entry in entries:
+            if str(getattr(entry, "status", "") or "") == "deleted":
+                continue
+            dimensions = int(getattr(entry, "dimensions", 0) or 0)
+            if dimensions <= 0:
+                continue
+            counts[dimensions] = counts.get(dimensions, 0) + 1
+        if not counts:
+            return None
+        return max(counts, key=lambda item: (counts[item], item))
+
+    def _query_vector(self, query: str, *, dimensions: int | None = None) -> tuple[tuple[float, ...], int | None]:
         service = self.embedding_service
         if service is None or not query.strip():
             return (), None
@@ -289,6 +319,7 @@ class PersonalModelUnderstandingSurface:
                 request_id="personal-model-search-query",
                 task="query",
                 latency_mode="balanced",
+                dimensions=dimensions,
             )
             values = tuple(getattr(vector, "values", ()) or ())
             dimensions = int(getattr(vector, "dimensions", 0) or 0) or None
@@ -429,12 +460,19 @@ class PersonalModelUnderstandingSurface:
         # query variant through the semantic path, then fuse by claim ref so cross-
         # language variants are not limited to keyword fallback only.
         if self.semantic_searcher is not None:
+            query_dimensions = self._indexed_query_dimensions(
+                owner_scope="personal_model",
+                personal_model_id=pm_id,
+            )
             ranked_facts = rank_facts_by_semantic_queries(
                 self.semantic_searcher,
                 queries,
                 pm_id=pm_id,
                 facts_by_ref=facts_by_ref,
-                query_vector=self._query_vector,
+                query_vector=lambda search_text: self._query_vector(
+                    search_text,
+                    dimensions=query_dimensions,
+                ),
                 limit=limit,
             )
             seen_refs: set[str] = {fact.fact_id for fact in ranked_facts}
