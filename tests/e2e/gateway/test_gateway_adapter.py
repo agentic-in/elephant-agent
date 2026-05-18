@@ -69,6 +69,8 @@ from packages.runtime_config import global_config_path_for_state_dir, load_globa
 from packages.security.runtime import PolicyDecision
 from packages.storage import RuntimeStorageRepository
 
+EMBEDDING_BOOTSTRAP_STATUSES = {"ready", "pending", "downloading", "failed"}
+
 
 class GatewayAdapterE2ETests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1409,7 +1411,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(summary["provider"]["profile_id"], "provider-openrouter")
         self.assertEqual(summary["provider"]["default_model"], "openai/gpt-4o-mini")
         self.assertEqual(summary["provider"]["model_id"], "openai/gpt-4o-mini")
-        self.assertIn(summary["provider"]["embedding_bootstrap_status"], {"ready", "pending", "downloading"})
+        self.assertIn(summary["provider"]["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
         self.assertEqual(
             summary["adapter_setup"]["feishu"]["preferred_transport"],
             "long-connection",
@@ -5576,23 +5578,33 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         )
 
         try:
-            service.accept_long_connection_event(
-                self._feishu_message_event(
-                    event_id="evt-failure-1",
-                    message_id="om_failure_1",
-                    chat_id="oc_failure_1",
-                    text="please fail",
-                ),
-                account_id="ops-feishu",
-            )
+            with self.assertLogs("apps.gateway.feishu_impl", level="ERROR") as failure_logs:
+                service.accept_long_connection_event(
+                    self._feishu_message_event(
+                        event_id="evt-failure-1",
+                        message_id="om_failure_1",
+                        chat_id="oc_failure_1",
+                        text="please fail",
+                    ),
+                    account_id="ops-feishu",
+                )
 
-            self._wait_until(
-                lambda: len(tuple(service.describe().get("recent_failures") or ())) == 1,
-                message="expected async failure to be recorded",
-            )
-            self._wait_until(
-                lambda: len(requests) == 3,
-                message="expected placeholder and failure replies",
+                self._wait_until(
+                    lambda: len(tuple(service.describe().get("recent_failures") or ())) == 1,
+                    message="expected async failure to be recorded",
+                )
+                self._wait_until(
+                    lambda: len(requests) == 3,
+                    message="expected placeholder and failure replies",
+                )
+            self.assertTrue(
+                any(
+                    record.getMessage()
+                    == "Feishu async job failed for account=ops-feishu conversation=oc_failure_1 message=om_failure_1"
+                    and record.exc_info is not None
+                    for record in failure_logs.records
+                ),
+                "expected async failure to be logged with exception context",
             )
             description = service.describe()
             self.assertTrue(description["async_delivery_enabled"])

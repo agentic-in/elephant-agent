@@ -37,6 +37,8 @@ from packages.kernel.loop_checkpoint_support import LoopCheckpointService
 from packages.runtime_config import parse_global_config_text
 from packages.runtime_layout import elephant_file_path
 
+EMBEDDING_BOOTSTRAP_STATUSES = {"ready", "pending", "downloading", "failed"}
+
 
 class _ProviderStubServer:
     def __init__(self) -> None:
@@ -831,7 +833,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(defaulted.payload["active_provider"]["model_id"], "openai/gpt-4o-mini")
         self.assertEqual(defaulted.payload["active_provider"]["context_window_tokens"], 128000)
         self.assertEqual(defaulted.payload["active_provider"]["context_window_mode"], "auto")
-        self.assertIn(defaulted.payload["active_provider"]["embedding_bootstrap_status"], {"ready", "pending", "downloading"})
+        self.assertIn(defaulted.payload["active_provider"]["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
         config = load_global_config(
             global_config_path_for_state_dir(self.app.repository.database_path.parent),
             state_dir=self.app.repository.database_path.parent,
@@ -890,7 +892,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(local_embedding.payload["embedding_provider"]["source"], "local-default")
         self.assertIn(
             local_embedding.payload["embedding_provider"]["embedding_bootstrap_status"],
-            {"ready", "pending", "downloading"},
+            EMBEDDING_BOOTSTRAP_STATUSES,
         )
 
         doctor = self.app.dispatch("GET", "/v1/providers/doctor")
@@ -1010,7 +1012,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("state_focus_mode", defaulted.payload["active_provider"])
         self.assertIn(
             defaulted.payload["active_provider"]["embedding_bootstrap_status"],
-            {"ready", "pending", "downloading"},
+            EMBEDDING_BOOTSTRAP_STATUSES,
         )
 
         doctor = self.app.dispatch("GET", "/v1/providers/doctor")
@@ -1018,7 +1020,7 @@ class APISurfaceE2ETest(unittest.TestCase):
         bootstrap_check = next(
             check for check in doctor.payload["checks"] if check["check"] == "embedding_bootstrap"
         )
-        self.assertIn(bootstrap_check["status"], {"ready", "pending", "downloading"})
+        self.assertIn(bootstrap_check["status"], EMBEDDING_BOOTSTRAP_STATUSES)
         self.assertEqual(doctor.payload["status"], "ready")
 
     def test_operator_dashboard_projection_is_empty_without_runtime_state(self) -> None:

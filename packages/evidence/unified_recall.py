@@ -424,6 +424,34 @@ def _match_has_text_anchor(match: Any) -> bool:
     return bool(_TEXT_ANCHOR_SIGNALS.intersection(reasons | signal_scores))
 
 
+def _indexed_query_dimensions(
+    repository: UnifiedRecallRepository,
+    *,
+    owner_scope: str,
+    personal_model_id: str | None = None,
+    state_id: str | None = None,
+) -> int | None:
+    try:
+        entries = repository.list_semantic_index_entries(
+            owner_scope=owner_scope,
+            personal_model_id=personal_model_id,
+            state_id=state_id,
+        )
+    except Exception:
+        return None
+    counts: dict[int, int] = {}
+    for entry in entries:
+        if str(getattr(entry, "status", "") or "") == "deleted":
+            continue
+        dimensions = int(getattr(entry, "dimensions", 0) or 0)
+        if dimensions <= 0:
+            continue
+        counts[dimensions] = counts.get(dimensions, 0) + 1
+    if not counts:
+        return None
+    return max(counts, key=lambda item: (counts[item], item))
+
+
 def _semantic_step_is_noise(document: Any | None, hit: RecallHit | None = None) -> bool:
     if document is None:
         return True
@@ -721,26 +749,40 @@ def unified_recall(
         )
         return rank_recall_candidates(request.query, candidates, limit=capped, now=now_ts)
 
-    query_vector: tuple[float, ...] = ()
-    query_dimensions: int | None = None
-    if embedding_service is not None:
+    embedding_available = embedding_service is not None
+    if embedding_available and embedding_health_callable is not None:
         try:
-            if embedding_health_callable is not None:
-                health = embedding_health_callable()
-                status = str(getattr(health, "status", "") or "").lower()
-                if status in {"failed", "unavailable", "disabled"}:
-                    raise RuntimeError(status)
+            health = embedding_health_callable()
+            status = str(getattr(health, "status", "") or "").lower()
+            if status in {"failed", "unavailable", "disabled"}:
+                embedding_available = False
+        except Exception:
+            embedding_available = False
+    query_vector_cache: dict[int | None, tuple[tuple[float, ...], int | None]] = {}
+
+    def query_vector_for(dimensions: int | None) -> tuple[tuple[float, ...], int | None]:
+        if dimensions in query_vector_cache:
+            return query_vector_cache[dimensions]
+        if not embedding_available:
+            resolved = ((), None)
+            query_vector_cache[dimensions] = resolved
+            return resolved
+        try:
             vector = embedding_service.embed_text(
                 query,
                 request_id="unified-recall-query",
                 task="query",
-                latency_mode="fast",
+                latency_mode="balanced",
+                dimensions=dimensions,
             )
             query_vector = tuple(getattr(vector, "values", ()) or ())
             query_dimensions = int(getattr(vector, "dimensions", 0) or 0) or None
         except Exception:
             query_vector = ()
             query_dimensions = None
+        resolved = (query_vector, query_dimensions)
+        query_vector_cache[dimensions] = resolved
+        return resolved
 
     # Attempt hybrid per-scope; collect matches into one ranked list.
     hits: list[RecallHit] = []
@@ -751,16 +793,23 @@ def unified_recall(
         owner_scope = _SCOPE_TO_OWNER_SCOPE.get(scope)
         if owner_scope is None:
             continue
+        scope_personal_model_id = request.personal_model_id if owner_scope == "personal_model" else None
+        scope_state_id = request.state_id if owner_scope == "state" else None
+        indexed_dimensions = _indexed_query_dimensions(
+            repository,
+            owner_scope=owner_scope,
+            personal_model_id=scope_personal_model_id,
+            state_id=scope_state_id,
+        )
+        query_vector, query_dimensions = query_vector_for(indexed_dimensions)
         try:
             search_query = SemanticSearchQuery(
                 text=query,
                 vector=query_vector,
                 dimensions=query_dimensions,
                 owner_scope=owner_scope,
-                personal_model_id=(
-                    request.personal_model_id if owner_scope == "personal_model" else None
-                ),
-                state_id=request.state_id if owner_scope == "state" else None,
+                personal_model_id=scope_personal_model_id,
+                state_id=scope_state_id,
                 start_at=time_range.start_at if time_range is not None else None,
                 end_at=time_range.end_at if time_range is not None else None,
                 limit=per_scope_limit,
