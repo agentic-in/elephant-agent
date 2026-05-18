@@ -51,6 +51,8 @@ def run_loop(
     episode = self.repository.load_episode_state(episode_id)
     if episode is None:
         raise KeyError(episode_id)
+    if episode.status == "closed":
+        raise ValueError(f"cannot send to a closed episode: {episode_id}")
     personal_model = self.repository.load_personal_model_runtime_state(episode.personal_model_id)
     if personal_model is None:
         raise KeyError(episode.personal_model_id)

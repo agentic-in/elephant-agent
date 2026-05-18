@@ -128,13 +128,23 @@ def _state_from_row(row: sqlite3.Row) -> State:
     )
 
 
+_LEGACY_EPISODE_STATUS_MAP: dict[str, str] = {
+    "active": "open",
+    "interrupted": "paused",
+}
+
+
+def _normalize_episode_status(raw: str) -> str:
+    return _LEGACY_EPISODE_STATUS_MAP.get(raw, raw)
+
+
 def _episode_from_row(row: sqlite3.Row) -> Episode:
     return Episode(
         episode_id=str(row["episode_id"]),
         state_id=str(row["state_id"]),
         personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
         entry_surface=str(row["entry_surface"]),
-        status=str(row["status"]),
+        status=_normalize_episode_status(str(row["status"])),
         started_at=_parse_datetime(str(row["started_at"])),
         ended_at=_parse_datetime(str(row["ended_at"])) if row["ended_at"] is not None else None,
         updated_at=_parse_datetime(str(row["updated_at"])) if row["updated_at"] is not None else None,

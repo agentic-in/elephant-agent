@@ -81,7 +81,12 @@ from .plugins import GatewayAdapterDescriptor, GatewayPluginRegistry
 
 
 def _episode_status_from_route(status: str) -> str:
-    return "paused" if str(status or "").strip() == "paused" else "open"
+    normalized = str(status or "").strip()
+    if normalized in ("paused", "interrupted"):
+        return "paused"
+    if normalized == "closed":
+        return "closed"
+    return "open"
 
 CHAT_BOT_ADAPTER_ID = "messaging.chat-bot"
 WEBHOOK_ADAPTER_ID = "messaging.webhook"
@@ -558,7 +563,7 @@ class GatewayApp:
             self.repository.upsert_episode_state(
                 replace(
                     existing_runtime,
-                    status=updated.status,
+                    status=_episode_status_from_route(updated.status),
                     updated_at=updated.updated_at,
                     interruption_state=updated.interruption_state,
                 )

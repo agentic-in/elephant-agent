@@ -1065,7 +1065,8 @@ export function ChatPage(): React.JSX.Element {
   }, [clarifyRequest, composer, composeProfile, dashboard, isClarifyReply, refresh, selectedConversation, selectedSessionId, sending]);
 
   const pendingPromptVisible = Boolean(pendingTurn) && selectedRows.some((row) => valueOf(row, "event_type", "") === "user_query" && normalizedConversationContent(row) === pendingTurn?.prompt.trim());
-  const submitDisabled = sending || !composer.trim() || !dashboard || (!selectedConversation && !composeProfile.eggId);
+  const isClosed = selectedConversation?.status === "closed";
+  const submitDisabled = sending || !composer.trim() || !dashboard || (!selectedConversation && !composeProfile.eggId) || isClosed;
 
   return (
     <div className={styles.pageStack}>
@@ -1271,7 +1272,11 @@ export function ChatPage(): React.JSX.Element {
             </label>
             <div className={styles.composerFooter}>
               <div className={styles.composerHints}>
-                <span>{isClarifyReply ? "Next send becomes the clarify tool result" : sessionEggLocked ? `Pinned to ${selectedEggName}` : `Next chat uses ${selectedEgg?.eggName ?? composeProfile.eggName}`}</span>
+                {isClosed ? (
+                  <span>This conversation is closed. Start a new one to continue.</span>
+                ) : (
+                  <span>{isClarifyReply ? "Next send becomes the clarify tool result" : sessionEggLocked ? `Pinned to ${selectedEggName}` : `Next chat uses ${selectedEgg?.eggName ?? composeProfile.eggName}`}</span>
+                )}
                 <small>Enter sends · Shift + Enter for newline</small>
               </div>
               <div className={styles.composerActions}>

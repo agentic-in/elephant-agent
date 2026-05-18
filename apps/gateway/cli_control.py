@@ -32,7 +32,12 @@ def _optional_text(value: object) -> str | None:
 
 
 def _episode_status_from_route(status: str) -> str:
-    return "paused" if str(status or "").strip() == "paused" else "open"
+    normalized = str(status or "").strip()
+    if normalized in ("paused", "interrupted"):
+        return "paused"
+    if normalized == "closed":
+        return "closed"
+    return "open"
 
 
 def _abbreviate_identifier(value: str, *, head: int = 12, tail: int = 6) -> str:
