@@ -140,6 +140,8 @@ def run_loop(
         inspection=inspection,
     )
 def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResponse:
+    if method.upper() == "OPTIONS":
+        return APIResponse(200, {"status": "ok"})
     if method.upper() == "GET" and path == "/healthz":
         return APIResponse(200, {"status": "ok", "service": "elephant-api"})
 
@@ -842,6 +844,22 @@ def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
         }
     }
 
+def _response_headers_with_cors(response: APIResponse, environ: Mapping[str, Any]) -> list[tuple[str, str]]:
+    headers = list(response.headers)
+    origin = str(environ.get("HTTP_ORIGIN") or "")
+    if origin == "tauri://localhost" or origin.startswith("http://127.0.0.1") or origin.startswith("http://localhost"):
+        headers.extend(
+            [
+                ("Access-Control-Allow-Origin", origin),
+                ("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS"),
+                ("Access-Control-Allow-Headers", "Content-Type,Authorization"),
+                ("Access-Control-Max-Age", "600"),
+                ("Vary", "Origin"),
+            ]
+        )
+    return headers
+
+
 def __call__(self, environ: Mapping[str, Any], start_response: Any) -> list[bytes]:
     from .api_runtime_support import _json_bytes as encode_json
 
@@ -851,6 +869,6 @@ def __call__(self, environ: Mapping[str, Any], start_response: Any) -> list[byte
     response = self.dispatch(method, path, payload)
     start_response(
         f"{response.status_code} {'OK' if response.status_code < 400 else 'ERROR'}",
-        list(response.headers),
+        _response_headers_with_cors(response, environ),
     )
     return [encode_json(response.payload)]

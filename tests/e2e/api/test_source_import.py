@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 import sys
@@ -25,6 +26,30 @@ class SourceImportE2ETest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
+
+    def test_wsgi_preflight_allows_desktop_origin(self) -> None:
+        captured: dict[str, object] = {}
+
+        def start_response(status: str, headers: list[tuple[str, str]]) -> None:
+            captured["status"] = status
+            captured["headers"] = dict(headers)
+
+        body = self.app(
+            {
+                "REQUEST_METHOD": "OPTIONS",
+                "PATH_INFO": "/v1/herd",
+                "HTTP_ORIGIN": "tauri://localhost",
+                "CONTENT_LENGTH": "0",
+                "wsgi.input": io.BytesIO(b""),
+            },
+            start_response,
+        )
+
+        self.assertEqual(body, [b'{"status":"ok"}'])
+        self.assertTrue(str(captured["status"]).startswith("200 "))
+        headers = captured["headers"]
+        self.assertEqual(headers["Access-Control-Allow-Origin"], "tauri://localhost")
+        self.assertIn("OPTIONS", headers["Access-Control-Allow-Methods"])
 
     def test_source_import_creates_evidence_without_direct_personal_model_truth(self) -> None:
         source_root = self.root / "sample-project"

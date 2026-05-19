@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::env;
-use std::fs;
+use std::ffi::OsString;
+use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -48,7 +49,11 @@ fn status_from_inner(inner: &DesktopInner) -> DesktopCoreStatus {
         api_url: inner.api_base_url.clone(),
         core_status: inner.core_status.clone(),
         database_path: inner.database_path.display().to_string(),
-        worker_status: if inner.child.is_some() { "managed".into() } else { "stopped".into() },
+        worker_status: if inner.child.is_some() {
+            "managed".into()
+        } else {
+            "stopped".into()
+        },
         version: env!("CARGO_PKG_VERSION").into(),
         error: inner.error.clone(),
     }
@@ -58,7 +63,15 @@ fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME").map(PathBuf::from)
 }
 
-fn resolve_repo_root() -> PathBuf {
+fn resolve_python_root(resource_dir: Option<PathBuf>) -> PathBuf {
+    if let Some(resource_dir) = resource_dir {
+        let bundled_python_root = resource_dir.join("python");
+        if bundled_python_root.join("apps").join("api").exists()
+            && bundled_python_root.join("packages").exists()
+        {
+            return bundled_python_root;
+        }
+    }
     if let Some(root) = env::var_os("ELEPHANT_DESKTOP_REPO_ROOT").map(PathBuf::from) {
         return root;
     }
@@ -86,13 +99,22 @@ fn resolve_data_paths(app_data_dir: PathBuf) -> Result<(PathBuf, PathBuf, PathBu
     if legacy_database.as_ref().is_some_and(|path| path.exists()) {
         let elephant_home = legacy_home.expect("legacy database has a home");
         let herd_dir = elephant_home.join("herd");
-        return Ok((elephant_home, herd_dir.clone(), herd_dir.join("elephant.sqlite3")));
+        return Ok((
+            elephant_home,
+            herd_dir.clone(),
+            herd_dir.join("elephant.sqlite3"),
+        ));
     }
 
     let elephant_home = app_data_dir;
     let herd_dir = elephant_home.join("herd");
-    fs::create_dir_all(&herd_dir).map_err(|error| format!("could not create app data dir: {error}"))?;
-    Ok((elephant_home, herd_dir.clone(), herd_dir.join("elephant.sqlite3")))
+    fs::create_dir_all(&herd_dir)
+        .map_err(|error| format!("could not create app data dir: {error}"))?;
+    Ok((
+        elephant_home,
+        herd_dir.clone(),
+        herd_dir.join("elephant.sqlite3"),
+    ))
 }
 
 fn free_loopback_port() -> Result<u16, String> {
@@ -180,6 +202,14 @@ fn stop_core(inner: &mut DesktopInner) {
     inner.core_status = "stopped".into();
 }
 
+fn python_module_path(root: &Path) -> Result<OsString, String> {
+    let mut paths = vec![root.to_path_buf()];
+    if let Some(existing) = env::var_os("PYTHONPATH") {
+        paths.extend(env::split_paths(&existing));
+    }
+    env::join_paths(paths).map_err(|error| format!("could not build PYTHONPATH: {error}"))
+}
+
 fn start_core(inner: &mut DesktopInner) -> Result<(), String> {
     if inner.child.is_some() {
         return Ok(());
@@ -191,6 +221,17 @@ fn start_core(inner: &mut DesktopInner) -> Result<(), String> {
     inner.error = None;
 
     let python = env::var("ELEPHANT_DESKTOP_PYTHON").unwrap_or_else(|_| "python3".into());
+    let python_path = python_module_path(&inner.repo_root)?;
+    let log_path = inner.herd_dir.join("desktop-core.log");
+    let mut log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("could not open core log: {error}"))?;
+    let log_error = log_file
+        .try_clone()
+        .map_err(|error| format!("could not prepare core log: {error}"))?;
+    let _ = writeln!(log_file, "\n--- Elephant desktop core launch ---");
     let child = Command::new(python)
         .arg("-m")
         .arg("apps.api")
@@ -203,10 +244,16 @@ fn start_core(inner: &mut DesktopInner) -> Result<(), String> {
         .current_dir(&inner.repo_root)
         .env("ELEPHANT_HOME", &inner.elephant_home)
         .env("ELEPHANT_HERD_DIR", &inner.herd_dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .env("PYTHONPATH", python_path)
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_error))
         .spawn()
-        .map_err(|error| format!("could not launch python core: {error}"))?;
+        .map_err(|error| {
+            format!(
+                "could not launch python core: {error}; see {}",
+                log_path.display()
+            )
+        })?;
     inner.child = Some(child);
 
     match wait_for_core(port) {
@@ -215,6 +262,10 @@ fn start_core(inner: &mut DesktopInner) -> Result<(), String> {
             Ok(())
         }
         Err(error) => {
+            if let Some(mut child) = inner.child.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
             inner.core_status = "error".into();
             inner.error = Some(error.clone());
             Err(error)
@@ -233,8 +284,14 @@ fn desktop_core_status(state: State<'_, DesktopState>) -> DesktopCoreStatus {
 }
 
 #[tauri::command]
-fn desktop_restart_core(_app: AppHandle, state: State<'_, DesktopState>) -> Result<DesktopCoreStatus, String> {
-    let mut inner = state.inner.lock().map_err(|_| "desktop state poisoned".to_string())?;
+fn desktop_restart_core(
+    _app: AppHandle,
+    state: State<'_, DesktopState>,
+) -> Result<DesktopCoreStatus, String> {
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "desktop state poisoned".to_string())?;
     stop_core(&mut inner);
     if let Err(error) = start_core(&mut inner) {
         inner.error = Some(error.clone());
@@ -317,6 +374,14 @@ fn show_main_window(app: &AppHandle, route: Option<&str>) {
     }
 }
 
+fn stop_managed_core(app: &AppHandle) {
+    let state = app.state::<DesktopState>();
+    let Ok(mut inner) = state.inner.lock() else {
+        return;
+    };
+    stop_core(&mut inner);
+}
+
 fn install_menu(app: &AppHandle) -> tauri::Result<()> {
     let elephant_menu = SubmenuBuilder::new(app, "Elephant")
         .text("open_elephant", "Open Elephant")
@@ -324,7 +389,7 @@ fn install_menu(app: &AppHandle) -> tauri::Result<()> {
         .text("run_reflect", "Run Reflect")
         .text("import_source", "Import Source")
         .separator()
-        .quit_with_text("Quit Elephant")
+        .text("quit_elephant", "Quit Elephant")
         .build()?;
     let menu = MenuBuilder::new(app).item(&elephant_menu).build()?;
     app.set_menu(menu)?;
@@ -343,6 +408,10 @@ fn install_menu(app: &AppHandle) -> tauri::Result<()> {
                 );
             });
         }
+        "quit_elephant" => {
+            stop_managed_core(app);
+            app.exit(0);
+        }
         _ => {}
     });
     Ok(())
@@ -355,8 +424,9 @@ fn main() {
                 .path()
                 .app_data_dir()
                 .map_err(|error| format!("could not resolve app data dir: {error}"))?;
+            let resource_dir = app.path().resource_dir().ok();
             let (elephant_home, herd_dir, database_path) = resolve_data_paths(app_data_dir)?;
-            let repo_root = resolve_repo_root();
+            let repo_root = resolve_python_root(resource_dir);
             app.manage(DesktopState {
                 inner: Mutex::new(DesktopInner {
                     api_base_url: String::new(),
@@ -371,7 +441,10 @@ fn main() {
             });
             let state = app.state::<DesktopState>();
             {
-                let mut inner = state.inner.lock().map_err(|_| "desktop state poisoned".to_string())?;
+                let mut inner = state
+                    .inner
+                    .lock()
+                    .map_err(|_| "desktop state poisoned".to_string())?;
                 if let Err(error) = start_core(&mut inner) {
                     inner.error = Some(error);
                 }
@@ -399,13 +472,8 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building Elephant Desktop")
         .run(|app_handle, event| {
-            if let RunEvent::ExitRequested { .. } = event {
-                let state = app_handle.state::<DesktopState>();
-                {
-                    if let Ok(mut inner) = state.inner.lock() {
-                        stop_core(&mut inner);
-                    };
-                }
+            if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+                stop_managed_core(app_handle);
             }
         });
 }

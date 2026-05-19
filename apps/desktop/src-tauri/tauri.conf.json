@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "ai.agentic.elephant.desktop",
   "build": {
-    "beforeDevCommand": "npm --prefix ../dashboard run build",
-    "beforeBuildCommand": "npm --prefix ../dashboard run build",
+    "beforeDevCommand": "node scripts/build-dashboard.mjs",
+    "beforeBuildCommand": "node scripts/build-dashboard.mjs",
     "frontendDist": "../../dashboard/dist"
   },
   "app": {
@@ -27,7 +27,22 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
-    "category": "Productivity"
+    "targets": ["app"],
+    "category": "Productivity",
+    "resources": {
+      "../../api": "python/apps/api",
+      "../../cli": "python/apps/cli",
+      "../../reflect": "python/apps/reflect",
+      "../../learning_agents": "python/apps/learning_agents",
+      "../../provider_runtime.py": "python/apps/provider_runtime.py",
+      "../../provider_runtime_support.py": "python/apps/provider_runtime_support.py",
+      "../../learning_worker_command.py": "python/apps/learning_worker_command.py",
+      "../../learning_worker_runtime.py": "python/apps/learning_worker_runtime.py",
+      "../../logging_setup.py": "python/apps/logging_setup.py",
+      "../../runtime_layout.py": "python/apps/runtime_layout.py",
+      "../../episode_runtime.py": "python/apps/episode_runtime.py",
+      "../../launcher.py": "python/apps/launcher.py",
+      "../../../packages": "python/packages"
+    }
   }
 }

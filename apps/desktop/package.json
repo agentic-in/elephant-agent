@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm --prefix ../dashboard run build && tauri dev",
-    "build": "npm --prefix ../dashboard run build && tauri build",
+    "build:dashboard": "node scripts/build-dashboard.mjs",
+    "dev": "npm run build:dashboard && tauri dev",
+    "build": "npm run build:dashboard && tauri build --bundles app && npm run build:dmg",
+    "build:dmg": "node scripts/create-mac-dmg.mjs",
     "check": "cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {
