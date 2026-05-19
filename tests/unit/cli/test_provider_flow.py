@@ -82,7 +82,7 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("gpt-5.4", "auto")),
+            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "gpt-5.4", "auto")),
             mock.patch("apps.cli.provider_flow._wizard_text_prompt") as text_prompt,
         ):
             result = run_provider_selection_wizard(
@@ -258,7 +258,7 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("openai/gpt-4o-mini", "auto")),
+            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "openai/gpt-4o-mini", "auto")),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("https://same.example.test/v1",),
@@ -308,7 +308,7 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("openai/gpt-4o-mini", "auto")),
+            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "openai/gpt-4o-mini", "auto")),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("sk-refreshed-key",),
@@ -347,7 +347,7 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("auto",)),
+            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "auto")),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("gpt-5.4",),
@@ -372,6 +372,83 @@ class ProviderFlowWizardTests(unittest.TestCase):
         self.assertEqual(result.model_id, "gpt-5.4")
         self.assertEqual(runtime.discover_provider_models.call_count, 1)
         self.assertEqual(text_prompt.call_count, 1)
+
+    def test_stored_api_key_prompts_keep_or_replace(self) -> None:
+        runtime = mock.Mock()
+        runtime.provider_setup_guide.return_value = mock.Mock(
+            required_config_keys=("model_id",),
+            required_secret_keys=("api_key",),
+            auth_type="api_key",
+        )
+        runtime.discovered_provider.return_value = mock.Mock(status="configured", source="profile")
+        runtime.provider_summary.return_value = {"provider_id": "deepseek", "secret_status": "stored"}
+        runtime.discover_provider_models.return_value = (
+            mock.Mock(model_id="deepseek-reasoner", context_window_tokens=128000, max_output_tokens=16384),
+        )
+        runtime.provider_reasoning_efforts.return_value = ()
+        runtime.detect_provider_context_window.return_value = 128000
+
+        with (
+            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "deepseek-reasoner", "auto")),
+            mock.patch("apps.cli.provider_flow._wizard_text_prompt") as text_prompt,
+        ):
+            result = run_provider_selection_wizard(
+                runtime,
+                initial_state=ProviderSelectionState(
+                    provider_id="deepseek",
+                    base_url="https://api.deepseek.com/v1",
+                    api_key=None,
+                    model_id="deepseek-reasoner",
+                    reasoning_effort=None,
+                    context_window_mode="auto",
+                    context_window_tokens=128000,
+                ),
+                allow_back=True,
+                provider_locked=True,
+            )
+
+        self.assertIsNone(result.api_key)
+        text_prompt.assert_not_called()
+
+    def test_stored_api_key_replace_prompts_for_new_key(self) -> None:
+        runtime = mock.Mock()
+        runtime.provider_setup_guide.return_value = mock.Mock(
+            required_config_keys=("model_id",),
+            required_secret_keys=("api_key",),
+            auth_type="api_key",
+        )
+        runtime.discovered_provider.return_value = mock.Mock(status="configured", source="profile")
+        runtime.provider_summary.return_value = {"provider_id": "deepseek", "secret_status": "stored"}
+        runtime.discover_provider_models.return_value = (
+            mock.Mock(model_id="deepseek-reasoner", context_window_tokens=128000, max_output_tokens=16384),
+        )
+        runtime.provider_reasoning_efforts.return_value = ()
+        runtime.detect_provider_context_window.return_value = 128000
+
+        with (
+            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("replace", "deepseek-reasoner", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_text_prompt",
+                side_effect=("sk-new-deepseek-key",),
+            ) as text_prompt,
+        ):
+            result = run_provider_selection_wizard(
+                runtime,
+                initial_state=ProviderSelectionState(
+                    provider_id="deepseek",
+                    base_url="https://api.deepseek.com/v1",
+                    api_key=None,
+                    model_id="deepseek-reasoner",
+                    reasoning_effort=None,
+                    context_window_mode="auto",
+                    context_window_tokens=128000,
+                ),
+                allow_back=True,
+                provider_locked=True,
+            )
+
+        self.assertEqual(result.api_key, "sk-new-deepseek-key")
+        text_prompt.assert_called_once()
 
 
 if __name__ == "__main__":
