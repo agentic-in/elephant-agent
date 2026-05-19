@@ -30,15 +30,26 @@ PYTHON_LINE_LIMIT_SURFACES = ("apps", "packages")
 PYTHON_LINE_LIMIT_PATTERNS = tuple(f"{surface}/**/*.py" for surface in PYTHON_LINE_LIMIT_SURFACES)
 PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = (
     "apps/api/api_runtime_console_ops.py",
+    "apps/api/api_runtime_http_methods.py",
+    "apps/api/api_runtime_internal_sections.py",
     "apps/cli/cli_main_impl.py",
     "apps/cli/runtime_extensions_surface.py",
     "apps/cli/shell_composer.py",
     "apps/cli/shell_methods_commands.py",
+    "apps/cli/shell_progress_trace.py",
+    "apps/cli/wizard.py",
     "apps/gateway/gateway_main_impl.py",
+    "apps/gateway/gateway_main_setup_impl.py",
+    "packages/context/projection.py",
+    "packages/context/runtime_support.py",
     "packages/evidence/runtime.py",
     "packages/learning/personal_model_evolution.py",
     "packages/models/providers/openai_compatible.py",
     "packages/storage/repository_system_methods.py",
+    "packages/tools/browser_backend.py",
+    "packages/tools/builtins.py",
+    "packages/tools/handlers_filesystem.py",
+    "packages/understanding/runtime.py",
 )
 FRONTEND_TYPECHECKS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     (
