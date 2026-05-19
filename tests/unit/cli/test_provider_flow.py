@@ -316,7 +316,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "openai/gpt-4o-mini", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "openai/gpt-4o-mini", "auto")
+            ),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("https://same.example.test/v1",),
@@ -380,7 +382,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "openai/gpt-4o-mini", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "openai/gpt-4o-mini", "auto")
+            ),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("sk-refreshed-key",),
@@ -465,7 +469,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "deepseek-reasoner", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt", side_effect=("keep", "deepseek-reasoner", "auto")
+            ),
             mock.patch("apps.cli.provider_flow._wizard_text_prompt") as text_prompt,
         ):
             result = run_provider_selection_wizard(
@@ -502,7 +508,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("replace", "deepseek-reasoner", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt", side_effect=("replace", "deepseek-reasoner", "auto")
+            ),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("sk-new-deepseek-key",),
