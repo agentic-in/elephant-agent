@@ -328,7 +328,7 @@ class InMemoryGatewayIdentityStore:
         return tuple(
             sorted(
                 (r for r in self._records.values() if r.elephant_id == elephant_id),
-                key=lambda r: (r.updated_at or r.created_at or _utc_now()),
+                key=lambda r: r.updated_at or r.created_at or _utc_now(),
                 reverse=True,
             )
         )
@@ -362,7 +362,7 @@ class FileGatewayIdentityStore:
         return tuple(
             sorted(
                 (r for r in self._load_records().values() if r.elephant_id == elephant_id),
-                key=lambda r: (r.updated_at or r.created_at or _utc_now()),
+                key=lambda r: r.updated_at or r.created_at or _utc_now(),
                 reverse=True,
             )
         )

@@ -102,22 +102,24 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
                 version="1.0.0",
                 description="Capture resolved tool runtime context.",
             ),
-            handler=lambda invocation: captured.update(
-                {
-                    "cwd": invocation.context.cwd,
-                    "allowed_roots": invocation.context.allowed_roots,
-                    "surface_id": invocation.context.surface_id,
-                    "state_id": invocation.context.state_id,
-                    "personal_model_id": invocation.context.personal_model_id,
-                    "elephant_id": invocation.context.elephant_id,
-                    "requester": invocation.context.requester,
+            handler=lambda invocation: (
+                captured.update(
+                    {
+                        "cwd": invocation.context.cwd,
+                        "allowed_roots": invocation.context.allowed_roots,
+                        "surface_id": invocation.context.surface_id,
+                        "state_id": invocation.context.state_id,
+                        "personal_model_id": invocation.context.personal_model_id,
+                        "elephant_id": invocation.context.elephant_id,
+                        "requester": invocation.context.requester,
+                    }
+                )
+                or {
+                    "execution_id": invocation.invocation_id,
+                    "summary": "captured context",
+                    "outcome": "success",
                 }
-            )
-            or {
-                "execution_id": invocation.invocation_id,
-                "summary": "captured context",
-                "outcome": "success",
-            },
+            ),
         )
 
         result = runtime.invoke(

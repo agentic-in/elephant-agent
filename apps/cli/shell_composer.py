@@ -866,10 +866,12 @@ def build_key_bindings(shell: ProductizedShell | None = None, *, submit=None, al
     # Guarded to `turn_active & not_searching` so Esc at the idle
     # composer stays a no-op.
     turn_active = Condition(
-        lambda: shell is not None
-        and (
-            getattr(shell, "_turn_started_at", None) is not None
-            or bool(getattr(shell, "_streaming_response_active", False))
+        lambda: (
+            shell is not None
+            and (
+                getattr(shell, "_turn_started_at", None) is not None
+                or bool(getattr(shell, "_streaming_response_active", False))
+            )
         )
     )
 
@@ -971,9 +973,11 @@ def build_key_bindings(shell: ProductizedShell | None = None, *, submit=None, al
     # chance to edit. If the composer already has text, Up falls through
     # to prompt_toolkit's default (caret moves up in multi-line buffer).
     empty_and_idle = Condition(
-        lambda: shell is not None
-        and not _history_search_active(shell)
-        and not (shell is not None and getattr(shell, "_turn_started_at", None) is not None)
+        lambda: (
+            shell is not None
+            and not _history_search_active(shell)
+            and not (shell is not None and getattr(shell, "_turn_started_at", None) is not None)
+        )
     )
 
     @bindings.add("up", filter=empty_and_idle)

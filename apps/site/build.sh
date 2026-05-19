@@ -2,7 +2,7 @@
 
 set -eu
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+ROOT_DIR=$(cd -- "$(dirname "$0")" && pwd)
 DIST_DIR="${ROOT_DIR}/dist"
 
 ensure_node_modules() {
