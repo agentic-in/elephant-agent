@@ -3,26 +3,26 @@
 ---
 
 ## 📦 Package Metadata
-- **Package Name**: 
+- **Package Name**:
 - **Registry**: [NPM / PyPI / RubyGems / etc.]
-- **Affected Versions**: 
-- **Malicious Version(s)**: 
-- **Downloads at Time of Detection**: 
-- **Package URL**: 
+- **Affected Versions**:
+- **Malicious Version(s)**:
+- **Downloads at Time of Detection**:
+- **Package URL**:
 
 ---
 
 ## 🚩 Indicators of Compromise (IOCs)
-- **Malicious URL(s)**: 
+- **Malicious URL(s)**:
 - **Exfiltrated Data Types**: [Environment variables, ~/.ssh/id_rsa, /etc/shadow, etc.]
 - **Exfiltration Method**: [DNS tunneling, HTTP POST to C2, etc.]
-- **C2 IP/Domain**: 
+- **C2 IP/Domain**:
 
 ---
 
 ## 🛠️ Analysis Summary
 - **Primary Mechanism**: [Typosquatting / Dependency Confusion / Maintainer Takeover]
-- **Behavior Description**: 
+- **Behavior Description**:
   - [Example: Installs a postinstall script that exfiltrates environment variables.]
   - [Example: Patches `setup.py` to download a secondary payload.]
 

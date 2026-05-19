@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from packages.evidence import normalize_recall_query, plan_recall_query
+from packages.evidence import plan_recall_query
 
 
 def test_recent_chinese_recap_extracts_topic_core() -> None:

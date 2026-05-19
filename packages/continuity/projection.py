@@ -10,7 +10,11 @@ from packages.contracts.runtime import (
     EpisodeContinuityState,
 )
 from packages.state.rendered_views import RenderedRelationshipView
-from packages.state import CompanionGovernanceState, LoadedProfile, build_companion_governance_state
+from packages.state import (
+    CompanionGovernanceState,
+    LoadedProfile,
+    build_companion_governance_state,
+)
 from .runtime import (
     RelationshipPolicy,
     build_relationship_policy,
@@ -57,9 +61,7 @@ class ContinuityProjectionService:
             ),
             preserve_preferences=companion.preserve_preferences if companion is not None else True,
             preserve_corrections=companion.preserve_corrections if companion is not None else True,
-            preserve_emotional_context=(
-                companion.preserve_emotional_context if companion is not None else True
-            ),
+            preserve_emotional_context=(companion.preserve_emotional_context if companion is not None else True),
         )
         initiative = identity_record.initiative if identity_record is not None else governance.identity.initiative
         continuity_notes = (
@@ -123,8 +125,7 @@ def _reengagement_prompt(
         return prompt, style
     style = "steady-follow-through"
     prompt = (
-        f"Preserve continuity explicitly and keep the next step legible; "
-        f"continuity cues: {note_text}.{focus_clause}"
+        f"Preserve continuity explicitly and keep the next step legible; continuity cues: {note_text}.{focus_clause}"
     )
     return prompt, style
 

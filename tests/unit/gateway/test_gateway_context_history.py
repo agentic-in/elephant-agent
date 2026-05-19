@@ -13,7 +13,14 @@ from packages.context import (
 )
 from packages.context.epoch_store import FileEpochStore, InMemoryEpochStore
 from packages.contracts.layers import Episode
-from packages.contracts.runtime import ContextBundle, EventEnvelope, ExecutionResult, PersonalModelRuntimeState, PromptMessage, PromptEnvelope
+from packages.contracts.runtime import (
+    ContextBundle,
+    EventEnvelope,
+    ExecutionResult,
+    PersonalModelRuntimeState,
+    PromptMessage,
+    PromptEnvelope,
+)
 from packages.state import CompanionSettings, render_user_profile_text
 from packages.state import write_elephant_identity_file
 from packages.state.projection import build_loaded_profile_from_state
@@ -55,7 +62,10 @@ class GatewayContextHistoryTest(unittest.TestCase):
                 session_snapshot="SESSION SNAPSHOT",
                 history_messages=(
                     PromptMessage(role="user", content="工作好忙"),
-                    PromptMessage(role="assistant", content="你是想倒倒苦水说一下在忙什么，还是就想有人知道你今天很忙？"),
+                    PromptMessage(
+                        role="assistant",
+                        content="你是想倒倒苦水说一下在忙什么，还是就想有人知道你今天很忙？",
+                    ),
                 ),
             ),
         )
@@ -131,7 +141,9 @@ class GatewayContextHistoryTest(unittest.TestCase):
         assert preflight_epoch is not None
         self.assertEqual(preflight_epoch.history_messages[0].content, "preflight")
 
-    def test_im_idle_gap_resets_projection_tail_before_appending_new_burst(self) -> None:
+    def test_im_idle_gap_resets_projection_tail_before_appending_new_burst(
+        self,
+    ) -> None:
         base = datetime(2026, 5, 7, 3, 0, tzinfo=timezone.utc)
         session = Episode(
             episode_id="episode:wx",
@@ -151,7 +163,10 @@ class GatewayContextHistoryTest(unittest.TestCase):
                 PromptMessage(
                     role="user",
                     content="早上第一句",
-                    metadata={"projection_surface": "im", "created_at": base.isoformat()},
+                    metadata={
+                        "projection_surface": "im",
+                        "created_at": base.isoformat(),
+                    },
                 ),
             ),
         )
@@ -165,7 +180,10 @@ class GatewayContextHistoryTest(unittest.TestCase):
                 event_type="turn.received",
                 episode_id=session.episode_id,
                 source="gateway:feishu",
-                payload={"content": "晚上新话题", "delivery_surface": "feishu-long-connection"},
+                payload={
+                    "content": "晚上新话题",
+                    "delivery_surface": "feishu-long-connection",
+                },
             ),
             execution=ExecutionResult(
                 execution_id="exec:2",
@@ -182,10 +200,15 @@ class GatewayContextHistoryTest(unittest.TestCase):
         )
 
         self.assertEqual(updated.compacted_history_summary, "")
-        self.assertEqual(tuple(message.content for message in updated.history_messages), ("晚上新话题", "晚上新回复"))
+        self.assertEqual(
+            tuple(message.content for message in updated.history_messages),
+            ("晚上新话题", "晚上新回复"),
+        )
         self.assertEqual(updated.history_messages[0].metadata["projection_surface"], "im")
 
-    def test_existing_session_epoch_does_not_refresh_frozen_prefix_on_normal_turn(self) -> None:
+    def test_existing_session_epoch_does_not_refresh_frozen_prefix_on_normal_turn(
+        self,
+    ) -> None:
         """Frozen prefix only refreshes on episode open, not on normal turns."""
         session = Episode(
             episode_id="episode:wx",
@@ -229,7 +252,10 @@ class GatewayContextHistoryTest(unittest.TestCase):
         # Frozen prefix does NOT refresh on normal turns (only on episode open)
         self.assertEqual(updated.frozen_prefix, "old PM facts")
         self.assertEqual(updated.compacted_history_summary, "older summary")
-        self.assertEqual(tuple(message.content for message in updated.history_messages), ("existing tail",))
+        self.assertEqual(
+            tuple(message.content for message in updated.history_messages),
+            ("existing tail",),
+        )
 
     def test_internal_proactive_prompt_is_not_appended_to_session_epoch(self) -> None:
         session = Episode(

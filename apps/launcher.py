@@ -9,20 +9,46 @@ import typer
 
 from apps.runtime_layout import default_cli_state_dir
 
-from .cli.shell import Align, BRAND_ACCENT, BRAND_LIGHT, BRAND_MUTED, Console, Group, Panel, RICH_AVAILABLE, Text, _resolve_elephant_version
+from .cli.shell import (
+    Align,
+    BRAND_ACCENT,
+    BRAND_LIGHT,
+    BRAND_MUTED,
+    Console,
+    Group,
+    Panel,
+    RICH_AVAILABLE,
+    Text,
+    _resolve_elephant_version,
+)
 from .cli.typer_support import run_typer_app
-from .cli.cli_main_support import CLI_COMMAND_HELP, CLI_HELP_COMMANDS, CLI_HELP_NEXT_COMMANDS, CLI_HELP_TAGLINE, _print_cli_help, _render_cli_banner_mark
+from .cli.cli_main_support import (
+    CLI_COMMAND_HELP,
+    CLI_HELP_COMMANDS,
+    CLI_HELP_NEXT_COMMANDS,
+    CLI_HELP_TAGLINE,
+    _print_cli_help,
+    _render_cli_banner_mark,
+)
 
 LAUNCHER_COMMAND_HELP = {
     **CLI_COMMAND_HELP,
     "upgrade": "Gracefully upgrade Elephant Agent, preserving state and restarting managed runtimes.",
 }
-LAUNCHER_HELP_COMMANDS = (*CLI_HELP_COMMANDS, ("upgrade", LAUNCHER_COMMAND_HELP["upgrade"]))
+LAUNCHER_HELP_COMMANDS = (
+    *CLI_HELP_COMMANDS,
+    ("upgrade", LAUNCHER_COMMAND_HELP["upgrade"]),
+)
 
 
 def _ensure_config_yaml(state_dir: Path) -> None:
     """Ensure config.yaml exists so the configuration is visible."""
-    from packages.runtime_config import default_global_config, write_global_config, global_config_path_for_state_dir
+    from packages.runtime_config import (
+        default_global_config,
+        write_global_config,
+        global_config_path_for_state_dir,
+    )
+
     state_dir.mkdir(parents=True, exist_ok=True)
     config_path = global_config_path_for_state_dir(state_dir)
     if not config_path.exists():
@@ -38,7 +64,10 @@ def _show_launcher_banner() -> None:
         header = Text()
         header.append("🥚  Elephant Agent\n", style=f"bold {BRAND_LIGHT}")
         header.append("Personal-model-first AI, with curiosity built in.\n", style=BRAND_MUTED)
-        header.append(f"🐣  v{_resolve_elephant_version()} · understands first, gets curious at your pace.", style=BRAND_ACCENT)
+        header.append(
+            f"🐣  v{_resolve_elephant_version()} · understands first, gets curious at your pace.",
+            style=BRAND_ACCENT,
+        )
         commands = Text()
         commands.append("Start here\n", style=f"bold {BRAND_ACCENT}")
         commands.append("🐣 elephant init\n", style=f"bold {BRAND_LIGHT}")
@@ -147,7 +176,11 @@ def build_typer_app() -> typer.Typer:
             )
         )
 
-    @app.command("gateway", help=CLI_COMMAND_HELP["gateway"], context_settings=passthrough_settings)
+    @app.command(
+        "gateway",
+        help=CLI_COMMAND_HELP["gateway"],
+        context_settings=passthrough_settings,
+    )
     def gateway_command(ctx: typer.Context) -> None:
         from apps.gateway.__main__ import command_main as gateway_command_main
 
@@ -162,7 +195,9 @@ def build_typer_app() -> typer.Typer:
 
     @app.command("cron", help=CLI_COMMAND_HELP["cron"], context_settings=passthrough_settings)
     def cron_command(ctx: typer.Context) -> None:
-        from apps.cron_scheduler_command import command_main as cron_scheduler_command_main
+        from apps.cron_scheduler_command import (
+            command_main as cron_scheduler_command_main,
+        )
 
         obj = ctx.obj or {}
         raise typer.Exit(
@@ -173,7 +208,11 @@ def build_typer_app() -> typer.Typer:
             )
         )
 
-    @app.command("upgrade", help=LAUNCHER_COMMAND_HELP["upgrade"], context_settings=passthrough_settings)
+    @app.command(
+        "upgrade",
+        help=LAUNCHER_COMMAND_HELP["upgrade"],
+        context_settings=passthrough_settings,
+    )
     def upgrade_command(ctx: typer.Context) -> None:
         from apps.upgrade_command import command_main as upgrade_command_main
 
@@ -206,7 +245,11 @@ def build_typer_app() -> typer.Typer:
             )
         )
 
-    @app.command("dashboard", help=CLI_COMMAND_HELP["dashboard"], context_settings=passthrough_settings)
+    @app.command(
+        "dashboard",
+        help=CLI_COMMAND_HELP["dashboard"],
+        context_settings=passthrough_settings,
+    )
     def dashboard_command(ctx: typer.Context) -> None:
         from apps.dashboard_command import command_main as dashboard_command_main
 
@@ -218,7 +261,11 @@ def build_typer_app() -> typer.Typer:
             )
         )
 
-    @app.command("provider", help=CLI_COMMAND_HELP["provider"], context_settings=passthrough_settings)
+    @app.command(
+        "provider",
+        help=CLI_COMMAND_HELP["provider"],
+        context_settings=passthrough_settings,
+    )
     def provider_passthrough(ctx: typer.Context) -> None:
         obj = ctx.obj or {}
         raise typer.Exit(_forward_cli(["provider", *ctx.args], state_dir=obj["state_dir"]))
@@ -233,7 +280,11 @@ def build_typer_app() -> typer.Typer:
         obj = ctx.obj or {}
         raise typer.Exit(_forward_cli(["facts", *ctx.args], state_dir=obj["state_dir"]))
 
-    @app.command("reflect", help=CLI_COMMAND_HELP["reflect"], context_settings=passthrough_settings)
+    @app.command(
+        "reflect",
+        help=CLI_COMMAND_HELP["reflect"],
+        context_settings=passthrough_settings,
+    )
     def reflect_passthrough(ctx: typer.Context) -> None:
         obj = ctx.obj or {}
         raise typer.Exit(_forward_cli(["reflect", *ctx.args], state_dir=obj["state_dir"]))

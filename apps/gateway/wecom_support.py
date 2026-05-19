@@ -4,26 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-import importlib.util
 import os
-from pathlib import Path
 
-from apps.runtime_layout import default_cli_state_dir
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayExchange,
-    GatewayInboundMessage,
     GatewayOutboundMessage,
 )
 
-from .cli_control import (
-    CliRuntimeFactory,
-    GatewayCliBindingStore,
-    GatewayCliControlService,
-    load_gateway_cli_control_config,
-)
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
-from .runtime import GatewayApp, build_gateway_app
+from .runtime import GatewayApp
 
 # ---------------------------------------------------------------------------
 # Environment variable defaults
@@ -129,10 +118,7 @@ def _normalize_transport(value: str | None) -> str:
     normalized = str(value or "websocket").strip().lower().replace("_", "-")
     if normalized in {"websocket", "wecom-websocket"}:
         return "websocket"
-    raise ValueError(
-        "wecom transport must be one of "
-        f"{', '.join(SUPPORTED_WECOM_TRANSPORTS)}"
-    )
+    raise ValueError(f"wecom transport must be one of {', '.join(SUPPORTED_WECOM_TRANSPORTS)}")
 
 
 def _coerce_list(value: object) -> tuple[str, ...]:
@@ -260,12 +246,8 @@ def load_wecom_gateway_accounts(
             resolved.append(
                 WecomGatewayAccountConfig(
                     account_id=str(account_mapping.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID),
-                    bot_id_env_var=str(
-                        env_payload.get("bot_id") or DEFAULT_WECOM_BOT_ID_ENV
-                    ),
-                    secret_env_var=str(
-                        env_payload.get("secret") or DEFAULT_WECOM_SECRET_ENV
-                    ),
+                    bot_id_env_var=str(env_payload.get("bot_id") or DEFAULT_WECOM_BOT_ID_ENV),
+                    secret_env_var=str(env_payload.get("secret") or DEFAULT_WECOM_SECRET_ENV),
                     surface=str(account_mapping.get("surface") or default_surface),
                     enabled=account_enabled,
                     ws_url=str(account_mapping.get("ws_url") or DEFAULT_WECOM_WS_URL),
@@ -290,13 +272,9 @@ def resolve_wecom_account(
     bot_id = str(env.get(config.bot_id_env_var) or "").strip()
     secret = str(env.get(config.secret_env_var) or "").strip()
     if not bot_id:
-        raise LookupError(
-            f"wecom account '{config.account_id}' requires {config.bot_id_env_var}"
-        )
+        raise LookupError(f"wecom account '{config.account_id}' requires {config.bot_id_env_var}")
     if not secret:
-        raise LookupError(
-            f"wecom account '{config.account_id}' requires {config.secret_env_var}"
-        )
+        raise LookupError(f"wecom account '{config.account_id}' requires {config.secret_env_var}")
     return WecomResolvedAccount(
         account_id=config.account_id,
         bot_id=bot_id,

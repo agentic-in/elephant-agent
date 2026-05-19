@@ -6,21 +6,20 @@ import tempfile
 import unittest
 
 from packages.contracts.runtime import ExecutionResult
-from packages.gateway_core.outbound_delivery import GatewayMessageDeliverySurface, _try_parse_session_route
+from packages.gateway_core.outbound_delivery import (
+    GatewayMessageDeliverySurface,
+    _try_parse_session_route,
+)
 from packages.gateway_core.outbound_queue import GatewayOutboundQueue
 
 
 class ParseSessionRouteTest(unittest.TestCase):
     def test_valid_session_id(self):
-        result = _try_parse_session_route(
-            "session:messaging.feishu:bot123@im.bot:user456@im.feishu"
-        )
+        result = _try_parse_session_route("session:messaging.feishu:bot123@im.bot:user456@im.feishu")
         self.assertEqual(result, ("messaging.feishu", "bot123@im.bot", "user456@im.feishu"))
 
     def test_conversation_id_with_colons(self):
-        result = _try_parse_session_route(
-            "session:messaging.weixin:bot@im.bot:conv:with:colons"
-        )
+        result = _try_parse_session_route("session:messaging.weixin:bot@im.bot:conv:with:colons")
         self.assertEqual(result, ("messaging.weixin", "bot@im.bot", "conv:with:colons"))
 
     def test_invalid_prefix_returns_none(self):
@@ -78,12 +77,14 @@ class GatewayMessageDeliverySurfaceTest(unittest.TestCase):
 
     def test_send_via_identity_store_fallback(self):
         """CLI session_id doesn't parse — falls back to identity store."""
-        identity_store = _FakeIdentityStore([
-            _FakeIdentityRecord(
-                key=_FakeIdentityKey("messaging.feishu", "bot@im.bot", "zoey@im.feishu"),
-                elephant_id="elephant-001",
-            ),
-        ])
+        identity_store = _FakeIdentityStore(
+            [
+                _FakeIdentityRecord(
+                    key=_FakeIdentityKey("messaging.feishu", "bot@im.bot", "zoey@im.feishu"),
+                    elephant_id="elephant-001",
+                ),
+            ]
+        )
         surface = GatewayMessageDeliverySurface(
             outbound_queue=self.queue,
             identity_store=identity_store,
@@ -101,16 +102,18 @@ class GatewayMessageDeliverySurfaceTest(unittest.TestCase):
 
     def test_send_with_target_hint_filters_adapter(self):
         """Target hint selects the right adapter."""
-        identity_store = _FakeIdentityStore([
-            _FakeIdentityRecord(
-                key=_FakeIdentityKey("messaging.feishu", "bot@feishu", "user@feishu"),
-                elephant_id="elephant-001",
-            ),
-            _FakeIdentityRecord(
-                key=_FakeIdentityKey("messaging.weixin", "bot@wx", "user@wx"),
-                elephant_id="elephant-001",
-            ),
-        ])
+        identity_store = _FakeIdentityStore(
+            [
+                _FakeIdentityRecord(
+                    key=_FakeIdentityKey("messaging.feishu", "bot@feishu", "user@feishu"),
+                    elephant_id="elephant-001",
+                ),
+                _FakeIdentityRecord(
+                    key=_FakeIdentityKey("messaging.weixin", "bot@wx", "user@wx"),
+                    elephant_id="elephant-001",
+                ),
+            ]
+        )
         surface = GatewayMessageDeliverySurface(
             outbound_queue=self.queue,
             identity_store=identity_store,

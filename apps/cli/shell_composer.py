@@ -5,7 +5,11 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from .shell_clipboard import compile_submission, import_system_clipboard, build_text_attachment
+from .shell_clipboard import (
+    compile_submission,
+    import_system_clipboard,
+    build_text_attachment,
+)
 from .shell_stack import (
     Application,
     BeforeInput,
@@ -106,6 +110,7 @@ def build_prompt_buffer(shell: ProductizedShell):
     # (commands are short lists) but meaningful smoothness win.
     try:
         from prompt_toolkit.completion import ThreadedCompleter
+
         completer = ThreadedCompleter(ShellCompleter(shell))
     except Exception:
         completer = ShellCompleter(shell)
@@ -186,7 +191,7 @@ def _ghost_hint_match(shell: ProductizedShell, text: str) -> tuple[str, str] | N
         if name_lc == prefix:
             return None
         if name_lc.startswith(prefix):
-            tail = name[len(first_line):]
+            tail = name[len(first_line) :]
             return tail, description
     return None
 
@@ -218,6 +223,7 @@ def _composer_ghost_fragments(shell: ProductizedShell, buffer):
 def build_input_meta_window(shell: ProductizedShell, buffer):
     try:
         from prompt_toolkit.layout import WindowAlign
+
         align = WindowAlign.RIGHT
     except Exception:
         align = None
@@ -1018,6 +1024,7 @@ def build_key_bindings(shell: ProductizedShell | None = None, *, submit=None, al
         if match is None:
             # Let the regular completion menu handle it.
             from prompt_toolkit.key_binding.bindings.named_commands import menu_complete
+
             try:
                 menu_complete(event)
             except Exception:

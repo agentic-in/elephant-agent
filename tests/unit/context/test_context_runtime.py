@@ -30,7 +30,12 @@ from packages.contracts.runtime import StateFocusDecision
 
 
 class ContextRuntimeTest(unittest.TestCase):
-    def _session(self, *, interruption_state: str | None = None, parent_session_id: str | None = None) -> Episode:
+    def _session(
+        self,
+        *,
+        interruption_state: str | None = None,
+        parent_session_id: str | None = None,
+    ) -> Episode:
         return Episode(
             episode_id="session-1",
             state_id="state:test",
@@ -156,9 +161,21 @@ class ContextRuntimeTest(unittest.TestCase):
             120,
             (
                 ContextBudgetRequest("stable_prefix", 32, minimum_tokens=16, required=True, priority=100),
-                ContextBudgetRequest("session_snapshot", 72, minimum_tokens=32, required=True, priority=90),
+                ContextBudgetRequest(
+                    "session_snapshot",
+                    72,
+                    minimum_tokens=32,
+                    required=True,
+                    priority=90,
+                ),
                 ContextBudgetRequest("loop_context", 32, minimum_tokens=16, required=True, priority=80),
-                ContextBudgetRequest("request_attachments", 24, minimum_tokens=0, required=False, priority=10),
+                ContextBudgetRequest(
+                    "request_attachments",
+                    24,
+                    minimum_tokens=0,
+                    required=False,
+                    priority=10,
+                ),
             ),
         )
 
@@ -286,7 +303,9 @@ class ContextRuntimeTest(unittest.TestCase):
         # Per R1, Source Trace is telemetry only — not rendered into the prompt.
         self.assertNotIn("Source Trace", detailed.rendered_prompt)
 
-    def test_steady_selection_prefers_work_item_linked_memory_over_newer_filler(self) -> None:
+    def test_steady_selection_prefers_work_item_linked_memory_over_newer_filler(
+        self,
+    ) -> None:
         runtime = ContextRuntime(
             planner=LayeredContextPlanner(
                 budget_manager=DeterministicBudgetManager(),
@@ -356,7 +375,8 @@ class ContextRuntimeTest(unittest.TestCase):
         # tag. It is now a short natural label (`Summary:`, `Decision:`,
         # `Relationship note:`, ...).
         evidence_lines = tuple(
-            line for line in snapshot_layer.content
+            line
+            for line in snapshot_layer.content
             if "Summary: The last turn asked for recovery after a gap." in line and "why:" in line
         )
         self.assertTrue(evidence_lines)
@@ -366,7 +386,9 @@ class ContextRuntimeTest(unittest.TestCase):
         prompt_snapshot = detailed.bundle.prompt_envelope.session_snapshot
         self.assertEqual(prompt_snapshot, "")
 
-    def test_session_snapshot_summary_keeps_profile_values_legible_when_truncated(self) -> None:
+    def test_session_snapshot_summary_keeps_profile_values_legible_when_truncated(
+        self,
+    ) -> None:
         runtime = ContextRuntime(
             planner=LayeredContextPlanner(
                 budget_manager=DeterministicBudgetManager(),
@@ -397,7 +419,9 @@ class ContextRuntimeTest(unittest.TestCase):
         self.assertNotIn("Preferred name: Xunzhuo", prompt_snapshot)
         self.assertNotIn("MBTI: INTJ", prompt_snapshot)
 
-    def test_steady_layer_prefers_work_item_linked_and_corrected_memory_over_blind_recency(self) -> None:
+    def test_steady_layer_prefers_work_item_linked_and_corrected_memory_over_blind_recency(
+        self,
+    ) -> None:
         runtime = ContextRuntime(
             planner=LayeredContextPlanner(
                 budget_manager=DeterministicBudgetManager(),
@@ -524,7 +548,9 @@ class ContextRuntimeTest(unittest.TestCase):
         self.assertIn("steady:", snapshot_summary)
         self.assertIn("interruption: resume-after-gap", snapshot_summary)
 
-    def test_replay_request_does_not_depend_on_removed_structured_evidence_copies(self) -> None:
+    def test_replay_request_does_not_depend_on_removed_structured_evidence_copies(
+        self,
+    ) -> None:
         runtime = ContextRuntime(
             planner=LayeredContextPlanner(
                 budget_manager=DeterministicBudgetManager(),
@@ -581,10 +607,19 @@ class ContextRuntimeTest(unittest.TestCase):
         self.assertIsNotNone(detailed.frame)
         assert detailed.frame is not None
         self.assertEqual(detailed.frame.session_snapshot.work_refs, ())
-        self.assertNotIn("work-slice: personal_model scope suppressed active elephant work items", detailed.frame.session_snapshot.content)
+        self.assertNotIn(
+            "work-slice: personal_model scope suppressed active elephant work items",
+            detailed.frame.session_snapshot.content,
+        )
         self.assertIsNone(detailed.frame.replay_packet)
-        self.assertIn("work slice suppressed by personal_model scope", detailed.summary_by_layer["session_snapshot"])
-        self.assertIn("personal-model elephant focus suppresses unrelated work refs", detailed.plan.rationale)
+        self.assertIn(
+            "work slice suppressed by personal_model scope",
+            detailed.summary_by_layer["session_snapshot"],
+        )
+        self.assertIn(
+            "personal-model elephant focus suppresses unrelated work refs",
+            detailed.plan.rationale,
+        )
 
 
 if __name__ == "__main__":

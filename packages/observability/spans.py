@@ -52,7 +52,8 @@ def trace_kernel_turn(
     if trigger_type:
         attrs[ATTR_TRIGGER_TYPE] = trigger_type
     with _tracer.start_as_current_span(
-        "invoke_agent", attributes=attrs,
+        "invoke_agent",
+        attributes=attrs,
     ) as span:
         yield span
 
@@ -72,7 +73,8 @@ def trace_model_call(
         **_elephant_attrs(episode_id=episode_id, loop_id=loop_id),
     }
     with _tracer.start_as_current_span(
-        f"chat {model_id}", attributes=attrs,
+        f"chat {model_id}",
+        attributes=attrs,
     ) as span:
         yield span
 
@@ -105,6 +107,7 @@ def trace_tool_execution(
         **_elephant_attrs(episode_id=episode_id, loop_id=loop_id),
     }
     with _tracer.start_as_current_span(
-        f"execute_tool {tool_name}", attributes=attrs,
+        f"execute_tool {tool_name}",
+        attributes=attrs,
     ) as span:
         yield span

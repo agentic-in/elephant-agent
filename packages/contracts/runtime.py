@@ -7,7 +7,7 @@ them without creating import cycles or backend-specific coupling.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Mapping
 
@@ -24,7 +24,9 @@ def _ensure_non_empty_text(value: str, *, name: str) -> None:
 
 _ALLOWED_STATE_FOCUS_MODES = frozenset({"embedded", "skip"})
 _ALLOWED_INDEX_REFRESH_SCOPES = frozenset({"noop", "full"})
-_ALLOWED_STATE_FOCUS_FAMILIES = frozenset({"execution", "exploration", "creation", "reference", "personal_model", "resume"})
+_ALLOWED_STATE_FOCUS_FAMILIES = frozenset(
+    {"execution", "exploration", "creation", "reference", "personal_model", "resume"}
+)
 _ALLOWED_STATE_FOCUS_CANDIDATE_KINDS = frozenset({"work_item"})
 _ALLOWED_CONTINUITY_SIGNALS = frozenset({"none", "continue", "resume", "interrupted", "inherit"})
 _ALLOWED_FOCUS_SCOPES = frozenset({"episode", "lineage", "state", "personal_model"})
@@ -252,7 +254,9 @@ class StateFocusDecision:
 
     def __post_init__(self) -> None:
         if self.focus_family not in _ALLOWED_STATE_FOCUS_FAMILIES:
-            raise ValueError(f"focus_family must be one of {sorted(_ALLOWED_STATE_FOCUS_FAMILIES)}: {self.focus_family}")
+            raise ValueError(
+                f"focus_family must be one of {sorted(_ALLOWED_STATE_FOCUS_FAMILIES)}: {self.focus_family}"
+            )
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("state focus confidence must stay between 0.0 and 1.0")
         if self.continuity_signal not in _ALLOWED_CONTINUITY_SIGNALS:
@@ -260,13 +264,9 @@ class StateFocusDecision:
                 f"continuity_signal must be one of {sorted(_ALLOWED_CONTINUITY_SIGNALS)}: {self.continuity_signal}"
             )
         if self.focus_scope not in _ALLOWED_FOCUS_SCOPES:
-            raise ValueError(
-                f"focus_scope must be one of {sorted(_ALLOWED_FOCUS_SCOPES)}: {self.focus_scope}"
-            )
+            raise ValueError(f"focus_scope must be one of {sorted(_ALLOWED_FOCUS_SCOPES)}: {self.focus_scope}")
         if self.context_budget not in _ALLOWED_BUDGET_CLASSES:
-            raise ValueError(
-                f"context_budget must be one of {sorted(_ALLOWED_BUDGET_CLASSES)}: {self.context_budget}"
-            )
+            raise ValueError(f"context_budget must be one of {sorted(_ALLOWED_BUDGET_CLASSES)}: {self.context_budget}")
         if self.degradation_mode not in _ALLOWED_STATE_FOCUS_DEGRADATION_MODES:
             raise ValueError(
                 "degradation_mode must be one of "
@@ -397,7 +397,10 @@ class RuntimeEvidenceBundle:
     artifacts: tuple[RuntimeArtifact, ...] = ()
 
     def __post_init__(self) -> None:
-        _ensure_unique_ids(tuple(item.evidence_id for item in self.recall_items), name="recall evidence")
+        _ensure_unique_ids(
+            tuple(item.evidence_id for item in self.recall_items),
+            name="recall evidence",
+        )
         _ensure_unique_ids(tuple(artifact.artifact_id for artifact in self.artifacts), name="artifact")
         for item in self.recall_items:
             if item.episode_id != self.episode_id:
@@ -566,7 +569,10 @@ class ProcedureLibrary:
     procedures: tuple[ProcedureRecord, ...] = ()
 
     def __post_init__(self) -> None:
-        _ensure_unique_ids(tuple(procedure.procedure_id for procedure in self.procedures), name="procedure")
+        _ensure_unique_ids(
+            tuple(procedure.procedure_id for procedure in self.procedures),
+            name="procedure",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,9 +599,7 @@ class PromptEnvelope:
 
     def system_prompt(self) -> str:
         return "\n\n".join(
-            section
-            for section in (self.frozen_prefix.strip(), self.session_snapshot.strip())
-            if section
+            section for section in (self.frozen_prefix.strip(), self.session_snapshot.strip()) if section
         )
 
     def user_prelude(self) -> str:

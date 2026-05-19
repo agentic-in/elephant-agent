@@ -72,8 +72,9 @@ def _detect_paste_intent(text: str) -> str:
     if "traceback (most recent call last)" in lowered:
         return "error"
     error_marker_count = sum(
-        1 for line in stripped.splitlines()
-        if line.strip().startswith(("File \"", "File '", "  at ", "Error:", "Exception", "Caused by:"))
+        1
+        for line in stripped.splitlines()
+        if line.strip().startswith(('File "', "File '", "  at ", "Error:", "Exception", "Caused by:"))
     )
     if error_marker_count >= 2:
         return "error"
@@ -84,7 +85,18 @@ def _detect_paste_intent(text: str) -> str:
             stripped_line = line.strip()
             if not stripped_line:
                 continue
-            if stripped_line.startswith(("def ", "class ", "import ", "from ", "function ", "const ", "let ", "var ")):
+            if stripped_line.startswith(
+                (
+                    "def ",
+                    "class ",
+                    "import ",
+                    "from ",
+                    "function ",
+                    "const ",
+                    "let ",
+                    "var ",
+                )
+            ):
                 code_markers += 2
             elif stripped_line.endswith((":", "{", "}", ");", ";")):
                 code_markers += 1
@@ -150,7 +162,8 @@ def import_system_clipboard(*, storage_dir: Path) -> tuple[ClipboardAttachment, 
         attachments = [
             attachment
             for raw_path in probe.paths
-            if (attachment := build_path_attachment(raw_path, kind_hint="image" if probe.kind == "image" else None)) is not None
+            if (attachment := build_path_attachment(raw_path, kind_hint="image" if probe.kind == "image" else None))
+            is not None
         ]
         return tuple(attachments)
     return ()
@@ -165,9 +178,7 @@ def compile_submission(raw_text: str, attachments: Iterable[ClipboardAttachment]
     display_command = _expanded_display_command(normalized, items) or compact_display_command
     prompt_parts: list[str] = [normalized] if normalized else []
     prompt_parts.extend(
-        attachment.prompt_fragment.strip()
-        for attachment in items
-        if attachment.prompt_fragment.strip()
+        attachment.prompt_fragment.strip() for attachment in items if attachment.prompt_fragment.strip()
     )
     command = "\n\n".join(part for part in prompt_parts if part)
     visible = display_command or normalized or command
@@ -252,11 +263,7 @@ def _probe_macos_clipboard(*, storage_dir: Path) -> _ClipboardProbe:
     if kind == "text":
         return _ClipboardProbe(kind="text", text=str(payload.get("text") or ""))
     if kind == "files":
-        paths = tuple(
-            str(path).strip()
-            for path in payload.get("paths", ())
-            if str(path or "").strip()
-        )
+        paths = tuple(str(path).strip() for path in payload.get("paths", ()) if str(path or "").strip())
         return _ClipboardProbe(kind="files", paths=paths)
     if kind == "image":
         path = str(payload.get("path") or "").strip()
@@ -290,28 +297,28 @@ def _macos_clipboard_script(image_path: str) -> str:
         'ObjC.import("AppKit");'
         'ObjC.import("Foundation");'
         'function emit(obj){var text=JSON.stringify(obj)+"\\n";'
-        'var data=$(text).dataUsingEncoding($.NSUTF8StringEncoding);'
-        '$.NSFileHandle.fileHandleWithStandardOutput.writeData(data);}'
-        'var pb=$.NSPasteboard.generalPasteboard;'
-        'var items=pb.pasteboardItems;'
-        'var paths=[];'
-        'if(items){for(var i=0;i<items.count;i++){' 
-        'var item=items.objectAtIndex(i);'
+        "var data=$(text).dataUsingEncoding($.NSUTF8StringEncoding);"
+        "$.NSFileHandle.fileHandleWithStandardOutput.writeData(data);}"
+        "var pb=$.NSPasteboard.generalPasteboard;"
+        "var items=pb.pasteboardItems;"
+        "var paths=[];"
+        "if(items){for(var i=0;i<items.count;i++){"
+        "var item=items.objectAtIndex(i);"
         'var urlString=item.stringForType($("public.file-url"))||item.stringForType($("NSURLPboardType"));'
-        'if(urlString){var nsurl=$.NSURL.URLWithString(urlString);'
-        'if(nsurl&&nsurl.isFileURL){paths.push(ObjC.unwrap(nsurl.path));}}}}'
+        "if(urlString){var nsurl=$.NSURL.URLWithString(urlString);"
+        "if(nsurl&&nsurl.isFileURL){paths.push(ObjC.unwrap(nsurl.path));}}}}"
         'if(paths.length){emit({kind:"files",paths:paths});}'
-        'else{var str=pb.stringForType($.NSPasteboardTypeString);'
+        "else{var str=pb.stringForType($.NSPasteboardTypeString);"
         'if(str){emit({kind:"text",text:ObjC.unwrap(str)});}'
         'else{var data=pb.dataForType($("public.png"))||pb.dataForType($("Apple PNG pasteboard type"));'
-        f'var imagePath={path_literal};'
-        'if(data){var ok=data.writeToFileAtomically($(imagePath),true);'
+        f"var imagePath={path_literal};"
+        "if(data){var ok=data.writeToFileAtomically($(imagePath),true);"
         'emit(ok?{kind:"image",path:imagePath}:{kind:"empty"});}'
-        'else{var image=$.NSImage.alloc.initWithPasteboard(pb);'
-        'if(image&&image.isValid()){var tiff=image.TIFFRepresentation();'
-        'var rep=tiff?$.NSBitmapImageRep.imageRepWithData(tiff):null;'
-        'var png=rep?rep.representationUsingTypeProperties($.NSBitmapImageFileTypePNG,$({})):null;'
-        'if(png){var wrote=png.writeToFileAtomically($(imagePath),true);'
+        "else{var image=$.NSImage.alloc.initWithPasteboard(pb);"
+        "if(image&&image.isValid()){var tiff=image.TIFFRepresentation();"
+        "var rep=tiff?$.NSBitmapImageRep.imageRepWithData(tiff):null;"
+        "var png=rep?rep.representationUsingTypeProperties($.NSBitmapImageFileTypePNG,$({})):null;"
+        "if(png){var wrote=png.writeToFileAtomically($(imagePath),true);"
         'emit(wrote?{kind:"image",path:imagePath}:{kind:"empty"});}'
         'else{emit({kind:"empty"});}}'
         'else{emit({kind:"empty"});}}}'

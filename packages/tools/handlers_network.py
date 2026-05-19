@@ -22,7 +22,12 @@ from .handler_support import (
     truncate,
 )
 from .runtime import ToolInvocation
-from .surfaces import BrowserToolBackend, BrowserVisionAnalyzer, ClarifySurface, MessageDeliverySurface
+from .surfaces import (
+    BrowserToolBackend,
+    BrowserVisionAnalyzer,
+    ClarifySurface,
+    MessageDeliverySurface,
+)
 
 _WEB_SEARCH_SUMMARY_LIMIT = 4_800
 
@@ -144,14 +149,18 @@ def run_web_search(invocation: ToolInvocation, *, user_agent: str) -> Mapping[st
             fallback_lines = _run_duckduckgo_instant_answer(candidate, user_agent=user_agent, limit=limit)
         except Exception as error:
             if search_error is not None:
-                raise RuntimeError(f"web search failed after HTML and fallback attempts: {search_error}; {error}") from error
+                raise RuntimeError(
+                    f"web search failed after HTML and fallback attempts: {search_error}; {error}"
+                ) from error
             raise
         if fallback_lines:
             fallback_query = candidate
             break
     if search_error is not None and not fallback_lines:
         raise RuntimeError(f"web search failed: {search_error}") from search_error
-    summary_lines = [f"search: {fallback_query}", *fallback_lines] if fallback_lines else [f"no web results for query: {query}"]
+    summary_lines = (
+        [f"search: {fallback_query}", *fallback_lines] if fallback_lines else [f"no web results for query: {query}"]
+    )
     return tool_summary(
         invocation,
         truncate("\n".join(summary_lines), limit=_WEB_SEARCH_SUMMARY_LIMIT),

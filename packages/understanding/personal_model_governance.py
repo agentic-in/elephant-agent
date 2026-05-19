@@ -59,9 +59,9 @@ class ProtectedTopicPolicy:
 
 ALLOWED_FACETS: dict[str, frozenset[str]] = {
     "identity": frozenset({"anchor", "character", "values", "style", "body"}),
-    "world":    frozenset({"people", "projects", "tools", "places", "assets", "skills"}),
-    "pulse":    frozenset({"chapter", "focus", "mood", "blockers", "intent"}),
-    "journey":  frozenset({"lessons", "patterns", "decisions", "milestones"}),
+    "world": frozenset({"people", "projects", "tools", "places", "assets", "skills"}),
+    "pulse": frozenset({"chapter", "focus", "mood", "blockers", "intent"}),
+    "journey": frozenset({"lessons", "patterns", "decisions", "milestones"}),
 }
 
 
@@ -71,23 +71,28 @@ def ensure_valid_facet(lens: str, facet: str) -> None:
         return
     if facet not in allowed:
         raise ValueError(
-            f"topic second segment must be a fixed facet for lens {lens!r}: "
-            f"got {facet!r}, allowed {sorted(allowed)}"
+            f"topic second segment must be a fixed facet for lens {lens!r}: got {facet!r}, allowed {sorted(allowed)}"
         )
 
 
 _SYSTEM_PROTECTED_TOPICS: dict[str, ProtectedTopicPolicy] = {
     # identity — who the person is (anchor, character, style, body)
     "identity.anchor.name.preferred": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "identity"),
-    "identity.anchor.gender.self_description": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "identity"),
+    "identity.anchor.gender.self_description": ProtectedTopicPolicy(
+        "system", "init_core_profile", "core_prompt", "identity"
+    ),
     "identity.anchor.birth.date": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "identity"),
     "identity.anchor.age.current": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "identity"),
     "identity.character.mbti.type": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "identity"),
     "identity.character.rhythm.pressure": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "rhythm"),
     "identity.character.rhythm.recovery": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "rhythm"),
     "identity.character.decision.compass": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "rhythm"),
-    "identity.style.language.first": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "communication"),
-    "identity.style.companion.posture": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "collaboration"),
+    "identity.style.language.first": ProtectedTopicPolicy(
+        "system", "init_core_profile", "core_prompt", "communication"
+    ),
+    "identity.style.companion.posture": ProtectedTopicPolicy(
+        "system", "init_core_profile", "core_prompt", "collaboration"
+    ),
     "identity.style.hobbies.personal": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "preference"),
     "identity.body.safety.boundary": ProtectedTopicPolicy("system", "init_core_profile", "core_prompt", "safety"),
     # world — what is around the person (people, projects, tools, places, assets)
@@ -175,7 +180,13 @@ def parse_topic_path(topic: object) -> TopicPath | None:
         return None
     if not all(_TOPIC_SEGMENT_RE.fullmatch(part) for part in parts):
         return None
-    return TopicPath(raw=normalized, domain=parts[0], entity=parts[1], aspect=parts[2], qualifier=parts[3:])
+    return TopicPath(
+        raw=normalized,
+        domain=parts[0],
+        entity=parts[1],
+        aspect=parts[2],
+        qualifier=parts[3:],
+    )
 
 
 def valid_topic_key(topic: object) -> str:
@@ -226,7 +237,12 @@ def topic_relation_weight(left: object, right: object) -> float:
 def policy_for_topic(topic: object) -> TopicPolicy:
     if parse_topic_path(topic) is None:
         return TopicPolicy()
-    return TopicPolicy(active_cardinality="single", default_recall_policy="review", review_after_days=14, projection_visible=True)
+    return TopicPolicy(
+        active_cardinality="single",
+        default_recall_policy="review",
+        review_after_days=14,
+        projection_visible=True,
+    )
 
 
 def is_single_active_topic(topic: object) -> bool:
@@ -269,12 +285,13 @@ def is_skill_affinity_topic(topic: object) -> bool:
     resolved = valid_topic_key(topic)
     return resolved.startswith("world.skills.affinity.") or resolved.startswith("skills.affinity.")
 
+
 def skill_affinity_index_id(topic: object) -> str:
     resolved = valid_topic_key(topic)
     if resolved.startswith("world.skills.affinity."):
-        return resolved[len("world.skills.affinity."):]
+        return resolved[len("world.skills.affinity.") :]
     if resolved.startswith("skills.affinity."):
-        return resolved[len("skills.affinity."):]
+        return resolved[len("skills.affinity.") :]
     return ""
 
 
@@ -320,13 +337,28 @@ def relation_payload(
     fact_numbers = set(numeric_mentions(fact.text))
     numeric_conflict = bool(source_numbers and fact_numbers and not source_numbers.issubset(fact_numbers))
     if relation == TopicRelation.SAME_TOPIC:
-        scope, matched_by, reason, score = "same_topic", "topic_path", "same topic path", 1.0
+        scope, matched_by, reason, score = (
+            "same_topic",
+            "topic_path",
+            "same topic path",
+            1.0,
+        )
     elif relation == TopicRelation.SAME_ENTITY:
         entity = topic_entity_key(source_topic)
-        scope, matched_by, reason, score = "same_entity", "topic_path", f"same topic entity {entity}", 0.75
+        scope, matched_by, reason, score = (
+            "same_entity",
+            "topic_path",
+            f"same topic entity {entity}",
+            0.75,
+        )
     elif relation == TopicRelation.SAME_DOMAIN:
         domain = topic_prefix(source_topic)
-        scope, matched_by, reason, score = "same_domain", "topic_path", f"same topic domain {domain}", 0.35
+        scope, matched_by, reason, score = (
+            "same_domain",
+            "topic_path",
+            f"same topic domain {domain}",
+            0.35,
+        )
     elif numeric_conflict and overlap >= 0.35:
         scope, matched_by, reason, score = (
             "numeric_conflict",
@@ -335,9 +367,19 @@ def relation_payload(
             max(0.72, overlap),
         )
     elif overlap >= 0.45:
-        scope, matched_by, reason, score = "text_overlap", "claim_text_overlap", "claim text overlaps with selected claim", overlap
+        scope, matched_by, reason, score = (
+            "text_overlap",
+            "claim_text_overlap",
+            "claim text overlaps with selected claim",
+            overlap,
+        )
     elif similarity >= 0.55 or (source_topic and (source_topic in fact_topic or fact_topic in source_topic)):
-        scope, matched_by, reason, score = "similar_topic", "topic_similarity", "topic keys are lexically similar", similarity
+        scope, matched_by, reason, score = (
+            "similar_topic",
+            "topic_similarity",
+            "topic keys are lexically similar",
+            similarity,
+        )
     else:
         return None
     return {
@@ -418,7 +460,10 @@ def claim_payload(fact: Fact) -> dict[str, Any]:
         "review_after_days": metadata.get("review_after_days", ""),
         "protected": protection.protection if protection is not None else "",
         "protected_reason": protection.reason if protection is not None else "",
-        "projection_policy": metadata.get("projection_policy", protection.projection_policy if protection is not None else ""),
+        "projection_policy": metadata.get(
+            "projection_policy",
+            protection.projection_policy if protection is not None else "",
+        ),
         "facet": metadata.get("facet", protection.facet if protection is not None else ""),
     }
 
@@ -481,7 +526,13 @@ def related_claims_for_selection(
         topic = clean((fact.metadata or {}).get("topic"))
         if not topic:
             continue
-        for item in similar_topic_payloads(facts, topic=topic, text=fact.text, exclude_refs=(fact.fact_id,), limit=limit):
+        for item in similar_topic_payloads(
+            facts,
+            topic=topic,
+            text=fact.text,
+            exclude_refs=(fact.fact_id,),
+            limit=limit,
+        ):
             ref = str(item.get("ref") or "")
             if not ref or ref in seen:
                 continue
@@ -502,7 +553,11 @@ def narrowing_suggestions(
 ) -> tuple[dict[str, str], ...]:
     if not selected:
         return ()
-    topics = tuple(dict.fromkeys(clean((fact.metadata or {}).get("topic")) for fact in selected if clean((fact.metadata or {}).get("topic"))))
+    topics = tuple(
+        dict.fromkeys(
+            clean((fact.metadata or {}).get("topic")) for fact in selected if clean((fact.metadata or {}).get("topic"))
+        )
+    )
     lenses = tuple(dict.fromkeys(fact.lens for fact in selected if fact.lens))
     ambiguous = len(selected) >= min(max(limit, 1), 5) or len(topics) >= 3 or len(lenses) >= 2
     if not ambiguous:
@@ -511,13 +566,29 @@ def narrowing_suggestions(
     if topics:
         reason += f" across {len(topics)} topics"
     suggestions = [
-        {"reason": reason, "suggestion": "retry with topic or ref when locating one known claim"},
-        {"reason": "verification needs a precise target", "suggestion": "retry tool.personal_model.search with an exact topic, ref, or claim phrase"},
+        {
+            "reason": reason,
+            "suggestion": "retry with topic or ref when locating one known claim",
+        },
+        {
+            "reason": "verification needs a precise target",
+            "suggestion": "retry tool.personal_model.search with an exact topic, ref, or claim phrase",
+        },
     ]
     if not lens and lenses:
-        suggestions.append({"reason": f"matches span lenses: {', '.join(lenses[:4])}", "suggestion": "add lens to constrain the owner surface"})
+        suggestions.append(
+            {
+                "reason": f"matches span lenses: {', '.join(lenses[:4])}",
+                "suggestion": "add lens to constrain the owner surface",
+            }
+        )
     if not topic and topics:
-        suggestions.append({"reason": "multiple topic keys matched", "suggestion": f"add topic, e.g. {', '.join(topics[:4])}"})
+        suggestions.append(
+            {
+                "reason": "multiple topic keys matched",
+                "suggestion": f"add topic, e.g. {', '.join(topics[:4])}",
+            }
+        )
     return tuple(suggestions)
 
 
@@ -551,8 +622,14 @@ def _numeric_conflict_payloads(facts: tuple[Fact, ...]) -> tuple[dict[str, Any],
                         "lens": lens,
                         "topic_key": topic_key,
                         "refs": (left.fact_id, right.fact_id),
-                        "topics": (clean((left.metadata or {}).get("topic")), clean((right.metadata or {}).get("topic"))),
-                        "values": (tuple(sorted(left_numbers)), tuple(sorted(right_numbers))),
+                        "topics": (
+                            clean((left.metadata or {}).get("topic")),
+                            clean((right.metadata or {}).get("topic")),
+                        ),
+                        "values": (
+                            tuple(sorted(left_numbers)),
+                            tuple(sorted(right_numbers)),
+                        ),
                         "reason": "active claims share a topic key but contain different numeric values",
                     }
                 )
@@ -595,7 +672,9 @@ def personal_model_health_report(facts: tuple[Fact, ...], *, now: datetime | Non
             without_policy.append({"ref": fact.fact_id, "lens": fact.lens, "topic": topic})
         if not reason:
             without_reason.append({"ref": fact.fact_id, "lens": fact.lens, "topic": topic})
-        verified = _parse_datetime_value(metadata.get("last_verified_at") or metadata.get("verified_at")) or fact.committed_at
+        verified = (
+            _parse_datetime_value(metadata.get("last_verified_at") or metadata.get("verified_at")) or fact.committed_at
+        )
         age_days = max(0, (current - verified).days)
         if policy == "review":
             try:
@@ -603,18 +682,37 @@ def personal_model_health_report(facts: tuple[Fact, ...], *, now: datetime | Non
             except ValueError:
                 review_days = 14
             if age_days > review_days:
-                review_overdue.append({"ref": fact.fact_id, "lens": fact.lens, "topic": topic, "age_days": str(age_days)})
+                review_overdue.append(
+                    {
+                        "ref": fact.fact_id,
+                        "lens": fact.lens,
+                        "topic": topic,
+                        "age_days": str(age_days),
+                    }
+                )
         if policy == "current" and age_days > 30:
-            current_stale.append({"ref": fact.fact_id, "lens": fact.lens, "topic": topic, "age_days": str(age_days)})
+            current_stale.append(
+                {
+                    "ref": fact.fact_id,
+                    "lens": fact.lens,
+                    "topic": topic,
+                    "age_days": str(age_days),
+                }
+            )
     retired_chain_candidates = tuple(
         {
             "lens": lens,
             "topic": topic,
             "retired_count": str(len(bucket)),
-            "refs": tuple(fact.fact_id for fact in sorted(bucket, key=lambda item: item.committed_at, reverse=True)[:8]),
+            "refs": tuple(
+                fact.fact_id for fact in sorted(bucket, key=lambda item: item.committed_at, reverse=True)[:8]
+            ),
             "reason": "topic has a long retired chain; keep for audit, but review whether old links still need dashboard prominence",
         }
-        for (lens, topic), bucket in sorted(_facts_by_topic_key(retired).items(), key=lambda item: (-len(item[1]), item[0][0], item[0][1]))
+        for (lens, topic), bucket in sorted(
+            _facts_by_topic_key(retired).items(),
+            key=lambda item: (-len(item[1]), item[0][0], item[0][1]),
+        )
         if len(bucket) >= 5
     )
     cleanup_suggestions = [

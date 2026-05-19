@@ -11,7 +11,13 @@ from packages.contracts.runtime import LearningJob
 from .evidence import build_evidence
 from .features import TRIGGER_CONSERVATISM, resolve_features
 from .features.types import Feature
-from .prompts import BOUNDARIES, CLAIM_TEXT_RULE, CONSERVATISM_PROMPTS, LANGUAGE_RULE, TOPIC_FORMAT
+from .prompts import (
+    BOUNDARIES,
+    CLAIM_TEXT_RULE,
+    CONSERVATISM_PROMPTS,
+    LANGUAGE_RULE,
+    TOPIC_FORMAT,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +131,12 @@ def _reflect_result_payload(
     features: tuple[str, ...],
 ) -> dict[str, object]:
     has_writes = any(
-        name in ("tool.personal_model.update", "tool.personal_model.questions", "tool.diary.write")
+        name
+        in (
+            "tool.personal_model.update",
+            "tool.personal_model.questions",
+            "tool.diary.write",
+        )
         for name in tool_names
     )
     status = "completed" if has_writes else "no_op"

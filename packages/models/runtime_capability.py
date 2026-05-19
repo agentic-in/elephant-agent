@@ -31,7 +31,10 @@ from packages.contracts.runtime import (
     PromptEnvelope,
     SupportModelProfile,
 )
-from packages.embeddings import OPENAI_COMPATIBLE_EMBED_PROFILE_ID, OPENAI_COMPATIBLE_EMBED_PROVIDER_ID
+from packages.embeddings import (
+    OPENAI_COMPATIBLE_EMBED_PROFILE_ID,
+    OPENAI_COMPATIBLE_EMBED_PROVIDER_ID,
+)
 from packages.models.bootstrap import (
     EmbeddingBootstrapState,
     resolve_embedding_bootstrap_state,
@@ -45,13 +48,21 @@ from packages.models.discovery import (
     heuristic_context_window,
     request_json,
 )
-from packages.models.provider_catalog import default_provider_definitions, provider_definition
+from packages.models.provider_catalog import (
+    default_provider_definitions,
+    provider_definition,
+)
 from packages.models.provider_runtime import ProviderRuntimeResolver
 from packages.models.providers import build_model_adapter
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolDefinition, ToolRuntime, build_tool_fallback_prompt
 
-from .ephemeral_injection import TurnScopedPrefixCache, ephemeral_blocks_as_user_suffix, recall_block_contents, strip_recall_blocks
+from .ephemeral_injection import (
+    TurnScopedPrefixCache,
+    ephemeral_blocks_as_user_suffix,
+    recall_block_contents,
+    strip_recall_blocks,
+)
 from .runtime import ModelRequest
 
 RequestJsonCallable = Callable[..., dict[str, Any]]
@@ -95,7 +106,9 @@ def _recall_message_contents(message: PromptMessage) -> tuple[str, ...]:
     return recall_block_contents(content)
 
 
-def _surfaced_recall_stats(messages: tuple[PromptMessage, ...]) -> tuple[int, frozenset[str]]:
+def _surfaced_recall_stats(
+    messages: tuple[PromptMessage, ...],
+) -> tuple[int, frozenset[str]]:
     contents = tuple(content for message in messages for content in _recall_message_contents(message))
     return sum(len(content.encode("utf-8")) for content in contents), frozenset(contents)
 
@@ -150,7 +163,9 @@ def _copilot_acp_status() -> tuple[str, str] | None:
     return None
 
 
-def generation_model_profile_from_auth_profile(profile: AuthProfile) -> GenerationModelProfile:
+def generation_model_profile_from_auth_profile(
+    profile: AuthProfile,
+) -> GenerationModelProfile:
     if not str(profile.default_model or "").strip():
         raise ValueError(f"auth profile '{profile.profile_id}' is missing a generation model id")
     return GenerationModelProfile(
@@ -164,7 +179,9 @@ def generation_model_profile_from_auth_profile(profile: AuthProfile) -> Generati
     )
 
 
-def support_model_profile_from_auth_profile(profile: AuthProfile) -> SupportModelProfile:
+def support_model_profile_from_auth_profile(
+    profile: AuthProfile,
+) -> SupportModelProfile:
     if not str(profile.default_model or "").strip():
         raise ValueError(f"auth profile '{profile.profile_id}' is missing a support model id")
     return SupportModelProfile(
@@ -260,9 +277,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
         # overflow retries inside the same user turn reuse the cached
         # result and never re-trigger memory providers with a stale query.
         # See `packages/models/ephemeral_injection.py`.
-        self.ephemeral_prefix_builders: tuple[EphemeralPrefixBuilder, ...] = tuple(
-            ephemeral_prefix_builders
-        )
+        self.ephemeral_prefix_builders: tuple[EphemeralPrefixBuilder, ...] = tuple(ephemeral_prefix_builders)
         self._ephemeral_prefix_cache = TurnScopedPrefixCache()
         self.state_focus_mode = "skip"
         self.bootstrap_state_dir = bootstrap_state_dir or repository.database_path.parent
@@ -735,8 +750,10 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
         except LookupError:
             profile = None
         active_profile = self.active_profile()
-        selected_profile = profile if profile is not None else (
-            active_profile if active_profile and active_profile.provider_id == provider_id else None
+        selected_profile = (
+            profile
+            if profile is not None
+            else (active_profile if active_profile and active_profile.provider_id == provider_id else None)
         )
         base_url = (
             (selected_profile.base_url if selected_profile is not None else None)
@@ -744,18 +761,16 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
             or definition.default_base_url
         )
         default_model = (
-            (selected_profile.default_model if selected_profile is not None else None)
-            or definition.default_model_id
-        )
+            selected_profile.default_model if selected_profile is not None else None
+        ) or definition.default_model_id
         secret_status = None
         secret_source = None
         if selected_profile is not None:
             secret_status, secret_source = self._profile_secret_status(selected_profile)
         discovered_secret = None if selected_profile is not None else self._discovered_secret_resolution(provider_id)
         external_process_status = _copilot_acp_status() if provider_id == "copilot-acp" else None
-        local_provider_reachable = (
-            definition.provider_kind == "local"
-            and self._local_provider_reachable(provider_id, base_url)
+        local_provider_reachable = definition.provider_kind == "local" and self._local_provider_reachable(
+            provider_id, base_url
         )
         return self.state_evaluator.evaluate(
             provider_id,
@@ -869,9 +884,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
                 self._fallback_tool_prompt(visible_tools),
             )
         request_tools = (
-            tuple(tool.model_function_schema() for tool in visible_tools)
-            if resolution.supports_tools
-            else ()
+            tuple(tool.model_function_schema() for tool in visible_tools) if resolution.supports_tools else ()
         )
         api_messages = tuple(context.prompt_envelope.messages)
         request = ModelRequest(

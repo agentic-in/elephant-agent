@@ -10,7 +10,10 @@ from packages.growth import build_growth_snapshot, default_growth_state
 from packages.runtime_layout import elephant_file_path
 from packages.state import ELEPHANT_IDENTITY_FILENAME
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
-from packages.understanding.personal_model_governance import is_skill_affinity_topic, skill_affinity_index_id
+from packages.understanding.personal_model_governance import (
+    is_skill_affinity_topic,
+    skill_affinity_index_id,
+)
 
 from .api_runtime_console import (
     _cron_jobs,
@@ -27,7 +30,6 @@ from .api_runtime_internal_methods import (
     _canonical_usage,
     _connection,
     _dashboard_active_provider,
-    _dashboard_step_row,
     _learning_snapshot,
     _personal_model_lens_summaries,
     _now,
@@ -50,6 +52,7 @@ _COUNT_TABLES = {
     "semantic_index_entries",
 }
 
+
 def _count_rows(database_path: Path, table: str) -> int:
     if table not in _COUNT_TABLES:
         raise ValueError(f"Unsupported dashboard count table: {table}")
@@ -59,17 +62,24 @@ def _count_rows(database_path: Path, table: str) -> int:
         row = connection.execute("SELECT COUNT(*) AS count FROM " + table).fetchone()
     return int(row["count"] if row is not None else 0)
 
+
 def _read_optional_text(path: Path, *, max_chars: int = 20_000) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="replace")[:max_chars].strip()
     except OSError:
         return ""
 
+
 def _elephant_identity_file(elephant_id: str, *, install_root: Path | None, fallback_text: str = "") -> dict[str, Any]:
     try:
         elephant_root = elephant_file_path(elephant_id, install_root=install_root)
     except ValueError:
-        return {"eggId": elephant_id, "path": "", "exists": False, "text": fallback_text.strip()}
+        return {
+            "eggId": elephant_id,
+            "path": "",
+            "exists": False,
+            "text": fallback_text.strip(),
+        }
     path = elephant_root / ELEPHANT_IDENTITY_FILENAME
     return {
         "eggId": elephant_id,
@@ -138,7 +148,13 @@ def _empty_dashboard(self, *, section: str, generated_at: str) -> dict[str, Any]
         "herd": (),
         "personal_models": (),
         "states": (),
-        "runtime": {"episodes": (), "loops": (), "steps": (), "episode_traces": (), "learning_jobs": ()},
+        "runtime": {
+            "episodes": (),
+            "loops": (),
+            "steps": (),
+            "episode_traces": (),
+            "learning_jobs": (),
+        },
         "learning": _empty_learning(),
         "evidence": {
             "semantic_index_entries": (),
@@ -206,47 +222,55 @@ def _state_projection_rows(
         state_episodes = episode_map.get(state.state_id, ())
         state_loops = tuple(loop for episode in state_episodes for loop in loop_map.get(episode.episode_id, ()))
         state_steps = tuple(step for loop in state_loops for step in step_map.get(loop.loop_id, ()))
-        state_index_entries = tuple(entry for entry in semantic_index_entries if getattr(entry, "state_id", None) == state.state_id)
+        state_index_entries = tuple(
+            entry for entry in semantic_index_entries if getattr(entry, "state_id", None) == state.state_id
+        )
         is_current = bool(current_state is not None and current_state.state_id == state.state_id)
-        growth_state = repository.load_personal_model_growth(state.personal_model_id) if repository is not None else None
+        growth_state = (
+            repository.load_personal_model_growth(state.personal_model_id) if repository is not None else None
+        )
         growth = build_growth_snapshot(growth_state or default_growth_state(state.personal_model_id))
-        elephant_rows.append({
-            "elephant_id": state.elephant_id,
-            "elephant_name": state.elephant_name,
-            "state_id": state.state_id,
-            "personal_model_id": state.personal_model_id,
-            "profile_id": state.personal_model_id,
-            "status": state.status,
-            "current": is_current,
-            "level": growth.level,
-            "checkpoint_label": f"checkpoint {growth.level}",
-            "stage": growth.stage.display_name,
-            "stage_id": growth.stage.stage_id,
-            "progress_percent": growth.progress_percent,
-            "score_to_next_level": growth.score_to_next_level,
-            "identity_mode": state.identity_mode,
-            "initiative": state.initiative,
-            "working_style": state.working_style,
-            "summary": state.summary,
-            "current_context_note": state.current_context_note,
-            "elephant_identity_text": state.elephant_identity_text,
-            "elephant_identity_file": _elephant_identity_file(
-                state.elephant_id,
-                install_root=install_root,
-                fallback_text=state.elephant_identity_text,
-            ),
-            "updated_at": _serialize(state).get("updated_at"),
-        })
+        elephant_rows.append(
+            {
+                "elephant_id": state.elephant_id,
+                "elephant_name": state.elephant_name,
+                "state_id": state.state_id,
+                "personal_model_id": state.personal_model_id,
+                "profile_id": state.personal_model_id,
+                "status": state.status,
+                "current": is_current,
+                "level": growth.level,
+                "checkpoint_label": f"checkpoint {growth.level}",
+                "stage": growth.stage.display_name,
+                "stage_id": growth.stage.stage_id,
+                "progress_percent": growth.progress_percent,
+                "score_to_next_level": growth.score_to_next_level,
+                "identity_mode": state.identity_mode,
+                "initiative": state.initiative,
+                "working_style": state.working_style,
+                "summary": state.summary,
+                "current_context_note": state.current_context_note,
+                "elephant_identity_text": state.elephant_identity_text,
+                "elephant_identity_file": _elephant_identity_file(
+                    state.elephant_id,
+                    install_root=install_root,
+                    fallback_text=state.elephant_identity_text,
+                ),
+                "updated_at": _serialize(state).get("updated_at"),
+            }
+        )
         state_payload = dict(_serialize(state))
         state_payload["current_context_note"] = state.current_context_note
-        state_rows.append({
-            **state_payload,
-            "current": is_current,
-            "episode_count": len(state_episodes),
-            "loop_count": len(state_loops),
-            "step_count": len(state_steps),
-            "semantic_index_entry_count": len(state_index_entries),
-        })
+        state_rows.append(
+            {
+                **state_payload,
+                "current": is_current,
+                "episode_count": len(state_episodes),
+                "loop_count": len(state_loops),
+                "step_count": len(state_steps),
+                "semantic_index_entry_count": len(state_index_entries),
+            }
+        )
     return elephant_rows, state_rows
 
 
@@ -255,6 +279,7 @@ def _personal_model_dashboard_row(model: Any, repository: Any) -> dict[str, Any]
     personal_model_id = str(model.personal_model_id)
     # Derive user_profile directly from active PM facts
     from packages.state.profile_from_claims import derive_profile_from_claims
+
     facts = _active_personal_model_facts(repository, personal_model_id)
     user_profile = derive_profile_from_claims(facts)
     if user_profile:
@@ -292,30 +317,39 @@ def _personal_model_rows(
     }
     rows: list[dict[str, Any]] = []
     for model in personal_models:
-        model_index_entries = tuple(entry for entry in semantic_index_entries if entry.personal_model_id == model.personal_model_id)
+        model_index_entries = tuple(
+            entry for entry in semantic_index_entries if entry.personal_model_id == model.personal_model_id
+        )
         model_facts = _active_personal_model_facts(repository, str(model.personal_model_id))
-        model_all_facts = _personal_model_facts(repository, str(model.personal_model_id), ("active", "retired", "disputed"))
-        rows.append({
-            **_personal_model_dashboard_row(model, repository),
-            "state_count": len(states_by_personal_model.get(model.personal_model_id, ())),
-            "personal_model_fact_count": len(model_facts),
-            "semantic_index_entry_count": len(model_index_entries),
-            "states": tuple({
-                "state_id": state.state_id,
-                "elephant_id": state.elephant_id,
-                "elephant_name": state.elephant_name,
-                "status": state.status,
-                "summary": state.summary,
-                "current_context_note": state.current_context_note,
-                "updated_at": _serialize(state).get("updated_at"),
-            } for state in states_by_personal_model.get(model.personal_model_id, ())),
-            "understanding_components": _personal_model_lens_summaries(
-                model_facts=model_facts,
-            ),
-            "personal_model_facts": tuple(_serialize(fact) for fact in model_facts),
-            "personal_model_all_facts": tuple(_serialize(fact) for fact in model_all_facts),
-            "semantic_index_entries": tuple(_serialize(entry) for entry in model_index_entries),
-        })
+        model_all_facts = _personal_model_facts(
+            repository, str(model.personal_model_id), ("active", "retired", "disputed")
+        )
+        rows.append(
+            {
+                **_personal_model_dashboard_row(model, repository),
+                "state_count": len(states_by_personal_model.get(model.personal_model_id, ())),
+                "personal_model_fact_count": len(model_facts),
+                "semantic_index_entry_count": len(model_index_entries),
+                "states": tuple(
+                    {
+                        "state_id": state.state_id,
+                        "elephant_id": state.elephant_id,
+                        "elephant_name": state.elephant_name,
+                        "status": state.status,
+                        "summary": state.summary,
+                        "current_context_note": state.current_context_note,
+                        "updated_at": _serialize(state).get("updated_at"),
+                    }
+                    for state in states_by_personal_model.get(model.personal_model_id, ())
+                ),
+                "understanding_components": _personal_model_lens_summaries(
+                    model_facts=model_facts,
+                ),
+                "personal_model_facts": tuple(_serialize(fact) for fact in model_facts),
+                "personal_model_all_facts": tuple(_serialize(fact) for fact in model_all_facts),
+                "semantic_index_entries": tuple(_serialize(entry) for entry in model_index_entries),
+            }
+        )
     return rows
 
 
@@ -323,7 +357,9 @@ def _basic_personal_model_rows(personal_models: tuple[Any, ...], *, repository: 
     return tuple(_personal_model_dashboard_row(model, repository) for model in personal_models)
 
 
-def _runtime_collections(self) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]:
+def _runtime_collections(
+    self,
+) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]:
     episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")
     loops = _sort_items(self.repository.list_loops(), id_field="loop_id", time_field="started_at")
     steps = _sort_items(self.repository.list_steps(), id_field="step_id", time_field="created_at")
@@ -337,18 +373,33 @@ def _runtime_maps(
     loops: tuple[Any, ...],
     steps: tuple[Any, ...],
 ) -> tuple[dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]]]:
-    episodes_by_state = {state.state_id: tuple(episode for episode in episodes if episode.state_id == state.state_id) for state in states}
-    loops_by_episode = {episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id) for episode in episodes}
+    episodes_by_state = {
+        state.state_id: tuple(episode for episode in episodes if episode.state_id == state.state_id) for state in states
+    }
+    loops_by_episode = {
+        episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id)
+        for episode in episodes
+    }
     steps_by_loop = {loop.loop_id: tuple(step for step in steps if step.loop_id == loop.loop_id) for loop in loops}
     return episodes_by_state, loops_by_episode, steps_by_loop
 
 
-def _episode_rows(episodes: tuple[Any, ...], loops_by_episode: Mapping[str, tuple[Any, ...]], steps_by_loop: Mapping[str, tuple[Any, ...]]) -> list[dict[str, Any]]:
+def _episode_rows(
+    episodes: tuple[Any, ...],
+    loops_by_episode: Mapping[str, tuple[Any, ...]],
+    steps_by_loop: Mapping[str, tuple[Any, ...]],
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for episode in episodes:
         episode_loops = loops_by_episode.get(episode.episode_id, ())
         episode_steps = tuple(step for loop in episode_loops for step in steps_by_loop.get(loop.loop_id, ()))
-        rows.append({**_serialize(episode), "loop_count": len(episode_loops), "step_count": len(episode_steps)})
+        rows.append(
+            {
+                **_serialize(episode),
+                "loop_count": len(episode_loops),
+                "step_count": len(episode_steps),
+            }
+        )
     return rows
 
 
@@ -356,8 +407,12 @@ def _loop_rows(loops: tuple[Any, ...], steps_by_loop: Mapping[str, tuple[Any, ..
     return [{**_serialize(loop), "step_count": len(steps_by_loop.get(loop.loop_id, ()))} for loop in loops]
 
 
-def _semantic_index_health(semantic_index_entries: tuple[Any, ...], active_provider: Mapping[str, Any]) -> dict[str, Any]:
-    semantic_index_status = str(active_provider.get("embedding_bootstrap_status") or ("indexed" if semantic_index_entries else "empty"))
+def _semantic_index_health(
+    semantic_index_entries: tuple[Any, ...], active_provider: Mapping[str, Any]
+) -> dict[str, Any]:
+    semantic_index_status = str(
+        active_provider.get("embedding_bootstrap_status") or ("indexed" if semantic_index_entries else "empty")
+    )
     return {
         "status": semantic_index_status,
         "entry_count": len(semantic_index_entries),
@@ -399,7 +454,9 @@ def _provider_catalog_rows(self, active_provider: Mapping[str, Any]) -> tuple[di
     return tuple(rows)
 
 
-def _operation_model_snapshot(self, *, active_provider: Mapping[str, Any], embedding_provider: Mapping[str, Any]) -> dict[str, Any]:
+def _operation_model_snapshot(
+    self, *, active_provider: Mapping[str, Any], embedding_provider: Mapping[str, Any]
+) -> dict[str, Any]:
     provider_keys = self.list_provider_keys()
     return {
         "activeProvider": _dashboard_active_provider(dict(active_provider)),
@@ -445,7 +502,12 @@ def _learning_overview(self) -> dict[str, Any]:
     )
     return {
         "worker": {},
-        "summary": {**counts, "total": len(jobs), "active_job_id": None, "latest_completed_at": None},
+        "summary": {
+            **counts,
+            "total": len(jobs),
+            "active_job_id": None,
+            "latest_completed_at": None,
+        },
         "jobs": job_rows,
     }
 
@@ -463,9 +525,15 @@ def _latest_episode_row(self, *, limit: int = 20) -> tuple[dict[str, Any], ...]:
     episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")
     if not episodes:
         return ()
-    recent = episodes[:max(1, int(limit))]
+    recent = episodes[: max(1, int(limit))]
     return tuple(
-        {**_serialize(episode), "loop_count": 0, "step_count": 0, "loops": (), "timeline": ()}
+        {
+            **_serialize(episode),
+            "loop_count": 0,
+            "step_count": 0,
+            "loops": (),
+            "timeline": (),
+        }
         for episode in recent
     )
 
@@ -473,25 +541,38 @@ def _latest_episode_row(self, *, limit: int = 20) -> tuple[dict[str, Any], ...]:
 def _fill_overview(dashboard: dict[str, Any], self) -> None:
     database_path = self.repository.database_path
     states, current_state = _fill_states(dashboard, self)
-    personal_models = _sort_items(self.repository.list_personal_models(), id_field="personal_model_id", time_field="updated_at")
+    personal_models = _sort_items(
+        self.repository.list_personal_models(),
+        id_field="personal_model_id",
+        time_field="updated_at",
+    )
     canonical_models = tuple(
         model for model in personal_models if model.personal_model_id == DEFAULT_PERSONAL_MODEL_ID
     )[:1]
     overview_target_models = canonical_models or personal_models[:1]
     current_personal_model_id = DEFAULT_PERSONAL_MODEL_ID
-    semantic_index_entries = self.repository.list_semantic_index_entries() if hasattr(self.repository, "list_semantic_index_entries") else ()
-    overview_models = tuple(_personal_model_rows(
-        personal_models=overview_target_models,
-        states=states,
-        semantic_index_entries=tuple(semantic_index_entries),
-        repository=self.repository,
-    ))
+    semantic_index_entries = (
+        self.repository.list_semantic_index_entries() if hasattr(self.repository, "list_semantic_index_entries") else ()
+    )
+    overview_models = tuple(
+        _personal_model_rows(
+            personal_models=overview_target_models,
+            states=states,
+            semantic_index_entries=tuple(semantic_index_entries),
+            repository=self.repository,
+        )
+    )
     active_provider = dict(self.model_provider.describe())
     learning = _learning_overview(self)
     semantic_index_count = _count_rows(database_path, "semantic_index_entries")
-    provider_auth_states = self.repository.list_provider_auth_states() if hasattr(self.repository, "list_provider_auth_states") else ()
+    provider_auth_states = (
+        self.repository.list_provider_auth_states() if hasattr(self.repository, "list_provider_auth_states") else ()
+    )
     dashboard["personal_models"] = overview_models
-    dashboard["runtime"] = {**dashboard["runtime"], "episode_traces": _latest_episode_row(self)}
+    dashboard["runtime"] = {
+        **dashboard["runtime"],
+        "episode_traces": _latest_episode_row(self),
+    }
     dashboard["learning"] = learning
     dashboard["overview"] = {
         "counts": {
@@ -512,21 +593,33 @@ def _fill_overview(dashboard: dict[str, Any], self) -> None:
         "current_state_id": current_state.state_id if current_state is not None else None,
         "current_personal_model_id": current_personal_model_id,
         "provider_status": str(active_provider.get("status") or "unknown"),
-        "semantic_index_status": str(active_provider.get("embedding_bootstrap_status") or ("indexed" if semantic_index_count else "empty")),
+        "semantic_index_status": str(
+            active_provider.get("embedding_bootstrap_status") or ("indexed" if semantic_index_count else "empty")
+        ),
         "note": "Overview fetches counts, current elephant, current PersonalModel identity, and latest Episode summary only.",
     }
 
 
 def _fill_personal_models(dashboard: dict[str, Any], self) -> None:
     states, _ = _state_collections(self)
-    personal_models = _sort_items(self.repository.list_personal_models(), id_field="personal_model_id", time_field="updated_at")
+    personal_models = _sort_items(
+        self.repository.list_personal_models(),
+        id_field="personal_model_id",
+        time_field="updated_at",
+    )
     canonical_models = tuple(model for model in personal_models if model.personal_model_id == DEFAULT_PERSONAL_MODEL_ID)
-    dashboard["personal_models"] = tuple(_personal_model_rows(
-        personal_models=canonical_models or personal_models[:1],
-        states=states,
-        semantic_index_entries=_sort_items(self.repository.list_semantic_index_entries(), id_field="semantic_index_entry_id", time_field="updated_at"),
-        repository=self.repository,
-    ))
+    dashboard["personal_models"] = tuple(
+        _personal_model_rows(
+            personal_models=canonical_models or personal_models[:1],
+            states=states,
+            semantic_index_entries=_sort_items(
+                self.repository.list_semantic_index_entries(),
+                id_field="semantic_index_entry_id",
+                time_field="updated_at",
+            ),
+            repository=self.repository,
+        )
+    )
 
 
 def _fill_runtime(dashboard: dict[str, Any], self) -> None:
@@ -543,8 +636,14 @@ def _fill_runtime(dashboard: dict[str, Any], self) -> None:
     for loop in recent_loops_tuple:
         recent_steps.extend(self.repository.list_steps(loop_id=loop.loop_id))
     recent_steps_tuple = tuple(recent_steps)
-    loops_by_episode = {ep.episode_id: tuple(loop for loop in recent_loops_tuple if loop.episode_id == ep.episode_id) for ep in recent_episodes}
-    steps_by_loop = {loop.loop_id: tuple(step for step in recent_steps_tuple if step.loop_id == loop.loop_id) for loop in recent_loops_tuple}
+    loops_by_episode = {
+        ep.episode_id: tuple(loop for loop in recent_loops_tuple if loop.episode_id == ep.episode_id)
+        for ep in recent_episodes
+    }
+    steps_by_loop = {
+        loop.loop_id: tuple(step for step in recent_steps_tuple if step.loop_id == loop.loop_id)
+        for loop in recent_loops_tuple
+    }
     elephant_rows, state_rows = _state_projection_rows(
         states,
         current_state=current_state,
@@ -555,7 +654,12 @@ def _fill_runtime(dashboard: dict[str, Any], self) -> None:
     dashboard["states"] = tuple(state_rows)
     dashboard["runtime"] = {
         "episodes": tuple(_episode_rows(all_episodes, loops_by_episode, steps_by_loop)),
-        "episode_traces": _runtime_traces(episodes=recent_episodes, loops_by_episode=loops_by_episode, steps_by_loop=steps_by_loop, source_payloads={}),
+        "episode_traces": _runtime_traces(
+            episodes=recent_episodes,
+            loops_by_episode=loops_by_episode,
+            steps_by_loop=steps_by_loop,
+            source_payloads={},
+        ),
         "learning_jobs": (),
     }
 
@@ -586,20 +690,42 @@ def _fill_chat(dashboard: dict[str, Any], self) -> None:
     )
     personal_models = tuple(
         model
-        for model in _sort_items(self.repository.list_personal_models(), id_field="personal_model_id", time_field="updated_at")
+        for model in _sort_items(
+            self.repository.list_personal_models(),
+            id_field="personal_model_id",
+            time_field="updated_at",
+        )
         if model.personal_model_id == DEFAULT_PERSONAL_MODEL_ID
     )
     dashboard["herd"] = tuple(elephant_rows)
     dashboard["states"] = tuple(state_rows)
     dashboard["personal_models"] = _basic_personal_model_rows(personal_models, repository=self.repository)
-    dashboard["runtime"] = {**dashboard["runtime"], "episode_traces": _runtime_traces(episodes=episodes, loops_by_episode=loops_by_episode, steps_by_loop=steps_by_loop, source_payloads={})}
-    dashboard["overview"] = {**dashboard["overview"], "current_state_id": current_state.state_id if current_state is not None else None, "current_personal_model_id": current_state.personal_model_id if current_state is not None else DEFAULT_PERSONAL_MODEL_ID}
+    dashboard["runtime"] = {
+        **dashboard["runtime"],
+        "episode_traces": _runtime_traces(
+            episodes=episodes,
+            loops_by_episode=loops_by_episode,
+            steps_by_loop=steps_by_loop,
+            source_payloads={},
+        ),
+    }
+    dashboard["overview"] = {
+        **dashboard["overview"],
+        "current_state_id": current_state.state_id if current_state is not None else None,
+        "current_personal_model_id": current_state.personal_model_id
+        if current_state is not None
+        else DEFAULT_PERSONAL_MODEL_ID,
+    }
 
 
 def _fill_evidence(dashboard: dict[str, Any], self) -> None:
     # Steps, Episodes, and Facts own evidence. This section only exposes the
     # shared semantic index that makes those rows searchable.
-    semantic_index_entries = _sort_items(self.repository.list_semantic_index_entries(), id_field="semantic_index_entry_id", time_field="updated_at")
+    semantic_index_entries = _sort_items(
+        self.repository.list_semantic_index_entries(),
+        id_field="semantic_index_entry_id",
+        time_field="updated_at",
+    )
     active_provider = dict(self.model_provider.describe())
     dashboard["evidence"] = {
         "semantic_index_entries": tuple(_serialize(entry) for entry in semantic_index_entries),
@@ -665,7 +791,10 @@ def _fill_questions(dashboard: dict[str, Any], self) -> None:
     # Coverage grid — one row per (lens, facet) with durable Fact counts.
     by_key: dict[tuple[str, str], dict[str, Any]] = {}
     for fact in facts:
-        key = (str(getattr(fact, "lens", "") or ""), str(getattr(fact, "facet", "") or ""))
+        key = (
+            str(getattr(fact, "lens", "") or ""),
+            str(getattr(fact, "facet", "") or ""),
+        )
         row = by_key.setdefault(key, {"lens": key[0], "facet": key[1], "facts": 0})
         row["facts"] += 1
     for row in by_key.values():
@@ -713,6 +842,7 @@ def _dashboard_question_config(repository) -> dict[str, Any]:
             global_config_path_for_state_dir,
             load_global_config,
         )
+
         state_dir = repository.database_path.parent
         config = load_global_config(
             global_config_path_for_state_dir(state_dir),
@@ -761,7 +891,9 @@ def _fill_providers(dashboard: dict[str, Any], self) -> None:
     }
     dashboard["operations"] = {
         **dashboard["operations"],
-        "models": _operation_model_snapshot(self, active_provider=active_provider, embedding_provider=embedding_provider),
+        "models": _operation_model_snapshot(
+            self, active_provider=active_provider, embedding_provider=embedding_provider
+        ),
     }
 
 
@@ -779,7 +911,7 @@ def _skill_affinity_rows(self) -> tuple[dict[str, Any], ...]:
         return ()
     personal_models = _sort_items(list_models(), id_field="personal_model_id", time_field="updated_at")
     canonical_models = tuple(model for model in personal_models if model.personal_model_id == DEFAULT_PERSONAL_MODEL_ID)
-    target_model = (canonical_models or personal_models[:1])
+    target_model = canonical_models or personal_models[:1]
     if not target_model:
         return ()
     personal_model_id = str(target_model[0].personal_model_id)
@@ -817,7 +949,10 @@ def _skill_affinity_rows(self) -> tuple[dict[str, Any], ...]:
     return tuple(
         sorted(
             slots.values(),
-            key=lambda row: (-int(row["activeCount"]), str(row["skillId"] or row["indexId"] or row["topic"])),
+            key=lambda row: (
+                -int(row["activeCount"]),
+                str(row["skillId"] or row["indexId"] or row["topic"]),
+            ),
         )
     )
 
@@ -858,7 +993,10 @@ def _fill_gateway(dashboard: dict[str, Any], self) -> None:
 
 def _fill_cron(dashboard: dict[str, Any], self) -> None:
     _fill_states(dashboard, self)
-    dashboard["operations"] = {**dashboard["operations"], "cron": {"jobs": tuple(_cron_jobs(self))}}
+    dashboard["operations"] = {
+        **dashboard["operations"],
+        "cron": {"jobs": tuple(_cron_jobs(self))},
+    }
 
 
 def _fill_settings(dashboard: dict[str, Any], self) -> None:
@@ -867,11 +1005,17 @@ def _fill_settings(dashboard: dict[str, Any], self) -> None:
 
 
 def _fill_usage(dashboard: dict[str, Any], self) -> None:
-    dashboard["operations"] = {**dashboard["operations"], "usage": _canonical_usage(self.repository.database_path)}
+    dashboard["operations"] = {
+        **dashboard["operations"],
+        "usage": _canonical_usage(self.repository.database_path),
+    }
 
 
 def _fill_logs(dashboard: dict[str, Any], self) -> None:
-    dashboard["operations"] = {**dashboard["operations"], "logs": tuple(_logs(self.repository.database_path.parent))}
+    dashboard["operations"] = {
+        **dashboard["operations"],
+        "logs": tuple(_logs(self.repository.database_path.parent)),
+    }
 
 
 def _fill_diary(dashboard: dict[str, Any], self) -> None:
@@ -938,4 +1082,9 @@ def inspect_internal_dashboard(self, section: str) -> dict[str, Any]:
     return dashboard
 
 
-__all__ = ["DASHBOARD_SECTIONS", "inspect_internal_dashboard", "trigger_diary_write", "trigger_reflect_job"]
+__all__ = [
+    "DASHBOARD_SECTIONS",
+    "inspect_internal_dashboard",
+    "trigger_diary_write",
+    "trigger_reflect_job",
+]

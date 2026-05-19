@@ -131,9 +131,7 @@ def plan_pending_tool_replay(
                     call=entry,
                     action="skip",
                     reason=(
-                        "tool completed before crash; Step "
-                        + matching_step_ids[0]
-                        + " already records the outcome"
+                        "tool completed before crash; Step " + matching_step_ids[0] + " already records the outcome"
                     ),
                 )
             )
@@ -223,9 +221,7 @@ def apply_resume_snapshot(
     if snapshot.state is None:
         return None
     current = now or datetime.now(timezone.utc)
-    remaining_pending = tuple(
-        plan.call for plan in snapshot.replay_plans if plan.action in {"replay", "poll"}
-    )
+    remaining_pending = tuple(plan.call for plan in snapshot.replay_plans if plan.action in {"replay", "poll"})
     return replace(
         snapshot.state,
         pending_tool_calls=remaining_pending,

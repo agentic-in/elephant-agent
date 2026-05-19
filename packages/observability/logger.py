@@ -26,14 +26,9 @@ class _RedactingFilter(logging.Filter):
             record.msg = _redact(record.msg)
         if record.args:
             if isinstance(record.args, dict):
-                record.args = {
-                    k: _redact(str(v)) if isinstance(v, str) else v
-                    for k, v in record.args.items()
-                }
+                record.args = {k: _redact(str(v)) if isinstance(v, str) else v for k, v in record.args.items()}
             elif isinstance(record.args, tuple):
-                record.args = tuple(
-                    _redact(str(a)) if isinstance(a, str) else a for a in record.args
-                )
+                record.args = tuple(_redact(str(a)) if isinstance(a, str) else a for a in record.args)
         return True
 
 
@@ -64,9 +59,7 @@ class _JSONFormatter(logging.Formatter):
         return json.dumps(entry, ensure_ascii=False)
 
 
-_CONSOLE_FORMAT = (
-    "%(asctime)s %(levelname)-5s [%(trace_id).8s] %(name)s: %(message)s"
-)
+_CONSOLE_FORMAT = "%(asctime)s %(levelname)-5s [%(trace_id).8s] %(name)s: %(message)s"
 
 
 def configure_logging(
@@ -98,7 +91,9 @@ def configure_logging(
     if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         file_handler = RotatingFileHandler(
-            log_path, maxBytes=10 * 1024 * 1024, backupCount=5,
+            log_path,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
         )
         file_handler.setLevel(level)
         file_handler.setFormatter(_JSONFormatter())

@@ -64,20 +64,27 @@ def status_sections(shell, session, continuity, context_frame, growth):
     elif continuity.wake_action == "continue":
         ready_lines.append(("now", "Ready to pick the thread back up when you are.", True))
     else:
-        ready_lines.append(("now", "Bring whatever you want to work on; I will adapt from here.", False))
+        ready_lines.append(
+            (
+                "now",
+                "Bring whatever you want to work on; I will adapt from here.",
+                False,
+            )
+        )
     ready_lines.append(
         (
             "history",
-            (
-                f"{growth.canonical_dialogues} dialogues · "
-                f"{growth.canonical_active_days} active day(s)"
-            ),
+            (f"{growth.canonical_dialogues} dialogues · {growth.canonical_active_days} active day(s)"),
             growth.canonical_dialogues > 0,
         )
     )
 
     model_lines = [
-        ("learning", _learning_job_execution_summary(shell.runtime, personal_model_id), True),
+        (
+            "learning",
+            _learning_job_execution_summary(shell.runtime, personal_model_id),
+            True,
+        ),
     ]
     if facts:
         model_lines.append(("saved", _lens_claim_summary(facts), True))
@@ -89,7 +96,13 @@ def status_sections(shell, session, continuity, context_frame, growth):
         sub_lens = str(getattr(next_question, "sub_lens", "") or "").strip()
         question_scope = " · ".join(part for part in (lens, sub_lens) if part)
         label = "question" if not question_scope else f"question ({question_scope})"
-        model_lines.append((label, compact_line(str(getattr(next_question, "text", "") or ""), limit=96), True))
+        model_lines.append(
+            (
+                label,
+                compact_line(str(getattr(next_question, "text", "") or ""), limit=96),
+                True,
+            )
+        )
     else:
         model_lines.append(("questions", "No pending question; I will ask only if it helps.", False))
 
@@ -119,9 +132,7 @@ def _looks_like_opening_prompt(text: str) -> bool:
     lowered = " ".join(text.casefold().split())
     if any(" ".join(marker.casefold().split()) in lowered for marker in _OPENING_PROMPT_MARKERS):
         return True
-    return lowered.startswith("write ") or (
-        "assistant_display_name:" in lowered and "current_work_summary:" in lowered
-    )
+    return lowered.startswith("write ") or ("assistant_display_name:" in lowered and "current_work_summary:" in lowered)
 
 
 def _human_facing_state_text(*values: object) -> str:
@@ -338,24 +349,46 @@ def _skill_lines(
     discoverable_count = len(skill_hub_entries)
     installed_ids = {str(getattr(skill, "skill_id", "") or "") for skill in skills}
     new_to_install_count = sum(
-        1
-        for entry in skill_hub_entries
-        if str(getattr(entry, "skill_id", "") or "") not in installed_ids
+        1 for entry in skill_hub_entries if str(getattr(entry, "skill_id", "") or "") not in installed_ids
     )
 
     lines: list[tuple[str, str, bool]] = []
     affinity_summary = _skill_affinity_summary(affinity_facts)
     lines.append(("affinities", affinity_summary, bool(affinity_facts)))
-    lines.append(("active", f"{len(enabled_skills)} enabled · {len(builtin_skills)} built-in", bool(enabled_skills)))
+    lines.append(
+        (
+            "active",
+            f"{len(enabled_skills)} enabled · {len(builtin_skills)} built-in",
+            bool(enabled_skills),
+        )
+    )
     if authored_skills:
         lines.append(("built by you", f"{len(authored_skills)} authored skill(s)", True))
     if discoverable_count:
         if new_to_install_count:
-            lines.append(("discover", f"{discoverable_count} local packages · {new_to_install_count} not installed", True))
+            lines.append(
+                (
+                    "discover",
+                    f"{discoverable_count} local packages · {new_to_install_count} not installed",
+                    True,
+                )
+            )
         else:
-            lines.append(("discover", f"{discoverable_count} local packages · /skills search <topic>", True))
+            lines.append(
+                (
+                    "discover",
+                    f"{discoverable_count} local packages · /skills search <topic>",
+                    True,
+                )
+            )
     else:
-        lines.append(("discover", "/skills search <topic> when you want more capabilities", False))
+        lines.append(
+            (
+                "discover",
+                "/skills search <topic> when you want more capabilities",
+                False,
+            )
+        )
     return tuple(lines)
 
 
@@ -394,7 +427,9 @@ def _skill_affinity_summary(facts: tuple[object, ...]) -> str:
     return " · ".join(parts)
 
 
-def _skill_affinity_rows(facts: tuple[object, ...]) -> tuple[tuple[float, str, dict[str, str], str, str], ...]:
+def _skill_affinity_rows(
+    facts: tuple[object, ...],
+) -> tuple[tuple[float, str, dict[str, str], str, str], ...]:
     rows: list[tuple[float, str, dict[str, str], str, str]] = []
     for fact in facts:
         metadata = {str(key): str(value) for key, value in dict(getattr(fact, "metadata", {}) or {}).items()}
@@ -409,12 +444,14 @@ def _skill_affinity_rows(facts: tuple[object, ...]) -> tuple[tuple[float, str, d
             usage = min(10.0, float(metadata.get("usage_count") or 0.0))
         except ValueError:
             usage = 0.0
-        rows.append((
-            confidence + (usage * 0.01),
-            topic,
-            metadata,
-            str(getattr(fact, "text", "") or ""),
-            str(getattr(fact, "status", "") or "active"),
-        ))
+        rows.append(
+            (
+                confidence + (usage * 0.01),
+                topic,
+                metadata,
+                str(getattr(fact, "text", "") or ""),
+                str(getattr(fact, "status", "") or "active"),
+            )
+        )
     rows.sort(key=lambda item: (-item[0], item[1]))
     return tuple(rows)

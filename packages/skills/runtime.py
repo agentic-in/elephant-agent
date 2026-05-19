@@ -185,9 +185,7 @@ class InMemorySkillCatalog:
     def register(self, definition: SkillDefinition) -> None:
         existing = self._skills.get(definition.skill_id)
         if existing is not None and existing != definition:
-            raise ValueError(
-                f"skill is already registered with different metadata: {definition.skill_id}"
-            )
+            raise ValueError(f"skill is already registered with different metadata: {definition.skill_id}")
         self._skills[definition.skill_id] = definition
 
     def get(self, skill_id: str) -> SkillDefinition | None:
@@ -449,7 +447,6 @@ def _ranked_resolved_skills(
     return tuple(sorted(eligible, key=_selection_sort_key))
 
 
-
 def _skill_is_runtime_eligible(
     definition: SkillDefinition,
     *,
@@ -482,7 +479,6 @@ def _resolved_state(
     return resolver(state_id)
 
 
-
 def _state_allows_skill(state: State | None, definition: SkillDefinition) -> bool:
     if state is None or not state.capability_boundaries:
         return True
@@ -508,7 +504,6 @@ def _selection_sort_key(definition: SkillDefinition) -> tuple[Any, ...]:
         str(definition.display_name or definition.skill_id).casefold(),
         definition.skill_id,
     )
-
 
 
 def _skill_from_dict(payload: Mapping[str, Any], *, source_path: Path | None = None) -> SkillDefinition:

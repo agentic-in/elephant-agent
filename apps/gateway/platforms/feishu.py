@@ -63,16 +63,10 @@ class FeishuMessagingAdapter:
         tenant_key = (
             str(header["tenant_key"])
             if header.get("tenant_key") is not None
-            else (
-                str(event["tenant_key"])
-                if event.get("tenant_key") is not None
-                else None
-            )
+            else (str(event["tenant_key"]) if event.get("tenant_key") is not None else None)
         )
         resolved_account_id = account_id or (
-            str(header["app_id"])
-            if header.get("app_id") is not None
-            else DEFAULT_GATEWAY_ACCOUNT_ID
+            str(header["app_id"]) if header.get("app_id") is not None else DEFAULT_GATEWAY_ACCOUNT_ID
         )
 
         chat_id = str(message.get("chat_id") or "")
@@ -84,9 +78,7 @@ class FeishuMessagingAdapter:
         if not message_id:
             raise ValueError("feishu message payload requires message_id")
         root_id = (
-            str(message["root_id"])
-            if message.get("root_id") is not None and str(message["root_id"]).strip()
-            else None
+            str(message["root_id"]) if message.get("root_id") is not None and str(message["root_id"]).strip() else None
         )
         parent_id = (
             str(message["parent_id"])
@@ -144,20 +136,14 @@ class FeishuMessagingAdapter:
                 is_bot=str(sender.get("sender_type") or "user") != "user",
                 metadata={
                     "sender_type": str(sender.get("sender_type") or "user"),
-                    "tenant_key": (
-                        str(sender["tenant_key"])
-                        if sender.get("tenant_key") is not None
-                        else ""
-                    ),
+                    "tenant_key": (str(sender["tenant_key"]) if sender.get("tenant_key") is not None else ""),
                 },
             ),
             body=_feishu_message_body(message_type, content),
             reply_to_message_id=parent_id or root_id or message_id,
             attachment_refs=attachment_refs,
             policy_hint=_policy_hint(
-                target_trusted_default=(
-                    target_trusted_default if target_trusted is None else target_trusted
-                ),
+                target_trusted_default=(target_trusted_default if target_trusted is None else target_trusted),
                 consent_default=consent_default if consent_given is None else consent_given,
                 is_external_default=external_default if is_external is None else is_external,
                 audience_scope=normalized_chat_type,

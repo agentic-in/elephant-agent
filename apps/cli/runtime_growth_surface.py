@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 from packages.contracts.runtime import ExperienceRecord
-from packages.growth import GrowthUpdate, ProgressionProjection, ProgressionProjectionBuilder, ProgressionTransition
+from packages.growth import (
+    GrowthUpdate,
+    ProgressionProjection,
+    ProgressionProjectionBuilder,
+    ProgressionTransition,
+)
 
 _PROGRESSION_BUILDER = ProgressionProjectionBuilder()
 
 
-def inspect_experiences(runtime, *, session_id: str | None = None, profile_id: str | None = None, statuses: tuple[str, ...] = (), limit: int | None = None) -> tuple[ExperienceRecord, ...]:
+def inspect_experiences(
+    runtime,
+    *,
+    session_id: str | None = None,
+    profile_id: str | None = None,
+    statuses: tuple[str, ...] = (),
+    limit: int | None = None,
+) -> tuple[ExperienceRecord, ...]:
     """Return experience records. Procedural memory has been removed; returns empty."""
     return ()
 

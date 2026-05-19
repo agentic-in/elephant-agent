@@ -78,7 +78,10 @@ def personal_model_growth_metrics(
         if changed_this_turn:
             new_facts += 1
             action = str(metadata.get("action") or "").strip().lower()
-            if getattr(fact, "supersedes_fact_id", None) or action in {"correct", "restore"}:
+            if getattr(fact, "supersedes_fact_id", None) or action in {
+                "correct",
+                "restore",
+            }:
                 updated_facts += 1
     fact_count = len(facts)
     return PersonalModelGrowthMetrics(

@@ -1,32 +1,22 @@
 """Context runtime planning protocols and deterministic implementations."""
 
-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-import re
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-from packages.capabilities.runtime import CapabilityDescriptor, ContextCapability
 from packages.contracts import Episode
 from packages.contracts.runtime import (
-    ContextBundle,
     StateFocusDecision,
     RecallEvidence,
     PromptEnvelope,
-    StructuredTurnSlot,
 )
-
 
 
 from .runtime_types import (
     ContextAssemblyPlan,
-    ContextAssemblyResult,
     ContextBudgetPlan,
     ContextBudgetRequest,
     ContextLayerBudget,
-    ContextLayerSnapshot,
     ContextRetrievalRequest,
     ContextSourceTrace,
     ContextSummaryRequest,
@@ -54,6 +44,7 @@ from .runtime_support import (
     _summary_content_for_layer,
     _truncate_lines,
 )
+
 
 def _operational_layer_heading(layer_name: str) -> str:
     """Human-readable heading for each context frame layer.
@@ -87,7 +78,9 @@ def _render_live_prompt_section(
     suppress_heading: bool = False,
 ) -> str:
     normalized_summary = str(summary or "").strip()
-    if normalized_summary.casefold() == "no content" and not tuple(str(line).strip() for line in content if str(line).strip()):
+    if normalized_summary.casefold() == "no content" and not tuple(
+        str(line).strip() for line in content if str(line).strip()
+    ):
         normalized_summary = ""
     if normalized_summary and summary_replaces_content:
         lines: list[str] = []
@@ -148,6 +141,7 @@ def build_prompt_envelope(frame: EpisodeFrame | None) -> PromptEnvelope:
         loop_context="\n\n".join(part for part in loop_parts if part.strip()),
     )
 
+
 @runtime_checkable
 class SummaryHook(Protocol):
     def summarize(
@@ -160,6 +154,7 @@ class SummaryHook(Protocol):
         reason: str,
     ) -> str:
         """Summarize content for a single context layer."""
+
 
 @runtime_checkable
 class RetrievalScheduler(Protocol):
@@ -176,15 +171,18 @@ class RetrievalScheduler(Protocol):
     ) -> tuple[ContextRetrievalRequest, ...]:
         """Schedule retrieval requests for the current session."""
 
+
 @runtime_checkable
 class BudgetManager(Protocol):
     def allocate(self, total_tokens: int, requests: tuple[ContextBudgetRequest, ...]) -> ContextBudgetPlan:
         """Allocate explicit token budgets to ordered layers."""
 
+
 @runtime_checkable
 class PromptRenderer(Protocol):
     def render(self, plan: ContextAssemblyPlan) -> str:
         """Render a structured prompt bundle."""
+
 
 @runtime_checkable
 class ContextPlanner(Protocol):
@@ -202,6 +200,7 @@ class ContextPlanner(Protocol):
         artifacts: tuple[str, ...] = (),
     ) -> ContextAssemblyPlan:
         """Plan layered context from structured runtime state."""
+
 
 class DeterministicBudgetManager:
     """Allocate context budgets in explicit priority order."""
@@ -259,6 +258,7 @@ class DeterministicBudgetManager:
             overflow_tokens=overflow,
             omitted_layers=tuple(dict.fromkeys(omitted)),
         )
+
 
 class DeterministicRetrievalScheduler:
     """Score recall_items deterministically against session work_items."""
@@ -323,9 +323,7 @@ class DeterministicRetrievalScheduler:
         replay_budget = _budget_for(budget_plan, "replay_packet")
         if replay_budget <= 0:
             return tuple(requests)
-        return tuple(
-            requests
-        ) + _schedule_replay_requests(
+        return tuple(requests) + _schedule_replay_requests(
             session=session,
             work_items=work_items,
             recall_items=recall_items,
@@ -333,6 +331,7 @@ class DeterministicRetrievalScheduler:
             token_budget=replay_budget,
             state_focus=state_focus,
         )
+
 
 class DeterministicSummaryHook:
     """Summarize a layer by compressing content into inspectable bullets."""
@@ -353,12 +352,15 @@ class DeterministicSummaryHook:
         # only; hidden from the model via the HTML-comment strip path)
         # for call-site audit and render only the bullets otherwise.
         del reason, layer_name  # telemetry-only inputs, see docstring
-        body = tuple(line for line in _truncate_lines(content, token_budget) if str(line).strip().casefold() != "no content")
+        body = tuple(
+            line for line in _truncate_lines(content, token_budget) if str(line).strip().casefold() != "no content"
+        )
         pieces: list[str] = []
         pieces.extend(f"- {line}" for line in body)
         if session.interruption_state:
             pieces.append(f"- continuity: {session.interruption_state}")
         return "\n".join(pieces)
+
 
 class MarkdownPromptRenderer:
     """Render the assembled plan as stable markdown-like text.
@@ -401,6 +403,7 @@ class MarkdownPromptRenderer:
             lines.append("")
         return "\n".join(lines).strip()
 
+
 class EpisodeFrameBuilder:
     """Build the explicit Episode frame from selected runtime slices."""
 
@@ -422,12 +425,14 @@ class EpisodeFrameBuilder:
         state_focus: StateFocusDecision | None = None,
     ) -> EpisodeFrame:
         snapshot_work_items = _snapshot_work_items(work_items, state_focus=state_focus)
-        steady_recall_items = _select_steady_recall_items(recall_items, session=session, work_items=work_items, state_focus=state_focus)
+        steady_recall_items = _select_steady_recall_items(
+            recall_items,
+            session=session,
+            work_items=work_items,
+            state_focus=state_focus,
+        )
         evidence_index = {evidence.evidence_id: evidence for evidence in recall_items}
-        summary_by_layer = {
-            request.layer_name: request
-            for request in summary_requests
-        }
+        summary_by_layer = {request.layer_name: request for request in summary_requests}
         snapshot_retrieval_requests, replay_retrieval_requests = _split_retrieval_requests(retrieval_requests)
         snapshot_summary = None
         snapshot_request = summary_by_layer.get("session_snapshot")
@@ -452,7 +457,9 @@ class EpisodeFrameBuilder:
                 reason=snapshot_request.reason,
             )
         retrieved_evidence_refs = tuple(
-            dict.fromkeys(evidence_ref for request in snapshot_retrieval_requests for evidence_ref in request.evidence_refs)
+            dict.fromkeys(
+                evidence_ref for request in snapshot_retrieval_requests for evidence_ref in request.evidence_refs
+            )
         )
         replay_summary = None
         replay_request = summary_by_layer.get("replay_packet")
@@ -477,7 +484,9 @@ class EpisodeFrameBuilder:
                 reason=replay_request.reason,
             )
         replay_evidence_refs = tuple(
-            dict.fromkeys(evidence_ref for request in replay_retrieval_requests for evidence_ref in request.evidence_refs)
+            dict.fromkeys(
+                evidence_ref for request in replay_retrieval_requests for evidence_ref in request.evidence_refs
+            )
         )
         replay_packet = None
         if replay_retrieval_requests:

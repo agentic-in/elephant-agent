@@ -1,83 +1,51 @@
 """Gateway runtime application."""
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import hashlib
-from pathlib import Path
-import re
-import tempfile
-from typing import Any
 from uuid import uuid4
 
-from apps.provider_runtime import (
-    load_provider_profile,
-    provider_profile_from_payload,
-)
-from packages.auth import AuthProfile, EnvironmentSecretStore, PersistentAuthProfileStore, ProfileCredentialResolver
-from packages.models import SurfaceModelProviderCapability
-from packages.models.runtime_capability import provider_fallback_summary, provider_profile_summary
-from packages.capabilities.runtime import (
-    CapabilityDescriptor,
-    ContextCapability,
-    RecallCapability,
-    ModelProviderCapability,
-    TelemetrySinkCapability,
-)
+from packages.auth import AuthProfile, PersistentAuthProfileStore
 from packages.context import (
-    ContextRuntime,
     next_session_context_epoch,
 )
-from packages.context.epoch_store import EpochStore, FileEpochStore
+from packages.context.epoch_store import EpochStore
 from packages.context.compress import compress_epoch
 from packages.contracts.runtime import (
-    ContextBundle,
     EventEnvelope,
-    ExecutionResult,
     RecallEvidence,
-    PersonalModelRuntimeState,
     PromptMessage,
 )
 from packages.contracts import Episode
 from packages.gateway_core import (
-    DEFAULT_GATEWAY_ACCOUNT_ID,
-    FileGatewayIdentityStore,
-    FileGatewaySessionStore,
-    GatewayAccountRef,
     GatewayAttachmentRef,
-    GatewayConversationRef,
-    GatewayCoreDependencies,
     GatewayCoreService,
     GatewayExchange,
     GatewayIdentityRecord,
     GatewayInboundMessage,
-    GatewayOutboundMessage,
-    GatewayPolicyHint,
     GatewayRouteState,
-    GatewaySenderRef,
-    InMemoryGatewayIdentityStore,
-    InMemoryGatewaySessionStore,
 )
-from packages.kernel import KernelDependencies, KernelOutcome, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
+from packages.kernel import (
+    KernelOutcome,
+    KernelService,
+    KernelSourceRequest,
+    ReconciliationPipeline,
+    StateReconciler,
+)
 from packages.kernel.context_compaction import (
     flush_projection_cache,
 )
 from packages.evidence.recall_runtime import RecallRuntime
 from packages.state import (
-    DEFAULT_ELEPHANT_IDENTITY_TEXT,
     LoadedProfile,
-    ProfileLoader,
-    build_prompt_contract,
 )
 from packages.state.persistence import resolve_runtime_state
-from packages.security.runtime import SecurityPolicy
 from packages.skills import SkillRuntime
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolRuntime
-from .plugins import GatewayAdapterDescriptor, GatewayPluginRegistry
+from .plugins import GatewayPluginRegistry
 
 
 def _episode_status_from_route(status: str) -> str:
@@ -88,6 +56,7 @@ def _episode_status_from_route(status: str) -> str:
         return "closed"
     return "open"
 
+
 CHAT_BOT_ADAPTER_ID = "messaging.chat-bot"
 WEBHOOK_ADAPTER_ID = "messaging.webhook"
 TELEGRAM_ADAPTER_ID = "messaging.telegram"
@@ -95,7 +64,8 @@ FEISHU_ADAPTER_ID = "messaging.feishu"
 DISCORD_ADAPTER_ID = "messaging.discord"
 
 from .runtime_support import *  # noqa: F401,F403
-from .runtime_capabilities import GatewayContextCapability, GatewayRecallCapability, GatewayPreviewModelProvider, GatewaySurfaceModelProvider, GatewayTelemetrySink
+from .runtime_capabilities import GatewaySurfaceModelProvider, GatewayTelemetrySink
+
 
 def _aware_gateway_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -187,7 +157,7 @@ class GatewayApp:
                 target_trusted=target_trusted,
                 consent_given=consent_given,
                 is_external=is_external,
-        )
+            )
         session = self._ensure_runtime_session(route)
         event = self._event_for_inbound(inbound, episode_id=session.episode_id)
         outcome = self.kernel.run(
@@ -233,9 +203,7 @@ class GatewayApp:
         delivery = self.core.deliver(
             route,
             body=reply_body or outcome.execution.summary,
-            reply_to_message_id=reply_to_message_id
-            or inbound.reply_to_message_id
-            or inbound.event_id,
+            reply_to_message_id=reply_to_message_id or inbound.reply_to_message_id or inbound.event_id,
             attachment_refs=attachment_refs,
             metadata={
                 **dict(metadata or {}),
@@ -317,9 +285,7 @@ class GatewayApp:
         delivery = self.core.deliver(
             route,
             body=guidance,
-            reply_to_message_id=reply_to_message_id
-            or route.inbound.reply_to_message_id
-            or route.inbound.event_id,
+            reply_to_message_id=reply_to_message_id or route.inbound.reply_to_message_id or route.inbound.event_id,
             attachment_refs=attachment_refs,
             metadata={
                 **dict(metadata or {}),
@@ -376,7 +342,10 @@ class GatewayApp:
 
     def _run_context_hygiene(self, session_id: str, *, event_id: str, outcome: KernelOutcome | None = None) -> None:
         execution = outcome.execution if outcome is not None else None
-        usage_tokens = max(int(getattr(execution, "prompt_tokens", 0) or 0), int(getattr(execution, "total_tokens", 0) or 0))
+        usage_tokens = max(
+            int(getattr(execution, "prompt_tokens", 0) or 0),
+            int(getattr(execution, "total_tokens", 0) or 0),
+        )
         context_limit = int(getattr(outcome.context, "token_budget", 0) or 0) if outcome is not None else 0
         if self.epoch_store is None:
             return
@@ -397,17 +366,27 @@ class GatewayApp:
         # Persist to episode for dashboard visibility
         try:
             with self.repository.connection() as connection:
-                connection.execute("UPDATE episodes SET exit_summary = ? WHERE episode_id = ?", (compress_result.summary, session_id))
+                connection.execute(
+                    "UPDATE episodes SET exit_summary = ? WHERE episode_id = ?",
+                    (compress_result.summary, session_id),
+                )
                 connection.commit()
         except Exception:
             pass
-        self.telemetry.emit({
-            "event_id": f"telemetry:{session_id}:context-compact:{uuid4().hex}",
-            "event_type": "kernel.stage",
-            "session_id": session_id,
-            "source": "gateway",
-            "payload": {"stage": "context-compact", "detail": f"method={compress_result.method} messages={compress_result.before_messages}->{compress_result.after_messages}", "recorded_at": datetime.now(timezone.utc).isoformat(), "event_id": event_id},
-        })
+        self.telemetry.emit(
+            {
+                "event_id": f"telemetry:{session_id}:context-compact:{uuid4().hex}",
+                "event_type": "kernel.stage",
+                "session_id": session_id,
+                "source": "gateway",
+                "payload": {
+                    "stage": "context-compact",
+                    "detail": f"method={compress_result.method} messages={compress_result.before_messages}->{compress_result.after_messages}",
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "event_id": event_id,
+                },
+            }
+        )
         flush_projection_cache(self.kernel.dependencies.context)
 
     def _llm_compress(
@@ -430,7 +409,7 @@ class GatewayApp:
             if role == "tool":
                 continue  # Skip tool results
             if role == "assistant" and msg.tool_calls and not content:
-                for call in (msg.tool_calls or ()):
+                for call in msg.tool_calls or ():
                     pending_tools.append(call.get("name") or call.get("tool_name") or "tool")
                 continue
             if pending_tools:
@@ -477,7 +456,10 @@ class GatewayApp:
                 prompt=f"Summarize this conversation:\n\n{conversation_text}",
                 messages=(
                     PromptMessage(role="system", content=system_prompt),
-                    PromptMessage(role="user", content=f"Summarize this conversation:\n\n{conversation_text}"),
+                    PromptMessage(
+                        role="user",
+                        content=f"Summarize this conversation:\n\n{conversation_text}",
+                    ),
                 ),
                 tools=(),
                 metadata={"source": "gateway-compress"},
@@ -574,13 +556,13 @@ class GatewayApp:
 
     def _ensure_runtime_session(self, route) -> Episode:
         """Ensure runtime session with correct personal_model_id from state.
-        
+
         When we have a state_id (identity/companion), load it directly to extract
         the correct personal_model_id (which links the identity back to its user).
         This ensures that if the gateway route was created with an identity,
         we use the authoritative state.personal_model_id, not a potentially stale
         or incorrect session.profile_id value.
-        
+
         This fixes the IM mode system prompt injection bug where Zoey (the identity)
         was being shown as the user's name because personal_model_id was incorrectly
         set to the state_id instead of the user's personal_model_id.
@@ -588,14 +570,14 @@ class GatewayApp:
         session = route.session
         identity = route.identity
         runtime_episode_id = identity.episode_id or session.session_id
-        
+
         # When we have a state_id (bound identity/elephant), load the State directly
         # to get the authoritative personal_model_id (which links the identity to its user).
         # This ensures personal_model_id is never confused with state_id or elephant_id.
         resolved_state = None
         if identity.state_id:
             resolved_state = self.repository.load_state(identity.state_id)
-        
+
         # Fallback to resolve_runtime_state if direct load didn't work
         if resolved_state is None:
             resolved_state = resolve_runtime_state(
@@ -606,9 +588,11 @@ class GatewayApp:
                 elephant_id=identity.elephant_id,
                 required=False,
             )
-        
+
         existing = self.repository.load_episode_state(runtime_episode_id)
-        idle_gap_seconds = max(0.0, (session.updated_at - existing.updated_at).total_seconds()) if existing is not None else 0.0
+        idle_gap_seconds = (
+            max(0.0, (session.updated_at - existing.updated_at).total_seconds()) if existing is not None else 0.0
+        )
         if idle_gap_seconds > 1800:
             self._clear_idle_context_epoch(
                 runtime_episode_id,

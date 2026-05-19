@@ -38,7 +38,10 @@ class CliRuntimeFilesystemLayoutTest(unittest.TestCase):
             self.assertEqual(result.outcome, "success")
             self.assertTrue((elephant_root / "notes" / "plan.txt").exists())
             self.assertTrue((runtime.paths.builtin_skills_dir / ".manifest.json").exists())
-            self.assertEqual(runtime.paths.cron_jobs_path.resolve(), (root / "cron" / "jobs.json").resolve())
+            self.assertEqual(
+                runtime.paths.cron_jobs_path.resolve(),
+                (root / "cron" / "jobs.json").resolve(),
+            )
             self.assertEqual(runtime.paths.pairing_dir.resolve(), (root / "pairing").resolve())
 
 

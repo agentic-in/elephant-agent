@@ -1,26 +1,15 @@
 """Gateway runtime capabilities."""
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
-from datetime import datetime, timezone
-import hashlib
-import json
+from dataclasses import replace
 from pathlib import Path
-import re
-import tempfile
 from typing import Any
 from uuid import uuid4
 
-from apps.provider_runtime import (
-    load_provider_profile,
-    provider_profile_from_payload,
-)
-from packages.auth import AuthProfile, EnvironmentSecretStore, PersistentAuthProfileStore, ProfileCredentialResolver
+from packages.auth import AuthProfile, EnvironmentSecretStore, ProfileCredentialResolver
 from packages.models import SurfaceModelProviderCapability
-from packages.models.runtime_capability import provider_fallback_summary, provider_profile_summary
 from packages.capabilities.runtime import (
     CapabilityDescriptor,
     ContextCapability,
@@ -47,30 +36,10 @@ from packages.contracts.runtime import (
     GenerationModelProfile,
     SupportModelProfile,
 )
-from packages.gateway_core import (
-    DEFAULT_GATEWAY_ACCOUNT_ID,
-    FileGatewayIdentityStore,
-    FileGatewaySessionStore,
-    GatewayAccountRef,
-    GatewayAttachmentRef,
-    GatewayConversationRef,
-    GatewayCoreDependencies,
-    GatewayCoreService,
-    GatewayExchange,
-    GatewayIdentityRecord,
-    GatewayInboundMessage,
-    GatewayOutboundMessage,
-    GatewayPolicyHint,
-    GatewaySenderRef,
-    InMemoryGatewayIdentityStore,
-    InMemoryGatewaySessionStore,
-)
-from packages.kernel import KernelDependencies, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
 from packages.evidence import RecallRuntime
 from packages.runtime_layout import elephant_file_path
 from packages.skills import SkillPromptContextBuilder
 from packages.state import (
-    DEFAULT_ELEPHANT_IDENTITY_TEXT,
     LoadedProfile,
     ProfileLoader,
     build_prompt_contract,
@@ -78,10 +47,8 @@ from packages.state import (
     load_runtime_profile,
     profile_with_authored_elephant_identity,
 )
-from packages.security.runtime import SecurityPolicy
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolRuntime
-from .plugins import GatewayAdapterDescriptor, GatewayPluginRegistry
 
 CHAT_BOT_ADAPTER_ID = "messaging.chat-bot"
 WEBHOOK_ADAPTER_ID = "messaging.webhook"
@@ -90,6 +57,7 @@ FEISHU_ADAPTER_ID = "messaging.feishu"
 DISCORD_ADAPTER_ID = "messaging.discord"
 
 from .runtime_support import *  # noqa: F401,F403
+
 
 class GatewayTelemetrySink(TelemetrySinkCapability):
     def __init__(self) -> None:
@@ -108,6 +76,7 @@ class GatewayTelemetrySink(TelemetrySinkCapability):
     def emit(self, event: Mapping[str, Any]) -> None:
         self._events.append(dict(event))
 
+
 class GatewayRecallCapability(RecallCapability):
     def __init__(self, runtime: RecallRuntime) -> None:
         self.descriptor = CapabilityDescriptor(
@@ -120,7 +89,6 @@ class GatewayRecallCapability(RecallCapability):
 
     def retrieve_evidence(self, request: EvidenceRetrievalRequest) -> EvidenceRetrievalResult:
         return self.runtime.retrieve_evidence(request)
-
 
 
 class GatewayContextCapability(ContextCapability):
@@ -217,11 +185,7 @@ class GatewayContextCapability(ContextCapability):
             bundle_id=f"bundle:{session.episode_id}:{len(work_items)}:{len(recall_items)}",
             instruction_refs=runtime.instruction_refs,
         )
-        epoch = (
-            self.epoch_store.load(session.episode_id)
-            if self.epoch_store is not None
-            else None
-        )
+        epoch = self.epoch_store.load(session.episode_id) if self.epoch_store is not None else None
         return apply_session_context_epoch(bundle, epoch)
 
     def force_projection_compaction(
@@ -255,6 +219,7 @@ class GatewayContextCapability(ContextCapability):
 
     def flush_projection_cache(self) -> None:
         return None
+
 
 class GatewayPreviewModelProvider(ModelProviderCapability):
     def __init__(self) -> None:
@@ -295,8 +260,13 @@ class GatewayPreviewModelProvider(ModelProviderCapability):
             episode_id=session.episode_id,
             outcome="ok",
             summary=summary,
-            side_effects=("gateway-preview-provider", profile.mode, f"model_role={model_role}"),
+            side_effects=(
+                "gateway-preview-provider",
+                profile.mode,
+                f"model_role={model_role}",
+            ),
         )
+
 
 class GatewaySurfaceModelProvider(ModelProviderCapability):
     def __init__(

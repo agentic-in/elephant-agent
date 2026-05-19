@@ -108,7 +108,9 @@ class ModelMetadataResolutionTests(unittest.TestCase):
 
         self.assertEqual(metadata, openrouter_entry)
 
-    def test_resolves_local_endpoint_model_detail_before_remote_registries(self) -> None:
+    def test_resolves_local_endpoint_model_detail_before_remote_registries(
+        self,
+    ) -> None:
         server = _MetadataStubServer(
             {
                 "/v1/models/local-model": {
@@ -169,7 +171,11 @@ class ModelMetadataResolutionTests(unittest.TestCase):
     def test_persistent_context_length_cache_takes_precedence(self) -> None:
         with TemporaryDirectory() as tempdir:
             cache_path = Path(tempdir) / "context-length-cache.json"
-            with mock.patch.dict(os.environ, {"ELEPHANT_CONTEXT_LENGTH_CACHE_PATH": str(cache_path)}, clear=False):
+            with mock.patch.dict(
+                os.environ,
+                {"ELEPHANT_CONTEXT_LENGTH_CACHE_PATH": str(cache_path)},
+                clear=False,
+            ):
                 model_metadata.save_context_length(
                     "custom-model",
                     "https://example.test/v1",
@@ -205,7 +211,11 @@ class ModelMetadataResolutionTests(unittest.TestCase):
 
         with TemporaryDirectory() as tempdir:
             cache_path = Path(tempdir) / "context-length-cache.json"
-            with mock.patch.dict(os.environ, {"ELEPHANT_CONTEXT_LENGTH_CACHE_PATH": str(cache_path)}, clear=False):
+            with mock.patch.dict(
+                os.environ,
+                {"ELEPHANT_CONTEXT_LENGTH_CACHE_PATH": str(cache_path)},
+                clear=False,
+            ):
                 metadata = model_metadata.resolve_provider_model_metadata(
                     provider_id="vllm",
                     model_id="local-model",

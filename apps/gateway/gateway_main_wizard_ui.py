@@ -1,31 +1,18 @@
 """Gateway setup wizard helpers."""
 
 from __future__ import annotations
-import asyncio
-from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass
 import getpass
 import apps.cli.wizard as cli_wizard
 import importlib.util
-import json
-import os
-from pathlib import Path
-import re
 import shlex
-import signal
 import subprocess
 import sys
-import time
-from wsgiref.simple_server import make_server
 
 from apps.cli.cli_main_support import _render_cli_banner_mark
-from apps.cli.runtime import CliRuntime
 from apps.cli.shell import (
     Align,
     BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
     BRAND_LIGHT,
     BRAND_MUTED,
     Console,
@@ -36,36 +23,17 @@ from apps.cli.shell import (
     Text,
     _resolve_elephant_version,
 )
-from apps.provider_runtime import load_runtime_local_secret_env
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID
 
 from . import (
-    DEFAULT_DINGDING_CLIENT_ID_ENV,
-    DEFAULT_DINGDING_CLIENT_SECRET_ENV,
-    DEFAULT_DINGDING_ROBOT_CODE_ENV,
-    DEFAULT_DISCORD_BOT_TOKEN_ENV,
-    DEFAULT_FEISHU_APP_ID_ENV,
-    DEFAULT_FEISHU_APP_SECRET_ENV,
-    DEFAULT_FEISHU_EVENT_PATH,
-    FEISHU_ADAPTER_ID,
-    GatewayHttpService,
-    GatewayManagedRuntime,
-    GatewayManagedService,
     SUPPORTED_DINGDING_TRANSPORTS,
     SUPPORTED_DISCORD_TRANSPORTS,
     SUPPORTED_FEISHU_TRANSPORTS,
     SUPPORTED_WECOM_TRANSPORTS,
     SUPPORTED_WEIXIN_TRANSPORTS,
-    build_gateway_app,
-    build_gateway_plugin_registry,
-    create_gateway_web_app,
 )
-from .dingding import DINGTALK_STREAM_PIP_SPEC, DingdingGatewayService
-from .discord import DISCORD_PY_PIP_SPEC, DiscordGatewayService
-from .feishu import FEISHU_SDK_PIP_SPEC, FeishuGatewayService
-from .wecom import WecomGatewayService
-from .weixin import WeixinGatewayService
+from .dingding import DINGTALK_STREAM_PIP_SPEC
+from .discord import DISCORD_PY_PIP_SPEC
+from .feishu import FEISHU_SDK_PIP_SPEC
 
 try:
     from prompt_toolkit.application import Application
@@ -87,6 +55,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional wizard polish
     input_dialog = None
     PromptStyle = None
     PROMPT_TOOLKIT_DIALOGS_AVAILABLE = False
+
 
 @dataclass(frozen=True)
 class GatewayRuntimeRecord:
@@ -110,6 +79,7 @@ class GatewayRuntimeRecord:
     last_error: str | None = None
     transport: str | None = None
 
+
 @dataclass(slots=True)
 class FeishuGatewayWizardState:
     account_id: str
@@ -121,6 +91,7 @@ class FeishuGatewayWizardState:
     app_secret_value: str
     enabled: bool
     allow_group_chats: bool
+
 
 @dataclass(slots=True)
 class DiscordGatewayWizardState:
@@ -166,6 +137,7 @@ class WecomGatewayWizardState:
     enabled: bool
     allow_group_chats: bool
 
+
 GATEWAY_WIZARD_MAX_VISIBLE_CHOICES = cli_wizard.WIZARD_MAX_VISIBLE_CHOICES
 GatewayWizardChoice = cli_wizard.WizardChoice
 _GatewayWizardBackSignal = cli_wizard._WizardBackSignal
@@ -179,10 +151,12 @@ _GATEWAY_NO_DEFAULT_ELEPHANT = "__elephant.gateway.no_default_elephant__"
 _GATEWAY_MANUAL_EGG = "__elephant.gateway.manual_elephant__"
 _GATEWAY_FOLLOW_LATEST_SESSION = "__elephant.gateway.follow_latest_session__"
 
+
 def _gateway_wizard_choice_label(choice: GatewayWizardChoice) -> str:
     if not choice.emoji:
         return choice.label
     return f"{choice.emoji} {choice.label}"
+
 
 def _gateway_wizard_choice_window(
     total: int,
@@ -203,6 +177,7 @@ def _gateway_wizard_choice_window(
         end = total
         start = end - max_visible
     return start, end
+
 
 def _gateway_wizard_choice_fragments(
     title: str,
@@ -239,6 +214,7 @@ def _gateway_wizard_choice_fragments(
     else:
         fragments.append(("class:hint", "\nEnter confirms · ↑/↓ or j/k moves"))
     return fragments
+
 
 def _gateway_wizard_choice_menu(
     title: str,
@@ -317,6 +293,7 @@ def _gateway_wizard_choice_menu(
         return GATEWAY_WIZARD_BACK
     return str(answer or default)
 
+
 def _gateway_prompt_value(
     label: str,
     *,
@@ -330,6 +307,7 @@ def _gateway_prompt_value(
     if preserve_default_on_empty:
         return default or ""
     return ""
+
 
 def _gateway_wizard_text_prompt(
     title: str,
@@ -355,6 +333,7 @@ def _gateway_wizard_text_prompt(
         default=default,
         preserve_default_on_empty=preserve_default_on_empty,
     )
+
 
 def _gateway_wizard_choice_prompt(
     title: str,
@@ -398,6 +377,7 @@ def _gateway_wizard_choice_prompt(
                 return choice.value
         print("  choose a listed number, transport id, or label.")
 
+
 def _gateway_bool_choices(
     *,
     enabled_label: str,
@@ -419,6 +399,7 @@ def _gateway_bool_choices(
             emoji="➖",
         ),
     )
+
 
 def _gateway_bool_prompt(
     title: str,
@@ -447,6 +428,7 @@ def _gateway_bool_prompt(
         return GATEWAY_WIZARD_BACK
     return str(answer) == "yes"
 
+
 def _feishu_transport_choices() -> tuple[GatewayWizardChoice, ...]:
     details = {
         "long-connection": "Use Feishu long connection for a local bridge without webhook setup.",
@@ -460,6 +442,7 @@ def _feishu_transport_choices() -> tuple[GatewayWizardChoice, ...]:
         )
         for transport in SUPPORTED_FEISHU_TRANSPORTS
     )
+
 
 def _discord_transport_choices() -> tuple[GatewayWizardChoice, ...]:
     details = {
@@ -504,6 +487,7 @@ def _weixin_transport_choices() -> tuple[GatewayWizardChoice, ...]:
         )
         for transport in SUPPORTED_WEIXIN_TRANSPORTS
     )
+
 
 def _wecom_transport_choices() -> tuple[GatewayWizardChoice, ...]:
     details = {
@@ -564,13 +548,16 @@ def _im_setup_choices(*, allow_skip: bool) -> tuple[GatewayWizardChoice, ...]:
         )
     return tuple(choices)
 
+
 def _center_brand_block(renderable):
     if Align is None:
         return renderable
     return Align.center(renderable)
 
+
 def _confirm_gateway_wizard_intro() -> bool:
     return True
+
 
 def _print_gateway_feishu_wizard_intro() -> bool:
     if not RICH_AVAILABLE or Table is None or Panel is None or Group is None:
@@ -592,13 +579,22 @@ def _print_gateway_feishu_wizard_intro() -> bool:
     flow = Text()
     flow.append("🧭 IM setup flow\n", style=f"bold {BRAND_ACCENT}")
     flow.append("1 · Choose the Feishu account and long-connection surface\n", style=BRAND_LIGHT)
-    flow.append("2 · Paste App ID and App Secret directly into the local IM secret store\n", style=BRAND_LIGHT)
+    flow.append(
+        "2 · Paste App ID and App Secret directly into the local IM secret store\n",
+        style=BRAND_LIGHT,
+    )
     flow.append("3 · Decide how the control bridge routes herd\n", style=BRAND_LIGHT)
-    flow.append("4 · Start the bridge with credentials kept out of profile.json", style=BRAND_LIGHT)
+    flow.append(
+        "4 · Start the bridge with credentials kept out of profile.json",
+        style=BRAND_LIGHT,
+    )
     portal = Text()
     portal.append("Feishu console checklist\n", style=f"bold {BRAND_ACCENT}")
     portal.append("Capability · Add App Capability → Bot\n", style=BRAND_LIGHT)
-    portal.append("Events · Event Subscriptions → add `im.message.receive_v1`\n", style=BRAND_LIGHT)
+    portal.append(
+        "Events · Event Subscriptions → add `im.message.receive_v1`\n",
+        style=BRAND_LIGHT,
+    )
     portal.append("Transport · Use Long Connection for local IM bring-up\n", style=BRAND_LIGHT)
     portal.append(
         "Permissions · Enable `im:message`, `im:message.p2p_msg:readonly`, and `im:message:send_as_bot`",
@@ -636,6 +632,7 @@ def _print_gateway_feishu_wizard_intro() -> bool:
     )
     return _confirm_gateway_wizard_intro()
 
+
 def _print_gateway_discord_wizard_intro() -> bool:
     if not RICH_AVAILABLE or Table is None or Panel is None or Group is None:
         print("💬 Elephant Agent Gateway // Discord setup")
@@ -659,8 +656,14 @@ def _print_gateway_discord_wizard_intro() -> bool:
     )
     flow = Text()
     flow.append("🧭 IM setup flow\n", style=f"bold {BRAND_ACCENT}")
-    flow.append("1 · Choose the Discord account and managed gateway surface\n", style=BRAND_LIGHT)
-    flow.append("2 · Paste the bot token directly into the local IM secret file\n", style=BRAND_LIGHT)
+    flow.append(
+        "1 · Choose the Discord account and managed gateway surface\n",
+        style=BRAND_LIGHT,
+    )
+    flow.append(
+        "2 · Paste the bot token directly into the local IM secret file\n",
+        style=BRAND_LIGHT,
+    )
     flow.append(
         "3 · Choose the elephant Discord should route new conversations into, or pin a known session\n",
         style=BRAND_LIGHT,
@@ -671,8 +674,14 @@ def _print_gateway_discord_wizard_intro() -> bool:
     )
     portal = Text()
     portal.append("Discord portal checklist\n", style=f"bold {BRAND_ACCENT}")
-    portal.append("OAuth2 · URL Generator → include the `bot` scope when inviting the app\n", style=BRAND_LIGHT)
-    portal.append("Bot · Privileged Gateway Intents → enable `MESSAGE_CONTENT`\n", style=BRAND_LIGHT)
+    portal.append(
+        "OAuth2 · URL Generator → include the `bot` scope when inviting the app\n",
+        style=BRAND_LIGHT,
+    )
+    portal.append(
+        "Bot · Privileged Gateway Intents → enable `MESSAGE_CONTENT`\n",
+        style=BRAND_LIGHT,
+    )
     portal.append(
         "Permissions · Grant `View Channels`, `Send Messages`, `Send Messages in Threads`, and `Read Message History`\n",
         style=BRAND_LIGHT,
@@ -710,6 +719,7 @@ def _print_gateway_discord_wizard_intro() -> bool:
     )
     return True
 
+
 def _gateway_wizard_secret_prompt(
     title: str,
     prompt: str,
@@ -732,12 +742,14 @@ def _gateway_wizard_secret_prompt(
         return GATEWAY_WIZARD_BACK
     return answer
 
+
 def _print_gateway_setup_paused(service_name: str) -> None:
     print(f"{service_name} IM setup paused")
     print("  No IM changes were written.")
     print("  next_commands:")
     print("  - elephant gateway")
     print("  - elephant gateway doctor")
+
 
 def _ensure_feishu_sdk_available(*, reason: str) -> bool:
     if importlib.util.find_spec("lark_oapi") is not None:
@@ -756,8 +768,7 @@ def _ensure_feishu_sdk_available(*, reason: str) -> bool:
     except (OSError, subprocess.CalledProcessError) as exc:
         rendered = " ".join(shlex.quote(part) for part in command)
         raise SystemExit(
-            "Elephant Agent could not automatically install the Feishu SDK. "
-            f"Run `{rendered}` and retry."
+            f"Elephant Agent could not automatically install the Feishu SDK. Run `{rendered}` and retry."
         ) from exc
     if importlib.util.find_spec("lark_oapi") is None:
         rendered = " ".join(shlex.quote(part) for part in command)
@@ -767,6 +778,7 @@ def _ensure_feishu_sdk_available(*, reason: str) -> bool:
         )
     print("Feishu support is ready.")
     return True
+
 
 def _ensure_discord_sdk_available(*, reason: str) -> bool:
     if importlib.util.find_spec("discord") is not None:
@@ -785,8 +797,7 @@ def _ensure_discord_sdk_available(*, reason: str) -> bool:
     except (OSError, subprocess.CalledProcessError) as exc:
         rendered = " ".join(shlex.quote(part) for part in command)
         raise SystemExit(
-            "Elephant Agent could not automatically install Discord support. "
-            f"Run `{rendered}` and retry."
+            f"Elephant Agent could not automatically install Discord support. Run `{rendered}` and retry."
         ) from exc
     if importlib.util.find_spec("discord") is None:
         rendered = " ".join(shlex.quote(part) for part in command)
@@ -815,8 +826,7 @@ def _ensure_dingding_sdk_available(*, reason: str) -> bool:
     except (OSError, subprocess.CalledProcessError) as exc:
         rendered = " ".join(shlex.quote(part) for part in command)
         raise SystemExit(
-            "Elephant Agent could not automatically install DingDing support. "
-            f"Run `{rendered}` and retry."
+            f"Elephant Agent could not automatically install DingDing support. Run `{rendered}` and retry."
         ) from exc
     if importlib.util.find_spec("dingtalk_stream") is None:
         rendered = " ".join(shlex.quote(part) for part in command)
@@ -850,8 +860,7 @@ def _ensure_weixin_sdk_available(*, reason: str) -> bool:
     except (OSError, subprocess.CalledProcessError) as exc:
         rendered = " ".join(shlex.quote(part) for part in command)
         raise SystemExit(
-            "Elephant Agent could not automatically install WeChat (iLink) support. "
-            f"Run `{rendered}` and retry."
+            f"Elephant Agent could not automatically install WeChat (iLink) support. Run `{rendered}` and retry."
         ) from exc
     print("WeChat support is ready.")
     return True
@@ -879,11 +888,11 @@ def _ensure_wecom_sdk_available(*, reason: str) -> bool:
     except (OSError, subprocess.CalledProcessError) as exc:
         rendered = " ".join(shlex.quote(part) for part in command)
         raise SystemExit(
-            "Elephant Agent could not automatically install WeCom support. "
-            f"Run `{rendered}` and retry."
+            f"Elephant Agent could not automatically install WeCom support. Run `{rendered}` and retry."
         ) from exc
     print("WeCom support is ready.")
     return True
+
 
 def _parse_gateway_id_csv(value: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(part.strip() for part in value.split(",") if part.strip()))

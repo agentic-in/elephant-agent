@@ -230,8 +230,8 @@ class _ProviderStubServer:
                     elif prompt_head == "search xunzhuo liu":
                         content = (
                             "<minimax:tool_call>\n"
-                            "<invoke name=\"tool.web.search\">\n"
-                            "<parameter name=\"query\">xunzhuo liu</parameter>\n"
+                            '<invoke name="tool.web.search">\n'
+                            '<parameter name="query">xunzhuo liu</parameter>\n'
                             "</invoke>\n"
                             "</minimax:tool_call>"
                         )
@@ -571,8 +571,14 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("provider_status · ready", health.stdout)
         self.assertIn("security_status · ready", health.stdout)
         self.assertIn("active_provider_model · openai/gpt-4o-mini", health.stdout)
-        self.assertRegex(health.stdout, rf"active_provider_embedding_bootstrap · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
-        self.assertRegex(health.stdout, rf"active_provider_embedding_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}")
+        self.assertRegex(
+            health.stdout,
+            rf"active_provider_embedding_bootstrap · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}",
+        )
+        self.assertRegex(
+            health.stdout,
+            rf"active_provider_embedding_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}",
+        )
         self.assertNotIn("state_focus_mode", health.stdout)
 
         turn = self._run("wake", "--message", "Who are you?")
@@ -616,7 +622,9 @@ class CliSurfaceE2ETest(unittest.TestCase):
         payload = json.loads(secret_path.read_text(encoding="utf-8"))
         self.assertEqual(payload["ELEPHANT_OPENROUTER_API_KEY"], "sk-cli-test-123")
 
-    def test_init_surfaces_embedding_bootstrap_without_exposing_state_focus_mode(self) -> None:
+    def test_init_surfaces_embedding_bootstrap_without_exposing_state_focus_mode(
+        self,
+    ) -> None:
         setup = self._run(
             "init",
             "--non-interactive",
@@ -631,18 +639,29 @@ class CliSurfaceE2ETest(unittest.TestCase):
             "--api-key",
             "sk-cli-test-123",
         )
-        self.assertRegex(setup.stdout, rf"embedding_bootstrap_status · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
-        self.assertRegex(setup.stdout, rf"embedding_bootstrap_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}")
+        self.assertRegex(
+            setup.stdout,
+            rf"embedding_bootstrap_status · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}",
+        )
+        self.assertRegex(
+            setup.stdout,
+            rf"embedding_bootstrap_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}",
+        )
         self.assertNotIn("state_focus_mode", setup.stdout)
 
         config = load_global_config(global_config_path_for_state_dir(self.state_dir), state_dir=self.state_dir)
         self.assertEqual(config["models"]["provider"]["default_model"], "openai/gpt-4o-mini")
 
         health = self._run("status")
-        self.assertRegex(health.stdout, rf"active_provider_embedding_bootstrap · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
+        self.assertRegex(
+            health.stdout,
+            rf"active_provider_embedding_bootstrap · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}",
+        )
         self.assertNotIn("state_focus_mode", health.stdout)
 
-    def test_provider_embeddings_switch_between_local_default_and_configured_override(self) -> None:
+    def test_provider_embeddings_switch_between_local_default_and_configured_override(
+        self,
+    ) -> None:
         self._run(
             "init",
             "--non-interactive",
@@ -689,13 +708,22 @@ class CliSurfaceE2ETest(unittest.TestCase):
         reverted = self._run("provider", "embeddings", "local")
         self.assertIn("Embedding provider updated", reverted.stdout)
         self.assertIn("source · local-default", reverted.stdout)
-        self.assertRegex(reverted.stdout, rf"embedding_bootstrap_status · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}")
-        self.assertRegex(reverted.stdout, rf"embedding_bootstrap_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}")
+        self.assertRegex(
+            reverted.stdout,
+            rf"embedding_bootstrap_status · {EMBEDDING_BOOTSTRAP_STATUS_PATTERN}",
+        )
+        self.assertRegex(
+            reverted.stdout,
+            rf"embedding_bootstrap_ready · {EMBEDDING_BOOTSTRAP_READY_PATTERN}",
+        )
 
         refreshed = CliRuntime.create(state_dir=self.state_dir)
         refreshed_summary = dict(refreshed.embedding_provider_summary())
         self.assertEqual(refreshed_summary["source"], "local-default")
-        self.assertIn(refreshed_summary["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
+        self.assertIn(
+            refreshed_summary["embedding_bootstrap_status"],
+            EMBEDDING_BOOTSTRAP_STATUSES,
+        )
 
     def test_setup_hands_off_to_wake_surface(self) -> None:
         setup = self._run(
@@ -806,8 +834,14 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("Elephant Agent launcher", help_output.stdout)
         self.assertIn("Elephant Agent is personal-model-first AI", help_output.stdout)
         self.assertEqual(help_output.stdout.count("Elephant Agent is personal-model-first AI"), 1)
-        self.assertIn("Warm, steady ways back to the elephant that remembers your path.", help_output.stdout)
-        self.assertIn("🐘 Model what matters · 👂 Ask gently · 🐾 Follow the path", help_output.stdout)
+        self.assertIn(
+            "Warm, steady ways back to the elephant that remembers your path.",
+            help_output.stdout,
+        )
+        self.assertIn(
+            "🐘 Model what matters · 👂 Ask gently · 🐾 Follow the path",
+            help_output.stdout,
+        )
         self.assertIn("Commands", help_output.stdout)
         expected_order = [
             "• init",
@@ -831,7 +865,10 @@ class CliSurfaceE2ETest(unittest.TestCase):
         overview = self._run_launcher()
         self.assertNotIn("Welcome", overview.stdout)
         self.assertIn("Elephant Agent CLI", overview.stdout)
-        self.assertIn("🐘 Model what matters · 👂 Ask gently · 🐾 Follow the path", overview.stdout)
+        self.assertIn(
+            "🐘 Model what matters · 👂 Ask gently · 🐾 Follow the path",
+            overview.stdout,
+        )
         self.assertIn("Elephant Agent is personal-model-first AI", overview.stdout)
         self.assertEqual(overview.stdout.count("Elephant Agent is personal-model-first AI"), 1)
         self.assertIn("elephant init", overview.stdout)
@@ -1137,7 +1174,9 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("Bring whatever you want to work on; I will adapt from here.", shell)
         self.assertIn("Elephant Agent stays by your side.", shell)
 
-    def test_non_interactive_elephant_creates_state_without_activity_command(self) -> None:
+    def test_non_interactive_elephant_creates_state_without_activity_command(
+        self,
+    ) -> None:
         self._run(
             "init",
             "--non-interactive",
@@ -1162,7 +1201,9 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("personal_model_id · you", created.stdout)
         self.assertNotIn("active_goal", created.stdout)
 
-    def test_elephant_name_is_required_and_elephants_delete_clears_named_or_all_elephants(self) -> None:
+    def test_elephant_name_is_required_and_elephants_delete_clears_named_or_all_elephants(
+        self,
+    ) -> None:
         missing_name = self._run("herd", "new", check=False)
         self.assertEqual(missing_name.returncode, 1)
         self.assertIn("Elephant blocked", missing_name.stdout)
@@ -1293,7 +1334,9 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("elephant wake --elephant-id provider-fail", failed.stdout)
         self.assertNotIn("Traceback", failed.stderr)
 
-    def test_elephant_create_persists_canonical_state_under_default_personal_model(self) -> None:
+    def test_elephant_create_persists_canonical_state_under_default_personal_model(
+        self,
+    ) -> None:
         self._run(
             "init",
             "--non-interactive",
@@ -1349,16 +1392,16 @@ class CliSurfaceE2ETest(unittest.TestCase):
             ).fetchone()
             table_names = {
                 str(table_row[0])
-                for table_row in connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                ).fetchall()
+                for table_row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
             }
 
         self.assertNotIn("sessions", table_names)
         self.assertIsNotNone(row)
         self.assertEqual(tuple(row), ("state:atlas", "you"))
 
-    def test_elephant_delete_removes_elephant_state_and_preserves_personal_model(self) -> None:
+    def test_elephant_delete_removes_elephant_state_and_preserves_personal_model(
+        self,
+    ) -> None:
         self._run(
             "init",
             "--non-interactive",
@@ -1433,7 +1476,9 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertIn("cleanup stale preference", deleted.stdout)
 
         refreshed = CliRuntime.create(state_dir=self.state_dir)
-        facts = refreshed.repository.list_personal_model_facts(personal_model_id=session.personal_model_id, status=("deleted",))
+        facts = refreshed.repository.list_personal_model_facts(
+            personal_model_id=session.personal_model_id, status=("deleted",)
+        )
         entry = next((fact for fact in facts if fact.fact_id == fact_id), None)
         self.assertIsNotNone(entry)
         assert entry is not None
@@ -1443,7 +1488,9 @@ class CliSurfaceE2ETest(unittest.TestCase):
         self.assertNotIn(fact_id, visible.stdout)
         self.assertNotIn("status=deleted", visible.stdout)
 
-    def test_runtime_skill_install_persists_provenance_and_distinguishes_refresh_from_migration(self) -> None:
+    def test_runtime_skill_install_persists_provenance_and_distinguishes_refresh_from_migration(
+        self,
+    ) -> None:
         runtime = CliRuntime.create(state_dir=self.state_dir)
         session = runtime.create_elephant(elephant_id="atlas")
         github_dir = self.root / "remote-github"

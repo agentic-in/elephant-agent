@@ -74,12 +74,22 @@ def elephant_id_from_session(session) -> str:
     if elephant_id:
         return elephant_id
     state_id = str(getattr(session, "state_id", "") or "").strip()
-    if state_id.startswith("state:") and ":" not in state_id[len("state:"):]:
-        return state_id[len("state:"):].strip()
+    if state_id.startswith("state:") and ":" not in state_id[len("state:") :]:
+        return state_id[len("state:") :].strip()
     return ""
 
 
-_RESERVED_DISPLAY_NAMES = {"", "you", "we", "i", "me", "myself", "yourself", "elephant", "elephant agent"}
+_RESERVED_DISPLAY_NAMES = {
+    "",
+    "you",
+    "we",
+    "i",
+    "me",
+    "myself",
+    "yourself",
+    "elephant",
+    "elephant agent",
+}
 
 
 def _display_name_from_authored_identity(profile, authored_text: str, *, elephant_root: Path) -> str | None:
@@ -120,21 +130,20 @@ _LEGACY_GENERATED_HEADER_PATTERNS = (
 
 def _is_legacy_default_identity_text(text: str) -> bool:
     lines = tuple(
-        line.strip()
-        for line in str(text or "").splitlines()
-        if line.strip() and not line.strip().startswith("<!--")
+        line.strip() for line in str(text or "").splitlines() if line.strip() and not line.strip().startswith("<!--")
     )
     body = tuple(
-        line
-        for line in lines
-        if not any(pattern.match(line) for pattern in _LEGACY_GENERATED_HEADER_PATTERNS)
+        line for line in lines if not any(pattern.match(line) for pattern in _LEGACY_GENERATED_HEADER_PATTERNS)
     )
     return body == _LEGACY_DEFAULT_LINES
 
 
 def _refreshed_default_identity_text(profile, *, display_name: str) -> str:
     try:
-        from .governance import render_default_elephant_identity, resolved_companion_settings
+        from .governance import (
+            render_default_elephant_identity,
+            resolved_companion_settings,
+        )
 
         companion = resolved_companion_settings(profile)
         return render_default_elephant_identity(

@@ -124,7 +124,12 @@ class CronRuntime:
             if not include_inactive and job.status != "scheduled":
                 continue
             filtered.append(job)
-        return tuple(sorted(filtered, key=lambda item: ((item.next_run_at or item.updated_at), item.name)))
+        return tuple(
+            sorted(
+                filtered,
+                key=lambda item: ((item.next_run_at or item.updated_at), item.name),
+            )
+        )
 
     def inspect_job(self, job_id: str) -> CronJob:
         for job in self._load_jobs():
@@ -186,7 +191,12 @@ class CronRuntime:
             if job.status == "completed":
                 raise ValueError("completed jobs cannot be resumed")
             next_run_at = job.next_run_at or _parse_schedule(job.schedule_text, self._clock())["next_run_at"]
-            return replace(job, status="scheduled", next_run_at=next_run_at, updated_at=self._clock())
+            return replace(
+                job,
+                status="scheduled",
+                next_run_at=next_run_at,
+                updated_at=self._clock(),
+            )
 
         return self._update_job(job_id, _resume)
 
@@ -218,7 +228,9 @@ class CronRuntime:
                 due.append(job)
         return tuple(due)
 
-    def record_execution(self, job_id: str, *, outcome: str, summary: str, now: datetime | None = None) -> CronJobExecution:
+    def record_execution(
+        self, job_id: str, *, outcome: str, summary: str, now: datetime | None = None
+    ) -> CronJobExecution:
         recorded_at = now or self._clock()
 
         def _advance(job: CronJob) -> CronJob:
@@ -447,14 +459,10 @@ def _job_from_payload(payload: Mapping[str, Any]) -> CronJob:
         created_at=datetime.fromisoformat(str(payload["created_at"])),
         updated_at=datetime.fromisoformat(str(payload["updated_at"])),
         next_run_at=(
-            datetime.fromisoformat(str(payload["next_run_at"]))
-            if payload.get("next_run_at") is not None
-            else None
+            datetime.fromisoformat(str(payload["next_run_at"])) if payload.get("next_run_at") is not None else None
         ),
         last_run_at=(
-            datetime.fromisoformat(str(payload["last_run_at"]))
-            if payload.get("last_run_at") is not None
-            else None
+            datetime.fromisoformat(str(payload["last_run_at"])) if payload.get("last_run_at") is not None else None
         ),
         run_count=int(payload.get("run_count", 0)),
         interval_seconds=int(payload["interval_seconds"]) if payload.get("interval_seconds") is not None else None,

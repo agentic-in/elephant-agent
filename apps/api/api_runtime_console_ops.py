@@ -21,8 +21,6 @@ from packages.runtime_config import (
     global_config_schema,
     load_global_config,
     load_extensions_from_config,
-    save_extensions_to_config,
-    save_provider_to_config,
     parse_global_config_text,
     read_global_config_text,
     write_global_config,
@@ -67,7 +65,13 @@ def _write_manifest_to_config(state_dir: Path, manifest: Mapping[str, Any]) -> P
         models["default_provider_source"] = "config"
         config["models"] = models
     # Extension keys
-    extension_keys = ("tool_manifests", "skill_manifests", "skill_overrides", "tool_overrides", "skill_packages")
+    extension_keys = (
+        "tool_manifests",
+        "skill_manifests",
+        "skill_overrides",
+        "tool_overrides",
+        "skill_packages",
+    )
     extensions = config.get("extensions", {})
     for key in extension_keys:
         if key in manifest:
@@ -88,6 +92,7 @@ def _read_json_file(path: Path) -> Any:
 def _load_manifest_from_config(state_dir: Path) -> dict[str, Any]:
     """Load manifest data (gateway, extensions) from config.yaml for the given state_dir."""
     from packages.runtime_config import global_config_path_for_state_dir
+
     config_path = global_config_path_for_state_dir(state_dir)
     try:
         config = load_global_config(config_path, state_dir=state_dir)
@@ -141,8 +146,16 @@ _GATEWAY_SERVICE_SPECS: tuple[dict[str, Any], ...] = (
         "summary": "Feishu bot long-connection bridge for p2p and group chat messages.",
         "eventPath": "/feishu/events",
         "secretFields": (
-            {"key": "app_id", "label": "App ID", "defaultEnvVar": "ELEPHANT_FEISHU_APP_ID"},
-            {"key": "app_secret", "label": "App Secret", "defaultEnvVar": "ELEPHANT_FEISHU_APP_SECRET"},
+            {
+                "key": "app_id",
+                "label": "App ID",
+                "defaultEnvVar": "ELEPHANT_FEISHU_APP_ID",
+            },
+            {
+                "key": "app_secret",
+                "label": "App Secret",
+                "defaultEnvVar": "ELEPHANT_FEISHU_APP_SECRET",
+            },
         ),
         "supportsDirectConfig": True,
     },
@@ -155,7 +168,11 @@ _GATEWAY_SERVICE_SPECS: tuple[dict[str, Any], ...] = (
         "transports": ("gateway",),
         "summary": "Discord bot gateway bridge for DMs, channels, and threads.",
         "secretFields": (
-            {"key": "bot_token", "label": "Bot token", "defaultEnvVar": "ELEPHANT_DISCORD_BOT_TOKEN"},
+            {
+                "key": "bot_token",
+                "label": "Bot token",
+                "defaultEnvVar": "ELEPHANT_DISCORD_BOT_TOKEN",
+            },
         ),
         "supportsDirectConfig": True,
     },
@@ -168,9 +185,21 @@ _GATEWAY_SERVICE_SPECS: tuple[dict[str, Any], ...] = (
         "transports": ("stream",),
         "summary": "DingDing stream bridge for chatbot messages.",
         "secretFields": (
-            {"key": "client_id", "label": "Client ID", "defaultEnvVar": "ELEPHANT_DINGDING_CLIENT_ID"},
-            {"key": "client_secret", "label": "Client Secret", "defaultEnvVar": "ELEPHANT_DINGDING_CLIENT_SECRET"},
-            {"key": "robot_code", "label": "Robot Code", "defaultEnvVar": "ELEPHANT_DINGDING_ROBOT_CODE"},
+            {
+                "key": "client_id",
+                "label": "Client ID",
+                "defaultEnvVar": "ELEPHANT_DINGDING_CLIENT_ID",
+            },
+            {
+                "key": "client_secret",
+                "label": "Client Secret",
+                "defaultEnvVar": "ELEPHANT_DINGDING_CLIENT_SECRET",
+            },
+            {
+                "key": "robot_code",
+                "label": "Robot Code",
+                "defaultEnvVar": "ELEPHANT_DINGDING_ROBOT_CODE",
+            },
         ),
         "supportsDirectConfig": True,
     },
@@ -183,8 +212,16 @@ _GATEWAY_SERVICE_SPECS: tuple[dict[str, Any], ...] = (
         "transports": ("websocket",),
         "summary": "WeCom AI Bot WebSocket bridge for chats and groups.",
         "secretFields": (
-            {"key": "bot_id", "label": "Bot ID", "defaultEnvVar": "ELEPHANT_WECOM_BOT_ID"},
-            {"key": "secret", "label": "Secret", "defaultEnvVar": "ELEPHANT_WECOM_SECRET"},
+            {
+                "key": "bot_id",
+                "label": "Bot ID",
+                "defaultEnvVar": "ELEPHANT_WECOM_BOT_ID",
+            },
+            {
+                "key": "secret",
+                "label": "Secret",
+                "defaultEnvVar": "ELEPHANT_WECOM_SECRET",
+            },
         ),
         "supportsDirectConfig": True,
     },
@@ -385,7 +422,11 @@ def _gateway_services(
         service = str(spec["service"])
         adapter = adapters_payload.get(service)
         adapter_payload = adapter if isinstance(adapter, Mapping) else {}
-        account_rows = [dict(item) for item in adapter_payload.get("accounts", ()) if isinstance(item, Mapping)] if isinstance(adapter_payload.get("accounts"), (list, tuple)) else []
+        account_rows = (
+            [dict(item) for item in adapter_payload.get("accounts", ()) if isinstance(item, Mapping)]
+            if isinstance(adapter_payload.get("accounts"), (list, tuple))
+            else []
+        )
         primary_account = account_rows[0] if account_rows else {}
         account_id = str(primary_account.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID)
         secret_fields = []
@@ -401,14 +442,18 @@ def _gateway_services(
                 secret_key=secret_key,
                 default_env_var=default_env_var,
             )
-            secret_fields.append({
-                "key": secret_key,
-                "label": str(field.get("label") or secret_key),
-                "hasValue": bool(local_secrets.get(env_var)),
-            })
+            secret_fields.append(
+                {
+                    "key": secret_key,
+                    "label": str(field.get("label") or secret_key),
+                    "hasValue": bool(local_secrets.get(env_var)),
+                }
+            )
         service_runtime_files = [row for row in runtime_files if _gateway_runtime_service_key(row) == service]
         control = adapter_payload.get("control") if isinstance(adapter_payload.get("control"), Mapping) else {}
-        configured_transport = str(primary_account.get("surface") or adapter_payload.get("surface") or spec.get("defaultTransport") or "")
+        configured_transport = str(
+            primary_account.get("surface") or adapter_payload.get("surface") or spec.get("defaultTransport") or ""
+        )
         enabled = adapter_payload.get("enabled") is True
         runtime_states = [_gateway_runtime_status(row) for row in service_runtime_files]
         is_running = any(state == "running" for state in runtime_states)
@@ -421,22 +466,29 @@ def _gateway_services(
                 if err:
                     last_error = err
                     break
-        rows.append({
-            **{key: value for key, value in spec.items() if key != "secretFields"},
-            "enabled": enabled,
-            "configured": bool(account_rows),
-            "configuredTransport": configured_transport,
-            "accountCount": len(account_rows),
-            "accounts": tuple(account_rows),
-            "primaryAccountId": account_id,
-            "eventPath": str(primary_account.get("event_path") or adapter_payload.get("event_path") or spec.get("eventPath") or ""),
-            "allowGroupChats": bool(control.get("allow_group_chats") is True),
-            "secretFields": tuple(secret_fields),
-            "runtimeFiles": tuple(service_runtime_files),
-            "running": is_running,
-            "starting": is_starting,
-            "lastError": last_error,
-        })
+        rows.append(
+            {
+                **{key: value for key, value in spec.items() if key != "secretFields"},
+                "enabled": enabled,
+                "configured": bool(account_rows),
+                "configuredTransport": configured_transport,
+                "accountCount": len(account_rows),
+                "accounts": tuple(account_rows),
+                "primaryAccountId": account_id,
+                "eventPath": str(
+                    primary_account.get("event_path")
+                    or adapter_payload.get("event_path")
+                    or spec.get("eventPath")
+                    or ""
+                ),
+                "allowGroupChats": bool(control.get("allow_group_chats") is True),
+                "secretFields": tuple(secret_fields),
+                "runtimeFiles": tuple(service_runtime_files),
+                "running": is_running,
+                "starting": is_starting,
+                "lastError": last_error,
+            }
+        )
     return rows
 
 
@@ -474,7 +526,9 @@ def _gateway_manifest(state_dir: Path) -> dict[str, Any]:
     return dict(manifest) if isinstance(manifest, Mapping) else {}
 
 
-def _gateway_adapter_payload(manifest: Mapping[str, Any], service: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+def _gateway_adapter_payload(
+    manifest: Mapping[str, Any], service: str
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     gateway_payload = manifest.get("gateway") if isinstance(manifest.get("gateway"), Mapping) else {}
     adapters_payload = gateway_payload.get("adapters") if isinstance(gateway_payload.get("adapters"), Mapping) else {}
     adapter_payload = adapters_payload.get(service) if isinstance(adapters_payload.get(service), Mapping) else {}
@@ -538,7 +592,9 @@ def _gateway_weixin_config_from_payload(payload: Mapping[str, Any]) -> dict[str,
     return dict(config)
 
 
-def _gateway_weixin_qr_payload(session_id: str, session_state: Mapping[str, Any], *, status: str = "wait") -> dict[str, Any]:
+def _gateway_weixin_qr_payload(
+    session_id: str, session_state: Mapping[str, Any], *, status: str = "wait"
+) -> dict[str, Any]:
     scan_data = str(session_state.get("qrScanData") or "")
     return {
         "status": status,
@@ -557,7 +613,9 @@ async def _fetch_weixin_qr(*, bot_type: str) -> dict[str, Any]:
     from apps.gateway import weixin_support as wx
 
     if not wx.check_weixin_requirements():
-        raise RuntimeError("WeChat QR login requires aiohttp and cryptography. Install gateway WeChat dependencies first.")
+        raise RuntimeError(
+            "WeChat QR login requires aiohttp and cryptography. Install gateway WeChat dependencies first."
+        )
     async with wx.aiohttp.ClientSession(trust_env=True, connector=wx._make_ssl_connector()) as session:
         return await wx._api_get(
             session,
@@ -571,7 +629,9 @@ async def _poll_weixin_qr(*, qrcode: str, base_url: str) -> dict[str, Any]:
     from apps.gateway import weixin_support as wx
 
     if not wx.check_weixin_requirements():
-        raise RuntimeError("WeChat QR login requires aiohttp and cryptography. Install gateway WeChat dependencies first.")
+        raise RuntimeError(
+            "WeChat QR login requires aiohttp and cryptography. Install gateway WeChat dependencies first."
+        )
     async with wx.aiohttp.ClientSession(trust_env=True, connector=wx._make_ssl_connector()) as session:
         return await wx._api_get(
             session,
@@ -602,7 +662,9 @@ def _gateway_weixin_qr_start(self, payload: Mapping[str, Any]) -> dict[str, Any]
     return _gateway_weixin_qr_payload(session_id, session_state, status="wait")
 
 
-def _gateway_persist_weixin_credentials(self, credentials: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str, Any]:
+def _gateway_persist_weixin_credentials(
+    self, credentials: Mapping[str, Any], config: Mapping[str, Any]
+) -> dict[str, Any]:
     from apps.gateway import weixin_support as wx
 
     database_path = self.repository.database_path
@@ -621,8 +683,14 @@ def _gateway_persist_weixin_credentials(self, credentials: Mapping[str, Any], co
         base_url=str(credentials.get("base_url") or credentials.get("baseurl") or wx.ILINK_BASE_URL),
         user_id=str(credentials.get("user_id") or credentials.get("ilink_user_id") or ""),
     )
-    control_payload = dict(adapter_payload.get("control")) if isinstance(adapter_payload.get("control"), Mapping) else {}
-    allow_group_chats = bool(config.get("allowGroupChats")) if isinstance(config.get("allowGroupChats"), bool) else bool(control_payload.get("allow_group_chats") is True)
+    control_payload = (
+        dict(adapter_payload.get("control")) if isinstance(adapter_payload.get("control"), Mapping) else {}
+    )
+    allow_group_chats = (
+        bool(config.get("allowGroupChats"))
+        if isinstance(config.get("allowGroupChats"), bool)
+        else bool(control_payload.get("allow_group_chats") is True)
+    )
     account_payload: dict[str, Any] = {
         "account_id": account_id,
         "token": token,
@@ -631,7 +699,9 @@ def _gateway_persist_weixin_credentials(self, credentials: Mapping[str, Any], co
         "surface": "ilink",
         "enabled": bool(config.get("accountEnabled")) if isinstance(config.get("accountEnabled"), bool) else True,
     }
-    event_path = str(config.get("eventPath") or config.get("event_path") or adapter_payload.get("event_path") or "/weixin/events").strip()
+    event_path = str(
+        config.get("eventPath") or config.get("event_path") or adapter_payload.get("event_path") or "/weixin/events"
+    ).strip()
     if event_path:
         account_payload["event_path"] = event_path
     adapter_payload["accounts"] = _gateway_upsert_account(accounts, account_payload)
@@ -667,14 +737,25 @@ def _gateway_weixin_qr_poll(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("WeChat QR session is missing or expired; start QR setup again")
     if time.time() > datetime.fromisoformat(str(session_state["expiresAt"])).timestamp():
         store.pop(session_id, None)
-        return {**_gateway_weixin_qr_payload(session_id, session_state, status="expired"), "message": "QR session expired; start again."}
-    status_resp = asyncio.run(_poll_weixin_qr(qrcode=str(session_state["qrcode"]), base_url=str(session_state.get("baseUrl") or "https://ilinkai.weixin.qq.com")))
+        return {
+            **_gateway_weixin_qr_payload(session_id, session_state, status="expired"),
+            "message": "QR session expired; start again.",
+        }
+    status_resp = asyncio.run(
+        _poll_weixin_qr(
+            qrcode=str(session_state["qrcode"]),
+            base_url=str(session_state.get("baseUrl") or "https://ilinkai.weixin.qq.com"),
+        )
+    )
     status = str(status_resp.get("status") or "wait")
     if status == "scaned_but_redirect":
         redirect_host = str(status_resp.get("redirect_host") or "").strip()
         if redirect_host:
             session_state["baseUrl"] = f"https://{redirect_host}"
-        return {**_gateway_weixin_qr_payload(session_id, session_state, status=status), "message": "Redirected QR polling host."}
+        return {
+            **_gateway_weixin_qr_payload(session_id, session_state, status=status),
+            "message": "Redirected QR polling host.",
+        }
     if status == "confirmed":
         credentials = {
             "account_id": str(status_resp.get("ilink_bot_id") or ""),
@@ -687,12 +768,22 @@ def _gateway_weixin_qr_poll(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return {
             **_gateway_weixin_qr_payload(session_id, session_state, status="confirmed"),
             "message": f"WeChat connected as {credentials['account_id']}",
-            "credentials": {"account_id": credentials["account_id"], "base_url": credentials["base_url"], "user_id": credentials["user_id"]},
+            "credentials": {
+                "account_id": credentials["account_id"],
+                "base_url": credentials["base_url"],
+                "user_id": credentials["user_id"],
+            },
             **persisted,
         }
     if status == "need_verifycode":
-        return {**_gateway_weixin_qr_payload(session_id, session_state, status=status), "message": "Scanned. Please confirm the verification code on your phone to continue."}
-    return {**_gateway_weixin_qr_payload(session_id, session_state, status=status), "message": "Scan the QR with WeChat and confirm login."}
+        return {
+            **_gateway_weixin_qr_payload(session_id, session_state, status=status),
+            "message": "Scanned. Please confirm the verification code on your phone to continue.",
+        }
+    return {
+        **_gateway_weixin_qr_payload(session_id, session_state, status=status),
+        "message": "Scan the QR with WeChat and confirm login.",
+    }
 
 
 def _gateway_configure_service(self, payload: Mapping[str, Any], *, service: str) -> dict[str, Any]:
@@ -704,15 +795,51 @@ def _gateway_configure_service(self, payload: Mapping[str, Any], *, service: str
     manifest = _gateway_manifest(state_dir)
     gateway_payload, adapters_payload, adapter_payload = _gateway_adapter_payload(manifest, service)
     accounts = _gateway_accounts(adapter_payload)
-    account_id = str(config.get("accountId") or config.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID).strip() or DEFAULT_GATEWAY_ACCOUNT_ID
-    existing_account = next((account for account in accounts if str(account.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID) == account_id), {})
-    transport = str(config.get("transport") or existing_account.get("surface") or adapter_payload.get("surface") or spec.get("defaultTransport") or "").strip()
+    account_id = (
+        str(config.get("accountId") or config.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID).strip()
+        or DEFAULT_GATEWAY_ACCOUNT_ID
+    )
+    existing_account = next(
+        (account for account in accounts if str(account.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID) == account_id),
+        {},
+    )
+    transport = str(
+        config.get("transport")
+        or existing_account.get("surface")
+        or adapter_payload.get("surface")
+        or spec.get("defaultTransport")
+        or ""
+    ).strip()
     if transport not in tuple(spec.get("transports", ())):
-        raise ValueError(f"gateway {service} transport must be one of {', '.join(spec.get('transports', ())) }")
-    enabled = bool(config.get("enabled")) if isinstance(config.get("enabled"), bool) else bool(adapter_payload.get("enabled") is not False)
-    account_enabled = bool(config.get("accountEnabled")) if isinstance(config.get("accountEnabled"), bool) else bool(existing_account.get("enabled") is not False)
-    event_path = str(config.get("eventPath") or config.get("event_path") or existing_account.get("event_path") or adapter_payload.get("event_path") or spec.get("eventPath") or "").strip()
-    allow_group_chats = bool(config.get("allowGroupChats")) if isinstance(config.get("allowGroupChats"), bool) else bool((adapter_payload.get("control") if isinstance(adapter_payload.get("control"), Mapping) else {}).get("allow_group_chats") is True)
+        raise ValueError(f"gateway {service} transport must be one of {', '.join(spec.get('transports', ()))}")
+    enabled = (
+        bool(config.get("enabled"))
+        if isinstance(config.get("enabled"), bool)
+        else bool(adapter_payload.get("enabled") is not False)
+    )
+    account_enabled = (
+        bool(config.get("accountEnabled"))
+        if isinstance(config.get("accountEnabled"), bool)
+        else bool(existing_account.get("enabled") is not False)
+    )
+    event_path = str(
+        config.get("eventPath")
+        or config.get("event_path")
+        or existing_account.get("event_path")
+        or adapter_payload.get("event_path")
+        or spec.get("eventPath")
+        or ""
+    ).strip()
+    allow_group_chats = (
+        bool(config.get("allowGroupChats"))
+        if isinstance(config.get("allowGroupChats"), bool)
+        else bool(
+            (adapter_payload.get("control") if isinstance(adapter_payload.get("control"), Mapping) else {}).get(
+                "allow_group_chats"
+            )
+            is True
+        )
+    )
     secrets = config.get("secrets") if isinstance(config.get("secrets"), Mapping) else {}
     secret_fields = tuple(field for field in spec.get("secretFields", ()) if isinstance(field, Mapping))
     env_payload: dict[str, str] = {}
@@ -740,7 +867,12 @@ def _gateway_configure_service(self, payload: Mapping[str, Any], *, service: str
         account_payload["event_path"] = event_path
     if service == "feishu":
         account_payload["secret_references"] = tuple(
-            _gateway_secret_reference(service=service, account_id=account_id, secret_key=secret_key, env_var=env_var)
+            _gateway_secret_reference(
+                service=service,
+                account_id=account_id,
+                secret_key=secret_key,
+                env_var=env_var,
+            )
             for secret_key, env_var in env_payload.items()
         )
     elif env_payload:
@@ -759,7 +891,9 @@ def _gateway_configure_service(self, payload: Mapping[str, Any], *, service: str
     adapter_payload["enabled"] = enabled
     if event_path:
         adapter_payload["event_path"] = event_path
-    control_payload = dict(adapter_payload.get("control")) if isinstance(adapter_payload.get("control"), Mapping) else {}
+    control_payload = (
+        dict(adapter_payload.get("control")) if isinstance(adapter_payload.get("control"), Mapping) else {}
+    )
     control_payload.pop("default_elephant_id", None)
     control_payload.pop("default_session_id", None)
     control_payload.pop("auto_create_elephant", None)
@@ -892,7 +1026,9 @@ def _gateway_remove_service_account(self, payload: Mapping[str, Any], *, service
     elif len(accounts) == 1:
         resolved_id = existing_ids[0]
         if requested_id and requested_id != resolved_id:
-            reason = f"requested accountId {requested_id!r} not found; removed the only configured account {resolved_id!r}"
+            reason = (
+                f"requested accountId {requested_id!r} not found; removed the only configured account {resolved_id!r}"
+            )
     else:
         # Ambiguous: either multiple accounts and id didn't match, or zero accounts.
         if not accounts:
@@ -995,7 +1131,9 @@ def gateway_action(self, payload: Mapping[str, Any]) -> dict[str, Any]:
     if action == "remove":
         return _gateway_remove_service_account(self, payload, service=service)
     if action not in {"status", "doctor", "start", "stop", "restart"}:
-        raise ValueError("gateway action must be status, doctor, start, stop, restart, configure, remove, qr-start, or qr-poll")
+        raise ValueError(
+            "gateway action must be status, doctor, start, stop, restart, configure, remove, qr-start, or qr-poll"
+        )
     database_path = self.repository.database_path
     state_dir = database_path.parent
     command = [sys.executable, "-m", "apps.gateway", service, action]
@@ -1005,12 +1143,14 @@ def gateway_action(self, payload: Mapping[str, Any]) -> dict[str, Any]:
     transport = str(payload.get("transport") or payload.get("runtimeTarget") or "").strip()
     if transport:
         command.extend(["--transport", transport])
-    command.extend([
-        "--state-dir",
-        str(state_dir),
-        "--cli-state-dir",
-        str(state_dir),
-    ])
+    command.extend(
+        [
+            "--state-dir",
+            str(state_dir),
+            "--cli-state-dir",
+            str(state_dir),
+        ]
+    )
     if action == "start":
         command.append("--detach")
     if action in {"stop", "restart"} and bool(payload.get("force")):
@@ -1067,11 +1207,7 @@ def _override_enabled(overrides: Mapping[str, Any], item_id: str, default: bool)
 def _mapping_rows(value: object) -> dict[str, dict[str, Any]]:
     if not isinstance(value, Mapping):
         return {}
-    return {
-        str(key): dict(item)
-        for key, item in value.items()
-        if str(key).strip() and isinstance(item, Mapping)
-    }
+    return {str(key): dict(item) for key, item in value.items() if str(key).strip() and isinstance(item, Mapping)}
 
 
 def _text_list(value: object) -> list[str]:
@@ -1111,11 +1247,7 @@ def _object_payload(value: object, *, field: str) -> dict[str, Any]:
 
 
 def _string_object_payload(value: object, *, field: str) -> dict[str, str]:
-    return {
-        str(key): str(item)
-        for key, item in _object_payload(value, field=field).items()
-        if str(key).strip()
-    }
+    return {str(key): str(item) for key, item in _object_payload(value, field=field).items() if str(key).strip()}
 
 
 def _optional_text(value: object) -> str | None:
@@ -1153,7 +1285,11 @@ def _mcp_catalog(*, config_path: Path, config: Mapping[str, Any]) -> dict[str, A
         url = str(server.get("url") or "").strip()
         transport = str(server.get("transport") or ("http" if url else "stdio")).strip() or "stdio"
         env = _mapping_rows({"env": server.get("env")}).get("env", {}) if isinstance(server.get("env"), Mapping) else {}
-        headers = _mapping_rows({"headers": server.get("headers")}).get("headers", {}) if isinstance(server.get("headers"), Mapping) else {}
+        headers = (
+            _mapping_rows({"headers": server.get("headers")}).get("headers", {})
+            if isinstance(server.get("headers"), Mapping)
+            else {}
+        )
         env_keys = sorted(str(key) for key in env if str(key).strip())
         header_keys = sorted(str(key) for key in headers if str(key).strip())
         server_rows.append(
@@ -1211,7 +1347,9 @@ def _mcp_catalog(*, config_path: Path, config: Mapping[str, Any]) -> dict[str, A
                     "writesState": bool(tool.get("writes_state", False)),
                     "touchesNetwork": bool(tool.get("touches_network", False)),
                     "touchesSecrets": bool(tool.get("touches_secrets", False)),
-                    "requiredFields": tuple(str(item) for item in schema.get("required", []) if str(item).strip()) if isinstance(schema.get("required"), list) else (),
+                    "requiredFields": tuple(str(item) for item in schema.get("required", []) if str(item).strip())
+                    if isinstance(schema.get("required"), list)
+                    else (),
                     "schema": schema,
                     "provenance": f"{config_path}#mcp_servers.{server_id}.tools.{tool_name}",
                     "backend": "mcp",
@@ -1225,7 +1363,9 @@ def _mcp_catalog(*, config_path: Path, config: Mapping[str, Any]) -> dict[str, A
     }
 
 
-def _load_operator_global_config(database_path: Path) -> tuple[Path, Path, dict[str, Any]]:
+def _load_operator_global_config(
+    database_path: Path,
+) -> tuple[Path, Path, dict[str, Any]]:
     state_dir = database_path.parent
     config_path = global_config_path_for_state_dir(database_path.parent)
     config = load_global_config(config_path, state_dir=state_dir)
@@ -1464,8 +1604,17 @@ def sync_operator_mcp_server(self, payload: Mapping[str, Any]) -> dict[str, Any]
     server_exists = server_id in servers
     existing_server = dict(servers.get(server_id, {}))
     next_server = _apply_mcp_server_payload(existing_server, payload)
-    transport = str(next_server.get("transport") or ("http" if str(next_server.get("url") or "").strip() else "stdio")).strip().lower() or "stdio"
-    headers = _mapping_rows({"headers": next_server.get("headers")}).get("headers", {}) if isinstance(next_server.get("headers"), Mapping) else {}
+    transport = (
+        str(next_server.get("transport") or ("http" if str(next_server.get("url") or "").strip() else "stdio"))
+        .strip()
+        .lower()
+        or "stdio"
+    )
+    headers = (
+        _mapping_rows({"headers": next_server.get("headers")}).get("headers", {})
+        if isinstance(next_server.get("headers"), Mapping)
+        else {}
+    )
     existing_tools = _mapping_rows(existing_server.get("tools"))
     merged_tools = _merge_discovered_mcp_tools(existing_tools, discovered_tools, transport=transport, headers=headers)
     next_server["tools"] = merged_tools
@@ -1576,7 +1725,9 @@ def _mcp_discover_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _mcporter_command_for_discovery(payload: Mapping[str, Any]) -> tuple[list[str], Any | None]:
+def _mcporter_command_for_discovery(
+    payload: Mapping[str, Any],
+) -> tuple[list[str], Any | None]:
     repo_root = Path(__file__).resolve().parents[2]
     transport = str(payload.get("transport") or "stdio")
     server_id = str(payload.get("serverId") or "mcp-probe")
@@ -1642,8 +1793,12 @@ def _mcp_discovered_tool_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]
                 "name": str(item.get("name") or "").strip(),
                 "description": str(item.get("description") or "").strip(),
                 "inputSchema": schema,
-                "requiredFields": tuple(str(field) for field in schema.get("required", []) if str(field).strip()) if isinstance(schema.get("required"), list) else (),
-                "options": [option for option in item.get("options", []) if isinstance(option, Mapping)] if isinstance(item.get("options"), list) else [],
+                "requiredFields": tuple(str(field) for field in schema.get("required", []) if str(field).strip())
+                if isinstance(schema.get("required"), list)
+                else (),
+                "options": [option for option in item.get("options", []) if isinstance(option, Mapping)]
+                if isinstance(item.get("options"), list)
+                else [],
             }
         )
     return rows
@@ -1733,7 +1888,10 @@ def discover_operator_mcp_server(self, payload: Mapping[str, Any]) -> dict[str, 
     error_text = str(parsed.get("error") or "").strip() if parsed else ""
     if not error_text and result.returncode != 0:
         error_text = (result.stderr or result.stdout or "mcporter discovery failed").strip()
-    status = str(parsed.get("status") or ("ok" if result.returncode == 0 and not error_text else "failed")).strip() or "failed"
+    status = (
+        str(parsed.get("status") or ("ok" if result.returncode == 0 and not error_text else "failed")).strip()
+        or "failed"
+    )
     return {
         "status": status,
         "serverId": probe["serverId"],

@@ -215,8 +215,14 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(registry.select("preview.echo").descriptor.adapter_id, "adapter.preview.echo")
-        self.assertEqual(registry.select("preview.static").descriptor.adapter_id, "adapter.preview.static")
+        self.assertEqual(
+            registry.select("preview.echo").descriptor.adapter_id,
+            "adapter.preview.echo",
+        )
+        self.assertEqual(
+            registry.select("preview.static").descriptor.adapter_id,
+            "adapter.preview.static",
+        )
         self.assertEqual(len(registry.list()), 2)
 
     def test_provider_runtime_lists_catalog_and_guided_setup(self) -> None:
@@ -408,7 +414,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertIn("creds: api_key", result.summary)
         self.assertNotIn("sk-test-456", result.summary)
 
-    def test_surface_runtime_includes_enabled_custom_mcp_tools_in_model_request(self) -> None:
+    def test_surface_runtime_includes_enabled_custom_mcp_tools_in_model_request(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "surface-runtime-mcp.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -422,7 +430,11 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                         "label": "Filesystem",
                         "transport": "stdio",
                         "command": "npx",
-                        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                        "args": [
+                            "-y",
+                            "@modelcontextprotocol/server-filesystem",
+                            "/tmp/demo",
+                        ],
                         "tools": {
                             "read_file": {
                                 "display_name": "Read File",
@@ -440,7 +452,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                                 "writes_state": True,
                                 "schema": {
                                     "type": "object",
-                                    "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+                                    "properties": {
+                                        "path": {"type": "string"},
+                                        "content": {"type": "string"},
+                                    },
                                     "required": ["path", "content"],
                                 },
                             },
@@ -473,7 +488,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                     task="generate",
                     content="captured",
                     usage=ModelUsage(),
-                    metadata={"transport_id": "openai_chat_completions", "credential_keys": ",".join(sorted(credentials))},
+                    metadata={
+                        "transport_id": "openai_chat_completions",
+                        "credential_keys": ",".join(sorted(credentials)),
+                    },
                 )
 
         profile = PersonalModelRuntimeState(
@@ -510,8 +528,15 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
 
         with (
             mock.patch.object(capability, "_profile_for_role", return_value=active_profile),
-            mock.patch.object(capability.credential_resolver, "resolve", return_value=credential_bundle),
-            mock.patch("packages.models.runtime_capability.build_model_adapter", return_value=_CapturingAdapter()),
+            mock.patch.object(
+                capability.credential_resolver,
+                "resolve",
+                return_value=credential_bundle,
+            ),
+            mock.patch(
+                "packages.models.runtime_capability.build_model_adapter",
+                return_value=_CapturingAdapter(),
+            ),
         ):
             result = capability.generate(
                 profile=profile,
@@ -536,7 +561,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             },
         )
 
-    def test_surface_runtime_adds_tool_fallback_prompt_without_native_tool_calling(self) -> None:
+    def test_surface_runtime_adds_tool_fallback_prompt_without_native_tool_calling(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "surface-runtime-fallback-tools.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -550,7 +577,11 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                         "label": "Filesystem",
                         "transport": "stdio",
                         "command": "npx",
-                        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                        "args": [
+                            "-y",
+                            "@modelcontextprotocol/server-filesystem",
+                            "/tmp/demo",
+                        ],
                         "tools": {
                             "read_file": {
                                 "display_name": "Read File",
@@ -588,7 +619,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                     task="generate",
                     content="captured",
                     usage=ModelUsage(),
-                    metadata={"transport_id": "legacy_chat", "credential_keys": ",".join(sorted(credentials))},
+                    metadata={
+                        "transport_id": "legacy_chat",
+                        "credential_keys": ",".join(sorted(credentials)),
+                    },
                 )
 
         profile = PersonalModelRuntimeState(
@@ -628,8 +662,15 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         with (
             mock.patch.object(capability, "_profile_for_role", return_value=active_profile),
             mock.patch.object(capability.runtime_resolver, "resolve", return_value=legacy_resolution),
-            mock.patch.object(capability.credential_resolver, "resolve", return_value=credential_bundle),
-            mock.patch("packages.models.runtime_capability.build_model_adapter", return_value=_CapturingAdapter()),
+            mock.patch.object(
+                capability.credential_resolver,
+                "resolve",
+                return_value=credential_bundle,
+            ),
+            mock.patch(
+                "packages.models.runtime_capability.build_model_adapter",
+                return_value=_CapturingAdapter(),
+            ),
         ):
             result = capability.generate(
                 profile=profile,
@@ -663,7 +704,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(request.provider_id, "preview.static")
         self.assertEqual(request.task, "generate")
 
-    def test_auth_profiles_persist_provider_metadata_and_secret_references(self) -> None:
+    def test_auth_profiles_persist_provider_metadata_and_secret_references(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "auth.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -703,7 +746,12 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         persisted = json.loads(auth_profiles_path.read_text(encoding="utf-8"))
         row = persisted["auth-openai-default"]
         self.assertEqual(
-            (row["provider_id"], row["transport_id"], row["base_url"], row["default_model"]),
+            (
+                row["provider_id"],
+                row["transport_id"],
+                row["base_url"],
+                row["default_model"],
+            ),
             ("openai", "openai_responses", "https://api.openai.com/v1", "gpt-4.1-mini"),
         )
         self.assertNotIn("sk-test-123", database_path.read_text(errors="ignore"))
@@ -818,9 +866,12 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        with mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=True), mock.patch(
-            "packages.auth.discovery.subprocess.run",
-            return_value=mock.Mock(stdout="gho-copilot-token\n"),
+        with (
+            mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=True),
+            mock.patch(
+                "packages.auth.discovery.subprocess.run",
+                return_value=mock.Mock(stdout="gho-copilot-token\n"),
+            ),
         ):
             payload = list_providers(SimpleNamespace(model_provider=capability))
 
@@ -830,7 +881,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(providers["copilot"]["status"], "authenticated")
         self.assertEqual(providers["copilot"]["source"], "gh auth token")
 
-    def test_surface_runtime_discovers_models_with_saved_non_active_provider_key(self) -> None:
+    def test_surface_runtime_discovers_models_with_saved_non_active_provider_key(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-saved-key-discovery.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -862,12 +915,17 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             self.assertEqual(dict(headers).get("Authorization"), "Bearer sk-saved-provider")
             return {"data": [{"id": "model-a"}, {"id": "model-b"}]}
 
-        with mock.patch("packages.models.runtime_capability.request_json", side_effect=_fake_request_json):
+        with mock.patch(
+            "packages.models.runtime_capability.request_json",
+            side_effect=_fake_request_json,
+        ):
             models = capability.discover_models(provider_id="openai-compatible", base_url=None)
 
         self.assertEqual([model.model_id for model in models[:2]], ["model-a", "model-b"])
 
-    def test_surface_runtime_discovers_copilot_models_from_provider_specific_catalog_path(self) -> None:
+    def test_surface_runtime_discovers_copilot_models_from_provider_specific_catalog_path(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-copilot-models.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -904,7 +962,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(server.last_headers.get("Openai-Intent"), "conversation-edits")
         self.assertEqual([model.model_id for model in models[:2]], ["claude-opus-4.6", "gpt-5.4"])
 
-    def test_surface_runtime_detects_copilot_claude_context_with_bearer_auth(self) -> None:
+    def test_surface_runtime_detects_copilot_claude_context_with_bearer_auth(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-copilot-claude-context.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -927,19 +987,23 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                 }
             raise AssertionError(f"unexpected url {url}")
 
-        with mock.patch.dict(os.environ, {"COPILOT_GITHUB_TOKEN": "ghu-test"}, clear=False), mock.patch.object(
-            capability,
-            "discover_models",
-            return_value=(
-                DiscoveredProviderModel(
-                    model_id="claude-sonnet-4.6",
-                    label="claude-sonnet-4.6",
-                    context_window_tokens=None,
+        with (
+            mock.patch.dict(os.environ, {"COPILOT_GITHUB_TOKEN": "ghu-test"}, clear=False),
+            mock.patch.object(
+                capability,
+                "discover_models",
+                return_value=(
+                    DiscoveredProviderModel(
+                        model_id="claude-sonnet-4.6",
+                        label="claude-sonnet-4.6",
+                        context_window_tokens=None,
+                    ),
                 ),
             ),
-        ), mock.patch(
-            "packages.models.runtime_capability.request_json",
-            side_effect=_fake_request_json,
+            mock.patch(
+                "packages.models.runtime_capability.request_json",
+                side_effect=_fake_request_json,
+            ),
         ):
             context_window = capability.detect_context_window(
                 provider_id="copilot",
@@ -948,15 +1012,20 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             )
 
         self.assertEqual(context_window, 200000)
-        self.assertEqual([url for url, _ in requests], [
-            "https://api.githubcopilot.com/models/claude-sonnet-4.6",
-        ])
+        self.assertEqual(
+            [url for url, _ in requests],
+            [
+                "https://api.githubcopilot.com/models/claude-sonnet-4.6",
+            ],
+        )
         detail_headers = requests[-1][1]
         self.assertEqual(detail_headers.get("Authorization"), "Bearer ghu-test")
         self.assertEqual(detail_headers.get("anthropic-version"), "2023-06-01")
         self.assertEqual(detail_headers.get("Openai-Intent"), "conversation-edits")
 
-    def test_surface_runtime_falls_back_to_curated_codex_models_when_live_probe_fails(self) -> None:
+    def test_surface_runtime_falls_back_to_curated_codex_models_when_live_probe_fails(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-codex-models.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -966,14 +1035,20 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             secret_key_path=Path(self.tempdir.name) / "provider-secrets.key",
         )
 
-        with mock.patch("packages.models.runtime_capability.request_json", side_effect=RuntimeError("boom")):
+        with mock.patch(
+            "packages.models.runtime_capability.request_json",
+            side_effect=RuntimeError("boom"),
+        ):
             models = capability.discover_models(
                 provider_id="openai-codex",
                 base_url="https://chatgpt.com/backend-api/codex",
             )
 
         self.assertGreaterEqual(len(models), 4)
-        self.assertEqual([model.model_id for model in models[:4]], ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark"])
+        self.assertEqual(
+            [model.model_id for model in models[:4]],
+            ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark"],
+        )
         self.assertTrue(all(model.source == "catalog-hint" for model in models))
         gpt5 = next(model for model in models if model.model_id == "gpt-5.4")
         gpt5_mini = next(model for model in models if model.model_id == "gpt-5.4-mini")
@@ -983,7 +1058,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(spark.context_window_tokens, 128_000)
         self.assertEqual(gpt5.metadata["reasoning_efforts"], "minimal,low,medium,high")
 
-    def test_surface_runtime_uses_model_specific_context_hints_when_live_probe_fails(self) -> None:
+    def test_surface_runtime_uses_model_specific_context_hints_when_live_probe_fails(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-context-hints.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -993,7 +1070,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             secret_key_path=Path(self.tempdir.name) / "provider-secrets.key",
         )
 
-        with mock.patch("packages.models.runtime_capability.request_json", side_effect=RuntimeError("boom")):
+        with mock.patch(
+            "packages.models.runtime_capability.request_json",
+            side_effect=RuntimeError("boom"),
+        ):
             minimax_models = capability.discover_models(
                 provider_id="minimax",
                 base_url="https://api.minimax.io/anthropic",
@@ -1042,7 +1122,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(context_window, 32_768)
         self.assertEqual(server.requests, ["GET /v1/models", "POST /api/show"])
 
-    def test_surface_runtime_uses_models_dev_fallback_after_endpoint_metadata_miss(self) -> None:
+    def test_surface_runtime_uses_models_dev_fallback_after_endpoint_metadata_miss(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-models-dev-context.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -1053,7 +1135,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         )
 
         with (
-            mock.patch("packages.models.runtime_capability.request_json", side_effect=RuntimeError("boom")),
+            mock.patch(
+                "packages.models.runtime_capability.request_json",
+                side_effect=RuntimeError("boom"),
+            ),
             mock.patch(
                 "packages.models.model_metadata.fetch_models_dev_registry",
                 return_value={
@@ -1078,7 +1163,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
 
         self.assertEqual(context_window, 1_000_000)
 
-    def test_surface_runtime_does_not_invent_placeholder_models_for_openai_compatible(self) -> None:
+    def test_surface_runtime_does_not_invent_placeholder_models_for_openai_compatible(
+        self,
+    ) -> None:
         database_path = Path(self.tempdir.name) / "provider-openai-compatible-models.sqlite3"
         repository = RuntimeStorageRepository(database_path)
         repository.bootstrap()
@@ -1088,7 +1175,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
             secret_key_path=Path(self.tempdir.name) / "provider-secrets.key",
         )
 
-        with mock.patch("packages.models.runtime_capability.request_json", side_effect=RuntimeError("boom")):
+        with mock.patch(
+            "packages.models.runtime_capability.request_json",
+            side_effect=RuntimeError("boom"),
+        ):
             models = capability.discover_models(
                 provider_id="openai-compatible",
                 base_url="https://api.example.test/v1",

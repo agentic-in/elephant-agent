@@ -105,7 +105,15 @@ def compose_shell_opening_instruction(context: ShellOpeningContext) -> str:
 
 def _first_language_line(first_language: str) -> str:
     normalized = str(first_language or "en").strip().lower()
-    if normalized in {"zh", "zh-cn", "cn", "chinese", "中文", "汉语", "普通话"} or normalized.startswith("zh"):
+    if normalized in {
+        "zh",
+        "zh-cn",
+        "cn",
+        "chinese",
+        "中文",
+        "汉语",
+        "普通话",
+    } or normalized.startswith("zh"):
         return "User's first language selected during init: Chinese. Write this opener in Chinese unless explicitly requested otherwise."
     return "User's first language selected during init: English."
 
@@ -126,8 +134,8 @@ def _actionable_wake_summary(*, wake_action: str, wake_summary: str) -> str:
         return ""
     lowered = " ".join(summary.casefold().split())
     non_actionable_markers = (
-    "no actionable current work",
-    "planner should defer",
+        "no actionable current work",
+        "planner should defer",
         "keeps the active slot clear",
         "defer and schedule",
     )
@@ -164,9 +172,7 @@ def _public_wake_summary(*, wake_action: str, wake_summary: str) -> str:
         return task_title
     sentences = re.split(r"(?<=[.!?])\s+", " ".join(summary.split()))
     public_sentences = tuple(
-        sentence.strip()
-        for sentence in sentences
-        if sentence.strip() and not _contains_internal_wake_marker(sentence)
+        sentence.strip() for sentence in sentences if sentence.strip() and not _contains_internal_wake_marker(sentence)
     )
     if public_sentences:
         return " ".join(public_sentences[:2])

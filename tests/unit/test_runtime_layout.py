@@ -17,9 +17,15 @@ class RuntimeLayoutTest(unittest.TestCase):
         environ = {"ELEPHANT_HOME": "/tmp/elephant-home"}
 
         self.assertEqual(default_cron_dir(environ=environ), Path("/tmp/elephant-home/cron"))
-        self.assertEqual(default_workspaces_dir(environ=environ), Path("/tmp/elephant-home/workspaces"))
+        self.assertEqual(
+            default_workspaces_dir(environ=environ),
+            Path("/tmp/elephant-home/workspaces"),
+        )
         self.assertEqual(default_pairing_dir(environ=environ), Path("/tmp/elephant-home/pairing"))
-        self.assertEqual(default_builtin_skills_dir(environ=environ), Path("/tmp/elephant-home/skills/builtin"))
+        self.assertEqual(
+            default_builtin_skills_dir(environ=environ),
+            Path("/tmp/elephant-home/skills/builtin"),
+        )
 
     def test_workspace_path_escapes_path_characters(self) -> None:
         path = elephant_file_path("team/atlas", environ={"ELEPHANT_HOME": "/tmp/elephant-home"})

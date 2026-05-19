@@ -87,15 +87,9 @@ RuntimeStorageRepository.load_provider_auth_state = _provider_auth_methods.load_
 RuntimeStorageRepository.list_provider_auth_states = _provider_auth_methods.list_provider_auth_states
 
 # Curiosity (v5): Fact / OpenQuestion / Diary tables.
-RuntimeStorageRepository.upsert_personal_model_fact = (
-    _curiosity_methods.upsert_personal_model_fact
-)
-RuntimeStorageRepository.touch_fact_access = (
-    _curiosity_methods.touch_fact_access
-)
-RuntimeStorageRepository.list_personal_model_facts = (
-    _curiosity_methods.list_personal_model_facts
-)
+RuntimeStorageRepository.upsert_personal_model_fact = _curiosity_methods.upsert_personal_model_fact
+RuntimeStorageRepository.touch_fact_access = _curiosity_methods.touch_fact_access
+RuntimeStorageRepository.list_personal_model_facts = _curiosity_methods.list_personal_model_facts
 RuntimeStorageRepository.upsert_open_question = _curiosity_methods.upsert_open_question
 RuntimeStorageRepository.list_open_questions = _curiosity_methods.list_open_questions
 RuntimeStorageRepository.mark_open_question = _curiosity_methods.mark_open_question

@@ -119,11 +119,13 @@ def _build_compress_evidence(metadata: dict[str, Any]) -> str:
     ]
     if previous_summary:
         lines.extend(["", "## Previous summary (for continuity)", previous_summary])
-    lines.extend([
-        "",
-        "## Conversation to compress",
-        compressed_messages or "(no content)",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Conversation to compress",
+            compressed_messages or "(no content)",
+        ]
+    )
     if tail_hint:
         lines.extend(["", "## Recent context (do NOT summarize, for handoff only)", tail_hint])
     return "\n".join(lines)
@@ -203,7 +205,10 @@ def _episode_turn_summary(runtime: Any, *, episode_id: str) -> tuple[str, ...]:
 
         if tool_counts:
             total_calls = sum(tool_counts.values())
-            tool_parts = [f"{name} ×{count}" if count > 1 else name for name, count in sorted(tool_counts.items(), key=lambda x: -x[1])[:6]]
+            tool_parts = [
+                f"{name} ×{count}" if count > 1 else name
+                for name, count in sorted(tool_counts.items(), key=lambda x: -x[1])[:6]
+            ]
             lines.append(f"  [tools: {total_calls} calls — {', '.join(tool_parts)}]")
 
         if skills_used:
@@ -253,14 +258,16 @@ def build_evidence(
     if str(job.trigger or "").strip().lower() == "init_profile":
         init_answers = _init_profile_answer_lines(metadata)
         portrait = _pm_portrait_lines(active_facts)
-        lines.extend([
-            "",
-            "## Init profile answers",
-            *(init_answers or ("(none)",)),
-            "",
-            "## Bootstrapped Personal Model facts",
-            *(portrait or ("(no facts yet)",)),
-        ])
+        lines.extend(
+            [
+                "",
+                "## Init profile answers",
+                *(init_answers or ("(none)",)),
+                "",
+                "## Bootstrapped Personal Model facts",
+                *(portrait or ("(no facts yet)",)),
+            ]
+        )
 
     if "dream" in feature_ids:
         target_date = str(metadata.get("target_date") or "today").strip() or "today"
@@ -271,12 +278,14 @@ def build_evidence(
                 user_tz = user.timezone
         except Exception:
             pass
-        lines.extend([
-            "",
-            "## Dream context",
-            f"target_date: {target_date}",
-            f"user_timezone: {user_tz}",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Dream context",
+                f"target_date: {target_date}",
+                f"user_timezone: {user_tz}",
+            ]
+        )
 
     # Episode evidence for features that learn from the supplied close packet.
     # Dream is a scheduled consolidation mode and intentionally receives no
@@ -286,16 +295,21 @@ def build_evidence(
         and "dream" not in feature_ids
         and feature_ids & {"pm", "questions", "skills"}
     ):
-        episode_summary = _compact(getattr(episode, "exit_summary", "") if episode is not None else "", limit=700)
+        episode_summary = _compact(
+            getattr(episode, "exit_summary", "") if episode is not None else "",
+            limit=700,
+        )
         turn_lines = _episode_turn_summary(runtime, episode_id=job.episode_id)
-        lines.extend([
-            "",
-            "## Episode summary",
-            *(tuple(item for item in (episode_summary,) if item) or ("(none)",)),
-            "",
-            "## Conversation turns",
-            *(turn_lines or ("(no conversation data)",)),
-        ])
+        lines.extend(
+            [
+                "",
+                "## Episode summary",
+                *(tuple(item for item in (episode_summary,) if item) or ("(none)",)),
+                "",
+                "## Conversation turns",
+                *(turn_lines or ("(no conversation data)",)),
+            ]
+        )
 
     # Diary-specific context
     if "diary" in feature_ids:
@@ -308,14 +322,16 @@ def build_evidence(
         except Exception:
             pass
         portrait = _pm_portrait_lines(active_facts)
-        lines.extend([
-            "",
-            "## Diary context",
-            f"target_date: {target_date}",
-            f"user_timezone: {user_tz}",
-            "",
-            "## Who this person is (active PM facts)",
-            *(portrait or ("(no facts yet)",)),
-        ])
+        lines.extend(
+            [
+                "",
+                "## Diary context",
+                f"target_date: {target_date}",
+                f"user_timezone: {user_tz}",
+                "",
+                "## Who this person is (active PM facts)",
+                *(portrait or ("(no facts yet)",)),
+            ]
+        )
 
     return "\n".join(lines)

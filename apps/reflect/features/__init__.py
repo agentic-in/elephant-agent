@@ -15,9 +15,7 @@ from .compress import FEATURE as COMPRESS
 from .dream import FEATURE as DREAM
 
 
-ALL_FEATURES: dict[str, Feature] = {
-    f.feature_id: f for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM)
-}
+ALL_FEATURES: dict[str, Feature] = {f.feature_id: f for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM)}
 
 # Trigger → default feature set mapping
 TRIGGER_FEATURES: dict[str, tuple[str, ...]] = {

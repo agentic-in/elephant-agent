@@ -14,7 +14,12 @@ try:
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.keys import Keys
     from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
-    from prompt_toolkit.layout.containers import ConditionalContainer, HSplit, VSplit, Window
+    from prompt_toolkit.layout.containers import (
+        ConditionalContainer,
+        HSplit,
+        VSplit,
+        Window,
+    )
     from prompt_toolkit.layout.dimension import Dimension
     from prompt_toolkit.layout.scrollable_pane import ScrollablePane
     from prompt_toolkit.layout.layout import Layout
@@ -105,6 +110,7 @@ except ModuleNotFoundError:  # pragma: no cover - minimal env fallback
     ScrollablePane = None
     VSplit = None
     Window = None
+
 
 def prompt_toolkit_output_without_cpr():
     if not PROMPT_TOOLKIT_AVAILABLE:

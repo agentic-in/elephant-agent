@@ -121,16 +121,12 @@ class BuiltinSkillCatalog:
 
     def hub_entries(self) -> tuple[SkillHubEntry, ...]:
         return tuple(
-            entry.to_hub_entry()
-            for entry in self.entries
-            if entry.visibility.include_in_hub and entry.default_enabled
+            entry.to_hub_entry() for entry in self.entries if entry.visibility.include_in_hub and entry.default_enabled
         )
 
     def prompt_entries(self) -> tuple[SkillCatalogEntry, ...]:
         return tuple(
-            entry
-            for entry in self.entries
-            if entry.visibility.include_in_prompt_index and entry.default_enabled
+            entry for entry in self.entries if entry.visibility.include_in_prompt_index and entry.default_enabled
         )
 
     def site_entries(self) -> tuple[SkillCatalogEntry, ...]:
@@ -160,9 +156,7 @@ def builtin_skill_catalog(
                 "include_in_prompt_index": any(
                     item.visibility.include_in_prompt_index for item in section_buckets[section_id]
                 ),
-                "include_in_site": any(
-                    item.visibility.include_in_site for item in section_buckets[section_id]
-                ),
+                "include_in_site": any(item.visibility.include_in_site for item in section_buckets[section_id]),
             },
         )
         for section_id in sorted(section_buckets, key=_builtin_section_sort_key)
@@ -196,11 +190,7 @@ def builtin_prompt_skill_catalog_entries(
 ) -> tuple[SkillCatalogEntry, ...]:
     entries = builtin_skill_catalog(root=root).prompt_entries()
     if enabled_overrides:
-        entries = tuple(
-            entry
-            for entry in entries
-            if enabled_overrides.get(entry.skill_id, True) is not False
-        )
+        entries = tuple(entry for entry in entries if enabled_overrides.get(entry.skill_id, True) is not False)
     if limit is None:
         return entries
     return entries[:limit]

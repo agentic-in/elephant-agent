@@ -24,8 +24,6 @@ from packages.auth import (
     AuthProfile,
     LocalEncryptedSecretCipher,
     PersistentAuthProfileStore,
-    ProfileCredentialResolver,
-    ProviderAuthState,
     ProviderCatalog,
     ProviderProfileFactory,
     ProviderProfileInput,
@@ -34,30 +32,10 @@ from packages.auth import (
     SecretStore,
     profile_from_input,
 )
-from packages.capabilities.runtime import CapabilityDescriptor, ModelProviderCapability
-from packages.contracts import Episode
-from packages.contracts.runtime import (
-    ContextBundle,
-    ExecutionResult,
-    RuntimeModelChoice,
-    PersonalModelRuntimeState,
-    GenerationModelProfile,
-    SupportModelProfile,
-)
-from packages.models import ModelRequest, ProviderRuntimeResolver
 from packages.models.discovery import DiscoveredProviderModel, DiscoveredProviderState
-from packages.models.model_metadata import resolve_provider_model_metadata
-from packages.models.provider_catalog import default_provider_definitions, provider_definition
+from packages.models.provider_catalog import provider_definition
 from packages.models.provider_runtime import provider_auth_headers
-from packages.models.providers import build_model_adapter
-from packages.models.runtime_capability import (
-    provider_fallback_summary,
-    provider_profile_summary,
-    generation_model_profile_from_auth_profile,
-    support_model_profile_from_auth_profile,
-)
 from packages.storage import RuntimeStorageRepository
-from packages.tools import ToolDefinition, ToolRuntime
 
 _MODEL_CONTEXT_KEYS = (
     "context_length",
@@ -240,7 +218,11 @@ def _query_ollama_context_window(*, model_id: str, base_url: str, timeout_second
         with request.urlopen(http_request, timeout=timeout_seconds) as response:
             raw_body = response.read().decode("utf-8")
             payload = json.loads(raw_body) if raw_body else {}
-    except (error.HTTPError, error.URLError, json.JSONDecodeError):  # pragma: no cover - covered by caller fallback
+    except (
+        error.HTTPError,
+        error.URLError,
+        json.JSONDecodeError,
+    ):  # pragma: no cover - covered by caller fallback
         return None
     if not isinstance(payload, Mapping):
         return None
@@ -413,16 +395,13 @@ def _read_google_gemini_oauth_resolution() -> SecretValueResolution | None:
     return None
 
 
-def _read_anthropic_token_from_payload(path: Path, payload: Mapping[str, Any], *, source: str) -> SecretValueResolution | None:
+def _read_anthropic_token_from_payload(
+    path: Path, payload: Mapping[str, Any], *, source: str
+) -> SecretValueResolution | None:
     claude_code_oauth = payload.get("claudeAiOauth")
     if isinstance(claude_code_oauth, Mapping):
         payload = {str(key): value for key, value in claude_code_oauth.items()}
-    access_token = str(
-        payload.get("accessToken")
-        or payload.get("access_token")
-        or payload.get("token")
-        or ""
-    ).strip()
+    access_token = str(payload.get("accessToken") or payload.get("access_token") or payload.get("token") or "").strip()
     if not access_token:
         return None
     expires_at = payload.get("expiresAt") or payload.get("expires_at")
@@ -458,11 +437,7 @@ def _read_copilot_resolution() -> SecretValueResolution | None:
         value = str(os.environ.get(env_name) or "").strip()
         if value and not value.startswith("ghp_"):
             return SecretValueResolution(value=value, source=f"env:{env_name}")
-    clean_env = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in {"GH_TOKEN", "GITHUB_TOKEN"}
-    }
+    clean_env = {key: value for key, value in os.environ.items() if key not in {"GH_TOKEN", "GITHUB_TOKEN"}}
     try:
         completed = subprocess.run(
             ["gh", "auth", "token"],
@@ -515,10 +490,7 @@ def _provider_base_url_from_env(provider_id: str, primary_env_var: str | None) -
 def provider_profile_from_payload(payload: Mapping[str, Any]) -> AuthProfile:
     if "profile_id" not in payload or "provider_id" not in payload:
         raise ValueError("provider_profile must include profile_id and provider_id")
-    secret_references = tuple(
-        secret_reference_from_payload(item)
-        for item in payload.get("secret_references", ())
-    )
+    secret_references = tuple(secret_reference_from_payload(item) for item in payload.get("secret_references", ()))
     profile_input = ProviderProfileInput(
         profile_id=str(payload["profile_id"]),
         provider_id=str(payload["provider_id"]),
@@ -539,7 +511,17 @@ def provider_profile_from_payload(payload: Mapping[str, Any]) -> AuthProfile:
     provider_defaults = catalog.get(provider_id)
     if provider_id == "openai-compatible" and (base_url is None or default_model is None):
         raise ValueError("openai-compatible provider profiles require base_url and default_model")
-    if any(value is not None for value in (base_url, default_model, transport_id, auth_method, provider_kind, extra_headers)):
+    if any(
+        value is not None
+        for value in (
+            base_url,
+            default_model,
+            transport_id,
+            auth_method,
+            provider_kind,
+            extra_headers,
+        )
+    ):
         default_profile = None
         if provider_defaults is not None:
             default_profile = ProviderProfileFactory(catalog).from_provider_defaults(
@@ -611,7 +593,11 @@ def secret_reference_from_payload(payload: Mapping[str, Any]) -> SecretReference
 def load_provider_profile(state_dir: Path, *, config_path: Path | None = None) -> AuthProfile | None:
     """Load the active provider profile from config.yaml (models.provider)."""
     if config_path is not None:
-        from packages.runtime_config import load_global_config, load_provider_from_config
+        from packages.runtime_config import (
+            load_global_config,
+            load_provider_from_config,
+        )
+
         try:
             config = load_global_config(config_path, state_dir=state_dir)
             provider_payload = load_provider_from_config(config)
@@ -708,7 +694,11 @@ class EnvironmentSecretStore(SecretStore):
         env = self.environ or os.environ
         candidates: list[str] = list(reference.env_var_candidates())
         seen = set(candidates)
-        for candidate in (reference.secret_name, reference.secret_key, reference.reference_id):
+        for candidate in (
+            reference.secret_name,
+            reference.secret_key,
+            reference.reference_id,
+        ):
             normalized = _normalize_env_name(candidate)
             if normalized and normalized not in seen:
                 seen.add(normalized)
@@ -783,6 +773,7 @@ from packages.models.bootstrap import (
     run_embedding_bootstrap_worker as _package_run_embedding_bootstrap_worker,
     trigger_embedding_bootstrap as _package_trigger_embedding_bootstrap,
 )
+
 EmbeddingBootstrapState = _PackageEmbeddingBootstrapState
 EnvironmentSecretStore = _PackageEnvironmentSecretStore
 EncryptedRepositorySecretStore = _PackageEncryptedRepositorySecretStore
@@ -819,8 +810,4 @@ _APP_PROVIDER_RUNTIME_COMPAT_EXPORTS = {
     "provider_fallback_summary",
 }
 
-__all__ = [
-    name
-    for name in globals()
-    if not name.startswith("_") and name not in _APP_PROVIDER_RUNTIME_COMPAT_EXPORTS
-]
+__all__ = [name for name in globals() if not name.startswith("_") and name not in _APP_PROVIDER_RUNTIME_COMPAT_EXPORTS]

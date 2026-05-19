@@ -35,7 +35,9 @@ class _CronRuntimeStub:
 
 
 class NightlyLearningCronTest(unittest.TestCase):
-    def test_single_nightly_cron_removes_legacy_diary_and_creates_dream_bundle(self) -> None:
+    def test_single_nightly_cron_removes_legacy_diary_and_creates_dream_bundle(
+        self,
+    ) -> None:
         diary = SimpleNamespace(
             job_id="cron:diary",
             name="Daily diary",

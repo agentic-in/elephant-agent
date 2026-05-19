@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from packages.contracts.layers import Episode
-from packages.contracts.runtime import EventEnvelope, ExecutionResult, PersonalModelRuntimeState, PromptMessage
+from packages.contracts.runtime import (
+    EventEnvelope,
+    ExecutionResult,
+    PersonalModelRuntimeState,
+    PromptMessage,
+)
 from packages.kernel import (
     KernelDependencies,
     KernelOutcome,
@@ -20,7 +25,9 @@ from packages.kernel import (
 )
 from packages.context.compress import split_for_compress, _deterministic_summary
 from packages.kernel.context_compaction import projection_compaction_detail
-from packages.kernel.episode_state_machine import open_next_episode as _open_next_episode
+from packages.kernel.episode_state_machine import (
+    open_next_episode as _open_next_episode,
+)
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
 from packages.state import (
     ensure_elephant_identity_file,
@@ -336,7 +343,10 @@ def run_turn(
     refreshed_session = runtime._load_session(session.episode_id)
     persisted_profile = runtime._load_profile(refreshed_session.personal_model_id)
     decision_summary = _decision_summary_from_outcome(outcome)
-    observed_event = replace(event, payload=_payload_with_turn_reasoning(event.payload, outcome, decision_summary=decision_summary))
+    observed_event = replace(
+        event,
+        payload=_payload_with_turn_reasoning(event.payload, outcome, decision_summary=decision_summary),
+    )
     if performed_turn_reconciliation:
         turn_observation = ReconciliationPipeline().observe_turn(
             inbound_event=observed_event,
@@ -509,10 +519,10 @@ def _reflect_compress_summary(
             object.__setattr__(runtime, "sub_agent_active", previous_sub_agent_active)
 
 
-
 def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutcome) -> KernelOutcome:
     """Trigger synchronous reflect-based context compression when usage is high."""
     import logging
+
     log = logging.getLogger(__name__)
 
     usage_tokens = _execution_context_usage_tokens(outcome.execution)
@@ -522,23 +532,36 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
         return outcome
     trigger_tokens = max(1, int(context_limit * _USAGE_AFTER_TURN_COMPACTION_RATIO))
     if usage_tokens < trigger_tokens:
-        log.debug("compress skipped: usage %s < trigger %s (limit=%s ratio=%s)",
-                  usage_tokens, trigger_tokens, context_limit, _USAGE_AFTER_TURN_COMPACTION_RATIO)
+        log.debug(
+            "compress skipped: usage %s < trigger %s (limit=%s ratio=%s)",
+            usage_tokens,
+            trigger_tokens,
+            context_limit,
+            _USAGE_AFTER_TURN_COMPACTION_RATIO,
+        )
         return outcome
 
-    log.info("compress triggered: usage=%s trigger=%s limit=%s session=%s",
-             usage_tokens, trigger_tokens, context_limit, outcome.route_session_id)
+    log.info(
+        "compress triggered: usage=%s trigger=%s limit=%s session=%s",
+        usage_tokens,
+        trigger_tokens,
+        context_limit,
+        outcome.route_session_id,
+    )
 
     # Load the frozen epoch to get history messages
     from apps.cli.runtime_snapshot import restore_snapshot_session_context_epoch
     from apps.cli.snapshot_io import load_snapshot_payload
+
     snapshot_path = getattr(runtime, "snapshot_path", None)
     if snapshot_path is None:
         log.warning("compress skipped: snapshot_path is None")
         _emit_compress_skip_stage(runtime, outcome, "snapshot_path_missing", usage_tokens)
         return outcome
     snapshot = load_snapshot_payload(snapshot_path) if snapshot_path.exists() else None
-    frozen_epoch = restore_snapshot_session_context_epoch(snapshot, session_id=outcome.route_session_id) if snapshot else None
+    frozen_epoch = (
+        restore_snapshot_session_context_epoch(snapshot, session_id=outcome.route_session_id) if snapshot else None
+    )
     if frozen_epoch is None:
         log.warning("compress skipped: frozen_epoch is None (snapshot=%s)", snapshot is not None)
         _emit_compress_skip_stage(runtime, outcome, "epoch_missing", usage_tokens)
@@ -573,8 +596,7 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
             protected_tail_turns=1,
         )
     if not to_summarize:
-        log.warning("compress skipped: nothing to summarize (msgs=%d)",
-                    history_count)
+        log.warning("compress skipped: nothing to summarize (msgs=%d)", history_count)
         _emit_compress_skip_stage(runtime, outcome, f"nothing_to_summarize_{history_count}", usage_tokens)
         return outcome
 
@@ -610,7 +632,9 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
         log.warning(
             "context compress fallback: hard-truncating history without LLM summary "
             "(history=%d to_summarize=%d tail=%d)",
-            history_count, len(to_summarize), len(tail),
+            history_count,
+            len(to_summarize),
+            len(tail),
         )
         summary = _deterministic_summary(to_summarize, history_count=history_count)
         _emit_post_snapshot_kernel_stage(
@@ -631,6 +655,7 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
     # Update the epoch: summary replaces Episode resume in frozen_prefix,
     # optionally refresh PM facts, keep only tail messages.
     from packages.context.session_projection import compact_session_context_epoch
+
     updated_epoch, compaction_result = compact_session_context_epoch(
         frozen_epoch,
         total_tokens=context_limit,
@@ -645,6 +670,7 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
         _strip_prompt_sections,
         _append_prompt_section,
     )
+
     updated_prefix = _strip_prompt_sections(updated_epoch.frozen_prefix, "Episode resume")
     updated_prefix = _append_prompt_section(
         updated_prefix,
@@ -652,6 +678,7 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
         (f"Reference summary: {summary}",),
     )
     from dataclasses import replace as _dc_replace
+
     updated_epoch = _dc_replace(updated_epoch, frozen_prefix=updated_prefix)
 
     # Write the compacted epoch back to snapshot.
@@ -662,6 +689,7 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
     # both session_context_epoch AND the session key to the parent episode.
     from apps.cli.runtime_snapshot import _session_context_epoch_payload
     from apps.cli.snapshot_io import load_snapshot_payload, write_snapshot_payload
+
     _snap = load_snapshot_payload(runtime.snapshot_path) or {}
     _snap["session_context_epoch"] = _session_context_epoch_payload(updated_epoch)
     # Restore session key — only episode_id matters for epoch session matching.
@@ -690,7 +718,10 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
     _emit_post_snapshot_kernel_stage(runtime, outcome, record)
     log.info(
         "compress completed: %d->%d messages, summary_len=%d, session=%s",
-        history_count, len(tail), len(summary), outcome.route_session_id,
+        history_count,
+        len(tail),
+        len(summary),
+        outcome.route_session_id,
     )
     return replace(outcome, stages=(*outcome.stages, record))
 
@@ -761,11 +792,7 @@ def _emit_compress_skip_stage(
         outcome,
         KernelStageRecord(
             stage="context-compact",
-            detail=(
-                f"reason=skip:{reason} "
-                f"tokens={usage_tokens}->{usage_tokens} "
-                f"messages=0->0"
-            ),
+            detail=(f"reason=skip:{reason} tokens={usage_tokens}->{usage_tokens} messages=0->0"),
             recorded_at=datetime.now(timezone.utc),
         ),
     )
@@ -796,7 +823,10 @@ def _projection_thread_focus(work_items: tuple[Any, ...]) -> str:
         None,
     )
     if active_work_item is None:
-        active_work_item = next((work_item for work_item in work_items if str(getattr(work_item, "title", "") or "").strip()), None)
+        active_work_item = next(
+            (work_item for work_item in work_items if str(getattr(work_item, "title", "") or "").strip()),
+            None,
+        )
     return str(getattr(active_work_item, "title", "") or "").strip() if active_work_item is not None else ""
 
 
@@ -848,9 +878,7 @@ def _wake_rationale_event(
 ) -> EventEnvelope:
     scope_summary = ", ".join(recovery.scope_episode_ids) or episode_id
     content = (
-        f"Wake recovery searched scope {scope_summary}. "
-        f"Reason: {recovery.scope_reason}. "
-        f"Next step: {wake_summary}"
+        f"Wake recovery searched scope {scope_summary}. Reason: {recovery.scope_reason}. Next step: {wake_summary}"
     )
     return EventEnvelope(
         event_id=f"event:{uuid4().hex}",
@@ -865,7 +893,9 @@ def _wake_rationale_event(
             "scope_episode_ids": ",".join(recovery.scope_episode_ids),
             "scope_reason": recovery.scope_reason,
             "query": recovery.query,
-            "resume_packet_summary": recovery.resume_packet.summary if getattr(recovery, "resume_packet", None) is not None else "",
+            "resume_packet_summary": recovery.resume_packet.summary
+            if getattr(recovery, "resume_packet", None) is not None
+            else "",
             "resume_packet_evidence_ids": ",".join(
                 recovery.resume_packet.evidence_ids if getattr(recovery, "resume_packet", None) is not None else ()
             ),

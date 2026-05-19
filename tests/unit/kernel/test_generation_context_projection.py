@@ -108,7 +108,14 @@ def _bundle() -> ContextBundle:
     )
 
 
-def _fact(*, text: str, field: str, lens: str = "knowledge", confidence: float = 1.0, extra_metadata: dict[str, str] | None = None) -> Any:
+def _fact(
+    *,
+    text: str,
+    field: str,
+    lens: str = "knowledge",
+    confidence: float = 1.0,
+    extra_metadata: dict[str, str] | None = None,
+) -> Any:
     topic_by_field = {
         "identity.name.preferred": "identity.anchor.name.preferred",
         "city": "world.places.city.current",
@@ -124,12 +131,23 @@ def _fact(*, text: str, field: str, lens: str = "knowledge", confidence: float =
             "text": text,
             "lens": lens,
             "confidence": confidence,
-            "metadata": {"field": field, "topic": topic_by_field.get(field, field), "protected": "system", "projection_policy": "core_prompt", **(extra_metadata or {})},
+            "metadata": {
+                "field": field,
+                "topic": topic_by_field.get(field, field),
+                "protected": "system",
+                "projection_policy": "core_prompt",
+                **(extra_metadata or {}),
+            },
         },
     )()
 
 
-def _profile(*, preferences: tuple[str, ...] = (), user_profile_text: str = "", style_summary: str = "") -> Any:
+def _profile(
+    *,
+    preferences: tuple[str, ...] = (),
+    user_profile_text: str = "",
+    style_summary: str = "",
+) -> Any:
     return type(
         "_Profile",
         (),
@@ -141,7 +159,11 @@ def _profile(*, preferences: tuple[str, ...] = (), user_profile_text: str = "", 
     )()
 
 
-def _question(*, text: str = "When things get messy, what helps?", sub_lens: str = "stress_response") -> Any:
+def _question(
+    *,
+    text: str = "When things get messy, what helps?",
+    sub_lens: str = "stress_response",
+) -> Any:
     return type(
         "_Question",
         (),
@@ -198,10 +220,17 @@ class GenerationContextProjectionTest(unittest.TestCase):
         self.assertEqual(result.evidence_refs, ())
         self.assertEqual(result.artifact_ids, ())
 
-    def test_learning_agent_minimal_context_can_carry_dedicated_system_prompt(self) -> None:
+    def test_learning_agent_minimal_context_can_carry_dedicated_system_prompt(
+        self,
+    ) -> None:
         result = build_context_for_generation(
             dependencies=_FakeDependencies(_FakeStorage()),
-            request=_FakeRequest(source_payload={"context_mode": "learning_agent", "system_prompt": "SYSTEM ONLY"}),
+            request=_FakeRequest(
+                source_payload={
+                    "context_mode": "learning_agent",
+                    "system_prompt": "SYSTEM ONLY",
+                }
+            ),
             profile=None,
             session=None,
             state_focus=None,
@@ -244,15 +273,27 @@ class GenerationContextProjectionTest(unittest.TestCase):
             dependencies=_FakeDependencies(
                 _FakeStorage(
                     facts=(
-                        _fact(text="Question-bank signal for feedback_preference: explicit", field="question.signal", lens="rapport"),
-                        _fact(text="User explicitly shared autonomy_boundary: 的心事更在前面？", field="question.noise", lens="rapport"),
+                        _fact(
+                            text="Question-bank signal for feedback_preference: explicit",
+                            field="question.signal",
+                            lens="rapport",
+                        ),
+                        _fact(
+                            text="User explicitly shared autonomy_boundary: 的心事更在前面？",
+                            field="question.noise",
+                            lens="rapport",
+                        ),
                         _fact(
                             text="Synthetic live acceptance marker for init_bootstrap mode validation. run_tag=20260509135158.",
                             field="validation.marker",
                             lens="knowledge",
                             extra_metadata={"recall_policy": "temporary"},
                         ),
-                        _fact(text="第一语言：中文。", field="first_language", lens="rapport"),
+                        _fact(
+                            text="第一语言：中文。",
+                            field="first_language",
+                            lens="rapport",
+                        ),
                     )
                 )
             ),
@@ -274,7 +315,9 @@ class GenerationContextProjectionTest(unittest.TestCase):
         self.assertNotIn("User explicitly shared autonomy_boundary", prompt)
         self.assertNotIn("Synthetic live acceptance marker", prompt)
 
-    def test_gateway_state_projection_does_not_inject_previous_assistant_reply_as_ongoing_thread(self) -> None:
+    def test_gateway_state_projection_does_not_inject_previous_assistant_reply_as_ongoing_thread(
+        self,
+    ) -> None:
         state = type(
             "_State",
             (),
@@ -310,11 +353,7 @@ class GenerationContextProjectionTest(unittest.TestCase):
         episode = type(
             "_Episode",
             (),
-            {
-                "metadata": {
-                    "opening_resume_snapshot": "Use the live project handoff as the current Elephant context."
-                }
-            },
+            {"metadata": {"opening_resume_snapshot": "Use the live project handoff as the current Elephant context."}},
         )()
         result = build_context_for_generation(
             dependencies=_FakeDependencies(_FakeStorage(episode=episode)),
@@ -349,7 +388,9 @@ class GenerationContextProjectionTest(unittest.TestCase):
             ),
         )
         result = build_context_for_generation(
-            dependencies=_FakeDependencies(_FakeStorage(facts=(_fact(text="称呼：xunzhuo。", field="identity.name.preferred"),))),
+            dependencies=_FakeDependencies(
+                _FakeStorage(facts=(_fact(text="称呼：xunzhuo。", field="identity.name.preferred"),))
+            ),
             request=_FakeRequest(),
             profile=None,
             session=None,
@@ -369,7 +410,9 @@ class GenerationContextProjectionTest(unittest.TestCase):
         self.assertNotIn("Prompt budget", rendered)
         self.assertNotIn("204800", rendered)
 
-    def test_pm_facts_replace_raw_user_snapshot_and_skill_index_moves_late(self) -> None:
+    def test_pm_facts_replace_raw_user_snapshot_and_skill_index_moves_late(
+        self,
+    ) -> None:
         skill_block = "\n".join(
             (
                 "### Capability Disclosure",
@@ -398,7 +441,11 @@ class GenerationContextProjectionTest(unittest.TestCase):
         )
         storage = _FakeStorage(
             facts=(
-                _fact(text="称呼：xunzhuo。", field="identity.name.preferred", lens="knowledge"),
+                _fact(
+                    text="称呼：xunzhuo。",
+                    field="identity.name.preferred",
+                    lens="knowledge",
+                ),
                 _fact(text="城市或时区语境：成都。", field="city", lens="knowledge"),
             ),
             profile=_profile(preferences=("first_language=zh",)),
@@ -425,7 +472,10 @@ class GenerationContextProjectionTest(unittest.TestCase):
         self.assertIn("### World — what is around them", prompt)
         self.assertIn("称呼：xunzhuo", prompt)
         self.assertIn("城市或时区语境：成都", prompt)
-        self.assertLess(prompt.index("### Identity — who they are"), prompt.index("### Capability Disclosure"))
+        self.assertLess(
+            prompt.index("### Identity — who they are"),
+            prompt.index("### Capability Disclosure"),
+        )
 
     def test_pm_facts_replace_stale_frozen_personal_projection(self) -> None:
         context = ContextBundle(
@@ -447,7 +497,15 @@ class GenerationContextProjectionTest(unittest.TestCase):
         )
         result = build_context_for_generation(
             dependencies=_FakeDependencies(
-                _FakeStorage(facts=(_fact(text="称呼：zoey。", field="identity.name.preferred", lens="knowledge"),))
+                _FakeStorage(
+                    facts=(
+                        _fact(
+                            text="称呼：zoey。",
+                            field="identity.name.preferred",
+                            lens="knowledge",
+                        ),
+                    )
+                )
             ),
             request=_FakeRequest(),
             profile=None,
@@ -468,9 +526,21 @@ class GenerationContextProjectionTest(unittest.TestCase):
     def test_style_guidance_is_behavioral_not_raw_database_summary(self) -> None:
         storage = _FakeStorage(
             facts=(
-                _fact(text="压力升起来时，常见反应是：先安静下来。", field="pressure_pattern", lens="trait"),
-                _fact(text="恢复精力时，较早有用的是：安静一会儿。", field="recovery_style", lens="trait"),
-                _fact(text="面对悬而未决的选择时，更靠近答案的方式是：写下取舍。", field="decision_compass", lens="trait"),
+                _fact(
+                    text="压力升起来时，常见反应是：先安静下来。",
+                    field="pressure_pattern",
+                    lens="trait",
+                ),
+                _fact(
+                    text="恢复精力时，较早有用的是：安静一会儿。",
+                    field="recovery_style",
+                    lens="trait",
+                ),
+                _fact(
+                    text="面对悬而未决的选择时，更靠近答案的方式是：写下取舍。",
+                    field="decision_compass",
+                    lens="trait",
+                ),
             ),
             profile=_profile(
                 preferences=("relationship_mode=安静、细腻、低压地陪在旁边",),
@@ -501,13 +571,24 @@ class GenerationContextProjectionTest(unittest.TestCase):
     def test_curiosity_hint_routes_question_selection_through_tool(self) -> None:
         storage = _FakeStorage(
             facts=(
-                _fact(text="第一语言：中文；除非用户另行要求，默认使用中文沟通。", field="first_language", lens="rapport"),
-                _fact(text="称呼：xunzhuo。", field="identity.name.preferred", lens="knowledge"),
+                _fact(
+                    text="第一语言：中文；除非用户另行要求，默认使用中文沟通。",
+                    field="first_language",
+                    lens="rapport",
+                ),
+                _fact(
+                    text="称呼：xunzhuo。",
+                    field="identity.name.preferred",
+                    lens="knowledge",
+                ),
             ),
             profile=_profile(),
             questions=(
                 _question(text="when things get messy, do you want a checklist first?"),
-                _question(text="when your energy is low, do you need quiet space first?", sub_lens="energy_management"),
+                _question(
+                    text="when your energy is low, do you need quiet space first?",
+                    sub_lens="energy_management",
+                ),
             ),
         )
         result = build_context_for_generation(
@@ -537,6 +618,7 @@ class GenerationContextProjectionTest(unittest.TestCase):
         ever said their name. Render-time filter catches it until a
         real name arrives via `tool.personal_model.update`.
         """
+
         class _PersonalModel:
             display_name = "Hazel"
             status = "active"
@@ -587,6 +669,7 @@ class GenerationContextProjectionTest(unittest.TestCase):
         """When display_name decayed to a reflexive pronoun like "You",
         we must not emit "You are You" absurdity.
         """
+
         class _PersonalModel:
             display_name = "You"
             status = "active"

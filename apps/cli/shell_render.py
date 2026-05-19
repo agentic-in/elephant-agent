@@ -149,10 +149,17 @@ def render_brand_column(shell: ProductizedShell, session, continuity, provider, 
     heading.append("🐘 Personal Model first. Curious by design.", style=BRAND_MUTED)
     meta = Text(no_wrap=True)
     meta.append(f"{display_name}\n", style=f"bold {BRAND_LIGHT}")
-    meta.append("understands first · asks gently · picks up the right thread\n", style=BRAND_MUTED)
+    meta.append(
+        "understands first · asks gently · picks up the right thread\n",
+        style=BRAND_MUTED,
+    )
     meta.append(growth.identity_line, style=BRAND_ACCENT_STRONG)
     if Table is None:
-        return Group(heading, shell._render_growth_mark(growth.brand_stage_id, level=growth.level), meta)
+        return Group(
+            heading,
+            shell._render_growth_mark(growth.brand_stage_id, level=growth.level),
+            meta,
+        )
     brand = Table.grid(expand=True)
     brand.add_column(no_wrap=True)
     brand.add_row(shell._center_brand_block(heading))
@@ -276,7 +283,10 @@ _RECOVERY_QUICK_FIX_HINTS: tuple[tuple[str, str], ...] = (
     ("invalid key:", "Try F1 or `?` for the cheatsheet of valid bindings."),
     ("no module named", "Check your virtualenv — something isn't importable."),
     ("permission denied", "This path might be outside the current project root."),
-    ("connection refused", "The provider endpoint didn't answer — check /providers status."),
+    (
+        "connection refused",
+        "The provider endpoint didn't answer — check /providers status.",
+    ),
     ("token limit", "The conversation got long. Try /clear and start a fresh thread."),
     ("unauthorized", "Your provider key looks off — run /providers to update."),
     ("rate limit", "Provider is rate-limiting us. Wait a moment and try again."),
@@ -309,7 +319,7 @@ def _fold_long_body(shell: ProductizedShell, entry: TranscriptEntry) -> tuple[st
     # Keep the head (most-recent information first in most dumps is rare,
     # so showing the head is the right default). Tail an ellipsis so users
     # know it's been trimmed.
-    head_lines = body.split("\n")[: _MAX_TRANSCRIPT_BODY_LINES]
+    head_lines = body.split("\n")[:_MAX_TRANSCRIPT_BODY_LINES]
     hidden = line_count - len(head_lines)
     fold_marker = f"… {hidden} more line(s) hidden · type /expand last to see the whole thing"
     head = "\n".join(head_lines)
@@ -388,16 +398,8 @@ def growth_panel_lines(shell: ProductizedShell, session, continuity, provider, g
     ]
     lines.extend(
         [
-            (
-                "history · "
-                f"{growth.canonical_dialogues} dialogues · "
-                f"{growth.canonical_active_days} active day(s)"
-            ),
-            (
-                "saved work · "
-                f"{growth.canonical_experiences} experience(s) · "
-                f"{growth.state.total_tokens} tokens seen"
-            ),
+            (f"history · {growth.canonical_dialogues} dialogues · {growth.canonical_active_days} active day(s)"),
+            (f"saved work · {growth.canonical_experiences} experience(s) · {growth.state.total_tokens} tokens seen"),
         ]
     )
     experiences = shell.runtime.inspect_experiences(session_id=session.episode_id, limit=2)
@@ -415,11 +417,15 @@ def recent_activity_lines(shell: ProductizedShell, session, continuity, provider
     return growth_panel_lines(shell, session, continuity, provider, growth)
 
 
-def recent_experience_lines(experiences: tuple[ExperienceRecord, ...]) -> tuple[str, ...]:
+def recent_experience_lines(
+    experiences: tuple[ExperienceRecord, ...],
+) -> tuple[str, ...]:
     return tuple(f"evidence · {format_experience_status(experience)}" for experience in experiences)
 
 
-def displayable_experiences(experiences: tuple[ExperienceRecord, ...]) -> tuple[ExperienceRecord, ...]:
+def displayable_experiences(
+    experiences: tuple[ExperienceRecord, ...],
+) -> tuple[ExperienceRecord, ...]:
     filtered = tuple(experience for experience in experiences if should_display_experience(experience))
     return filtered[:2]
 
@@ -601,15 +607,39 @@ def _render_assistant_response(response: str) -> Text | list[object]:
         list_match = _re.match(r"^(\s*)([-*+]|\d+\.)\s+(.*)$", line)
         if list_match:
             current_block.append(f"{list_match.group(1)}{list_match.group(2)} ", style=BRAND_ACCENT)
-            _append_inline_formatted(current_block, list_match.group(3), bold_italic_pat, bold_pat, italic_pat, code_pat, link_pat)
+            _append_inline_formatted(
+                current_block,
+                list_match.group(3),
+                bold_italic_pat,
+                bold_pat,
+                italic_pat,
+                code_pat,
+                link_pat,
+            )
             line_index += 1
             continue
         if line.startswith(">"):
             current_block.append("│ ", style=BRAND_MUTED)
-            _append_inline_formatted(current_block, line.lstrip("> "), bold_italic_pat, bold_pat, italic_pat, code_pat, link_pat)
+            _append_inline_formatted(
+                current_block,
+                line.lstrip("> "),
+                bold_italic_pat,
+                bold_pat,
+                italic_pat,
+                code_pat,
+                link_pat,
+            )
             line_index += 1
             continue
-        _append_inline_formatted(current_block, line, bold_italic_pat, bold_pat, italic_pat, code_pat, link_pat)
+        _append_inline_formatted(
+            current_block,
+            line,
+            bold_italic_pat,
+            bold_pat,
+            italic_pat,
+            code_pat,
+            link_pat,
+        )
         line_index += 1
 
     # If no table detected, keep original return type

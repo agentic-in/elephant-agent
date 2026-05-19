@@ -1,11 +1,8 @@
 """Provider methods for the API runtime app."""
 
-
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, is_dataclass, replace
-from pathlib import Path
-import json
+from dataclasses import asdict, replace
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -21,59 +18,21 @@ from packages.embeddings import (
     OPENAI_COMPATIBLE_EMBED_SECRET_REFERENCE_ID,
     default_local_embedding_provider_config,
 )
-from packages.models import SurfaceModelProviderCapability
-from packages.auth import AuthProfile, PersistentAuthProfileStore, SecretReference
-from packages.context import ContextRuntime
+from packages.auth import AuthProfile, SecretReference
 from packages.contracts import (
     ContextBundle,
     Episode,
-    EventEnvelope,
     ExecutionResult,
 )
-from packages.contracts.runtime import PersonalModelRuntimeState, RecallEvidence
-from packages.kernel import KernelDependencies, KernelOutcome, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
-from packages.evidence.recall_runtime import RecallRuntime
-from packages.operator.runtime import (
-    RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
-    ProcedureOperatorDetail,
-    build_recall_evidence_operator_surface,
-    build_procedure_operator_surface,
-    build_profile_operator_surface,
+from packages.contracts.runtime import PersonalModelRuntimeState
+from packages.runtime_config import (
+    global_config_path_for_state_dir,
+    save_provider_to_config,
 )
-from packages.storage import RuntimeStorageRepository
-from packages.runtime_config import global_config_path_for_state_dir, save_provider_to_config
-from packages.tools import BuiltinToolDependencies, build_tool_runtime
-from packages.tools.adapters import DeliveryMessageSurfaceAdapter, StructuredClarifySurface
-from packages.tools.browser_backend import create_playwright_browser_backend
 
-from .capabilities import (
-    APIContextCapability,
-    APIDeliveryCapability,
-    APIRecallCapability,
-    APIModelProvider,
-    APITelemetrySink,
-    APIToolExecution,
-)
-from .state_runtime import APIContinuityInspection, APIStateService
 
 from .api_runtime_support import (
-    APIAppConfig,
-    APIResponse,
-    APIEpisodeCreationResult,
-    APIEpisodeInspection,
-    APIEpisodeTransitionResult,
-    APILoopRecord,
-    APILoopResult,
-    _coerce_str_tuple,
-    _json_bytes,
-    _jsonable,
     _now,
-    _optional_bool,
-    _optional_datetime,
-    _optional_str,
-    _read_json_bytes,
-    _split_path,
 )
 
 _EMBEDDING_API_KEY_ENV_VAR = OPENAI_COMPATIBLE_EMBED_DEFAULT_SECRET_ENV_VAR
@@ -108,12 +67,14 @@ def list_providers(self) -> dict[str, Any]:
         "providers": providers,
     }
 
+
 def setup_provider(self, provider_id: str) -> dict[str, Any]:
     guide = self.model_provider.runtime_resolver.build_setup_guide(provider_id)
     return {
         "active_provider": self.model_provider.describe(),
         "guide": guide.as_mapping(),
     }
+
 
 def discover_provider_models(self, payload: Mapping[str, Any]) -> dict[str, Any]:
     provider_id = str(payload.get("providerId") or payload.get("provider_id") or "").strip()
@@ -132,6 +93,7 @@ def discover_provider_models(self, payload: Mapping[str, Any]) -> dict[str, Any]
         "baseUrl": base_url,
         "models": [asdict(model) for model in models],
     }
+
 
 def _metadata_context_window_tokens(metadata: Mapping[str, str]) -> int | None:
     raw_value = metadata.get("context_window_tokens")
@@ -189,6 +151,7 @@ def set_default_provider(self, provider_profile: Mapping[str, Any]) -> dict[str,
         "active_provider": self.model_provider.describe(),
     }
 
+
 def _provider_probe(
     self,
     *,
@@ -227,6 +190,7 @@ def _provider_probe(
         prompt=prompt,
     )
 
+
 def test_provider(self, *, prompt: str = "Summarize the current provider configuration.") -> dict[str, Any]:
     active_provider = self.model_provider.describe()
     try:
@@ -242,6 +206,7 @@ def test_provider(self, *, prompt: str = "Summarize the current provider configu
         "status": "ok",
         "result": result,
     }
+
 
 def doctor_provider(self) -> dict[str, Any]:
     active_provider = self.model_provider.describe()
@@ -372,7 +337,10 @@ def _stored_api_key_for_active_provider(self, provider_id: str) -> str | None:
     active_profile = self.model_provider.active_profile()
     if active_profile is None or active_profile.provider_id != provider_id:
         return None
-    reference = next((item for item in active_profile.secret_references if item.secret_key == "api_key"), None)
+    reference = next(
+        (item for item in active_profile.secret_references if item.secret_key == "api_key"),
+        None,
+    )
     if reference is None or not self.repository.has_auth_secret_value(reference.reference_id):
         return None
     credentials = self.model_provider.resolve_credentials(active_profile)
@@ -384,7 +352,10 @@ def embedding_provider_summary(self) -> dict[str, Any]:
     active_provider = dict(self.model_provider.describe())
     profile = self._active_embedding_provider_profile()
     if profile is not None:
-        reference = next((item for item in profile.secret_references if item.secret_key == "api_key"), None)
+        reference = next(
+            (item for item in profile.secret_references if item.secret_key == "api_key"),
+            None,
+        )
         reference_id = reference.reference_id if reference is not None else ""
         has_secret = bool(reference_id) and self.repository.has_auth_secret_value(reference_id)
         return {
@@ -543,7 +514,9 @@ def create_provider_key(self, payload: Mapping[str, Any]) -> dict[str, Any]:
     provider_id = str(payload.get("providerId") or payload.get("provider_id") or "").strip()
     secret_key = str(payload.get("secretKey") or payload.get("secret_key") or "api_key").strip()
     secret_name = str(payload.get("secretName") or payload.get("secret_name") or "api_token").strip()
-    reference_id = str(payload.get("referenceId") or payload.get("reference_id") or f"secret:{profile_id}:{secret_key}").strip()
+    reference_id = str(
+        payload.get("referenceId") or payload.get("reference_id") or f"secret:{profile_id}:{secret_key}"
+    ).strip()
     if not profile_id or not provider_id or not reference_id:
         raise ValueError("profileId, providerId, and referenceId are required")
     profile = self.repository.load_auth_profile(profile_id)

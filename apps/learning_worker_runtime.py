@@ -237,6 +237,7 @@ def close_finished_learning_child_episode(runtime: CliRuntime, job: LearningJob,
         return False
     # Close by updating status via upsert
     from dataclasses import replace as _replace
+
     closed = _replace(child, status="closed")
     runtime.repository.upsert_episode(closed)
     return True

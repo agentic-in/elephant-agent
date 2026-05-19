@@ -51,8 +51,14 @@ def skill_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, ...]:
             schema=_object_schema(
                 required=("skill_id",),
                 properties={
-                    "skill_id": {"type": "string", "description": "Installed skill id or local hub reference to inspect."},
-                    "reference": {"type": "string", "description": "Optional local hub reference if different from skill_id."},
+                    "skill_id": {
+                        "type": "string",
+                        "description": "Installed skill id or local hub reference to inspect.",
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "Optional local hub reference if different from skill_id.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -79,16 +85,48 @@ def skill_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, ...]:
                 properties={
                     "action": {
                         "type": "string",
-                        "enum": ["install", "enable", "disable", "create", "update", "delete", "remove"],
+                        "enum": [
+                            "install",
+                            "enable",
+                            "disable",
+                            "create",
+                            "update",
+                            "delete",
+                            "remove",
+                        ],
                     },
-                    "skill_id": {"type": "string", "description": "Installed skill id, local hub reference, or authored skill id."},
-                    "reference": {"type": "string", "description": "Install source reference or path when action=install."},
-                    "display_name": {"type": "string", "description": "Authored skill title when action=create or update."},
-                    "summary": {"type": "string", "description": "One-line authored skill summary when action=create or update."},
-                    "instruction_text": {"type": "string", "description": "Full SKILL.md body when action=create or update."},
-                    "category": {"type": "string", "description": "Optional authored skill category bucket."},
-                    "install": {"type": "boolean", "description": "Whether to install an authored skill immediately after writing it."},
-                    "overwrite": {"type": "boolean", "description": "Whether action=create may overwrite an existing authored skill."},
+                    "skill_id": {
+                        "type": "string",
+                        "description": "Installed skill id, local hub reference, or authored skill id.",
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "Install source reference or path when action=install.",
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "description": "Authored skill title when action=create or update.",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "One-line authored skill summary when action=create or update.",
+                    },
+                    "instruction_text": {
+                        "type": "string",
+                        "description": "Full SKILL.md body when action=create or update.",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional authored skill category bucket.",
+                    },
+                    "install": {
+                        "type": "boolean",
+                        "description": "Whether to install an authored skill immediately after writing it.",
+                    },
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "Whether action=create may overwrite an existing authored skill.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(

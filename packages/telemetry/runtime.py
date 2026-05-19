@@ -9,7 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, ClassVar, Literal, Mapping, Protocol, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Literal,
+    Mapping,
+    Protocol,
+    runtime_checkable,
+)
 
 TelemetryFamily = Literal["lifecycle", "execution", "approval", "delivery", "failure"]
 TelemetryPhase = Literal["ingest", "resolve", "recover", "assemble", "select", "execute", "persist", "emit"]
@@ -37,10 +45,26 @@ LIFECYCLE_PHASES: tuple[TelemetryPhase, ...] = (
     "emit",
 )
 
-EXECUTION_STATUSES: tuple[ExecutionStatus, ...] = ("started", "completed", "blocked", "failed")
+EXECUTION_STATUSES: tuple[ExecutionStatus, ...] = (
+    "started",
+    "completed",
+    "blocked",
+    "failed",
+)
 APPROVAL_DECISIONS: tuple[ApprovalDecision, ...] = ("approved", "denied", "deferred")
-DELIVERY_STATUSES: tuple[DeliveryStatus, ...] = ("queued", "sent", "acknowledged", "failed")
-FAILURE_SEVERITIES: tuple[FailureSeverity, ...] = ("debug", "info", "warning", "error", "critical")
+DELIVERY_STATUSES: tuple[DeliveryStatus, ...] = (
+    "queued",
+    "sent",
+    "acknowledged",
+    "failed",
+)
+FAILURE_SEVERITIES: tuple[FailureSeverity, ...] = (
+    "debug",
+    "info",
+    "warning",
+    "error",
+    "critical",
+)
 
 KRN_REQUIRED_EVENTS = (
     "lifecycle.turn.ingested",

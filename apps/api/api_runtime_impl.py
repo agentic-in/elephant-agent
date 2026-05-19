@@ -1,36 +1,21 @@
 """Programmatic API runtime implementation assembled from smaller method modules."""
 
-
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, is_dataclass, replace
-from datetime import UTC, datetime
 from pathlib import Path
-import json
-from typing import Any, Mapping
-from uuid import uuid4
+from typing import Mapping
 
 from apps.provider_runtime import load_provider_profile
 from packages.runtime_config import global_config_path_for_state_dir
 from packages.models import SurfaceModelProviderCapability
-from packages.auth import AuthProfile, PersistentAuthProfileStore
+from packages.auth import PersistentAuthProfileStore
 from packages.context import ContextRuntime
 from packages.cron import CronRuntime
-from packages.contracts import (
-    ContextBundle,
-    EventEnvelope,
-    ExecutionResult,
-)
-from packages.contracts.runtime import PersonalModelRuntimeState, RecallEvidence
-from packages.kernel import KernelDependencies, KernelOutcome, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
-from packages.evidence import RecallRuntime, SemanticSummaryIndexer, build_semantic_index_bundle
-from packages.operator.runtime import (
-    RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
-    ProcedureOperatorDetail,
-    build_recall_evidence_operator_surface,
-    build_procedure_operator_surface,
-    build_profile_operator_surface,
+from packages.kernel import KernelDependencies, KernelService
+from packages.evidence import (
+    RecallRuntime,
+    SemanticSummaryIndexer,
+    build_semantic_index_bundle,
 )
 from packages.runtime_config import configured_external_skill_dirs, load_global_config
 from packages.runtime_layout import default_cron_dir, infer_install_root_from_state_dir
@@ -54,7 +39,10 @@ from packages.tools import (
     build_tool_runtime,
     sync_custom_mcp_tools,
 )
-from packages.tools.adapters import DeliveryMessageSurfaceAdapter, StructuredClarifySurface
+from packages.tools.adapters import (
+    DeliveryMessageSurfaceAdapter,
+    StructuredClarifySurface,
+)
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.tools.browser_backend import create_playwright_browser_backend
 from packages.tools.local_roots import default_local_allowed_roots
@@ -67,7 +55,7 @@ from .capabilities import (
     APITelemetrySink,
     APIToolExecution,
 )
-from .state_runtime import APIContinuityInspection, APIStateService
+from .state_runtime import APIStateService
 
 from .api_runtime_support import (
     APIAppConfig,
@@ -90,7 +78,12 @@ from . import api_runtime_internal_methods as _internal_methods
 
 def _enabled_overrides(state_dir: Path, section: str) -> dict[str, bool]:
     """Load skill/extension override settings from config.yaml."""
-    from packages.runtime_config import load_global_config, load_extensions_from_config, global_config_path_for_state_dir
+    from packages.runtime_config import (
+        load_global_config,
+        load_extensions_from_config,
+        global_config_path_for_state_dir,
+    )
+
     manifest = {}
     try:
         config_path = global_config_path_for_state_dir(state_dir)
@@ -116,13 +109,20 @@ class ElephantAPIApp:
         self.repository = RuntimeStorageRepository(config.database_path)
         self.repository.bootstrap()
         runtime_state_dir = self.repository.database_path.parent
-        _obs_cfg = load_global_config(global_config_path_for_state_dir(runtime_state_dir), state_dir=runtime_state_dir)
+        _obs_cfg = load_global_config(
+            global_config_path_for_state_dir(runtime_state_dir),
+            state_dir=runtime_state_dir,
+        )
         from packages.observability import setup_from_config
+
         setup_from_config(_obs_cfg, state_dir=str(runtime_state_dir))
         install_root = config.install_root or infer_install_root_from_state_dir(runtime_state_dir)
         sync_builtin_skill_shelf(destination_root=install_root / "skills" / "builtin")
         self.profile_loader = ProfileLoader(install_root)
-        active_provider_profile = load_provider_profile(runtime_state_dir, config_path=global_config_path_for_state_dir(runtime_state_dir))
+        active_provider_profile = load_provider_profile(
+            runtime_state_dir,
+            config_path=global_config_path_for_state_dir(runtime_state_dir),
+        )
         active_provider_profile_id = None
         active_provider_id = None
         if active_provider_profile is not None:
@@ -147,7 +147,9 @@ class ElephantAPIApp:
         loaded_profile = self.profile_loader.load()
         prompt_contract = build_prompt_contract(loaded_profile, prompt_mode="full")
         context_instruction_refs = prompt_contract.instruction_refs or config.instruction_refs
-        self.context_runtime = ContextRuntime(instruction_refs=context_instruction_refs, total_tokens=config.total_tokens)
+        self.context_runtime = ContextRuntime(
+            instruction_refs=context_instruction_refs, total_tokens=config.total_tokens
+        )
         self.personal_state = APIStateService(
             repository=self.repository,
             recall_runtime=self.recall_runtime,
@@ -203,6 +205,7 @@ class ElephantAPIApp:
             profile_loader=self.profile_loader,
             install_root=install_root,
         )
+
         def _resolve_elephant_state(elephant_id: str):
             resolved_elephant_id = elephant_id.strip()
             if resolved_elephant_id:
@@ -232,6 +235,7 @@ class ElephantAPIApp:
                 elephant_id=elephant_id,
                 episode_id=episode.episode_id,
             )
+
         self.tool_runtime = build_tool_runtime(
             enabled_overrides=_enabled_overrides(runtime_state_dir, "tool_overrides"),
             dependencies=BuiltinToolDependencies(
@@ -299,6 +303,7 @@ class ElephantAPIApp:
         )
         self._loops: dict[str, list[APILoopRecord]] = {}
 
+
 ElephantAPIApp.list_providers = _provider_methods.list_providers
 ElephantAPIApp.setup_provider = _provider_methods.setup_provider
 ElephantAPIApp.discover_provider_models = _provider_methods.discover_provider_models
@@ -360,6 +365,7 @@ ElephantAPIApp.run_cron_job_now = _http_methods.run_cron_job_now
 ElephantAPIApp.run_proactive_ask_now = _cron_methods.run_proactive_ask_now
 ElephantAPIApp.__call__ = _http_methods.__call__
 
+
 def create_app(
     *,
     database_path: str | Path,
@@ -375,6 +381,7 @@ def create_app(
             total_tokens=total_tokens,
         )
     )
+
 
 __all__ = [
     "APIAppConfig",

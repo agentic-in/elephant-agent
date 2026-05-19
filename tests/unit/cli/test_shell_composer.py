@@ -20,7 +20,9 @@ class ShellComposerPromptToolkitTests(unittest.TestCase):
             _prompt_continuation=lambda: "  ",
         )
 
-    def test_read_command_runs_prompt_session_in_thread_when_loop_is_active(self) -> None:
+    def test_read_command_runs_prompt_session_in_thread_when_loop_is_active(
+        self,
+    ) -> None:
         shell = self._make_shell()
         captured: dict[str, object] = {}
 
@@ -39,7 +41,11 @@ class ShellComposerPromptToolkitTests(unittest.TestCase):
             mock.patch.object(shell_composer, "prompt_toolkit_composer_available", return_value=False),
             mock.patch.object(shell_composer, "shell_history", return_value=mock.sentinel.history),
             mock.patch.object(shell_composer, "prompt_toolkit_loop_running", return_value=True),
-            mock.patch.object(shell_composer, "prompt_toolkit_output_without_cpr", return_value=mock.sentinel.output),
+            mock.patch.object(
+                shell_composer,
+                "prompt_toolkit_output_without_cpr",
+                return_value=mock.sentinel.output,
+            ),
             mock.patch.object(cli_shell, "ShellCompleter", return_value=mock.sentinel.completer),
         ):
             result = shell_composer.read_command(shell)
@@ -73,18 +79,37 @@ class ShellComposerPromptToolkitTests(unittest.TestCase):
             mock.patch.object(shell_composer, "PROMPT_TOOLKIT_AVAILABLE", True),
             mock.patch.object(shell_composer, "prompt_toolkit_composer_available", return_value=True),
             mock.patch.object(shell_composer, "build_prompt_buffer", return_value=buffer),
-            mock.patch.object(shell_composer, "build_input_window", return_value=mock.sentinel.input_window),
-            mock.patch.object(shell_composer, "build_command_palette", return_value=mock.sentinel.command_palette),
+            mock.patch.object(
+                shell_composer,
+                "build_input_window",
+                return_value=mock.sentinel.input_window,
+            ),
+            mock.patch.object(
+                shell_composer,
+                "build_command_palette",
+                return_value=mock.sentinel.command_palette,
+            ),
             mock.patch.object(shell_composer, "build_composer_body", return_value=mock.sentinel.body),
-            mock.patch.object(shell_composer, "prompt_toolkit_output_without_cpr", return_value=mock.sentinel.output),
+            mock.patch.object(
+                shell_composer,
+                "prompt_toolkit_output_without_cpr",
+                return_value=mock.sentinel.output,
+            ),
             mock.patch.object(shell_composer, "Application", _FakeApplication),
-            mock.patch.object(shell_composer, "Layout", side_effect=lambda body, focused_element=None: (body, focused_element)),
+            mock.patch.object(
+                shell_composer,
+                "Layout",
+                side_effect=lambda body, focused_element=None: (body, focused_element),
+            ),
             mock.patch.object(shell_composer, "prompt_toolkit_loop_running", return_value=True),
         ):
             result = shell_composer.read_command(shell)
 
         self.assertEqual(result, "hello from app")
-        self.assertEqual(captured["application_init"]["layout"], (mock.sentinel.body, mock.sentinel.input_window))
+        self.assertEqual(
+            captured["application_init"]["layout"],
+            (mock.sentinel.body, mock.sentinel.input_window),
+        )
         self.assertIs(captured["application_init"]["output"], mock.sentinel.output)
         self.assertTrue(captured["run_kwargs"]["in_thread"])
 
@@ -181,19 +206,23 @@ class LastUserMessageTests(unittest.TestCase):
         self.assertEqual(shell_composer._last_user_message(shell), "")
 
     def test_picks_most_recent_user_entry(self) -> None:
-        shell = self._shell_with_transcript([
-            self._entry("user", "first"),
-            self._entry("assistant", "reply"),
-            self._entry("user", "second"),
-            self._entry("assistant", "second reply"),
-        ])
+        shell = self._shell_with_transcript(
+            [
+                self._entry("user", "first"),
+                self._entry("assistant", "reply"),
+                self._entry("user", "second"),
+                self._entry("assistant", "second reply"),
+            ]
+        )
         self.assertEqual(shell_composer._last_user_message(shell), "second")
 
     def test_skips_blank_user_entries(self) -> None:
-        shell = self._shell_with_transcript([
-            self._entry("user", "real message"),
-            self._entry("user", "   "),
-        ])
+        shell = self._shell_with_transcript(
+            [
+                self._entry("user", "real message"),
+                self._entry("user", "   "),
+            ]
+        )
         self.assertEqual(shell_composer._last_user_message(shell), "real message")
 
     def test_missing_transcript_attr_does_not_raise(self) -> None:

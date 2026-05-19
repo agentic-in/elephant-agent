@@ -135,7 +135,15 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                 return None
 
             def load_episode_state(self, _session_id):
-                return type("_Episode", (), {"episode_id": "current-session", "personal_model_id": "you", "state_id": "state-1"})()
+                return type(
+                    "_Episode",
+                    (),
+                    {
+                        "episode_id": "current-session",
+                        "personal_model_id": "you",
+                        "state_id": "state-1",
+                    },
+                )()
 
             def current_state(self):
                 return type("_State", (), {"state_id": "state-1"})()
@@ -166,7 +174,15 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                 return None
 
             def load_episode_state(self, _session_id):
-                return type("_Episode", (), {"episode_id": "current-session", "personal_model_id": "you", "state_id": "state-1"})()
+                return type(
+                    "_Episode",
+                    (),
+                    {
+                        "episode_id": "current-session",
+                        "personal_model_id": "you",
+                        "state_id": "state-1",
+                    },
+                )()
 
             def current_state(self):
                 return type("_State", (), {"state_id": "state-1"})()
@@ -198,7 +214,15 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                 return None
 
             def load_episode_state(self, _session_id):
-                return type("_Episode", (), {"episode_id": "current-session", "personal_model_id": "you", "state_id": "state-1"})()
+                return type(
+                    "_Episode",
+                    (),
+                    {
+                        "episode_id": "current-session",
+                        "personal_model_id": "you",
+                        "state_id": "state-1",
+                    },
+                )()
 
             def current_state(self):
                 return type("_State", (), {"state_id": "state-1"})()
@@ -223,7 +247,10 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                         sequence=1,
                         created_at=now,
                         summary="source item ingested",
-                        metadata={"event_type": "turn.received", "user_query": "当前这轮也提到了家庭。"},
+                        metadata={
+                            "event_type": "turn.received",
+                            "user_query": "当前这轮也提到了家庭。",
+                        },
                     ),
                     Step(
                         step_id="step-old",
@@ -237,14 +264,20 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                         sequence=2,
                         created_at=now,
                         summary="source item ingested",
-                        metadata={"event_type": "turn.received", "user_query": "昨晚我们聊了家庭边界。"},
+                        metadata={
+                            "event_type": "turn.received",
+                            "user_query": "昨晚我们聊了家庭边界。",
+                        },
                     ),
                 )
 
         result = PersonalModelUnderstandingSurface(repository=_Repo()).search_conversation(
             "current-session",
             query="家庭",
-            time_range={"start_at": "2026-05-09T00:00:00+00:00", "end_at": "2026-05-09T02:00:00+00:00"},
+            time_range={
+                "start_at": "2026-05-09T00:00:00+00:00",
+                "end_at": "2026-05-09T02:00:00+00:00",
+            },
             mode="recall",
         )
 
@@ -252,7 +285,9 @@ class PersonalModelLifecycleTest(unittest.TestCase):
         self.assertIn("昨晚我们聊了家庭边界", contents)
         self.assertNotIn("当前这轮", contents)
 
-    def test_conversation_discover_returns_copyable_range_and_user_anchor_first(self) -> None:
+    def test_conversation_discover_returns_copyable_range_and_user_anchor_first(
+        self,
+    ) -> None:
         now = datetime(2026, 5, 9, 1, 20, tzinfo=timezone.utc)
 
         class _Repo:
@@ -260,7 +295,15 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                 return None
 
             def load_episode_state(self, _session_id):
-                return type("_Episode", (), {"episode_id": "current-session", "personal_model_id": "you", "state_id": "state-1"})()
+                return type(
+                    "_Episode",
+                    (),
+                    {
+                        "episode_id": "current-session",
+                        "personal_model_id": "you",
+                        "state_id": "state-1",
+                    },
+                )()
 
             def current_state(self):
                 return type("_State", (), {"state_id": "state-1"})()
@@ -299,14 +342,21 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                         sequence=2,
                         created_at=now,
                         summary="source item ingested",
-                        metadata={"event_type": "turn.received", "user_query": "我说了一个家庭边界的具体场景。"},
+                        metadata={
+                            "event_type": "turn.received",
+                            "user_query": "我说了一个家庭边界的具体场景。",
+                        },
                     ),
                 )
 
         result = PersonalModelUnderstandingSurface(repository=_Repo()).search_conversation(
             "current-session",
             query="家庭边界",
-            time_range={"start_at": "2026-05-09T00:00:00+00:00", "end_at": "2026-05-09T02:00:00+00:00", "timezone": "Asia/Shanghai"},
+            time_range={
+                "start_at": "2026-05-09T00:00:00+00:00",
+                "end_at": "2026-05-09T02:00:00+00:00",
+                "timezone": "Asia/Shanghai",
+            },
             mode="discover",
             bucket="hour",
         )
@@ -350,7 +400,10 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                         sequence=1,
                         created_at=now,
                         summary="tool result mentions family but is not conversation",
-                        metadata={"tool_name": "tool.conversation.search", "tool_result": "家庭 recall test report"},
+                        metadata={
+                            "tool_name": "tool.conversation.search",
+                            "tool_result": "家庭 recall test report",
+                        },
                     ),
                     Step(
                         step_id="step-internal",
@@ -364,7 +417,10 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                         sequence=2,
                         created_at=now,
                         summary="source item ingested",
-                        metadata={"event_type": "turn.internal", "user_query": "Write Iris's first message about family."},
+                        metadata={
+                            "event_type": "turn.internal",
+                            "user_query": "Write Iris's first message about family.",
+                        },
                     ),
                     Step(
                         step_id="step-user",
@@ -378,14 +434,20 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                         sequence=3,
                         created_at=now,
                         summary="source item ingested",
-                        metadata={"event_type": "turn.received", "user_query": "我们昨晚聊了家庭权力结构。"},
+                        metadata={
+                            "event_type": "turn.received",
+                            "user_query": "我们昨晚聊了家庭权力结构。",
+                        },
                     ),
                 )
 
         result = PersonalModelUnderstandingSurface(repository=_Repo()).recall_personal_model(
             "session-life",
             query="家庭",
-            time_range={"start_at": "2026-05-08T18:00:00+00:00", "end_at": "2026-05-09T06:00:00+00:00"},
+            time_range={
+                "start_at": "2026-05-08T18:00:00+00:00",
+                "end_at": "2026-05-09T06:00:00+00:00",
+            },
         )
 
         contents = "\n".join(str(hit.get("content") or "") for hit in tuple(result.get("hits") or ()))
@@ -393,7 +455,9 @@ class PersonalModelLifecycleTest(unittest.TestCase):
         self.assertNotIn("tool result", contents)
         self.assertNotIn("Write Iris", contents)
 
-    def test_tool_update_adds_review_metadata_for_changeable_account_claim(self) -> None:
+    def test_tool_update_adds_review_metadata_for_changeable_account_claim(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
             repository.bootstrap()
@@ -755,8 +819,16 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                 personal_model_id=state.personal_model_id,
             )
 
-            topics = surface.audit_personal_model("session-life", action="topics", personal_model_id=state.personal_model_id)
-            health = surface.audit_personal_model("session-life", action="health", personal_model_id=state.personal_model_id)
+            topics = surface.audit_personal_model(
+                "session-life",
+                action="topics",
+                personal_model_id=state.personal_model_id,
+            )
+            health = surface.audit_personal_model(
+                "session-life",
+                action="health",
+                personal_model_id=state.personal_model_id,
+            )
 
         self.assertTrue(tuple(topics.get("topics") or ()))
         self.assertEqual(health["health_report"]["total_active_claims"], 1)
@@ -790,7 +862,12 @@ class PersonalModelLifecycleTest(unittest.TestCase):
             )
 
             active = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")
-            retired = surface.search_personal_model("session-life", ref=first["ref"], status="retired", personal_model_id=state.personal_model_id)
+            retired = surface.search_personal_model(
+                "session-life",
+                ref=first["ref"],
+                status="retired",
+                personal_model_id=state.personal_model_id,
+            )
 
         self.assertEqual(len(active), 1)
         self.assertEqual(second["retired"], (first["ref"],))
@@ -867,8 +944,16 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                 personal_model_id=state.personal_model_id,
             )
 
-            topics = surface.audit_personal_model("session-life", action="topics", personal_model_id=state.personal_model_id)
-            health = surface.audit_personal_model("session-life", action="health", personal_model_id=state.personal_model_id)
+            topics = surface.audit_personal_model(
+                "session-life",
+                action="topics",
+                personal_model_id=state.personal_model_id,
+            )
+            health = surface.audit_personal_model(
+                "session-life",
+                action="health",
+                personal_model_id=state.personal_model_id,
+            )
             related = surface.search_personal_model(
                 "session-life",
                 query="小红书账号",
@@ -903,7 +988,9 @@ class PersonalModelLifecycleTest(unittest.TestCase):
                     personal_model_id=state.personal_model_id,
                 )
 
-    def test_forget_dispute_without_ref_does_not_report_retired_when_no_match(self) -> None:
+    def test_forget_dispute_without_ref_does_not_report_retired_when_no_match(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
             repository.bootstrap()

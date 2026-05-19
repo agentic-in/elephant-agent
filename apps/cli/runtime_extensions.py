@@ -11,7 +11,11 @@ from typing import Any
 from .snapshot_io import load_snapshot_payload, write_snapshot_payload
 from packages.state import ProfileLoader
 from packages.security import SecurityPolicy
-from packages.skills import SkillActivationContext, SkillRuntime, builtin_skill_definitions
+from packages.skills import (
+    SkillActivationContext,
+    SkillRuntime,
+    builtin_skill_definitions,
+)
 from packages.storage import RuntimeStorageRepository
 from packages.tools import (
     BuiltinToolDependencies,
@@ -223,6 +227,9 @@ def _resolve_elephant_state(repository: RuntimeStorageRepository, elephant_id: s
         if state is not None:
             return state
         for candidate in repository.list_states():
-            if candidate.elephant_id == resolved_elephant_id or candidate.state_anchor in {resolved_elephant_id, f"elephant:{resolved_elephant_id}"}:
+            if candidate.elephant_id == resolved_elephant_id or candidate.state_anchor in {
+                resolved_elephant_id,
+                f"elephant:{resolved_elephant_id}",
+            }:
                 return candidate
     return repository.current_state()

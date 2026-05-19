@@ -13,7 +13,6 @@ import subprocess
 import sys
 import time
 import warnings
-from dataclasses import asdict
 from pathlib import Path
 from typing import IO, Sequence
 
@@ -117,6 +116,7 @@ def _daemon_healthz_payload(state_dir: Path) -> dict | None:
     addr = host if host != "0.0.0.0" else "127.0.0.1"
     try:
         import urllib.request
+
         url = f"http://{addr}:{port}/healthz"
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:
@@ -132,6 +132,7 @@ def _daemon_healthz_payload(state_dir: Path) -> dict | None:
 
 def _utc_now_iso() -> str:
     from datetime import UTC, datetime
+
     return datetime.now(UTC).isoformat()
 
 
@@ -251,7 +252,11 @@ def build_typer_app(*, default_state_dir: Path | None = None) -> typer.Typer:
         host: str = typer.Option("0.0.0.0", "--host", help="HTTP listen host."),
         port: int = typer.Option(8900, "--port", help="HTTP listen port."),
         log_level: str = typer.Option("INFO", "--log-level", help="Log level: DEBUG, INFO, WARNING, ERROR."),
-        detach: bool = typer.Option(False, "--detach", help="Start in a background process. This is the recommended way to run all Elephant services (IM gateways, cron, supervisor, learning worker) together."),
+        detach: bool = typer.Option(
+            False,
+            "--detach",
+            help="Start in a background process. This is the recommended way to run all Elephant services (IM gateways, cron, supervisor, learning worker) together.",
+        ),
     ) -> None:
         if detach:
             raise typer.Exit(_start_detached(state_dir, cli_state_dir, host=host, port=port, log_level=log_level))
@@ -304,8 +309,6 @@ def build_typer_app(*, default_state_dir: Path | None = None) -> typer.Typer:
             for line in lines[-tail:]:
                 print(line)
         if follow:
-            import select
-
             with log_path.open("r", encoding="utf-8") as f:
                 f.seek(0, 2)
                 try:
@@ -321,7 +324,14 @@ def build_typer_app(*, default_state_dir: Path | None = None) -> typer.Typer:
     return app
 
 
-def _run_foreground(state_dir: Path, cli_state_dir: Path, *, host: str, port: int, log_level: str = "INFO") -> int:
+def _run_foreground(
+    state_dir: Path,
+    cli_state_dir: Path,
+    *,
+    host: str,
+    port: int,
+    log_level: str = "INFO",
+) -> int:
     """Run the daemon in the foreground (blocking)."""
     from apps.daemon import run_daemon_foreground
 
@@ -340,11 +350,7 @@ def _run_foreground(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
 
     try:
         existing_pid = _read_pid(pid_path)
-        if (
-            existing_pid is not None
-            and existing_pid != os.getpid()
-            and _pid_is_running(existing_pid)
-        ):
+        if existing_pid is not None and existing_pid != os.getpid() and _pid_is_running(existing_pid):
             print(f"Elephant daemon is already running with pid {existing_pid}.")
             return 1
 
@@ -353,21 +359,24 @@ def _run_foreground(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
         pid_path.write_text(f"{pid}\n", encoding="utf-8")
 
         # Write runtime record
-        _write_record(record_path, {
-            "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
-            "service_key": DAEMON_SERVICE_KEY,
-            "target": DAEMON_TARGET,
-            "status": "running",
-            "pid": pid,
-            "pid_path": str(pid_path),
-            "log_path": str(_daemon_log_path(state_dir)),
-            "record_path": str(record_path),
-            "state_dir": str(state_dir),
-            "cli_state_dir": str(cli_state_dir),
-            "host": host,
-            "port": port,
-            "started_at": _utc_now_iso(),
-        })
+        _write_record(
+            record_path,
+            {
+                "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
+                "service_key": DAEMON_SERVICE_KEY,
+                "target": DAEMON_TARGET,
+                "status": "running",
+                "pid": pid,
+                "pid_path": str(pid_path),
+                "log_path": str(_daemon_log_path(state_dir)),
+                "record_path": str(record_path),
+                "state_dir": str(state_dir),
+                "cli_state_dir": str(cli_state_dir),
+                "host": host,
+                "port": port,
+                "started_at": _utc_now_iso(),
+            },
+        )
     finally:
         # Release startup lock — PID file now provides singleton protection.
         _release_daemon_lock(lock_fd)
@@ -385,7 +394,14 @@ def _run_foreground(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
         _mark_daemon_stopped(record_path)
 
 
-def _start_detached(state_dir: Path, cli_state_dir: Path, *, host: str, port: int, log_level: str = "INFO") -> int:
+def _start_detached(
+    state_dir: Path,
+    cli_state_dir: Path,
+    *,
+    host: str,
+    port: int,
+    log_level: str = "INFO",
+) -> int:
     """Start the daemon as a background process."""
     state_dir.mkdir(parents=True, exist_ok=True)
     pid_path = _daemon_pid_path(state_dir)
@@ -410,11 +426,16 @@ def _start_detached(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
             "apps.launcher",
             "daemon",
             "start",
-            "--state-dir", str(state_dir),
-            "--cli-state-dir", str(cli_state_dir),
-            "--host", host,
-            "--port", str(port),
-            "--log-level", log_level,
+            "--state-dir",
+            str(state_dir),
+            "--cli-state-dir",
+            str(cli_state_dir),
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--log-level",
+            log_level,
         ]
 
         started_at = _utc_now_iso()
@@ -431,22 +452,25 @@ def _start_detached(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
 
         # Write PID file + record (still under lock — eliminates TOCTOU race)
         pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
-        _write_record(record_path, {
-            "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
-            "service_key": DAEMON_SERVICE_KEY,
-            "target": DAEMON_TARGET,
-            "status": "starting",
-            "pid": process.pid,
-            "pid_path": str(pid_path),
-            "log_path": str(log_path),
-            "record_path": str(record_path),
-            "command": command,
-            "state_dir": str(state_dir),
-            "cli_state_dir": str(cli_state_dir),
-            "host": host,
-            "port": port,
-            "started_at": started_at,
-        })
+        _write_record(
+            record_path,
+            {
+                "runtime_id": f"{DAEMON_SERVICE_KEY}:{DAEMON_TARGET}",
+                "service_key": DAEMON_SERVICE_KEY,
+                "target": DAEMON_TARGET,
+                "status": "starting",
+                "pid": process.pid,
+                "pid_path": str(pid_path),
+                "log_path": str(log_path),
+                "record_path": str(record_path),
+                "command": command,
+                "state_dir": str(state_dir),
+                "cli_state_dir": str(cli_state_dir),
+                "host": host,
+                "port": port,
+                "started_at": started_at,
+            },
+        )
     finally:
         # Release startup lock.  The PID file is now written and the child
         # process will re-acquire this lock inside its own _run_foreground().
@@ -470,13 +494,15 @@ def _start_detached(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
     if return_code is not None:
         _remove_file_if_exists(pid_path)
         record = _load_record(record_path) or {}
-        record.update({
-            "status": "failed",
-            "pid": None,
-            "stopped_at": _utc_now_iso(),
-            "last_exit_code": return_code,
-            "last_error": f"process exited with code {return_code}",
-        })
+        record.update(
+            {
+                "status": "failed",
+                "pid": None,
+                "stopped_at": _utc_now_iso(),
+                "last_exit_code": return_code,
+                "last_error": f"process exited with code {return_code}",
+            }
+        )
         _write_record(record_path, record)
         print(f"Elephant daemon failed to start (exit {return_code}). Check {log_path}.")
         return 1
@@ -490,12 +516,11 @@ def _start_detached(state_dir: Path, cli_state_dir: Path, *, host: str, port: in
     else:
         record["status"] = "starting"
         record["last_error"] = (
-            f"healthz not ready after {_DAEMON_STARTUP_WAIT_SECONDS:g}s; "
-            "daemon process is still running"
+            f"healthz not ready after {_DAEMON_STARTUP_WAIT_SECONDS:g}s; daemon process is still running"
         )
     _write_record(record_path, record)
 
-    print(f"Elephant daemon is now running in the background.")
+    print("Elephant daemon is now running in the background.")
     print(f"  PID: {process.pid}")
     print(f"  PID file: {pid_path}")
     print(f"  Log file: {log_path}")
@@ -605,6 +630,7 @@ def _show_status(state_dir: Path) -> int:
     if running:
         try:
             import urllib.request
+
             url = f"http://127.0.0.1:{port}/healthz"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=3) as resp:
@@ -623,6 +649,7 @@ def _fmt_iso(iso_str: str) -> str:
     """Format an ISO timestamp to a more readable local time string."""
     try:
         from datetime import datetime
+
         dt = datetime.fromisoformat(iso_str)
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
@@ -633,11 +660,11 @@ def _print_services_table(services: dict) -> None:
     """Print a compact, aligned services status table."""
     # Icons for each status
     icons = {
-        "running": "\U0001f7e2",   # green circle
-        "skipped": "\U000026AA",   # white circle
-        "failed":  "\U0001f534",   # red circle
-        "stopped": "\U0001f7e1",   # yellow circle
-        "idle":    "\U000026AA",   # white circle
+        "running": "\U0001f7e2",  # green circle
+        "skipped": "\U000026aa",  # white circle
+        "failed": "\U0001f534",  # red circle
+        "stopped": "\U0001f7e1",  # yellow circle
+        "idle": "\U000026aa",  # white circle
     }
 
     # Categorize services
@@ -650,7 +677,7 @@ def _print_services_table(services: dict) -> None:
         if key in services:
             info = services[key]
             s = info.get("status", "unknown")
-            icon = icons.get(s, "\U000026AA")
+            icon = icons.get(s, "\U000026aa")
             line = f"    {icon}  {key:<12} {s}"
             if s == "skipped" and info.get("last_error"):
                 line += f"  ({info['last_error']})"
@@ -673,7 +700,7 @@ def _print_services_table(services: dict) -> None:
         if key in services:
             info = services[key]
             s = info.get("status", "unknown")
-            icon = icons.get(s, "\U000026AA")
+            icon = icons.get(s, "\U000026aa")
             line = f"    {icon}  {key:<12} {s}"
             if s == "failed" and info.get("last_error"):
                 line += f"  ({info['last_error']})"

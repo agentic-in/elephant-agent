@@ -5,11 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 import asyncio
-import importlib.util
 import logging
 import os
 from pathlib import Path
-import threading
 from typing import Any
 from uuid import uuid4
 
@@ -17,14 +15,12 @@ from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayAccountRef,
     GatewayConversationRef,
-    GatewayExchange,
     GatewayInboundMessage,
     GatewayOutboundMessage,
     GatewayOutboundQueue,
     GatewayOutboundRow,
     InboundSequencer,
     default_outbound_queue_path,
-    resolve_cron_identity_records,
     run_outbound_drain_loop,
 )
 
@@ -36,17 +32,20 @@ from .cli_control import (
     GatewayCliControlService,
     load_gateway_cli_control_config,
 )
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
-from .runtime import DINGDING_ADAPTER_ID, DingdingMessagingAdapter, GatewayApp, build_gateway_app
+from .plugins import (
+    GatewayManagedRuntime,
+    GatewayPluginRegistry,
+    default_gateway_runtime_path,
+)
+from .runtime import (
+    DINGDING_ADAPTER_ID,
+    DingdingMessagingAdapter,
+    GatewayApp,
+    build_gateway_app,
+)
 
 from .dingding_support import (
-    DEFAULT_DINGDING_CLIENT_ID_ENV,
-    DEFAULT_DINGDING_CLIENT_SECRET_ENV,
-    DEFAULT_DINGDING_ROBOT_CODE_ENV,
-    DINGTALK_STREAM_PIP_SPEC,
-    SUPPORTED_DINGDING_TRANSPORTS,
     DingdingGatewayAccountConfig,
-    DingdingGatewayEventResult,
     DingdingResolvedAccount,
     _dingding_chat_type,
     _dingtalk_stream_dependency_status,
@@ -97,13 +96,9 @@ class DingdingGatewayService:
                 if binding_store is None:
                     state_root = self.app.state_dir
                     binding_path = (
-                        None
-                        if state_root is None
-                        else os.path.join(state_root, "dingding-cli-bindings.json")
+                        None if state_root is None else os.path.join(state_root, "dingding-cli-bindings.json")
                     )
-                    binding_store = GatewayCliBindingStore(
-                        path=None if binding_path is None else Path(binding_path)
-                    )
+                    binding_store = GatewayCliBindingStore(path=None if binding_path is None else Path(binding_path))
                 self.cli_control = GatewayCliControlService(
                     config=self._resolved_cli_control_config(config),
                     app=self.app,
@@ -166,9 +161,7 @@ class DingdingGatewayService:
                     "surface": config.surface,
                     "enabled": config.enabled,
                     "credentials_status": (
-                        "configured"
-                        if _can_resolve_account(config, environ=self.environ)
-                        else "missing_credentials"
+                        "configured" if _can_resolve_account(config, environ=self.environ) else "missing_credentials"
                     ),
                 }
                 for config in self.account_configs
@@ -190,14 +183,10 @@ class DingdingGatewayService:
         transport_configs = self._transport_account_configs()
         if not transport_configs:
             return "stream"
-        transports = tuple(
-            dict.fromkeys(_normalize_transport(config.surface) for config in transport_configs)
-        )
+        transports = tuple(dict.fromkeys(_normalize_transport(config.surface) for config in transport_configs))
         if len(transports) == 1:
             return transports[0]
-        raise LookupError(
-            "configured DingDing accounts use multiple transport surfaces; choose one explicitly"
-        )
+        raise LookupError("configured DingDing accounts use multiple transport surfaces; choose one explicitly")
 
     def configured_runtime_target(self) -> str:
         return self.configured_transport()
@@ -280,9 +269,11 @@ class DingdingGatewayService:
     ) -> object:
         dingtalk_stream = _load_dingtalk_stream_sdk(dingtalk_module)
         account = self._match_account(account_id=account_id)
-        LOGGER.info("DingDing start_gateway: client_id=%s..., robot_code=%s...",
-                     account.client_id[:8] if account.client_id else "(empty)",
-                     account.robot_code[:8] if account.robot_code else "(empty)")
+        LOGGER.info(
+            "DingDing start_gateway: client_id=%s..., robot_code=%s...",
+            account.client_id[:8] if account.client_id else "(empty)",
+            account.robot_code[:8] if account.robot_code else "(empty)",
+        )
 
         # New SDK: DingTalkStreamClient + Credential (replaces OpenDingTalkClient)
         client_cls = getattr(dingtalk_stream, "DingTalkStreamClient", None)
@@ -312,7 +303,10 @@ class DingdingGatewayService:
                 try:
                     data = getattr(callback, "data", None)
                     payload = _dingtalk_callback_payload(callback)
-                    LOGGER.debug("DingDing callback: payload keys=%s", list(payload.keys()) if isinstance(payload, Mapping) else type(payload).__name__)
+                    LOGGER.debug(
+                        "DingDing callback: payload keys=%s",
+                        list(payload.keys()) if isinstance(payload, Mapping) else type(payload).__name__,
+                    )
                     # Build ChatbotMessage for reply methods
                     incoming_msg = None
                     chatbot_msg_cls = getattr(dingtalk_stream, "ChatbotMessage", None)
@@ -339,9 +333,14 @@ class DingdingGatewayService:
             client = client_cls(credential)
             # ChatbotMessage.TOPIC = '/v1.0/im/bot/messages/get'
             chatbot_msg_cls = getattr(dingtalk_stream, "ChatbotMessage", None)
-            topic = getattr(chatbot_msg_cls, "TOPIC", "/v1.0/im/bot/messages/get") if chatbot_msg_cls else "/v1.0/im/bot/messages/get"
+            topic = (
+                getattr(chatbot_msg_cls, "TOPIC", "/v1.0/im/bot/messages/get")
+                if chatbot_msg_cls
+                else "/v1.0/im/bot/messages/get"
+            )
             client.register_callback_handler(
-                topic, handler_instance,
+                topic,
+                handler_instance,
             )
         else:
             client = open_dingtalk_client(
@@ -381,7 +380,10 @@ class DingdingGatewayService:
         return GatewayOutboundQueue(path=default_outbound_queue_path(state_root))
 
     def _inbound_sequence_key(
-        self, payload: Mapping[str, object], *, account: DingdingResolvedAccount,
+        self,
+        payload: Mapping[str, object],
+        *,
+        account: DingdingResolvedAccount,
     ) -> str | None:
         sender_id = str(payload.get("sender_id") or "").strip()
         robot_code = str(payload.get("robot_code") or account.robot_code or "").strip()
@@ -459,7 +461,10 @@ class DingdingGatewayService:
             if result.handled and result.body is not None:
                 outbound = self._build_control_outbound(inbound, body=result.body, session_id=result.session_id)
                 delivery_request = adapter.build_reply_request(outbound)
-                delivery_request = {**dict(delivery_request), "incoming_message": incoming_message}
+                delivery_request = {
+                    **dict(delivery_request),
+                    "incoming_message": incoming_message,
+                }
                 await self._send_dingtalk_reply(
                     delivery_request,
                     account=account,
@@ -481,7 +486,10 @@ class DingdingGatewayService:
         if exchange.delivery.outbound is None:
             return
         delivery_request = adapter.build_reply_request(exchange.delivery.outbound)
-        delivery_request = {**dict(delivery_request), "incoming_message": incoming_message}
+        delivery_request = {
+            **dict(delivery_request),
+            "incoming_message": incoming_message,
+        }
         await self._send_dingtalk_reply(
             delivery_request,
             account=account,
@@ -514,6 +522,7 @@ class DingdingGatewayService:
                     title = raw_title if raw_title else (msg_param.split("\n")[0][:64] if msg_param else "Reply")
                     import json as _json
                     import requests as _requests
+
                     webhook_url = getattr(incoming, "session_webhook", None)
                     sender_staff_id = getattr(incoming, "sender_staff_id", None)
                     if not webhook_url:
@@ -535,7 +544,11 @@ class DingdingGatewayService:
                         data=_json.dumps(reply_payload),
                     )
                     if resp.status_code != 200 or resp.json().get("errcode"):
-                        LOGGER.error("DingDing reply failed: status=%s body=%s", resp.status_code, resp.text[:500])
+                        LOGGER.error(
+                            "DingDing reply failed: status=%s body=%s",
+                            resp.status_code,
+                            resp.text[:500],
+                        )
                     else:
                         LOGGER.debug("DingDing reply sent successfully")
                     resp.raise_for_status()
@@ -597,9 +610,7 @@ class DingdingGatewayService:
             raise LookupError("no enabled DingDing gateway accounts are configured")
         if len(enabled_configs) == 1:
             return resolve_dingding_account(enabled_configs[0], environ=self.environ)
-        raise LookupError(
-            "multiple enabled DingDing gateway accounts are configured; pass account_id explicitly"
-        )
+        raise LookupError("multiple enabled DingDing gateway accounts are configured; pass account_id explicitly")
 
     # ── Outbound drain (shared queue) ─────────────────────────
 
@@ -732,7 +743,9 @@ def _dingtalk_callback_payload(callback: object) -> Mapping[str, object]:
     return merged
 
 
-def register_dingding_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_dingding_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     from .dingding import DingdingGatewayService
 
     registry.register_service(

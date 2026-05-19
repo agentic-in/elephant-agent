@@ -7,7 +7,10 @@ from typing import Any, cast
 
 from packages.continuity import ContinuityProjection, ContinuityProjectionService
 from packages.contracts import ElephantIdentityRecord, Episode
-from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
+from packages.state.rendered_views import (
+    RenderedRelationshipView,
+    RenderedUserProfileView,
+)
 from packages.contracts.runtime import PersonalModelRuntimeState
 from packages.evidence.recall_runtime import RecallRuntime
 from packages.state import (
@@ -22,7 +25,10 @@ from packages.state.persistence import (
     resolve_runtime_state,
     sync_canonical_profile_state,
 )
-from packages.state.projection import build_loaded_profile_from_state, render_user_profile_projection_text
+from packages.state.projection import (
+    build_loaded_profile_from_state,
+    render_user_profile_projection_text,
+)
 from packages.state.user_updates import apply_user_profile_update
 from packages.storage import RuntimeStorageRepository
 from packages.storage.repository_support import canonical_personal_model_id
@@ -89,7 +95,9 @@ class APIStateService:
             elephant_id=elephant_id,
             required=False,
         )
-        resolved_elephant_id = elephant_id or (resolved_state.elephant_id if resolved_state is not None and resolved_state.elephant_id else None)
+        resolved_elephant_id = elephant_id or (
+            resolved_state.elephant_id if resolved_state is not None and resolved_state.elephant_id else None
+        )
         persisted = load_persisted_canonical_state(self.repository, canonical_personal_model.profile_id)
         if (
             persisted.elephant_identity is not None
@@ -231,12 +239,17 @@ class APIStateService:
             )
         bundle = build_canonical_profile_state(
             loaded,
-            elephant_id=resolved_state.elephant_id if resolved_state is not None and resolved_state.elephant_id else None,
+            elephant_id=resolved_state.elephant_id
+            if resolved_state is not None and resolved_state.elephant_id
+            else None,
         )
         synced = sync_canonical_profile_state(
             self.repository,
             bundle,
-            previous=load_persisted_canonical_state(self.repository, canonical_personal_model_id(updated_personal_model.profile_id)),
+            previous=load_persisted_canonical_state(
+                self.repository,
+                canonical_personal_model_id(updated_personal_model.profile_id),
+            ),
             sync_source="api.identity.update",
             recall_runtime=self.recall_runtime,
             surface="api",
@@ -284,12 +297,16 @@ class APIStateService:
         )
         bundle = build_canonical_profile_state(
             replace(loaded, user_profile_text=render_user_profile_projection_text(next_user)),
-            elephant_id=resolved_state.elephant_id if resolved_state is not None and resolved_state.elephant_id else None,
+            elephant_id=resolved_state.elephant_id
+            if resolved_state is not None and resolved_state.elephant_id
+            else None,
         )
         synced = sync_canonical_profile_state(
             self.repository,
             bundle,
-            previous=load_persisted_canonical_state(self.repository, canonical_personal_model_id(personal_model.profile_id)),
+            previous=load_persisted_canonical_state(
+                self.repository, canonical_personal_model_id(personal_model.profile_id)
+            ),
             sync_source="api.user.update",
             recall_runtime=self.recall_runtime,
             surface="api",
@@ -344,12 +361,16 @@ class APIStateService:
             next_notes = current_notes
         bundle = build_canonical_profile_state(
             replace(loaded, companion=replace(companion, notes=next_notes)),
-            elephant_id=resolved_state.elephant_id if resolved_state is not None and resolved_state.elephant_id else None,
+            elephant_id=resolved_state.elephant_id
+            if resolved_state is not None and resolved_state.elephant_id
+            else None,
         )
         synced = sync_canonical_profile_state(
             self.repository,
             bundle,
-            previous=load_persisted_canonical_state(self.repository, canonical_personal_model_id(personal_model.profile_id)),
+            previous=load_persisted_canonical_state(
+                self.repository, canonical_personal_model_id(personal_model.profile_id)
+            ),
             sync_source="api.relationship.update",
             recall_runtime=self.recall_runtime,
             surface="api",

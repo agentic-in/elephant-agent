@@ -300,7 +300,9 @@ class _CliContextCapability:
     startup_cwd: Path | None = None
     summary_model_provider: Any | None = None
     embedding_service: Any | None = None
-    last_projection_compaction: ContextProjectionCompactionResult | None = field(default=None, init=False, repr=False, compare=False)
+    last_projection_compaction: ContextProjectionCompactionResult | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
     descriptor: CapabilityDescriptor = CapabilityDescriptor(
         capability_id="cli.context.runtime",
         kind="context_assembler",
@@ -562,10 +564,14 @@ class _CliContextCapability:
     def _runtime_path_artifact(self, session: Episode) -> str:
         lines: list[str] = []
         if self.startup_cwd is not None:
-            lines.append(f"startup_cwd={self.startup_cwd.expanduser().resolve()} (the directory where this session launched; use as working directory when the user asks to explore 'here' or 'current project')")
+            lines.append(
+                f"startup_cwd={self.startup_cwd.expanduser().resolve()} (the directory where this session launched; use as working directory when the user asks to explore 'here' or 'current project')"
+            )
         if self.workspaces_dir is not None and session.elephant_id:
-            elephant_ws = self.workspaces_dir.expanduser().resolve() / quote(session.elephant_id.strip(), safe='')
-            lines.append(f"elephant_workspace={elephant_ws} (default scratch directory for file output when the user does not specify a path)")
+            elephant_ws = self.workspaces_dir.expanduser().resolve() / quote(session.elephant_id.strip(), safe="")
+            lines.append(
+                f"elephant_workspace={elephant_ws} (default scratch directory for file output when the user does not specify a path)"
+            )
         if not lines:
             return ""
         return "runtime-paths: " + "; ".join(lines)
@@ -583,9 +589,13 @@ class _CliContextCapability:
             state = self.repository.current_state()
         if state is None:
             active_states = self.repository.list_states(status="active")
-            profile_states = [c for c in active_states if str(c.metadata.get("profile_id") or "").strip() == session.personal_model_id]
-            if len(profile_states) == 1: state = profile_states[0]
-            elif len(active_states) == 1: state = active_states[0]
+            profile_states = [
+                c for c in active_states if str(c.metadata.get("profile_id") or "").strip() == session.personal_model_id
+            ]
+            if len(profile_states) == 1:
+                state = profile_states[0]
+            elif len(active_states) == 1:
+                state = active_states[0]
         if state is None:
             return (None, ())
         list_facts = getattr(self.repository, "list_personal_model_facts", None)
@@ -601,6 +611,7 @@ class _CliContextCapability:
         """Find PM facts committed in last 24h for UX visibility."""
         try:
             from datetime import timedelta, datetime, timezone
+
             cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
             recent: list[str] = []
             for fact in facts:
@@ -610,10 +621,13 @@ class _CliContextCapability:
                 if not promoted_at:
                     continue
                 try:
-                    if datetime.fromisoformat(promoted_at.replace("Z", "+00:00")) < cutoff: continue
-                except (ValueError, TypeError): continue
+                    if datetime.fromisoformat(promoted_at.replace("Z", "+00:00")) < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    continue
                 effect = str(metadata.get("behavioral_effect") or getattr(fact, "text", "") or "").strip()
-                if effect and effect not in recent: recent.append(_compact_runtime_text(effect, limit=120))
+                if effect and effect not in recent:
+                    recent.append(_compact_runtime_text(effect, limit=120))
             return tuple(recent[:4])
         except Exception:
             return ()
@@ -629,28 +643,45 @@ class _CliContextCapability:
             if str(getattr(fact, "status", "") or "active") != "active":
                 continue
             effect = str(metadata.get("behavioral_effect") or getattr(fact, "text", "") or "").strip()
-            if not effect: continue
+            if not effect:
+                continue
             family = str(metadata.get("facet") or getattr(fact, "lens", "") or "general").strip()
             grouped.setdefault(family, [])
             compact = _compact_runtime_text(effect, limit=160)
-            if compact not in grouped[family]: grouped[family].append(compact)
+            if compact not in grouped[family]:
+                grouped[family].append(compact)
         if not grouped:
             return ""
         lines: list[str] = []
         total = 0
-        family_labels = {"style": "Style", "core": "Identity", "relationship": "Relationship", "procedural": "Workflow", "personal_knowledge": "Knowledge"}
-        for family in ("style", "core", "relationship", "procedural", "personal_knowledge"):
+        family_labels = {
+            "style": "Style",
+            "core": "Identity",
+            "relationship": "Relationship",
+            "procedural": "Workflow",
+            "personal_knowledge": "Knowledge",
+        }
+        for family in (
+            "style",
+            "core",
+            "relationship",
+            "procedural",
+            "personal_knowledge",
+        ):
             effects = grouped.pop(family, [])
-            if not effects: continue
+            if not effects:
+                continue
             label = family_labels.get(family, family.replace("_", " ").title())
             for effect in effects:
-                if total >= limit: break
+                if total >= limit:
+                    break
                 lines.append(f"- {label}: {effect}")
                 total += 1
         for family, effects in grouped.items():
             label = family.replace("_", " ").title()
             for effect in effects:
-                if total >= limit: break
+                if total >= limit:
+                    break
                 lines.append(f"- {label}: {effect}")
                 total += 1
         return "\n".join(lines) if lines else ""
@@ -664,20 +695,14 @@ class _CliContextCapability:
         plan: PlanDraft | None,
         continuity: EpisodeContinuityState | None,
     ) -> tuple[str, ...]:
-        artifacts = [
-            artifact
-            for artifact in (
-                _continuity_artifact(continuity),
-            )
-            if artifact.strip()
-        ]
+        artifacts = [artifact for artifact in (_continuity_artifact(continuity),) if artifact.strip()]
         if plan is not None and plan.steps:
             step = plan.steps[0]
             artifacts.append(
-                "runtime-plan-step: "
-                f"{step.title}; rationale={_compact_runtime_text(step.rationale, limit=160)}"
-                )
+                f"runtime-plan-step: {step.title}; rationale={_compact_runtime_text(step.rationale, limit=160)}"
+            )
         return tuple(artifacts)
+
 
 def _continuity_artifact(continuity: EpisodeContinuityState | None) -> str:
     if continuity is None or not continuity.requires_recovery:
@@ -789,6 +814,7 @@ class _PreviewModelProviderCapability:
             total_tokens=len(prompt.split()) + len(summary.split()),
             side_effects=(f"model_role={model_role}",),
         )
+
 
 class _PreviewToolCapability:
     descriptor: Any = None

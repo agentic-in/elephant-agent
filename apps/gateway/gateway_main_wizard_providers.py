@@ -1,71 +1,8 @@
 """Gateway setup wizard helpers."""
 
 from __future__ import annotations
-import asyncio
-from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-import getpass
-import apps.cli.wizard as cli_wizard
-import importlib.util
-import json
-import os
-from pathlib import Path
-import re
-import shlex
-import signal
-import subprocess
-import sys
-import time
-from wsgiref.simple_server import make_server
+from collections.abc import Sequence
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
-    render_elephant_mark,
-)
-from apps.provider_runtime import load_runtime_local_secret_env
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID
-
-from . import (
-    DEFAULT_DINGDING_CLIENT_ID_ENV,
-    DEFAULT_DINGDING_CLIENT_SECRET_ENV,
-    DEFAULT_DINGDING_ROBOT_CODE_ENV,
-    DEFAULT_DISCORD_BOT_TOKEN_ENV,
-    DEFAULT_FEISHU_APP_ID_ENV,
-    DEFAULT_FEISHU_APP_SECRET_ENV,
-    DEFAULT_FEISHU_EVENT_PATH,
-    FEISHU_ADAPTER_ID,
-    GatewayHttpService,
-    GatewayManagedRuntime,
-    GatewayManagedService,
-    SUPPORTED_DINGDING_TRANSPORTS,
-    SUPPORTED_DISCORD_TRANSPORTS,
-    SUPPORTED_FEISHU_TRANSPORTS,
-    SUPPORTED_WECOM_TRANSPORTS,
-    SUPPORTED_WEIXIN_TRANSPORTS,
-    build_gateway_app,
-    build_gateway_plugin_registry,
-    create_gateway_web_app,
-)
-from .dingding import DINGTALK_STREAM_PIP_SPEC, DingdingGatewayService
-from .discord import DISCORD_PY_PIP_SPEC, DiscordGatewayService
-from .feishu import FEISHU_SDK_PIP_SPEC, FeishuGatewayService
-from .wecom import WecomGatewayService
-from .weixin import WeixinGatewayService
 
 try:
     from prompt_toolkit.application import Application
@@ -90,6 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional wizard polish
 
 
 from .gateway_main_wizard_ui import *  # noqa: F401,F403
+
 
 def _run_interactive_feishu_wizard(
     *,
@@ -148,6 +86,7 @@ def _run_interactive_feishu_wizard(
             continue
     return state
 
+
 def _run_interactive_discord_wizard(
     *,
     account_id: str,
@@ -169,9 +108,7 @@ def _run_interactive_discord_wizard(
         allow_guild_ids=tuple(str(value).strip() for value in allow_guild_ids if str(value).strip()),
         allow_channel_ids=tuple(str(value).strip() for value in allow_channel_ids if str(value).strip()),
     )
-    steps = (
-        "bot_token_value",
-    )
+    steps = ("bot_token_value",)
     step_index = 0
     while step_index < len(steps):
         step = steps[step_index]
@@ -313,7 +250,7 @@ def _run_interactive_weixin_wizard(
         if step == "wxhook_host":
             answer = _gateway_wizard_text_prompt(
                 "wxhook Server",
-                f"wxhook API address (host:port) for sending replies.",
+                "wxhook API address (host:port) for sending replies.",
                 default=f"{state.wxhook_host}:{state.wxhook_port}",
                 allow_back=True,
             )
@@ -328,7 +265,7 @@ def _run_interactive_weixin_wizard(
         if step == "callback_host":
             answer = _gateway_wizard_text_prompt(
                 "Callback Server",
-                f"Callback server address (host:port) for receiving WeChat messages.",
+                "Callback server address (host:port) for receiving WeChat messages.",
                 default=f"{state.callback_host}:{state.callback_port}",
                 allow_back=True,
             )
@@ -396,4 +333,13 @@ def _run_interactive_wecom_wizard(
     return state
 
 
-__all__ = ['_run_interactive_feishu_wizard', '_run_interactive_discord_wizard', '_print_gateway_dingding_wizard_intro', '_print_gateway_weixin_wizard_intro', '_print_gateway_wecom_wizard_intro', '_run_interactive_dingding_wizard', '_run_interactive_weixin_wizard', '_run_interactive_wecom_wizard']
+__all__ = [
+    "_run_interactive_feishu_wizard",
+    "_run_interactive_discord_wizard",
+    "_print_gateway_dingding_wizard_intro",
+    "_print_gateway_weixin_wizard_intro",
+    "_print_gateway_wecom_wizard_intro",
+    "_run_interactive_dingding_wizard",
+    "_run_interactive_weixin_wizard",
+    "_run_interactive_wecom_wizard",
+]

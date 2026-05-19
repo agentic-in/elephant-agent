@@ -2,48 +2,26 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 import importlib.util
 import inspect
-import io
 import json
 import logging
 import os
 from pathlib import Path
-import threading
 from typing import Any, Protocol, runtime_checkable
-from uuid import uuid4
 
 
 LOGGER = logging.getLogger(__name__)
 
-from apps.runtime_layout import default_cli_state_dir
 from packages.gateway_core import (
     GatewayExchange,
-    GatewayInboundMessage,
-    GatewayOutboundMessage,
-    GatewayOutboundQueue,
-    GatewayOutboundRow,
-    default_outbound_queue_path,
-    resolve_cron_identity_records,
-    run_outbound_drain_thread,
 )
 
-from .cli_control import (
-    CliRuntimeFactory,
-    GatewayCliBindingStore,
-    GatewayCliControlService,
-    load_gateway_cli_control_config,
-)
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
 from .runtime import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
-    DISCORD_ADAPTER_ID,
-    DiscordMessagingAdapter,
     GatewayApp,
-    build_gateway_app,
 )
 
 DEFAULT_DISCORD_BOT_TOKEN_ENV = "ELEPHANT_DISCORD_BOT_TOKEN"
@@ -69,10 +47,7 @@ def _normalize_transport(value: str | None) -> str:
     normalized = str(value or "gateway").strip().lower().replace("_", "-")
     if normalized in {"gateway", "discord-gateway"}:
         return "gateway"
-    raise ValueError(
-        "discord transport must be one of "
-        f"{', '.join(SUPPORTED_DISCORD_TRANSPORTS)}"
-    )
+    raise ValueError(f"discord transport must be one of {', '.join(SUPPORTED_DISCORD_TRANSPORTS)}")
 
 
 def _string_list(value: object, *, field_name: str) -> tuple[str, ...]:
@@ -200,7 +175,6 @@ def _split_discord_message_content(
     return tuple(chunks)
 
 
-
 def _discord_fence_state(content: str) -> str | None:
     open_fence: str | None = None
     for raw_line in content.split("\n"):
@@ -212,7 +186,6 @@ def _discord_fence_state(content: str) -> str | None:
         else:
             open_fence = None
     return open_fence
-
 
 
 def _rebalance_discord_fenced_chunks(
@@ -361,9 +334,7 @@ def load_discord_gateway_accounts(
             resolved.append(
                 DiscordGatewayAccountConfig(
                     account_id=str(account_mapping.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID),
-                    bot_token_env_var=str(
-                        env_payload.get("bot_token") or DEFAULT_DISCORD_BOT_TOKEN_ENV
-                    ),
+                    bot_token_env_var=str(env_payload.get("bot_token") or DEFAULT_DISCORD_BOT_TOKEN_ENV),
                     surface=str(account_mapping.get("surface") or default_surface),
                     enabled=account_enabled,
                     allow_guild_ids=_string_list(
@@ -393,13 +364,12 @@ def resolve_discord_account(
     if not bot_token and config.bot_token_env_var == DEFAULT_DISCORD_BOT_TOKEN_ENV:
         bot_token = str(env.get(LEGACY_DISCORD_BOT_TOKEN_ENV) or "").strip()
     if not bot_token:
-        raise LookupError(
-            f"discord account '{config.account_id}' requires {config.bot_token_env_var}"
-        )
+        raise LookupError(f"discord account '{config.account_id}' requires {config.bot_token_env_var}")
     return DiscordResolvedAccount(
         account_id=config.account_id,
         bot_token=bot_token,
         config=config,
     )
+
 
 __all__ = [name for name in globals() if not name.startswith("__")]

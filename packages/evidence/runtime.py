@@ -34,7 +34,11 @@ from packages.embeddings import (
 )
 from packages.semantic_index import HybridSemanticSearcher, SemanticSearchQuery
 from packages.storage import RuntimeStorageRepository
-from .state_focus_support import build_resume_packet, focus_work_item_ids, state_focus_scope_hints, state_focus_score_adjustments
+from .state_focus_support import (
+    focus_work_item_ids,
+    state_focus_scope_hints,
+    state_focus_score_adjustments,
+)
 
 if TYPE_CHECKING:
     from .recall_runtime import StepEvidenceStore
@@ -74,6 +78,8 @@ def evidence_query_cache_key(query: str, *, latency_mode: str = "fast") -> str:
     dims = resolve_embedding_dimensions(latency_mode)
     digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
     return f"evidence-query:{dims}d:{digest}"
+
+
 _SEMANTIC_RECALL_SCORE_SCALE = 100.0
 _SEMANTIC_MEMORY_ENTRY_INACTIVE_STATES = frozenset(
     {"deleted", "superseded", "retired", "inactive", "archived", "rejected"}
@@ -125,6 +131,8 @@ class _ResolvedScope:
     lineage_episode_ids: tuple[str, ...]
     elephant_episode_ids: tuple[str, ...]
     personal_model_episode_ids: tuple[str, ...]
+
+
 _REPLAY_SLOT_NAMES = ("observation", "reasoning", "action", "outcome")
 _REPLAY_SLOT_LABELS = {
     "observation": "observation",
@@ -140,6 +148,8 @@ _REPLAY_DETAIL_RANK = {
     "raw_turn": 4,
     "raw_trace": 5,
 }
+
+
 def _tuple_from_metadata(value: object) -> tuple[str, ...]:
     if isinstance(value, (list, tuple)):
         return tuple(str(item) for item in value if str(item))
@@ -147,27 +157,35 @@ def _tuple_from_metadata(value: object) -> tuple[str, ...]:
         return ()
     cleaned = str(value).strip()
     return (cleaned,) if cleaned else ()
+
+
 def _record_search_text(record: RecallEvidence, *, structured_text: str = "") -> str:
     return "\n".join(part for part in (record.content, structured_text) if part)
+
+
 def _embedding_text(value: str, *, max_chars: int = _EVIDENCE_EMBED_TEXT_LIMIT) -> str:
     normalized = re.sub(r"\s+", " ", value).strip()
     if len(normalized) <= max_chars:
         return normalized
     return normalized[:max_chars].rstrip()
+
+
 def _record_embedding_text(record: RecallEvidence, *, structured_text: str | None = None) -> str:
     if structured_text is None:
         structured_turn = _structured_turn_from_record(record)
         structured_text = (
-            _replay_text(structured_turn, selected_slots=_REPLAY_SLOT_NAMES)
-            if structured_turn is not None
-            else ""
+            _replay_text(structured_turn, selected_slots=_REPLAY_SLOT_NAMES) if structured_turn is not None else ""
         )
     search_text = _record_search_text(record, structured_text=structured_text) or record.content
     return _embedding_text(search_text)
+
+
 def _evidence_cache_key(record: RecallEvidence, *, search_text: str) -> str:
     created_at = record.created_at.isoformat() if record.created_at is not None else ""
     digest = hashlib.sha256(search_text.encode("utf-8")).hexdigest()[:16]
     return f"{record.evidence_id}:{created_at}:{digest}"
+
+
 def _evidence_preload_entry(record: RecallEvidence, *, structured_text: str = "") -> EmbeddingPreloadEntry:
     search_text = _record_embedding_text(record, structured_text=structured_text or None)
     return EmbeddingPreloadEntry(
@@ -192,6 +210,8 @@ def _structured_slot_from_metadata(value: object) -> StructuredTurnSlot:
         source_refs=_tuple_from_metadata(value.get("source_refs")),
         linkage_refs=_tuple_from_metadata(value.get("linkage_refs")),
     )
+
+
 def _structured_turn_from_record(record: RecallEvidence) -> StepReplayRecord | None:
     if record.kind != "structured_turn":
         return None
@@ -207,12 +227,12 @@ def _structured_turn_from_record(record: RecallEvidence) -> StepReplayRecord | N
         action=_structured_slot_from_metadata(payload.get("action")),
         outcome=_structured_slot_from_metadata(payload.get("outcome")),
         personal_model_id=(
-            str(payload.get("personal_model_id"))
-            if payload.get("personal_model_id") is not None
-            else None
+            str(payload.get("personal_model_id")) if payload.get("personal_model_id") is not None else None
         ),
         elephant_id=str(payload.get("elephant_id")) if payload.get("elephant_id") is not None else None,
-        source_event_id=str(payload.get("source_event_id")) if payload.get("source_event_id") is not None else record.source_id,
+        source_event_id=str(payload.get("source_event_id"))
+        if payload.get("source_event_id") is not None
+        else record.source_id,
         reasoning_availability=str(payload.get("reasoning_availability", "summary_only")),
         reasoning_provenance=str(payload.get("reasoning_provenance", "runtime.decision_summary")),
         compression_tier=str(payload.get("compression_tier", "raw_turn")),
@@ -228,20 +248,16 @@ def parse_step_replay_record(record: RecallEvidence) -> StepReplayRecord | None:
     """Parse Step replay metadata from a recall evidence record."""
 
     return _structured_turn_from_record(record)
+
+
 def _normalize_target_slots(target_slots: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(
-        dict.fromkeys(
-            slot.strip().lower()
-            for slot in target_slots
-            if slot.strip().lower() in _REPLAY_SLOT_NAMES
-        )
+        dict.fromkeys(slot.strip().lower() for slot in target_slots if slot.strip().lower() in _REPLAY_SLOT_NAMES)
     )
-
 
 
 def _detail_rank(compression: str) -> int:
     return _REPLAY_DETAIL_RANK.get(compression.strip().lower(), _REPLAY_DETAIL_RANK["structured_summary"])
-
 
 
 def _project_slot(
@@ -266,7 +282,6 @@ def _project_slot(
     )
 
 
-
 def _selected_replay_slots(
     request: EvidenceRetrievalRequest,
     turn: StepReplayRecord | None,
@@ -281,7 +296,6 @@ def _selected_replay_slots(
         for slot_name in _REPLAY_SLOT_NAMES
         if getattr(turn, slot_name).summary or getattr(turn, slot_name).detail
     )
-
 
 
 def _project_replay_record(
@@ -327,7 +341,6 @@ def _project_replay_record(
     )
 
 
-
 def _slot_text(slot_name: str, slot: StructuredTurnSlot) -> tuple[str, ...]:
     label = _REPLAY_SLOT_LABELS.get(slot_name, slot_name)
     lines: list[str] = []
@@ -337,13 +350,11 @@ def _slot_text(slot_name: str, slot: StructuredTurnSlot) -> tuple[str, ...]:
     return tuple(lines)
 
 
-
 def _replay_text(turn: StepReplayRecord, *, selected_slots: tuple[str, ...]) -> str:
     lines: list[str] = []
     for slot_name in selected_slots:
         lines.extend(_slot_text(slot_name, getattr(turn, slot_name)))
     return "\n".join(line for line in lines if line)
-
 
 
 def _replay_summary(turn: StepReplayRecord, *, selected_slots: tuple[str, ...]) -> str:
@@ -406,12 +417,7 @@ class DefaultEvidenceRetriever:
             for record in self.store.list(include_inactive=request.include_inactive)
             if record.episode_id in scope_set
         )
-        scope_records = tuple(
-            {
-                record.evidence_id: record
-                for record in episode_scope_records
-            }.values()
-        )
+        scope_records = tuple({record.evidence_id: record for record in episode_scope_records}.values())
         query_vector: tuple[float, ...] = ()
         embeddings_allowed = bool(request.allow_embeddings)
         if not embeddings_allowed:
@@ -499,10 +505,7 @@ class DefaultEvidenceRetriever:
         opened_scopes: list[str] = []
 
         lineage_episode_ids = tuple(
-            dict.fromkeys(
-                request.lineage_episode_ids
-                or self._lineage_episode_ids(request.episode_id)
-            )
+            dict.fromkeys(request.lineage_episode_ids or self._lineage_episode_ids(request.episode_id))
         )
         elephant_episode_ids = (
             _query_episode_ids(self.repository, elephant_id=request.elephant_id)
@@ -757,7 +760,9 @@ class DefaultEvidenceRetriever:
         content = str(getattr(document, "payload", {}).get("text") or "").strip()
         if not content:
             content = str(metadata.get("indexed_text") or metadata.get("text") or source_id)
-        layer_type = str(getattr(document, "layer_type", "") or metadata.get("kind") or getattr(document, "kind", "") or "semantic")
+        layer_type = str(
+            getattr(document, "layer_type", "") or metadata.get("kind") or getattr(document, "kind", "") or "semantic"
+        )
         episode_id = str(metadata.get("episode_id") or request.episode_id)
         step_id = metadata.get("step_id") if source_id.startswith("step:") or metadata.get("step_id") else None
         loop_id = metadata.get("loop_id") or None
@@ -795,8 +800,7 @@ class DefaultEvidenceRetriever:
         owner_scope: str,
     ) -> EvidenceCandidate:
         scaled_signal_scores = {
-            signal: value * _SEMANTIC_RECALL_SCORE_SCALE
-            for signal, value in match.signal_scores.items()
+            signal: value * _SEMANTIC_RECALL_SCORE_SCALE for signal, value in match.signal_scores.items()
         }
         lexical_score = sum(score for signal, score in scaled_signal_scores.items() if signal != "vector")
         vector_score = scaled_signal_scores.get("vector", 0.0)
@@ -861,11 +865,7 @@ class DefaultEvidenceRetriever:
                 merged.values(),
                 key=lambda item: (
                     -item.score,
-                    -(
-                        item.evidence.created_at.timestamp()
-                        if item.evidence.created_at is not None
-                        else 0.0
-                    ),
+                    -(item.evidence.created_at.timestamp() if item.evidence.created_at is not None else 0.0),
                     item.evidence_id,
                 ),
             )
@@ -967,7 +967,13 @@ class DefaultEvidenceRetriever:
         overlap = sorted(query_tokens & content_tokens)
         lexical_score = float(len(overlap)) * 2.0
         if overlap:
-            reasons.append(RecallReason("lexical.query", f"query overlap: {','.join(overlap)}", lexical_score))
+            reasons.append(
+                RecallReason(
+                    "lexical.query",
+                    f"query overlap: {','.join(overlap)}",
+                    lexical_score,
+                )
+            )
         tag_tokens = _tokenize(" ".join(record.tags))
         tag_overlap = sorted(query_tokens & tag_tokens)
         if tag_overlap:
@@ -1048,7 +1054,13 @@ class DefaultEvidenceRetriever:
 
         continuity_score = 0.0
         if query_tokens & _CONTINUITY_QUERY_TOKENS:
-            if record.kind in {"procedural", "semantic", "summary", "decision", "structured_turn"}:
+            if record.kind in {
+                "procedural",
+                "semantic",
+                "summary",
+                "decision",
+                "structured_turn",
+            }:
                 continuity_score += 1.75
                 reasons.append(
                     RecallReason(
@@ -1066,7 +1078,13 @@ class DefaultEvidenceRetriever:
                         0.4,
                     )
                 )
-            continuity_tags = {"continuity", "handoff", "recovery", "resume", "scope-aware"}
+            continuity_tags = {
+                "continuity",
+                "handoff",
+                "recovery",
+                "resume",
+                "scope-aware",
+            }
             if continuity_tags & set(record.tags):
                 continuity_score += 0.4
                 reasons.append(
@@ -1082,7 +1100,13 @@ class DefaultEvidenceRetriever:
         replay_score = 0.0
         if structured_turn is not None:
             replay_score += 0.75
-            reasons.append(RecallReason("replay.structured-turn", "structured turn evidence is replayable", 0.75))
+            reasons.append(
+                RecallReason(
+                    "replay.structured-turn",
+                    "structured turn evidence is replayable",
+                    0.75,
+                )
+            )
             if request.replay_mode != "off":
                 replay_score += 0.8
                 reasons.append(
@@ -1124,7 +1148,10 @@ class DefaultEvidenceRetriever:
                             )
                         )
                 elif request.replay_mode == "episode":
-                    if structured_turn.compression_tier == "episode_summary" or len(structured_turn.source_turn_ids) > 1:
+                    if (
+                        structured_turn.compression_tier == "episode_summary"
+                        or len(structured_turn.source_turn_ids) > 1
+                    ):
                         replay_score += 1.5
                         reasons.append(
                             RecallReason(
@@ -1263,7 +1290,9 @@ def _index_invalidation_reason(*, lifecycle_state: str, replacement_evidence_id:
     return f"{lifecycle_state} evidence must refresh derived lexical and vector views from canonical rows"
 
 
-def _embedding_index_invalidations(store: "StepEvidenceStore") -> tuple[EmbeddingIndexInvalidation, ...]:
+def _embedding_index_invalidations(
+    store: "StepEvidenceStore",
+) -> tuple[EmbeddingIndexInvalidation, ...]:
     invalidations: list[EmbeddingIndexInvalidation] = []
     ordered_records = tuple(sorted(store.list(include_inactive=True), key=_evidence_sort_key))
     for record in ordered_records:
@@ -1292,7 +1321,9 @@ def _embedding_index_invalidations(store: "StepEvidenceStore") -> tuple[Embeddin
     return tuple(invalidations)
 
 
-def build_embedding_index_rebuild_plan(store: "StepEvidenceStore") -> EmbeddingIndexRebuildPlan:
+def build_embedding_index_rebuild_plan(
+    store: "StepEvidenceStore",
+) -> EmbeddingIndexRebuildPlan:
     ordered_records = tuple(sorted(store.list(include_inactive=True), key=_evidence_sort_key))
     active_records = tuple(
         record

@@ -89,7 +89,8 @@ def compress_epoch(
     if reflect_compressor is not None:
         try:
             summary = reflect_compressor(
-                to_summarize, tail,
+                to_summarize,
+                tail,
                 session_id=resolved_session_id,
                 context_limit=context_limit,
             )
@@ -105,7 +106,9 @@ def compress_epoch(
 
     # Apply compression: replace history with tail, set summary
     before_tokens = estimate_epoch_prompt_tokens(
-        epoch, history_messages=history, compacted_summary=epoch.compacted_history_summary,
+        epoch,
+        history_messages=history,
+        compacted_summary=epoch.compacted_history_summary,
     )
     updated, _result = compact_session_context_epoch(
         epoch,
@@ -122,6 +125,7 @@ def compress_epoch(
         _append_prompt_section,
         invalidate_prefix_cache,
     )
+
     invalidate_prefix_cache(resolved_session_id)
     updated_prefix = _strip_prompt_sections(updated.frozen_prefix, "Episode resume")
     updated_prefix = _append_prompt_section(
@@ -132,7 +136,9 @@ def compress_epoch(
     updated = replace(updated, frozen_prefix=updated_prefix)
 
     after_tokens = estimate_epoch_prompt_tokens(
-        updated, history_messages=tail, compacted_summary=summary,
+        updated,
+        history_messages=tail,
+        compacted_summary=summary,
     )
 
     result = CompressResult(
@@ -179,11 +185,7 @@ def split_for_compress(
         tail_start = user_starts[-protected_tail_turns]
         # Ensure we're actually compressing a meaningful amount (>30%)
         if tail_start > total * 0.3:
-            selected_groups = {
-                group_index
-                for group_index, (start, _end) in enumerate(groups)
-                if start >= tail_start
-            }
+            selected_groups = {group_index for group_index, (start, _end) in enumerate(groups) if start >= tail_start}
             to_summarize, tail = _split_by_tail_groups(messages, groups, selected_groups)
             if to_summarize:
                 return to_summarize, tail
@@ -206,10 +208,7 @@ def split_for_compress(
         group_messages = messages[start:end]
         if any(msg.role == "user" and msg.content.strip() for msg in group_messages):
             tail_groups.add(group_index)
-        elif any(
-            msg.role == "assistant" and msg.content.strip() and not msg.tool_calls
-            for msg in group_messages
-        ):
+        elif any(msg.role == "assistant" and msg.content.strip() and not msg.tool_calls for msg in group_messages):
             tail_groups.add(group_index)
 
     to_summarize, tail = _split_by_tail_groups(messages, groups, tail_groups)
@@ -220,11 +219,7 @@ def split_for_compress(
     # provider-visible tool call/result group.
     cut = max(1, int(total * 0.6))
     tail_start = _group_boundary_after_index(groups, cut)
-    tail_groups = {
-        group_index
-        for group_index, (start, _end) in enumerate(groups)
-        if start >= tail_start
-    }
+    tail_groups = {group_index for group_index, (start, _end) in enumerate(groups) if start >= tail_start}
     return _split_by_tail_groups(messages, groups, tail_groups)
 
 
@@ -258,11 +253,7 @@ def _preservable_live_group(group: tuple[PromptMessage, ...]) -> bool:
     tool_messages = tuple(message for message in group[1:] if message.role == "tool")
     if not tool_messages:
         return False
-    call_ids = {
-        call_id
-        for call in first.tool_calls
-        if (call_id := tool_call_id(call))
-    }
+    call_ids = {call_id for call in first.tool_calls if (call_id := tool_call_id(call))}
     if not call_ids:
         return True
     result_ids = {message.tool_call_id for message in tool_messages if message.tool_call_id}

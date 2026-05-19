@@ -171,9 +171,7 @@ def _validated_segment(value: str | None, *, field_name: str) -> str:
     if not resolved:
         raise ValueError(f"{field_name} is required")
     if not _VALID_SEGMENT_RE.match(resolved):
-        raise ValueError(
-            f"{field_name} must use lowercase letters, digits, dots, underscores, or hyphens: {value!r}"
-        )
+        raise ValueError(f"{field_name} must use lowercase letters, digits, dots, underscores, or hyphens: {value!r}")
     return resolved
 
 
@@ -196,21 +194,25 @@ def _render_skill_markdown(
     ]
     if asset_paths:
         lines.append(f"assets: {', '.join(asset_paths)}")
-    lines.extend([
-        "---",
-        "",
-        f"# {display_name}",
-        "",
-        instruction_text.rstrip(),
-        "",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            f"# {display_name}",
+            "",
+            instruction_text.rstrip(),
+            "",
+        ]
+    )
     if asset_paths:
-        lines.extend([
-            "## Dependent files",
-            "",
-            *(f"- `{path}`" for path in asset_paths),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Dependent files",
+                "",
+                *(f"- `{path}`" for path in asset_paths),
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 

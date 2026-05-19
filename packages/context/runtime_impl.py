@@ -1,17 +1,11 @@
 """Layered context runtime implementation assembled from smaller modules."""
 
-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-import re
-from typing import Any, Mapping, Protocol, runtime_checkable
 
 from packages.capabilities.runtime import CapabilityDescriptor, ContextCapability
 from packages.contracts.layers import Episode
-from packages.contracts.runtime import ContextBundle, StateFocusDecision, RecallEvidence, StructuredTurnSlot
-
+from packages.contracts.runtime import ContextBundle, StateFocusDecision, RecallEvidence
 
 
 from .runtime_types import (
@@ -45,42 +39,20 @@ from .runtime_layers import (
     build_prompt_envelope,
 )
 from .runtime_support import (
-    _budget_for,
-    _work_item_line,
-    _evidence_line,
     _select_steady_recall_items,
-    _steady_recall_refs,
-    _work_item_trace_reason,
     _derived_source_refs,
     _loop_context_trace_reason,
     _session_snapshot_trace_reason,
     _request_attachment_trace_reason,
-    _session_snapshot_lines,
-    _build_retrieval_query,
-    _build_retrieval_reason,
     _estimate_tokens,
     _state_focus_budget_multiplier,
-    _truncate_lines,
-    _summary_content_for_layer,
-    _retrieval_lines,
-    _ReplayRequestSpec,
     _split_retrieval_requests,
     _infer_replay_specs,
-    _schedule_replay_requests,
-    _select_replay_evidence,
-    _replay_rank,
-    _project_replay_slot,
-    _replay_lines,
-    _replay_summary_lines,
     _replay_packet_trace_reason,
-    _tokenize,
-    _thematic_tokens,
-    _continuity_marker_tokens,
-    _context_evidence_score,
-    _retrieval_priority_bucket,
     _plan_rationale,
     _snapshot_work_items,
 )
+
 
 class LayeredContextPlanner:
     """Plan the layered context structure from runtime state."""
@@ -154,7 +126,14 @@ class LayeredContextPlanner:
             summary_requests=summary_requests,
             retrieval_requests=retrieval_requests,
         )
-        rationale = _plan_rationale(session, work_items, recall_items, budgets, retrieval_requests, state_focus=state_focus)
+        rationale = _plan_rationale(
+            session,
+            work_items,
+            recall_items,
+            budgets,
+            retrieval_requests,
+            state_focus=state_focus,
+        )
         frame = EpisodeFrameBuilder().build(
             session=session,
             instruction_refs=instruction_refs,
@@ -199,7 +178,10 @@ class LayeredContextPlanner:
         snapshot_tokens = max(
             96,
             int(
-                max(144, len(profile_snapshot_refs) * 6 + len(snapshot_work_items) * 28 + min(len(recall_items), 6) * 24)
+                max(
+                    144,
+                    len(profile_snapshot_refs) * 6 + len(snapshot_work_items) * 28 + min(len(recall_items), 6) * 24,
+                )
                 * _state_focus_budget_multiplier(state_focus)
             ),
         )
@@ -302,8 +284,10 @@ class LayeredContextPlanner:
                 )
             )
         replay_budget = budgets.allocation_for("replay_packet")
-        if replay_budget and replay_retrieval_requests and (
-            replay_budget.allocated_tokens < replay_budget.requested_tokens or len(replay_retrieval_requests) > 1
+        if (
+            replay_budget
+            and replay_retrieval_requests
+            and (replay_budget.allocated_tokens < replay_budget.requested_tokens or len(replay_retrieval_requests) > 1)
         ):
             requests.append(
                 ContextSummaryRequest(
@@ -366,20 +350,31 @@ class LayeredContextPlanner:
         summary_requests: tuple[ContextSummaryRequest, ...],
         retrieval_requests: tuple[ContextRetrievalRequest, ...],
     ) -> tuple[ContextSourceTrace, ...]:
-        steady_recall_items = _select_steady_recall_items(recall_items, session=session, work_items=work_items, state_focus=state_focus)
+        steady_recall_items = _select_steady_recall_items(
+            recall_items,
+            session=session,
+            work_items=work_items,
+            state_focus=state_focus,
+        )
         snapshot_work_items = _snapshot_work_items(work_items, state_focus=state_focus)
         steady_refs = tuple(evidence.evidence_id for evidence in steady_recall_items)
         snapshot_retrieval_requests, replay_retrieval_requests = _split_retrieval_requests(retrieval_requests)
         retrieved_evidence_refs = tuple(
-            dict.fromkeys(evidence_ref for request in snapshot_retrieval_requests for evidence_ref in request.evidence_refs)
+            dict.fromkeys(
+                evidence_ref for request in snapshot_retrieval_requests for evidence_ref in request.evidence_refs
+            )
         )
         replay_evidence_refs = tuple(
-            dict.fromkeys(evidence_ref for request in replay_retrieval_requests for evidence_ref in request.evidence_refs)
+            dict.fromkeys(
+                evidence_ref for request in replay_retrieval_requests for evidence_ref in request.evidence_refs
+            )
         )
         omitted_snapshot_refs = tuple(
             evidence.evidence_id
             for evidence in recall_items
-            if evidence.evidence_id not in steady_refs and evidence.evidence_id not in retrieved_evidence_refs and evidence.evidence_id not in replay_evidence_refs
+            if evidence.evidence_id not in steady_refs
+            and evidence.evidence_id not in retrieved_evidence_refs
+            and evidence.evidence_id not in replay_evidence_refs
         )
         traces: list[ContextSourceTrace] = [
             ContextSourceTrace(
@@ -420,7 +415,9 @@ class LayeredContextPlanner:
                     selected_refs=replay_evidence_refs,
                     reason=_replay_packet_trace_reason(replay_retrieval_requests),
                     omitted_refs=tuple(
-                        evidence_ref for evidence_ref in structured_turn_refs if evidence_ref not in replay_evidence_refs
+                        evidence_ref
+                        for evidence_ref in structured_turn_refs
+                        if evidence_ref not in replay_evidence_refs
                     ),
                 )
             )
@@ -441,6 +438,7 @@ class LayeredContextPlanner:
                 )
             )
         return tuple(traces)
+
 
 class ContextRuntime(ContextCapability):
     """Capability adapter for layered context assembly."""
@@ -542,15 +540,9 @@ class ContextRuntime(ContextCapability):
         )
         rendered = self._renderer.render(plan)
         prompt_envelope = build_prompt_envelope(plan.frame)
-        summary_by_layer = {
-            layer.layer_name: layer.summary
-            for layer in plan.layers
-            if layer.summary is not None
-        }
+        summary_by_layer = {layer.layer_name: layer.summary for layer in plan.layers if layer.summary is not None}
         retrieved_evidence_refs = tuple(
-            evidence_ref
-            for request in plan.retrieval_requests
-            for evidence_ref in request.evidence_refs
+            evidence_ref for request in plan.retrieval_requests for evidence_ref in request.evidence_refs
         )
         bundle = ContextBundle(
             bundle_id=f"{session.episode_id}:context",
@@ -572,6 +564,7 @@ class ContextRuntime(ContextCapability):
             source_trace=plan.source_trace,
             frame=plan.frame,
         )
+
 
 __all__ = [
     "BudgetManager",

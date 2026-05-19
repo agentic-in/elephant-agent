@@ -20,12 +20,26 @@ from packages.auth import (
     AuthProfile,
     ProfileCredentialResolver,
     SecretReference,
-    SecretStore,
     SecretValueResolution,
 )
-from packages.state import CompanionSettings, LoadedProfile, build_companion_identity_state
-from packages.security import ApprovalClass, PolicyDecision, PolicyResult, SecurityPolicy, SecurityRequest
-from packages.telemetry import TelemetrySink, emit_approval_event, emit_delivery_event, emit_failure_event
+from packages.state import (
+    CompanionSettings,
+    LoadedProfile,
+    build_companion_identity_state,
+)
+from packages.security import (
+    ApprovalClass,
+    PolicyDecision,
+    PolicyResult,
+    SecurityPolicy,
+    SecurityRequest,
+)
+from packages.telemetry import (
+    TelemetrySink,
+    emit_approval_event,
+    emit_delivery_event,
+    emit_failure_event,
+)
 
 _VOICE_SOURCE_PREVIEW = "preview"
 _VOICE_SOURCE_PROVIDER_BACKED = "provider-backed"
@@ -360,10 +374,7 @@ class OpenAICompatibleVoiceAdapter:
             audio_format=audio_format,
             credentials=credentials,
         )
-        payload = (
-            f"VOICE[{plan.provider_id}/{plan.model_id}/{self.config.voice_name}] "
-            f"{transcript}"
-        )
+        payload = f"VOICE[{plan.provider_id}/{plan.model_id}/{self.config.voice_name}] {transcript}"
         return payload.encode("utf-8"), plan
 
     def _build_headers(
@@ -399,9 +410,7 @@ class VoiceService:
             text_first=companion.text_first,
             started_at=_utc_now(),
             updated_at=_utc_now(),
-            status=VoiceModeStatus.READY.value
-            if companion.text_first
-            else VoiceModeStatus.BLOCKED.value,
+            status=VoiceModeStatus.READY.value if companion.text_first else VoiceModeStatus.BLOCKED.value,
             notes=_dedupe(
                 (
                     f"identity:{profile.state.display_name}",
@@ -485,7 +494,9 @@ class VoiceService:
             },
             {
                 "check": "credentials",
-                "status": "available" if credentials_ready else ("missing" if summary["supported"] else "not-applicable"),
+                "status": "available"
+                if credentials_ready
+                else ("missing" if summary["supported"] else "not-applicable"),
                 "summary": ",".join(credential_keys) if credential_keys else credential_error,
             },
             {
@@ -706,7 +717,9 @@ class VoiceService:
             audio_format=audio_format,
         )
 
-    def _refresh_session(self, session: _VoiceRuntimeSession, input_kind: str, output_kind: str) -> _VoiceRuntimeSession:
+    def _refresh_session(
+        self, session: _VoiceRuntimeSession, input_kind: str, output_kind: str
+    ) -> _VoiceRuntimeSession:
         return _VoiceRuntimeSession(
             voice_session_id=session.voice_session_id,
             profile_id=session.profile_id,
@@ -854,10 +867,15 @@ def build_provider_voice_service(
     voice_name: str = "alloy",
 ) -> VoiceService:
     adapter: OneShotVoiceAdapter | None = None
-    if provider_profile is not None and provider_profile.base_url and provider_profile.transport_id in {
-        "openai-compatible",
-        "openai_chat_compatible",
-    }:
+    if (
+        provider_profile is not None
+        and provider_profile.base_url
+        and provider_profile.transport_id
+        in {
+            "openai-compatible",
+            "openai_chat_compatible",
+        }
+    ):
         adapter = OpenAICompatibleVoiceAdapter(
             OpenAICompatibleVoiceConfig(
                 provider_id=provider_profile.provider_id,

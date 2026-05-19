@@ -10,7 +10,6 @@ from packages.contracts import DiaryEntry, Fact, OpenQuestion
 
 from .repository_support import (
     _iso,
-    _json_dict_text,
     _json_mapping,
     canonical_personal_model_id,
 )
@@ -163,9 +162,7 @@ def list_personal_model_facts(
     where_sql = " WHERE " + " AND ".join(clauses)
     with self.connection() as connection:
         rows = connection.execute(
-            "SELECT * FROM personal_model_facts"
-            + where_sql
-            + " ORDER BY lens ASC, confidence DESC, committed_at DESC",
+            "SELECT * FROM personal_model_facts" + where_sql + " ORDER BY lens ASC, confidence DESC, committed_at DESC",
             tuple(parameters),
         ).fetchall()
     return tuple(_fact_from_row(row) for row in rows)

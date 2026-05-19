@@ -100,9 +100,20 @@ def execute_kernel_turn(
                 "tool_result": execution.summary,
             },
         )
-        return execution, checkpoint, (*turn_messages, *assistant_turn_messages(_clean_execution_summary(execution)))
+        return (
+            execution,
+            checkpoint,
+            (
+                *turn_messages,
+                *assistant_turn_messages(_clean_execution_summary(execution)),
+            ),
+        )
 
-    model_prompt = turn_messages[0].content if len(turn_messages) == 1 and turn_messages[0].role == "user" else prompt_for_execution
+    model_prompt = (
+        turn_messages[0].content
+        if len(turn_messages) == 1 and turn_messages[0].role == "user"
+        else prompt_for_execution
+    )
     _record_effective_user_query_step(
         step_recorder,
         raw_prompt=request.prompt,
@@ -121,7 +132,12 @@ def execute_kernel_turn(
         planned_summary="initial model call",
     )
     if service.dependencies.tools is None:
-        stage_context_usage(stage, response.prompt_tokens, response.completion_tokens, response.total_tokens)
+        stage_context_usage(
+            stage,
+            response.prompt_tokens,
+            response.completion_tokens,
+            response.total_tokens,
+        )
         cleaned = _clean_execution_summary(response)
         return cleaned, None, (*turn_messages, *assistant_turn_messages(cleaned))
     return _execute_model_tool_loop(
@@ -331,7 +347,9 @@ def _execute_model_tool_loop(
             service._persist_loop_checkpoint(current_loop)
         provider_system_prompt = _provider_system_prompt_for_recording(context)
         if current_loop is not None and not context_recorded and provider_system_prompt:
-            current_loop, context_step = loop_service.record_context_prompt(current_loop, system_prompt=provider_system_prompt)
+            current_loop, context_step = loop_service.record_context_prompt(
+                current_loop, system_prompt=provider_system_prompt
+            )
             service._persist_loop_checkpoint(current_loop, step=context_step)
             context_recorded = True
         if current_loop is not None:
@@ -448,9 +466,13 @@ def _finalize_model_loop_response(
         cache_creation_prompt_tokens=cache_creation_prompt_tokens_total,
         cache_usage_reported=cache_usage_reported,
     )
-    finalized = cleaned if not loop_traces else replace(
-        cleaned,
-        side_effects=tuple(dict.fromkeys((*cleaned.side_effects, *loop_traces))),
+    finalized = (
+        cleaned
+        if not loop_traces
+        else replace(
+            cleaned,
+            side_effects=tuple(dict.fromkeys((*cleaned.side_effects, *loop_traces))),
+        )
     )
     if current_loop is not None:
         current_loop = loop_service.complete(current_loop, summary=finalized.summary)

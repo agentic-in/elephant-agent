@@ -21,14 +21,31 @@ from apps.cli.shell_composer import (
     build_composer_body,
     prompt_style_map,
 )
-from apps.cli.shell_progress import _VisibleToolEvent, latest_stream_text, reset_stream_text, stream_text_tracker, turn_tool_progress_lines
+from apps.cli.shell_progress import (
+    _VisibleToolEvent,
+    latest_stream_text,
+    reset_stream_text,
+    stream_text_tracker,
+    turn_tool_progress_lines,
+)
 import apps.cli.shell_progress_runtime as shell_progress_runtime
 from apps.cli.shell_render import _render_tooltrace_body_line
 import apps.cli.shell_render as shell_render
-from apps.cli.shell_banner import _learning_job_execution_summary, _skill_affinity_summary
+from apps.cli.shell_banner import (
+    _learning_job_execution_summary,
+    _skill_affinity_summary,
+)
 import apps.cli.shell_progress_trace as shell_progress_trace
-from apps.cli.shell_clarify import ShellClarifyState, render_clarify_fragments, route_clarify_answer
-from apps.cli.shell_stack import FormattedTextControl as StackFormattedTextControl, ScrollablePane, Window as StackWindow
+from apps.cli.shell_clarify import (
+    ShellClarifyState,
+    render_clarify_fragments,
+    route_clarify_answer,
+)
+from apps.cli.shell_stack import (
+    FormattedTextControl as StackFormattedTextControl,
+    ScrollablePane,
+    Window as StackWindow,
+)
 from apps.cli.shell import (
     BRAND_ACCENT,
     BRAND_DARK,
@@ -38,7 +55,6 @@ from apps.cli.shell import (
     COMMAND_PALETTE_VISIBLE_ROWS,
     Console,
     Document,
-    ELEPHANT_STAGE_ROWS,
     ELEPHANT_STAGE_ROWS,
     GROWTH_PROGRESS_EMPTY,
     GROWTH_PROGRESS_FILLED,
@@ -220,7 +236,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertTrue(shell._use_alternate_screen)
 
-    def test_refresh_shell_frame_does_not_clear_or_replay_same_frame_in_scrollback_mode(self) -> None:
+    def test_refresh_shell_frame_does_not_clear_or_replay_same_frame_in_scrollback_mode(
+        self,
+    ) -> None:
         shell = self._make_shell_without_identity_update()
         shell.console = _CaptureConsole(100)
         shell._last_shell_frame_token = shell._current_shell_frame_token()
@@ -232,7 +250,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell.console.printed, [])
         self.assertEqual(shell._rendered_entries, 2)
 
-    def test_refresh_shell_frame_clears_and_replays_in_alternate_screen_mode(self) -> None:
+    def test_refresh_shell_frame_clears_and_replays_in_alternate_screen_mode(
+        self,
+    ) -> None:
         shell = self._make_shell_without_identity_update()
         shell.console = _CaptureConsole(100)
         shell._use_alternate_screen = True
@@ -245,7 +265,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertGreaterEqual(len(shell.console.printed), 1)
         self.assertEqual(shell._rendered_entries, 0)
 
-    def test_prime_transcript_uses_elephant_state_name_for_assistant_title(self) -> None:
+    def test_prime_transcript_uses_elephant_state_name_for_assistant_title(
+        self,
+    ) -> None:
         shell = self._make_shell(opened="Opened elephant atlas")
         shell.runtime.update_identity_state(
             session_id=shell.session_id,
@@ -344,9 +366,7 @@ class ShellPaletteTest(unittest.TestCase):
             self.assertIn("resume", cron_commands)
             self.assertIn("remove", cron_commands)
 
-            removed_whoami_commands = {
-                item.text for item in completer.get_completions(Document("/whoami "), None)
-            }
+            removed_whoami_commands = {item.text for item in completer.get_completions(Document("/whoami "), None)}
             self.assertEqual(set(), removed_whoami_commands)
 
             gateway_commands = {item.text for item in completer.get_completions(Document("/gateway "), None)}
@@ -384,7 +404,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertFalse(any(entry.title == "Learning" for entry in shell.transcript))
 
-    def test_latest_learning_notice_surfaces_completed_learning_result_once(self) -> None:
+    def test_latest_learning_notice_surfaces_completed_learning_result_once(
+        self,
+    ) -> None:
         shell = self._make_shell()
         job = shell.runtime.schedule_learning_for_session(
             session_id=shell.session_id,
@@ -434,7 +456,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertFalse(any(entry.title == "Learning" for entry in shell.transcript))
 
-    def test_conversational_surface_requests_list_tools_on_explicit_show_list_verbs(self) -> None:
+    def test_conversational_surface_requests_list_tools_on_explicit_show_list_verbs(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         handled_tools = shell._handle_conversational_surface_request("show tools")
@@ -469,7 +493,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(handled_skills)
         self.assertEqual(len(shell.transcript), original_len)
 
-    def test_skills_search_routes_through_skill_search_tool_and_records_tooltrace(self) -> None:
+    def test_skills_search_routes_through_skill_search_tool_and_records_tooltrace(
+        self,
+    ) -> None:
         shell = self._make_shell()
         with mock.patch.object(
             shell.runtime.skill_search_hub,
@@ -496,7 +522,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell.transcript[-1].title, "Skill search")
         self.assertIn("github:openai/skills/apple-notes", shell.transcript[-1].body)
 
-    def test_plain_turn_with_explicit_skill_name_no_longer_routes_skill_body(self) -> None:
+    def test_plain_turn_with_explicit_skill_name_no_longer_routes_skill_body(
+        self,
+    ) -> None:
         shell = self._make_shell()
         outcome = mock.Mock()
         with (
@@ -515,9 +543,15 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIsNone(run_turn.call_args.kwargs["event_payload"])
         append_outcome.assert_called_once_with(outcome)
 
-    def test_dispatch_clears_pending_context_compaction_frame_before_next_turn(self) -> None:
+    def test_dispatch_clears_pending_context_compaction_frame_before_next_turn(
+        self,
+    ) -> None:
         shell = self._make_shell()
-        shell._pending_context_compaction_frame = {"prompt": "previous", "tick": 0, "kernel_stage_events": ()}
+        shell._pending_context_compaction_frame = {
+            "prompt": "previous",
+            "tick": 0,
+            "kernel_stage_events": (),
+        }
         shell._pending_context_compaction_frame_rendered = True
         with (
             mock.patch.object(shell, "_handle_slash_command", return_value=False),
@@ -641,7 +675,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell._last_provider_prompt_tokens, 0)
         self.assertEqual(shell._last_prompt_tokens, 6_200)
 
-    def test_plain_turn_with_contextual_skill_phrase_no_longer_routes_skill_body(self) -> None:
+    def test_plain_turn_with_contextual_skill_phrase_no_longer_routes_skill_body(
+        self,
+    ) -> None:
         shell = self._make_shell()
         outcome = mock.Mock()
         with (
@@ -660,7 +696,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIsNone(run_turn.call_args.kwargs["event_payload"])
         append_outcome.assert_called_once_with(outcome)
 
-    def test_skill_slash_specs_include_full_local_skill_hub_not_first_page_only(self) -> None:
+    def test_skill_slash_specs_include_full_local_skill_hub_not_first_page_only(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         spec_ids = {spec.skill_id for spec in shell.skill_slash_specs()}
@@ -714,11 +752,16 @@ class ShellPaletteTest(unittest.TestCase):
         refresh_specs.assert_called_once_with()
         self.assertEqual(shell.transcript[-1].title, "Skill installed")
         self.assertIn("detail: installed via GitHub (trusted)", shell.transcript[-1].body)
-        self.assertIn("source_reference: github:openai/skills/apple-notes", shell.transcript[-1].body)
+        self.assertIn(
+            "source_reference: github:openai/skills/apple-notes",
+            shell.transcript[-1].body,
+        )
         self.assertIn("install_action: install", shell.transcript[-1].body)
         self.assertIn("install_requester: operator", shell.transcript[-1].body)
 
-    def test_growth_panel_keeps_removed_procedural_memory_out_of_learning_overview(self) -> None:
+    def test_growth_panel_keeps_removed_procedural_memory_out_of_learning_overview(
+        self,
+    ) -> None:
         shell = self._make_shell()
         session = shell.runtime.inspect_session(shell.session_id)
 
@@ -729,7 +772,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(any("Release State Recovery" in line for line in lines))
         self.assertIn("latest · no captured grounded experience yet", lines)
 
-    def test_growth_panel_filters_noisy_failure_experiences_from_learning_overview(self) -> None:
+    def test_growth_panel_filters_noisy_failure_experiences_from_learning_overview(
+        self,
+    ) -> None:
         shell = self._make_shell()
         session = shell.runtime.inspect_session(shell.session_id)
 
@@ -740,7 +785,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(any("skill manager is having some trouble" in line for line in lines))
         self.assertIn("latest · no captured grounded experience yet", lines)
 
-    def test_conversational_surface_request_reads_specific_web_page_without_hitting_model(self) -> None:
+    def test_conversational_surface_request_reads_specific_web_page_without_hitting_model(
+        self,
+    ) -> None:
         shell = self._make_shell()
         server = _WebPageStubServer().start()
         self.addCleanup(server.close)
@@ -758,11 +805,14 @@ class ShellPaletteTest(unittest.TestCase):
     def test_provider_configure_cancels_when_wizard_is_escaped(self) -> None:
         shell = self._make_shell()
 
-        with mock.patch("apps.cli.shell.run_provider_selection_wizard", return_value=WIZARD_BACK), mock.patch.object(
-            CliRuntime,
-            "set_default_provider",
-            autospec=True,
-        ) as set_default_provider:
+        with (
+            mock.patch("apps.cli.shell.run_provider_selection_wizard", return_value=WIZARD_BACK),
+            mock.patch.object(
+                CliRuntime,
+                "set_default_provider",
+                autospec=True,
+            ) as set_default_provider,
+        ):
             shell._append_providers([])
 
         set_default_provider.assert_not_called()
@@ -782,17 +832,22 @@ class ShellPaletteTest(unittest.TestCase):
             api_key="sk-test",
         )
 
-        with mock.patch("apps.cli.shell.run_provider_selection_wizard", return_value=WIZARD_BACK), mock.patch.object(
-            CliRuntime,
-            "set_default_provider",
-            autospec=True,
-        ) as set_default_provider:
+        with (
+            mock.patch("apps.cli.shell.run_provider_selection_wizard", return_value=WIZARD_BACK),
+            mock.patch.object(
+                CliRuntime,
+                "set_default_provider",
+                autospec=True,
+            ) as set_default_provider,
+        ):
             shell._append_models([])
 
         set_default_provider.assert_not_called()
         self.assertEqual(shell.transcript[-1].body, "Model setup cancelled.")
 
-    def test_work_surface_discloses_resolved_state_focus_scope_and_fallback(self) -> None:
+    def test_work_surface_discloses_resolved_state_focus_scope_and_fallback(
+        self,
+    ) -> None:
         shell = self._make_shell()
         session = shell.runtime.inspect_session(shell.session_id)
         profile = shell.runtime.inspect_profile(session.personal_model_id)
@@ -821,7 +876,11 @@ class ShellPaletteTest(unittest.TestCase):
                 focus_assist_outcome="suggested",
                 selection_path="embedding-unavailable.weak-assist.suggested.narrow",
                 reasons=(
-                    StateFocusReason("continuation", "The prompt continues the active rollout thread.", 0.9),
+                    StateFocusReason(
+                        "continuation",
+                        "The prompt continues the active rollout thread.",
+                        0.9,
+                    ),
                     StateFocusReason("focus", "The active work stays ahead of generic recall.", 0.8),
                 ),
                 audit_trace=("stage3: fallback path -> embedding-unavailable.weak-assist.suggested.narrow",),
@@ -832,7 +891,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(shell._handle_slash_command("/work"))
         self.assertEqual(shell.transcript[-1].title, "Unknown command")
 
-    def test_conversational_surface_requests_can_schedule_prompt_cron_and_list_jobs(self) -> None:
+    def test_conversational_surface_requests_can_schedule_prompt_cron_and_list_jobs(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         created = shell._handle_conversational_surface_request("schedule a prompt to tell me a joke every morning")
@@ -869,22 +930,30 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("cron", shell.transcript[-1].meta)
         self.assertFalse(shell.runtime.has_due_cron_jobs(session_id=shell.session_id))
 
-    def test_prompt_cron_job_references_requested_skill_without_body_injection(self) -> None:
+    def test_prompt_cron_job_references_requested_skill_without_body_injection(
+        self,
+    ) -> None:
         shell = self._make_shell()
         skill = shell.runtime.inspect_skill("arxiv", session_id=shell.session_id)
         shell.runtime.create_cron_job(
             session_id=shell.session_id,
             name="Paper scan",
             schedule="2000-01-01T00:00:00+00:00",
-            payload={"prompt": "find papers and write a markdown note", "skills": ["arxiv"]},
+            payload={
+                "prompt": "find papers and write a markdown note",
+                "skills": ["arxiv"],
+            },
         )
         outcome = SimpleNamespace(execution=SimpleNamespace(summary="wrote paper note"))
 
-        with mock.patch.object(type(shell.runtime), "inspect_skill", return_value=skill) as inspect_skill, mock.patch.object(
-            type(shell.runtime),
-            "explain_next_step",
-            return_value=outcome,
-        ) as explain:
+        with (
+            mock.patch.object(type(shell.runtime), "inspect_skill", return_value=skill) as inspect_skill,
+            mock.patch.object(
+                type(shell.runtime),
+                "explain_next_step",
+                return_value=outcome,
+            ) as explain,
+        ):
             executions = shell.runtime.run_due_cron_jobs(session_id=shell.session_id)
 
         self.assertEqual(executions[0].summary, "wrote paper note")
@@ -926,7 +995,11 @@ class ShellPaletteTest(unittest.TestCase):
         ) as create_child_runtime:
             result = shell.runtime.tool_runtime.invoke(
                 "tool.sub_agents",
-                {"task": "inspect the cron implementation", "name": "reviewer", "skills": ["subagent-driven-development"]},
+                {
+                    "task": "inspect the cron implementation",
+                    "name": "reviewer",
+                    "skills": ["subagent-driven-development"],
+                },
                 session_id=shell.session_id,
                 requester="model",
             )
@@ -943,10 +1016,14 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("Do not call tool.sub_agents", prompt)
         self.assertIn("Sub-agent name: reviewer", prompt)
 
-    def test_learning_sub_agent_uses_dedicated_system_prompt_without_generic_wrapper(self) -> None:
+    def test_learning_sub_agent_uses_dedicated_system_prompt_without_generic_wrapper(
+        self,
+    ) -> None:
         shell = self._make_shell()
         captured: dict[str, object] = {}
-        child_tool_runtime = SimpleNamespace(subscribe=mock.Mock(return_value=mock.Mock()), descriptor=SimpleNamespace())
+        child_tool_runtime = SimpleNamespace(
+            subscribe=mock.Mock(return_value=mock.Mock()), descriptor=SimpleNamespace()
+        )
         child_runtime = SimpleNamespace(
             tool_runtime=child_tool_runtime,
             model_provider=SimpleNamespace(tool_runtime=child_tool_runtime),
@@ -966,12 +1043,18 @@ class ShellPaletteTest(unittest.TestCase):
             )
 
         child_runtime._run_turn = mock.Mock(side_effect=run_turn)
-        with mock.patch("apps.cli.runtime_cron_sub_agents._create_child_runtime", return_value=child_runtime):
+        with mock.patch(
+            "apps.cli.runtime_cron_sub_agents._create_child_runtime",
+            return_value=child_runtime,
+        ):
             result = shell.runtime.run_sub_agent(
                 session_id=shell.session_id,
                 task="Mode: manual\nLearning context packet: compact facts",
                 name="Manual learning",
-                allowed_tools=("tool.personal_model.search", "tool.personal_model.update"),
+                allowed_tools=(
+                    "tool.personal_model.search",
+                    "tool.personal_model.update",
+                ),
                 system_prompt="[SYSTEM: Background Learning Agent]",
                 learning_agent=True,
             )
@@ -984,7 +1067,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(event_payload["context_mode"], "learning_agent")
         self.assertNotIn("bounded Elephant Agent sub-agent", str(captured["prompt"]))
 
-    def test_sub_agents_start_returns_handle_and_emits_child_lifecycle_events(self) -> None:
+    def test_sub_agents_start_returns_handle_and_emits_child_lifecycle_events(
+        self,
+    ) -> None:
         shell = self._make_shell()
         child_started = threading.Event()
         release_child = threading.Event()
@@ -1051,8 +1136,7 @@ class ShellPaletteTest(unittest.TestCase):
         child_events = [
             event
             for event in captured_events
-            if event.invocation.tool_id == "tool.sub_agents"
-            and event.invocation.arguments.get("sub_agent_child")
+            if event.invocation.tool_id == "tool.sub_agents" and event.invocation.arguments.get("sub_agent_child")
         ]
         self.assertTrue(any(event.phase == "execution.started" for event in child_events))
         self.assertTrue(any(event.phase == "execution.completed" for event in child_events))
@@ -1136,7 +1220,9 @@ class ShellPaletteTest(unittest.TestCase):
             self.assertEqual(shell_progress_trace._tool_trace_emoji(tool_id), emoji)
         self.assertEqual(shell_progress_trace._tool_trace_emoji("mcp.km.hot-articles"), "🧩")
 
-    def test_clarify_blocks_for_shell_input_and_returns_answer_as_tool_result(self) -> None:
+    def test_clarify_blocks_for_shell_input_and_returns_answer_as_tool_result(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.runtime.set_clarify_surface(shell._interactive_clarify_surface())
         holder: dict[str, ExecutionResult] = {}
@@ -1260,7 +1346,10 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(style_map["progress-tool-label"], f"fg:{BRAND_ACCENT_STRONG} bold")
         self.assertEqual(style_map["stream-response-body"], f"fg:{BRAND_LIGHT}")
         self.assertEqual(style_map["status-bar-growth-empty"], f"bg:#1b2029 fg:{BRAND_ACCENT}")
-        self.assertEqual(style_map["completion-menu.completion.current"], f"bg:#2a3343 fg:{BRAND_ACCENT_STRONG} bold")
+        self.assertEqual(
+            style_map["completion-menu.completion.current"],
+            f"bg:#2a3343 fg:{BRAND_ACCENT_STRONG} bold",
+        )
         self.assertEqual(style_map["scrollbar.button"], f"bg:{BRAND_ACCENT}")
         self.assertNotIn("bg:", style_map[""])
         self.assertNotIn("bg:", style_map["composer-prefix"])
@@ -1313,9 +1402,7 @@ class ShellPaletteTest(unittest.TestCase):
             shell._dispatch(shell._next_command().command)
 
         queued_entries = [
-            entry
-            for entry in shell.transcript
-            if entry.kind == "user" and entry.body == "queued followup"
+            entry for entry in shell.transcript if entry.kind == "user" and entry.body == "queued followup"
         ]
         self.assertEqual(len(queued_entries), 1)
 
@@ -1339,9 +1426,7 @@ class ShellPaletteTest(unittest.TestCase):
         shell.console = _StubConsole(48)
         shell._enqueue_followup_command("queued followup")
 
-        preview_lines = "".join(
-            text for _style, text in shell._render_queued_followup_fragments()
-        ).splitlines()
+        preview_lines = "".join(text for _style, text in shell._render_queued_followup_fragments()).splitlines()
         sent = shell._render_entry(
             TranscriptEntry(
                 kind="user",
@@ -1370,7 +1455,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("Working", rendered)
         self.assertIn("queued scrolls · 2 messages", rendered)
 
-    def test_turn_progress_fragments_drop_queue_scroll_hint_but_keep_spacing(self) -> None:
+    def test_turn_progress_fragments_drop_queue_scroll_hint_but_keep_spacing(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         fragments = shell._render_turn_progress_fragments(
@@ -1382,7 +1469,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("Press Enter to queue another scroll.", rendered)
         self.assertTrue(rendered.endswith("\n"))
 
-    def test_turn_progress_fragments_keep_live_tool_lines_on_separate_rows(self) -> None:
+    def test_turn_progress_fragments_keep_live_tool_lines_on_separate_rows(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._rendered_entries = len(shell.transcript)
         shell._append_tooltrace_line("┊ 📚 Calling skill…")
@@ -1398,7 +1487,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("\n┊ 📚 skill        apple-notes  0.3s", rendered)
         self.assertNotIn("skill…┊ 📚 skill", rendered)
 
-    def test_turn_progress_fragments_surface_state_focus_resolution_summary(self) -> None:
+    def test_turn_progress_fragments_surface_state_focus_resolution_summary(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         fragments = shell._render_turn_progress_fragments(
@@ -1429,7 +1520,9 @@ class ShellPaletteTest(unittest.TestCase):
         rendered = "".join(text for _style, text in fragments)
         self.assertIn("┊ 🧭 focus        exploration · 35ms · elephant · conf 0.82", rendered)
 
-    def test_turn_progress_fragments_omit_context_and_request_progress_rows(self) -> None:
+    def test_turn_progress_fragments_omit_context_and_request_progress_rows(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         fragments = shell._render_turn_progress_fragments(
@@ -1494,7 +1587,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertFalse([entry for entry in shell.transcript if entry.kind == "tooltrace"])
 
-    def test_record_kernel_event_trace_updates_context_projection_after_compaction(self) -> None:
+    def test_record_kernel_event_trace_updates_context_projection_after_compaction(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_prompt_tokens = 1800
 
@@ -1515,10 +1610,15 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell._last_prompt_tokens, 620)
         tool_entries = [entry for entry in shell.transcript if entry.kind == "tooltrace"]
         self.assertEqual(len(tool_entries), 1)
-        self.assertIn("┊ 🧩 context      projection compact · est 1800->620 tokens · preflight", tool_entries[0].body)
+        self.assertIn(
+            "┊ 🧩 context      projection compact · est 1800->620 tokens · preflight",
+            tool_entries[0].body,
+        )
         self.assertIn("scanner: 2 cached / 5 pending / 1 missed", tool_entries[0].body)
 
-    def test_record_kernel_event_trace_uses_provider_prompt_usage_for_status_bar(self) -> None:
+    def test_record_kernel_event_trace_uses_provider_prompt_usage_for_status_bar(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_prompt_tokens = 1800
 
@@ -1537,7 +1637,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell._last_provider_prompt_tokens, 720)
         self.assertFalse([entry for entry in shell.transcript if entry.kind == "tooltrace"])
 
-    def test_record_kernel_event_trace_tracks_latest_context_projection_status(self) -> None:
+    def test_record_kernel_event_trace_tracks_latest_context_projection_status(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_prompt_tokens = 1800
 
@@ -1582,7 +1684,9 @@ class ShellPaletteTest(unittest.TestCase):
             self.assertEqual(lines[0], "hello from wake shell")
             self.assertEqual(lines[1], "sent just now")
 
-    def test_growth_rows_use_gray_history_background_with_selective_yellow_text(self) -> None:
+    def test_growth_rows_use_gray_history_background_with_selective_yellow_text(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.console = _StubConsole(48)
         rendered = shell._render_entry(
@@ -1609,7 +1713,10 @@ class ShellPaletteTest(unittest.TestCase):
             self.assertIn(f"{BRAND_MUTED} on {USER_HISTORY_BG}", styles)
             self.assertIn(f"{GROWTH_HIGHLIGHT_FG} on {USER_HISTORY_BG}", styles)
         else:
-            self.assertEqual(lines[0], "Something settled into the Personal Model — checkpoint 1 in Evidence I. I'll carry it forward.")
+            self.assertEqual(
+                lines[0],
+                "Something settled into the Personal Model — checkpoint 1 in Evidence I. I'll carry it forward.",
+            )
             self.assertEqual(lines[1], "understanding · checkpoint")
 
     def test_composer_divider_tracks_console_width_without_old_cap(self) -> None:
@@ -1652,7 +1759,11 @@ class ShellPaletteTest(unittest.TestCase):
 
     def test_elephant_rows_match_current_ascii_logo(self) -> None:
         joined = "\n".join(ELEPHANT_STAGE_ROWS)
-        self.assertIn("/  \\~~~/  \\", joined, msg="ear and head line should survive terminal rendering")
+        self.assertIn(
+            "/  \\~~~/  \\",
+            joined,
+            msg="ear and head line should survive terminal rendering",
+        )
         self.assertIn("..", joined, msg="eye dots should survive terminal rendering")
         self.assertIn("`---'", joined, msg="body tail line should survive terminal rendering")
         centered_rows = _centered_elephant_rows()
@@ -1680,12 +1791,7 @@ class ShellPaletteTest(unittest.TestCase):
     def test_elephant_rows_keep_sticker_optically_centered(self) -> None:
         centered = _centered_elephant_rows()
         self.assertEqual(centered, ELEPHANT_STAGE_ROWS)
-        visible = [
-            index
-            for row in centered
-            for index, cell in enumerate(row)
-            if cell != " "
-        ]
+        visible = [index for row in centered for index, cell in enumerate(row) if cell != " "]
         self.assertTrue(visible)
 
     def test_growth_levels_reuse_unified_elephant_mark(self) -> None:
@@ -1693,8 +1799,14 @@ class ShellPaletteTest(unittest.TestCase):
         elephant = shell._render_growth_mark("seed", level=0)
         seed = shell._render_growth_mark("seed", level=1)
         if not RICH_AVAILABLE:
-            self.assertEqual(elephant.plain if hasattr(elephant, "plain") else str(elephant), "[Elephant Agent elephant]")
-            self.assertEqual(seed.plain if hasattr(seed, "plain") else str(seed), "[Elephant Agent seed]")
+            self.assertEqual(
+                elephant.plain if hasattr(elephant, "plain") else str(elephant),
+                "[Elephant Agent elephant]",
+            )
+            self.assertEqual(
+                seed.plain if hasattr(seed, "plain") else str(seed),
+                "[Elephant Agent seed]",
+            )
             return
         elephant_lines = elephant.plain.splitlines()
         seed_lines = seed.plain.splitlines()
@@ -1722,12 +1834,7 @@ class ShellPaletteTest(unittest.TestCase):
         ):
             centered = visual_centered_rows(rows, width=GROWTH_MARK_CANVAS_WIDTH)
             self.assertEqual({len(row) for row in centered}, {GROWTH_MARK_CANVAS_WIDTH})
-            visible = [
-                index
-                for row in centered
-                for index, cell in enumerate(row)
-                if cell != " "
-            ]
+            visible = [index for row in centered for index, cell in enumerate(row) if cell != " "]
             self.assertTrue(visible, msg=label)
             visible_center = (min(visible) + max(visible)) / 2
             canvas_center = (GROWTH_MARK_CANVAS_WIDTH - 1) / 2
@@ -1831,7 +1938,10 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertIn("🐘 What I know", plain)
         self.assertIn("saved · identity 1 · world 2 · 2 lens empty", plain)
-        self.assertIn("question (pulse · current_focus) · What should I treat as the current highest-priority thread?", plain)
+        self.assertIn(
+            "question (pulse · current_focus) · What should I treat as the current highest-priority thread?",
+            plain,
+        )
         self.assertIn("🧩 Skills for you", plain)
         self.assertIn("affinities · 1 learned · 1 active", plain)
         self.assertNotIn("affinities · Architecture Diagram", plain)
@@ -1864,7 +1974,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertEqual(summary, "1 learned · 1 active")
 
-    def test_skill_affinities_follow_dashboard_topic_detection_without_projection_filter(self) -> None:
+    def test_skill_affinities_follow_dashboard_topic_detection_without_projection_filter(
+        self,
+    ) -> None:
         now = datetime.now(timezone.utc)
         summary = _skill_affinity_summary(
             facts=(
@@ -1898,7 +2010,10 @@ class ShellPaletteTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(_learning_job_execution_summary(runtime, "you"), "2 run(s) · 1 completed · 1 failed")
+        self.assertEqual(
+            _learning_job_execution_summary(runtime, "you"),
+            "2 run(s) · 1 completed · 1 failed",
+        )
 
     def test_shell_frame_surfaces_user_facing_context_summary(self) -> None:
         shell = self._make_shell()
@@ -1948,9 +2063,14 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertIn("now · Ready to pick the thread back up when you are.", rendered)
         self.assertNotIn("assistant_display_name:", rendered)
-        self.assertNotIn("Open the wake surface proactively before the user sends a new message.", rendered)
+        self.assertNotIn(
+            "Open the wake surface proactively before the user sends a new message.",
+            rendered,
+        )
 
-    def test_status_column_renders_carrying_forward_with_bold_label_and_markdown_value(self) -> None:
+    def test_status_column_renders_carrying_forward_with_bold_label_and_markdown_value(
+        self,
+    ) -> None:
         shell = self._make_shell()
         session = shell.runtime.inspect_session(shell.session_id)
         continuity = shell.runtime.inspect_continuity(session_id=shell.session_id)
@@ -2159,14 +2279,19 @@ class ShellPaletteTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("routing · resume · 56ms · lineage · 0.94", rendered.plain if hasattr(rendered, "plain") else str(rendered))
+        self.assertIn(
+            "routing · resume · 56ms · lineage · 0.94",
+            rendered.plain if hasattr(rendered, "plain") else str(rendered),
+        )
 
     def test_live_state_focus_progress_uses_steady_orange_trace_style(self) -> None:
         text = shell_progress_trace.render_tool_trace_text("┊ 🧭 routing      resume · 56ms · lineage · 0.94")
 
         self.assertEqual(text.spans[0].style, shell_render.BRAND_ACCENT_STRONG)
 
-    def test_growth_panel_reports_enabled_and_self_learned_skill_counts_without_internal_next_move(self) -> None:
+    def test_growth_panel_reports_enabled_and_self_learned_skill_counts_without_internal_next_move(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.runtime.create_experience_skill(
             skill_id="self-learned-shell-fix",
@@ -2180,7 +2305,9 @@ class ShellPaletteTest(unittest.TestCase):
         continuity = shell.runtime.inspect_continuity(session_id=shell.session_id)
         provider = dict(shell.runtime.provider_summary())
         lines = shell._recent_activity_lines(session, continuity, provider)
-        enabled_skills = tuple(skill for skill in shell.runtime.skill_catalog(session_id=shell.session_id) if skill.enabled)
+        enabled_skills = tuple(
+            skill for skill in shell.runtime.skill_catalog(session_id=shell.session_id) if skill.enabled
+        )
 
         self.assertIn(f"skills · {len(enabled_skills)} enabled · 1 self-learned", lines)
         self.assertFalse(any(line.startswith("next move ·") for line in lines))
@@ -2204,14 +2331,19 @@ class ShellPaletteTest(unittest.TestCase):
             self.assertIn(BRAND_ACCENT_STRONG, styles)
             self.assertIn(BRAND_MUTED, styles)
 
-    def test_diff_styles_use_brighter_live_palette_and_dimmer_settled_palette(self) -> None:
+    def test_diff_styles_use_brighter_live_palette_and_dimmer_settled_palette(
+        self,
+    ) -> None:
         style_map = prompt_style_map()
 
         self.assertEqual(style_map["progress-output-file"], f"fg:{LIVE_DIFF_FILE_FG} bold")
         self.assertEqual(style_map["progress-output-hunk"], f"fg:{LIVE_DIFF_HUNK_FG} bold")
         self.assertEqual(style_map["progress-output-add"], f"fg:{LIVE_DIFF_ADD_FG} bold")
         self.assertEqual(style_map["progress-output-remove"], f"fg:{LIVE_DIFF_REMOVE_FG} bold")
-        self.assertEqual(_render_tooltrace_body_line("a/notes.md → b/notes.md").style, SETTLED_DIFF_FILE_FG)
+        self.assertEqual(
+            _render_tooltrace_body_line("a/notes.md → b/notes.md").style,
+            SETTLED_DIFF_FILE_FG,
+        )
         self.assertEqual(_render_tooltrace_body_line("@@ -1 +1 @@").style, SETTLED_DIFF_HUNK_FG)
         self.assertEqual(_render_tooltrace_body_line("+added").style, SETTLED_DIFF_ADD_FG)
         self.assertEqual(_render_tooltrace_body_line("-removed").style, SETTLED_DIFF_REMOVE_FG)
@@ -2237,7 +2369,10 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("12s", rendered)
         self.assertIn("Evidence I", rendered)
         self.assertIn(shell._build_context_bar(update.after.progress_percent), rendered)
-        self.assertIn(f"checkpoint {update.after.level} · {update.after.progress_percent}%", rendered)
+        self.assertIn(
+            f"checkpoint {update.after.level} · {update.after.progress_percent}%",
+            rendered,
+        )
 
         styles = {style for style, _text in fragments if style}
         self.assertIn("class:status-bar-level", styles)
@@ -2287,7 +2422,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("--/128K", rendered)
         self.assertNotIn("10%", rendered)
 
-    def test_status_bar_fragments_show_committed_provider_usage_after_turn(self) -> None:
+    def test_status_bar_fragments_show_committed_provider_usage_after_turn(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_prompt_tokens = 14_000
         shell._last_provider_prompt_tokens = 43_500
@@ -2392,7 +2529,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("apple-notes", rendered)
         self.assertIn("memo notes --help", rendered)
 
-    def test_turn_progress_frame_renders_streaming_response_in_dedicated_surface(self) -> None:
+    def test_turn_progress_frame_renders_streaming_response_in_dedicated_surface(
+        self,
+    ) -> None:
         shell = self._make_shell()
         frame = shell._render_turn_frame(
             prompt="hello",
@@ -2411,7 +2550,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("First line of the reply.", rendered)
         self.assertIn("Second line arrives next.", rendered)
 
-    def test_turn_progress_frame_formats_reasoning_with_elephant_mind_heading(self) -> None:
+    def test_turn_progress_frame_formats_reasoning_with_elephant_mind_heading(
+        self,
+    ) -> None:
         shell = self._make_shell()
         frame = shell._render_turn_frame(
             prompt="hello",
@@ -2466,7 +2607,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("projection compact", rendered)
         self.assertIn("est 1800->620 tokens", rendered)
 
-    def test_turn_progress_frame_surfaces_recall_without_context_ready_or_request_rows(self) -> None:
+    def test_turn_progress_frame_surfaces_recall_without_context_ready_or_request_rows(
+        self,
+    ) -> None:
         shell = self._make_shell()
         frame = shell._render_turn_frame(
             prompt="hello",
@@ -2506,14 +2649,16 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("📈 request", rendered)
         self.assertNotIn("provider running", rendered)
 
-    def test_turn_progress_frame_hides_raw_tool_call_markup_from_stream_response(self) -> None:
+    def test_turn_progress_frame_hides_raw_tool_call_markup_from_stream_response(
+        self,
+    ) -> None:
         shell = self._make_shell()
         frame = shell._render_turn_frame(
             prompt="hello",
             tick=0,
             stream_text=(
                 "I'll search for information on Xunzhuo Liu.\n"
-                "<tool_call><invoke name=\"tool.web.search\"><parameter name=\"query\">"
+                '<tool_call><invoke name="tool.web.search"><parameter name="query">'
                 "xunzhuo liu researcher academic</parameter></invoke></tool_call>"
             ),
         )
@@ -2568,9 +2713,14 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertEqual(shell.transcript[-1].kind, "assistant")
         self.assertEqual(shell.transcript[-1].body, "The release note draft is ready.")
-        self.assertEqual(shell.transcript[-1].meta, "routing · execution · 12ms · loop · 0.74 · cache hit · 50.0%")
+        self.assertEqual(
+            shell.transcript[-1].meta,
+            "routing · execution · 12ms · loop · 0.74 · cache hit · 50.0%",
+        )
 
-    def test_state_focus_notice_fragments_show_almost_there_while_transcript_prime_pending(self) -> None:
+    def test_state_focus_notice_fragments_show_almost_there_while_transcript_prime_pending(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         with mock.patch.object(
@@ -2595,7 +2745,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("I'm with you", rendered)
         self.assertTrue(shell._state_focus_runtime_ready_seen)
 
-    def test_state_focus_notice_fragments_hide_after_first_user_turn_is_submitted(self) -> None:
+    def test_state_focus_notice_fragments_hide_after_first_user_turn_is_submitted(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._startup_user_turn_submitted = True
 
@@ -2617,7 +2769,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("opening", rendered)
         self.assertNotIn("ready", rendered)
 
-    def test_state_focus_notice_fragments_hide_after_ready_once_first_user_turn_is_submitted(self) -> None:
+    def test_state_focus_notice_fragments_hide_after_ready_once_first_user_turn_is_submitted(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._startup_surface_prepared = True
         shell._startup_user_turn_submitted = True
@@ -2644,7 +2798,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("opening", rendered)
         self.assertNotIn("path nearly ready", rendered)
 
-    def test_state_focus_notice_fragments_surface_state_focus_queue_after_ready_when_first_turn_is_waiting(self) -> None:
+    def test_state_focus_notice_fragments_surface_state_focus_queue_after_ready_when_first_turn_is_waiting(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._startup_surface_prepared = True
         shell._startup_user_turn_submitted = True
@@ -2668,7 +2824,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("path nearly ready", rendered)
         self.assertNotIn("🐾 ready", rendered)
 
-    def test_startup_transition_result_primes_opening_after_ready_idle_threshold(self) -> None:
+    def test_startup_transition_result_primes_opening_after_ready_idle_threshold(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._state_focus_runtime_ready_seen_at = time.monotonic() - 10
 
@@ -2679,7 +2837,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIsNone(immediate)
         self.assertEqual(result, "__elephant.startup.prime__")
 
-    def test_startup_transition_result_primes_before_dispatching_queued_first_turn(self) -> None:
+    def test_startup_transition_result_primes_before_dispatching_queued_first_turn(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._startup_user_turn_submitted = True
         shell._pending_commands.append(PendingShellCommand(command="帮我看下这个"))
@@ -2699,7 +2859,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    def test_startup_transition_result_does_not_restart_prime_while_background_prime_runs(self) -> None:
+    def test_startup_transition_result_does_not_restart_prime_while_background_prime_runs(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._startup_prime_started = True
         shell._state_focus_runtime_ready_seen_at = time.monotonic() - 10
@@ -2709,7 +2871,9 @@ class ShellPaletteTest(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    def test_startup_transition_result_dispatches_pending_after_proactive_prime(self) -> None:
+    def test_startup_transition_result_dispatches_pending_after_proactive_prime(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._startup_user_turn_submitted = True
         shell._startup_transcript_primed = True
@@ -2741,7 +2905,9 @@ class ShellPaletteTest(unittest.TestCase):
         with mock.patch.object(type(shell), "_startup_state_focus_dispatch_ready", return_value=True):
             self.assertFalse(shell._startup_should_hold_user_command("帮我看下这个"))
 
-    def test_shell_constructor_defers_startup_opening_until_explicit_prime(self) -> None:
+    def test_shell_constructor_defers_startup_opening_until_explicit_prime(
+        self,
+    ) -> None:
         tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(tmpdir.cleanup)
         root = Path(tmpdir.name)
@@ -2783,7 +2949,11 @@ class ShellPaletteTest(unittest.TestCase):
             return _inner
 
         with (
-            mock.patch.object(shell, "_render_startup_sequence", side_effect=record("startup-sequence")),
+            mock.patch.object(
+                shell,
+                "_render_startup_sequence",
+                side_effect=record("startup-sequence"),
+            ),
             mock.patch.object(shell, "_refresh_shell_frame", side_effect=record("refresh-frame")),
             mock.patch.object(shell, "_prepare_startup_surface", side_effect=record("prepare-surface")),
             mock.patch.object(shell, "_next_command", side_effect=EOFError),
@@ -2824,11 +2994,7 @@ class ShellPaletteTest(unittest.TestCase):
     def test_run_dispatches_queued_startup_turn_immediately_after_prime(self) -> None:
         shell = self._make_shell()
         shell._pending_commands.append(PendingShellCommand(command="帮我看下这个"))
-        commands = iter(
-            (
-                PendingShellCommand(command="__elephant.startup.prime__"),
-            )
-        )
+        commands = iter((PendingShellCommand(command="__elephant.startup.prime__"),))
 
         def next_command():
             value = next(commands)
@@ -2852,7 +3018,9 @@ class ShellPaletteTest(unittest.TestCase):
         prime.assert_called_once_with()
         dispatch.assert_called_once_with(PendingShellCommand(command="帮我看下这个"))
 
-    def test_prepare_startup_surface_runs_in_background_and_refreshes_skills(self) -> None:
+    def test_prepare_startup_surface_runs_in_background_and_refreshes_skills(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         class _ImmediateThread:
@@ -2863,7 +3031,10 @@ class ShellPaletteTest(unittest.TestCase):
                 self._target()
 
         with (
-            mock.patch("apps.cli.shell_methods_ui.threading.Thread", side_effect=_ImmediateThread),
+            mock.patch(
+                "apps.cli.shell_methods_ui.threading.Thread",
+                side_effect=_ImmediateThread,
+            ),
             mock.patch.object(type(shell.runtime), "prepare_session_surface") as prepare_surface,
             mock.patch.object(shell, "_refresh_skill_slash_specs") as refresh_skills,
         ):
@@ -2873,7 +3044,9 @@ class ShellPaletteTest(unittest.TestCase):
         refresh_skills.assert_called_once_with()
         self.assertTrue(shell._startup_surface_prepared)
 
-    def test_turn_progress_fragments_keep_stream_text_out_of_progress_header(self) -> None:
+    def test_turn_progress_fragments_keep_stream_text_out_of_progress_header(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         fragments = shell._render_turn_progress_fragments(
@@ -2887,11 +3060,13 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("streaming chunk", rendered)
         self.assertNotIn("active request:", rendered)
 
-    def test_stream_text_tracker_strips_tool_markup_and_resets_between_tool_rounds(self) -> None:
+    def test_stream_text_tracker_strips_tool_markup_and_resets_between_tool_rounds(
+        self,
+    ) -> None:
         holder, lock, observer = stream_text_tracker()
 
         observer("I'll search for information on Xunzhuo Liu.\n")
-        observer("<tool_call><invoke name=\"tool.web.search\"><parameter name=\"query\">xunzhuo")
+        observer('<tool_call><invoke name="tool.web.search"><parameter name="query">xunzhuo')
         self.assertEqual(
             latest_stream_text(holder, lock).strip(),
             "I'll search for information on Xunzhuo Liu.",
@@ -2910,7 +3085,9 @@ class ShellPaletteTest(unittest.TestCase):
             "I found several relevant researcher profiles.",
         )
 
-    def test_retain_stream_response_only_drops_old_thinking_but_keeps_response(self) -> None:
+    def test_retain_stream_response_only_drops_old_thinking_but_keeps_response(
+        self,
+    ) -> None:
         holder, lock, observer = stream_text_tracker()
 
         observer("<think>Inspect the first result carefully.</think>I'll open the strongest profile next.")
@@ -2920,7 +3097,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(preserved, "I'll open the strongest profile next.")
         self.assertEqual(latest_stream_text(holder, lock), "I'll open the strongest profile next.")
 
-    def test_tool_event_tracker_stream_anchors_exclude_historical_thinking(self) -> None:
+    def test_tool_event_tracker_stream_anchors_exclude_historical_thinking(
+        self,
+    ) -> None:
         holder, lock, observer = stream_text_tracker()
         tool_event_holder, tool_event_lock, tool_observer = shell_progress_runtime.tool_event_tracker(
             stream_holder=holder,
@@ -2988,7 +3167,9 @@ class ShellPaletteTest(unittest.TestCase):
         if border_style is not None:
             self.assertEqual(str(border_style), BRAND_ACCENT)
 
-    def test_personal_model_update_progress_copy_mentions_understanding_surface(self) -> None:
+    def test_personal_model_update_progress_copy_mentions_understanding_surface(
+        self,
+    ) -> None:
         shell = self._make_shell()
         event = ToolLifecycleEvent(
             event_id="tool-event-2",
@@ -2996,7 +3177,12 @@ class ShellPaletteTest(unittest.TestCase):
                 invocation_id="session-1:tool.personal_model.update",
                 tool_id="tool.personal_model.update",
                 session_id="session-1",
-                arguments={"action": "remember", "lens": "trait", "topic": "identity.name.preferred", "text": "The user's preferred name is Bit."},
+                arguments={
+                    "action": "remember",
+                    "lens": "trait",
+                    "topic": "identity.name.preferred",
+                    "text": "The user's preferred name is Bit.",
+                },
             ),
             phase="execution.started",
             detail="executing tool.personal_model.update",
@@ -3153,7 +3339,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("@@ -1 +1,2 @@", tool_entries[0].body)
         self.assertIn("+world", tool_entries[0].body)
 
-    def test_turn_tool_progress_lines_keep_write_visible_when_diff_is_pending(self) -> None:
+    def test_turn_tool_progress_lines_keep_write_visible_when_diff_is_pending(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.transcript = [
             TranscriptEntry(
@@ -3181,7 +3369,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(any(line.startswith("@@") for line in lines))
         self.assertFalse(any(line.startswith("+") for line in lines))
 
-    def test_render_pending_entries_keeps_context_compaction_frame_until_next_turn(self) -> None:
+    def test_render_pending_entries_keeps_context_compaction_frame_until_next_turn(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._pending_context_compaction_frame = {
             "prompt": "hello",
@@ -3211,7 +3401,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("projection compact", rendered)
         self.assertIn("est 1800->620 tokens", rendered)
 
-    def test_turn_progress_frame_keeps_later_tool_events_visible_after_diff_body(self) -> None:
+    def test_turn_progress_frame_keeps_later_tool_events_visible_after_diff_body(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.transcript = [
             TranscriptEntry(
@@ -3239,7 +3431,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("┊ 💻 computer", rendered)
         self.assertIn("osascript", rendered)
 
-    def test_personal_model_update_completed_event_keeps_generic_tooltrace(self) -> None:
+    def test_personal_model_update_completed_event_keeps_generic_tooltrace(
+        self,
+    ) -> None:
         shell = self._make_shell()
         event = ToolLifecycleEvent(
             event_id="tool-event-state-completed",
@@ -3247,7 +3441,12 @@ class ShellPaletteTest(unittest.TestCase):
                 invocation_id="session-1:tool.personal_model.update",
                 tool_id="tool.personal_model.update",
                 session_id=shell.session_id,
-                arguments={"action": "remember", "lens": "trait", "topic": "identity.name.preferred", "text": "The user's preferred name is Bit."},
+                arguments={
+                    "action": "remember",
+                    "lens": "trait",
+                    "topic": "identity.name.preferred",
+                    "text": "The user's preferred name is Bit.",
+                },
                 requested_at=datetime(2026, 4, 13, 8, 0, 0, tzinfo=timezone.utc),
             ),
             phase="execution.completed",
@@ -3284,7 +3483,9 @@ class ShellPaletteTest(unittest.TestCase):
             self.assertIn(BRAND_MUTED, styles)
             self.assertIn(f"bold {BRAND_ACCENT_STRONG}", styles)
 
-    def test_turn_progress_fragments_reuse_tool_trace_copy_for_live_events(self) -> None:
+    def test_turn_progress_fragments_reuse_tool_trace_copy_for_live_events(
+        self,
+    ) -> None:
         shell = self._make_shell()
         invocation = ToolInvocation(
             invocation_id="session-1:tool.web.search",
@@ -3308,8 +3509,12 @@ class ShellPaletteTest(unittest.TestCase):
             occurred_at=invocation.requested_at,
         )
 
-        requested_fragments = shell._render_turn_progress_fragments(prompt="search xunzhuo liu", tick=0, tool_event=requested)
-        started_fragments = shell._render_turn_progress_fragments(prompt="search xunzhuo liu", tick=0, tool_event=started)
+        requested_fragments = shell._render_turn_progress_fragments(
+            prompt="search xunzhuo liu", tick=0, tool_event=requested
+        )
+        started_fragments = shell._render_turn_progress_fragments(
+            prompt="search xunzhuo liu", tick=0, tool_event=started
+        )
 
         requested_text = "".join(fragment[1] for fragment in requested_fragments)
         started_text = "".join(fragment[1] for fragment in started_fragments)
@@ -3317,7 +3522,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("┊ 🌐 search", started_text)
         self.assertIn("xunzhuo liu", started_text)
 
-    def test_turn_progress_fragments_anchor_stream_text_to_matching_tool_event(self) -> None:
+    def test_turn_progress_fragments_anchor_stream_text_to_matching_tool_event(
+        self,
+    ) -> None:
         shell = self._make_shell()
         stream_holder, stream_lock, stream_observer = stream_text_tracker()
         tool_event_holder, tool_event_lock, tool_observer = shell_progress_runtime.tool_event_tracker(
@@ -3384,11 +3591,22 @@ class ShellPaletteTest(unittest.TestCase):
         )
 
         rendered = "".join(fragment[1] for fragment in fragments)
-        self.assertLess(rendered.index("I'll search for the profile first."), rendered.index("┊ 🌐 search"))
-        self.assertGreater(rendered.index("Then I'll open the best result."), rendered.index("┊ 🌐 search"))
-        self.assertLess(rendered.index("Then I'll open the best result."), rendered.rindex("┊ 🌐 Calling fetch…"))
+        self.assertLess(
+            rendered.index("I'll search for the profile first."),
+            rendered.index("┊ 🌐 search"),
+        )
+        self.assertGreater(
+            rendered.index("Then I'll open the best result."),
+            rendered.index("┊ 🌐 search"),
+        )
+        self.assertLess(
+            rendered.index("Then I'll open the best result."),
+            rendered.rindex("┊ 🌐 Calling fetch…"),
+        )
 
-    def test_turn_progress_fragments_keep_stream_text_with_started_event_after_requested_event_expires(self) -> None:
+    def test_turn_progress_fragments_keep_stream_text_with_started_event_after_requested_event_expires(
+        self,
+    ) -> None:
         shell = self._make_shell()
         stream_holder, stream_lock, stream_observer = stream_text_tracker()
         tool_event_holder, tool_event_lock, tool_observer = shell_progress_runtime.tool_event_tracker(
@@ -3445,9 +3663,14 @@ class ShellPaletteTest(unittest.TestCase):
         rendered = "".join(fragment[1] for fragment in fragments)
         self.assertIn("I'll inspect local files first.", rendered)
         self.assertEqual(rendered.count("I'll inspect local files first."), 1)
-        self.assertLess(rendered.index("I'll inspect local files first."), rendered.index("┊ 🌐 search"))
+        self.assertLess(
+            rendered.index("I'll inspect local files first."),
+            rendered.index("┊ 🌐 search"),
+        )
 
-    def test_turn_progress_fragments_preserve_repeated_tool_rail_with_late_stream_anchor(self) -> None:
+    def test_turn_progress_fragments_preserve_repeated_tool_rail_with_late_stream_anchor(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._rendered_entries = len(shell.transcript)
         stream_holder, stream_lock, stream_observer = stream_text_tracker()
@@ -3511,10 +3734,18 @@ class ShellPaletteTest(unittest.TestCase):
         rendered = "".join(fragment[1] for fragment in fragments)
         self.assertGreaterEqual(rendered.count("┊ 📖 Calling read…"), 2)
         self.assertIn("┊ 📖 read         /tmp/alpha.txt  0.7s", rendered)
-        self.assertLess(rendered.index("┊ 📖 read         /tmp/alpha.txt  0.7s"), rendered.index("Then I'll inspect the second file."))
-        self.assertLess(rendered.index("Then I'll inspect the second file."), rendered.rindex("┊ 📖 Calling read…"))
+        self.assertLess(
+            rendered.index("┊ 📖 read         /tmp/alpha.txt  0.7s"),
+            rendered.index("Then I'll inspect the second file."),
+        )
+        self.assertLess(
+            rendered.index("Then I'll inspect the second file."),
+            rendered.rindex("┊ 📖 Calling read…"),
+        )
 
-    def test_turn_progress_fragments_keep_middle_stream_text_after_live_events_expire(self) -> None:
+    def test_turn_progress_fragments_keep_middle_stream_text_after_live_events_expire(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._rendered_entries = len(shell.transcript)
         stream_holder, stream_lock, stream_observer = stream_text_tracker()
@@ -3584,11 +3815,22 @@ class ShellPaletteTest(unittest.TestCase):
         )
 
         rendered = "".join(fragment[1] for fragment in fragments)
-        self.assertLess(rendered.index("I'll search for the profile first."), rendered.index("┊ 🌐 Calling search…"))
-        self.assertGreater(rendered.index("Then I'll open the best result."), rendered.index("┊ 🌐 search"))
-        self.assertLess(rendered.index("Then I'll open the best result."), rendered.rindex("┊ 🌐 Calling fetch…"))
+        self.assertLess(
+            rendered.index("I'll search for the profile first."),
+            rendered.index("┊ 🌐 Calling search…"),
+        )
+        self.assertGreater(
+            rendered.index("Then I'll open the best result."),
+            rendered.index("┊ 🌐 search"),
+        )
+        self.assertLess(
+            rendered.index("Then I'll open the best result."),
+            rendered.rindex("┊ 🌐 Calling fetch…"),
+        )
 
-    def test_turn_progress_fragments_keep_earliest_stream_anchor_after_live_feed_truncates(self) -> None:
+    def test_turn_progress_fragments_keep_earliest_stream_anchor_after_live_feed_truncates(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._rendered_entries = len(shell.transcript)
         stream_holder, stream_lock, stream_observer = stream_text_tracker()
@@ -3652,7 +3894,13 @@ class ShellPaletteTest(unittest.TestCase):
             ),
         )
 
-        for message, invocation, requested_detail, completed_detail, completed_at in invocations_and_events:
+        for (
+            message,
+            invocation,
+            requested_detail,
+            completed_detail,
+            completed_at,
+        ) in invocations_and_events:
             stream_observer(message)
             tool_observer(
                 ToolLifecycleEvent(
@@ -3677,7 +3925,10 @@ class ShellPaletteTest(unittest.TestCase):
         with tool_event_lock:
             feed = [item for item in tool_event_holder.get("feed", ()) if isinstance(item, _VisibleToolEvent)]
             self.assertEqual(len(feed), 6)
-            self.assertNotIn("session-1:tool.web.search", {item.event.invocation.invocation_id for item in feed})
+            self.assertNotIn(
+                "session-1:tool.web.search",
+                {item.event.invocation.invocation_id for item in feed},
+            )
 
         fragments = shell_progress_runtime.render_turn_progress_fragments(
             shell,
@@ -3691,7 +3942,10 @@ class ShellPaletteTest(unittest.TestCase):
         rendered = "".join(fragment[1] for fragment in fragments)
         self.assertLess(rendered.index("I'll search first."), rendered.index("┊ 🌐 Calling search…"))
         self.assertLess(rendered.index("Then I'll fetch."), rendered.index("┊ 🌐 Calling fetch…"))
-        self.assertLess(rendered.index("Next I'll read a file."), rendered.index("┊ 📖 Calling read…"))
+        self.assertLess(
+            rendered.index("Next I'll read a file."),
+            rendered.index("┊ 📖 Calling read…"),
+        )
         self.assertLess(rendered.index("Finally I'll grep."), rendered.index("┊ 🔎 Calling grep…"))
 
     def test_tool_event_lines_compact_completed_tool_result_details(self) -> None:
@@ -3734,12 +3988,18 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(shell._handle_slash_command("/relationship clear"))
         self.assertEqual(shell.transcript[-1].title, "Unknown command")
 
-    def test_render_pending_entries_inserts_blank_line_between_user_and_assistant(self) -> None:
+    def test_render_pending_entries_inserts_blank_line_between_user_and_assistant(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.console = _CaptureConsole(80)
         shell.transcript = [
             TranscriptEntry(kind="user", title="You", body="where did we leave off?"),
-            TranscriptEntry(kind="assistant", title="Elephant Agent", body="We were refining the wake shell."),
+            TranscriptEntry(
+                kind="assistant",
+                title="Elephant Agent",
+                body="We were refining the wake shell.",
+            ),
         ]
         shell._rendered_entries = 0
 
@@ -3755,7 +4015,11 @@ class ShellPaletteTest(unittest.TestCase):
         shell.console = _CaptureConsole(80)
         shell.transcript = [
             TranscriptEntry(kind="tooltrace", title="Tool trace", body="┊ 🌐 Calling search…"),
-            TranscriptEntry(kind="tooltrace", title="Tool trace", body="┊ 🌐 search       xunzhuo liu  3.2s"),
+            TranscriptEntry(
+                kind="tooltrace",
+                title="Tool trace",
+                body="┊ 🌐 search       xunzhuo liu  3.2s",
+            ),
         ]
         shell._rendered_entries = 0
 
@@ -3765,7 +4029,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("Calling search", shell.console.printed[0])
         self.assertIn("xunzhuo liu", shell.console.printed[0])
 
-    def test_render_pending_entries_keeps_inline_review_diff_in_same_tooltrace_block(self) -> None:
+    def test_render_pending_entries_keeps_inline_review_diff_in_same_tooltrace_block(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.console = _CaptureConsole(120)
         shell.transcript = [
@@ -3773,12 +4039,7 @@ class ShellPaletteTest(unittest.TestCase):
                 kind="tooltrace",
                 title="Tool trace",
                 body=(
-                    "┊ 🛠 write        notes.md  0.2s\n"
-                    "┊ 🛠 diff\n"
-                    "a/notes.md → b/notes.md\n"
-                    "@@ -1 +1,2 @@\n"
-                    " hello\n"
-                    "+world"
+                    "┊ 🛠 write        notes.md  0.2s\n┊ 🛠 diff\na/notes.md → b/notes.md\n@@ -1 +1,2 @@\n hello\n+world"
                 ),
             )
         ]
@@ -3791,12 +4052,22 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("a/notes.md → b/notes.md", shell.console.printed[0])
         self.assertIn("+world", shell.console.printed[0])
 
-    def test_render_pending_entries_inserts_blank_line_between_tooltrace_and_assistant(self) -> None:
+    def test_render_pending_entries_inserts_blank_line_between_tooltrace_and_assistant(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.console = _CaptureConsole(80)
         shell.transcript = [
-            TranscriptEntry(kind="tooltrace", title="Tool trace", body="┊ 📚 skill        apple-notes  0.3s"),
-            TranscriptEntry(kind="assistant", title="Elephant Agent", body="I created the note in Apple Notes."),
+            TranscriptEntry(
+                kind="tooltrace",
+                title="Tool trace",
+                body="┊ 📚 skill        apple-notes  0.3s",
+            ),
+            TranscriptEntry(
+                kind="assistant",
+                title="Elephant Agent",
+                body="I created the note in Apple Notes.",
+            ),
         ]
         shell._rendered_entries = 0
 
@@ -3807,7 +4078,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell.console.printed[1], "")
         self.assertIn("I created the note in Apple Notes.", shell.console.printed[2])
 
-    def test_render_pending_entries_inserts_blank_line_between_reasoning_and_tooltrace(self) -> None:
+    def test_render_pending_entries_inserts_blank_line_between_reasoning_and_tooltrace(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.console = _CaptureConsole(100)
         shell.transcript = [
@@ -3816,7 +4089,11 @@ class ShellPaletteTest(unittest.TestCase):
                 title="Elephant Agent",
                 body="<think>Inspect the tool results first.</think>",
             ),
-            TranscriptEntry(kind="tooltrace", title="Tool trace", body="┊ 🌐 fetch        https://example.com"),
+            TranscriptEntry(
+                kind="tooltrace",
+                title="Tool trace",
+                body="┊ 🌐 fetch        https://example.com",
+            ),
         ]
         shell._rendered_entries = 0
 
@@ -3881,7 +4158,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell.transcript[-1].title, "Embedding provider updated")
         self.assertIn("selection: local-default", shell.transcript[-1].body)
 
-    def test_refresh_shell_frame_resets_render_cursor_and_clears_console_in_alternate_screen(self) -> None:
+    def test_refresh_shell_frame_resets_render_cursor_and_clears_console_in_alternate_screen(
+        self,
+    ) -> None:
         shell = self._make_shell_without_identity_update()
         shell.console = _CaptureConsole(120)
         shell._use_alternate_screen = True
@@ -3893,7 +4172,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(shell.console.clear_calls, [True])
         self.assertEqual(len(shell.console.printed), 1)
 
-    def test_conversational_dispatch_skips_shell_frame_refresh_when_frame_state_is_unchanged(self) -> None:
+    def test_conversational_dispatch_skips_shell_frame_refresh_when_frame_state_is_unchanged(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
         with mock.patch.object(shell, "_refresh_shell_frame_if_needed") as refresh:
@@ -3912,9 +4193,14 @@ class ShellPaletteTest(unittest.TestCase):
             mock.patch.object(
                 CliRuntime,
                 "generate_opening_reply",
-                return_value=SimpleNamespace(execution=SimpleNamespace(summary="startup-reply:I'm back in the thread.")),
+                return_value=SimpleNamespace(
+                    execution=SimpleNamespace(summary="startup-reply:I'm back in the thread.")
+                ),
             ) as generate_opening_reply,
-            mock.patch("apps.learning_worker_runtime.ensure_learning_worker_running", return_value=True),
+            mock.patch(
+                "apps.learning_worker_runtime.ensure_learning_worker_running",
+                return_value=True,
+            ),
             mock.patch.object(shell, "_refresh_shell_frame") as refresh,
         ):
             handled = shell._handle_slash_command("/clear")
@@ -3923,7 +4209,10 @@ class ShellPaletteTest(unittest.TestCase):
         generate_opening_reply.assert_called_once()
         refresh.assert_called_once_with()
         self.assertNotEqual(shell.session_id, original_session_id)
-        self.assertEqual(shell.runtime.inspect_session(shell.session_id).parent_episode_id, original_session_id)
+        self.assertEqual(
+            shell.runtime.inspect_session(shell.session_id).parent_episode_id,
+            original_session_id,
+        )
         self.assertEqual(len(shell.transcript), 2)
         self.assertEqual(shell.transcript[0].kind, "assistant")
         self.assertEqual(shell.transcript[0].body, "startup-reply:I'm back in the thread.")
@@ -3937,7 +4226,10 @@ class ShellPaletteTest(unittest.TestCase):
         shell = self._make_shell(prime_transcript=True)
         original_session_id = shell.session_id
 
-        with mock.patch("apps.learning_worker_runtime.ensure_learning_worker_running", return_value=True):
+        with mock.patch(
+            "apps.learning_worker_runtime.ensure_learning_worker_running",
+            return_value=True,
+        ):
             handled = shell._handle_slash_command("/exit")
 
         self.assertTrue(handled)
@@ -3949,7 +4241,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0].trigger, "episode_close")
 
-    def test_append_growth_update_message_surfaces_visible_understanding_checkpoint_reply(self) -> None:
+    def test_append_growth_update_message_surfaces_visible_understanding_checkpoint_reply(
+        self,
+    ) -> None:
         shell = self._make_shell()
         now = datetime.now(timezone.utc)
         initial = default_growth_state(shell.runtime.current_profile().state.profile_id, now=now)
@@ -3996,7 +4290,9 @@ class ShellPaletteTest(unittest.TestCase):
         schedule.assert_called_once_with()
         refresh.assert_not_called()
 
-    def test_refresh_shell_frame_if_needed_skips_when_frame_token_is_unchanged(self) -> None:
+    def test_refresh_shell_frame_if_needed_skips_when_frame_token_is_unchanged(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_shell_frame_token = shell._current_shell_frame_token()
 
@@ -4006,7 +4302,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(changed)
         refresh.assert_not_called()
 
-    def test_refresh_shell_frame_if_needed_skips_for_pending_context_compaction_frame(self) -> None:
+    def test_refresh_shell_frame_if_needed_skips_for_pending_context_compaction_frame(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_shell_frame_token = shell._current_shell_frame_token()
         shell._pending_context_compaction_frame = {
@@ -4029,7 +4327,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertFalse(changed)
         refresh.assert_not_called()
 
-    def test_refresh_shell_frame_if_needed_skips_when_session_context_freezes(self) -> None:
+    def test_refresh_shell_frame_if_needed_skips_when_session_context_freezes(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell._last_shell_frame_token = shell._current_shell_frame_token()
         session = shell.runtime.inspect_session(shell.session_id)
@@ -4097,7 +4397,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("Resume active", shell.transcript[0].body)
         self.assertNotIn("internal projection", shell.transcript[0].body)
 
-    def test_opener_hides_internal_defer_summary_when_no_actionable_current_work_exists(self) -> None:
+    def test_opener_hides_internal_defer_summary_when_no_actionable_current_work_exists(
+        self,
+    ) -> None:
         shell = self._make_shell()
         shell.runtime.update_user_state(
             profile_id=shell.runtime.inspect_session(shell.session_id).profile_id,
@@ -4121,7 +4423,10 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertIn("I'll start holding this new elephant with you.", shell.transcript[0].body)
         self.assertNotIn("Welcome back", shell.transcript[0].body)
         self.assertIn("What should I call you", shell.transcript[0].body)
-        self.assertNotIn("one durable thing I should keep in mind from the start", shell.transcript[0].body)
+        self.assertNotIn(
+            "one durable thing I should keep in mind from the start",
+            shell.transcript[0].body,
+        )
 
     def test_prime_transcript_prefers_model_generated_opening_reply(self) -> None:
         shell = self._make_shell()
@@ -4138,7 +4443,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(len(shell.transcript), 1)
         self.assertEqual(shell.transcript[0].body, "startup-reply:I'm already here.")
 
-    def test_prime_transcript_renders_new_elephant_opening_without_runtime_label(self) -> None:
+    def test_prime_transcript_renders_new_elephant_opening_without_runtime_label(
+        self,
+    ) -> None:
         shell = self._make_shell(opened="Shaped new")
         shell.transcript = []
         shell._rendered_entries = 0
@@ -4146,7 +4453,9 @@ class ShellPaletteTest(unittest.TestCase):
         with mock.patch.object(
             CliRuntime,
             "generate_opening_reply",
-            return_value=SimpleNamespace(execution=SimpleNamespace(summary="startup-reply:I'm here. What should I call you?")),
+            return_value=SimpleNamespace(
+                execution=SimpleNamespace(summary="startup-reply:I'm here. What should I call you?")
+            ),
         ) as generate_opening_reply:
             shell._prime_transcript()
 
@@ -4157,7 +4466,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("Shaped new", prompt)
         self.assertNotIn("welcome back", shell.transcript[0].body.lower())
 
-    def test_prime_transcript_passes_known_name_and_active_state_into_startup_prompt(self) -> None:
+    def test_prime_transcript_passes_known_name_and_active_state_into_startup_prompt(
+        self,
+    ) -> None:
         shell = self._make_shell(
             opened="Opened elephant atlas",
             user_profile_text=render_user_profile_text(
@@ -4174,7 +4485,9 @@ class ShellPaletteTest(unittest.TestCase):
         with mock.patch.object(
             CliRuntime,
             "generate_opening_reply",
-            return_value=SimpleNamespace(execution=SimpleNamespace(summary="startup-reply:Bit, I still have the release State in view.")),
+            return_value=SimpleNamespace(
+                execution=SimpleNamespace(summary="startup-reply:Bit, I still have the release State in view.")
+            ),
         ) as generate_opening_reply:
             shell._prime_transcript()
 
@@ -4184,10 +4497,13 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertNotIn("their current context is Building durable agent systems.", prompt)
         self.assertNotIn("returning to an ongoing relationship", prompt)
         self.assertNotIn("Opened elephant atlas", prompt)
-        self.assertNotIn('Live thread', prompt)
+        self.assertNotIn("Live thread", prompt)
         self.assertNotIn("private posture signals only", prompt)
         self.assertIn("one natural message", prompt)
-        self.assertEqual(shell.transcript[0].body, "startup-reply:Bit, I still have the release State in view.")
+        self.assertEqual(
+            shell.transcript[0].body,
+            "startup-reply:Bit, I still have the release State in view.",
+        )
 
     def test_existing_elephant_open_does_not_render_user_questionnaire(self) -> None:
         shell = self._make_shell(
@@ -4218,7 +4534,9 @@ class ShellPaletteTest(unittest.TestCase):
         self.assertEqual(len(shell.transcript), 1)
         self.assertIn("If something matters right now", shell.transcript[0].body)
 
-    def test_existing_elephant_open_skips_user_onboarding_when_profile_fields_are_complete(self) -> None:
+    def test_existing_elephant_open_skips_user_onboarding_when_profile_fields_are_complete(
+        self,
+    ) -> None:
         shell = self._make_shell(
             opened="Opened elephant atlas",
             user_profile_text=render_user_profile_text(
@@ -4259,11 +4577,18 @@ class ShellPaletteTest(unittest.TestCase):
         shell._prime_transcript()
 
         self.assertEqual(len(shell.transcript), 1)
-        self.assertNotIn("If there's something you want me to keep carrying", shell.transcript[-1].body)
+        self.assertNotIn(
+            "If there's something you want me to keep carrying",
+            shell.transcript[-1].body,
+        )
 
     def test_shell_welcome_copy_and_boot_delays_support_a_visible_entry(self) -> None:
         self.assertEqual(SHELL_WELCOME_HEADLINE, "Your elephant still knows the path.")
-        self.assertAlmostEqual((STARTUP_SEQUENCE_STEP_DELAY * 4) + STARTUP_SEQUENCE_FINAL_DELAY, 3.0, delta=0.12)
+        self.assertAlmostEqual(
+            (STARTUP_SEQUENCE_STEP_DELAY * 4) + STARTUP_SEQUENCE_FINAL_DELAY,
+            3.0,
+            delta=0.12,
+        )
         self.assertGreaterEqual(STARTUP_SEQUENCE_STEP_DELAY, 0.50)
         self.assertGreaterEqual(STARTUP_SEQUENCE_FINAL_DELAY, 0.50)
 

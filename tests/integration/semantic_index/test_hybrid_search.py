@@ -74,7 +74,10 @@ class HybridSemanticSearchTest(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(tuple(match.document.source_id for match in matches), ("step:alpha-error", "step:alpha-vector"))
+        self.assertEqual(
+            tuple(match.document.source_id for match in matches),
+            ("step:alpha-error", "step:alpha-vector"),
+        )
         self.assertIn("keyword_exact", matches[0].signal_scores)
         self.assertIn("vector", matches[0].signal_scores)
         self.assertIn("vector", matches[1].signal_scores)
@@ -124,7 +127,10 @@ class HybridSemanticSearchTest(unittest.TestCase):
 
         self.assertEqual(tuple(match.document.source_id for match in matches), ("step:heartbeat",))
         self.assertEqual(backend.search_calls, 0)
-        self.assertEqual(set(matches[0].signal_scores), {"token_coverage", "keyword_exact", "bm25", "ngram"})
+        self.assertEqual(
+            set(matches[0].signal_scores),
+            {"token_coverage", "keyword_exact", "bm25", "ngram"},
+        )
         self.assertNotIn("vector", matches[0].signal_scores)
 
     def test_unicode_lexical_matches_cjk_split_and_fuzzy_queries(self) -> None:
@@ -173,8 +179,14 @@ class HybridSemanticSearchTest(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(tuple(match.document.source_id for match in split_matches), ("step:fog-crossing",))
-        self.assertEqual(tuple(match.document.source_id for match in fuzzy_matches), ("step:quiet-corner",))
+        self.assertEqual(
+            tuple(match.document.source_id for match in split_matches),
+            ("step:fog-crossing",),
+        )
+        self.assertEqual(
+            tuple(match.document.source_id for match in fuzzy_matches),
+            ("step:quiet-corner",),
+        )
         self.assertTrue({"token_coverage", "ngram"} & set(split_matches[0].signal_scores))
         self.assertIn("ngram", fuzzy_matches[0].signal_scores)
 

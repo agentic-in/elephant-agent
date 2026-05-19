@@ -52,14 +52,11 @@ def _abbreviate_identifier(value: str, *, head: int = 12, tail: int = 6) -> str:
 
 
 class CliRuntimeLike(Protocol):
-    def list_herd(self, *, limit: int = 12) -> tuple[object, ...]:
-        ...
+    def list_herd(self, *, limit: int = 12) -> tuple[object, ...]: ...
 
-    def latest_session_for_elephant(self, elephant_id: str) -> Episode | None:
-        ...
+    def latest_session_for_elephant(self, elephant_id: str) -> Episode | None: ...
 
-    def session_ids_for_elephant(self, elephant_id: str) -> tuple[str, ...]:
-        ...
+    def session_ids_for_elephant(self, elephant_id: str) -> tuple[str, ...]: ...
 
     def create_elephant(
         self,
@@ -69,14 +66,11 @@ class CliRuntimeLike(Protocol):
         display_name: str | None = None,
         mode: str | None = None,
         session_id: str | None = None,
-    ) -> Episode:
-        ...
+    ) -> Episode: ...
 
-    def inspect_session(self, session_id: str) -> Episode:
-        ...
+    def inspect_session(self, session_id: str) -> Episode: ...
 
-    def prepare_session_surface(self, session_id: str) -> Episode:
-        ...
+    def prepare_session_surface(self, session_id: str) -> Episode: ...
 
     def explain_next_step(
         self,
@@ -87,8 +81,7 @@ class CliRuntimeLike(Protocol):
         tool_name: str | None = None,
         tool_arguments: Mapping[str, Any] | None = None,
         delivery_payload: Mapping[str, Any] | None = None,
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
     def compact_session_context(
         self,
@@ -96,8 +89,7 @@ class CliRuntimeLike(Protocol):
         *,
         reason: str = "gateway-hygiene",
         force: bool = False,
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
     def schedule_learning_for_session(
         self,
@@ -106,8 +98,7 @@ class CliRuntimeLike(Protocol):
         trigger: str,
         summary: str = "",
         metadata: Mapping[str, str] | None = None,
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
     def open_next_episode(
         self,
@@ -116,11 +107,9 @@ class CliRuntimeLike(Protocol):
         next_episode_id: str | None = None,
         reason: str = "wake_boundary",
         summary: str = "",
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
-    def elephant_id_for_session(self, session: Episode) -> str:
-        ...
+    def elephant_id_for_session(self, session: Episode) -> str: ...
 
 
 CliRuntimeFactory = Callable[[Path, Path], CliRuntimeLike]
@@ -245,7 +234,9 @@ def load_gateway_cli_control_config(
     )
 
 
-def load_feishu_cli_control_config(manifest: Mapping[str, object]) -> GatewayCliControlConfig:
+def load_feishu_cli_control_config(
+    manifest: Mapping[str, object],
+) -> GatewayCliControlConfig:
     config = load_gateway_cli_control_config(
         manifest,
         adapter_key="feishu",
@@ -500,12 +491,7 @@ class GatewayCliControlService:
     ) -> GatewayCliControlResult:
         if not argument:
             return GatewayCliControlResult(
-                body=(
-                    "Usage:\n"
-                    "- /elephant list\n"
-                    "- /elephant use <name>\n"
-                    "- /elephant current"
-                ),
+                body=("Usage:\n- /elephant list\n- /elephant use <name>\n- /elephant current"),
                 summary="missing elephant subcommand",
             )
         action, _, remainder = argument.strip().partition(" ")
@@ -581,7 +567,11 @@ class GatewayCliControlService:
             route_session = self.app.core.dependencies.session_store.lookup(bound.session_id)
             if route_session is not None:
                 self.app.core.dependencies.session_store.save(
-                    replace(route_session, profile_id=state.personal_model_id, updated_at=_utc_now())
+                    replace(
+                        route_session,
+                        profile_id=state.personal_model_id,
+                        updated_at=_utc_now(),
+                    )
                 )
             return GatewayCliControlResult(
                 body=(
@@ -594,12 +584,7 @@ class GatewayCliControlService:
                 summary="elephant shaped",
             )
         return GatewayCliControlResult(
-            body=(
-                "Usage:\n"
-                "- /elephant list\n"
-                "- /elephant use <name>\n"
-                "- /elephant current"
-            ),
+            body=("Usage:\n- /elephant list\n- /elephant use <name>\n- /elephant current"),
             summary="unknown elephant subcommand",
         )
 
@@ -635,7 +620,11 @@ class GatewayCliControlService:
                 if selection_mode in {"parent-bound", "parent-bound-session"}:
                     return elephant_id, recovered, "parent-bound-recovered"
                 return elephant_id, recovered, "bound-recovered"
-        return elephant_id, self._session_for_elephant(runtime, elephant_id), selection_mode
+        return (
+            elephant_id,
+            self._session_for_elephant(runtime, elephant_id),
+            selection_mode,
+        )
 
     def _elephant_selection(
         self,
@@ -679,10 +668,7 @@ class GatewayCliControlService:
         inbound: GatewayInboundMessage,
     ) -> tuple[str, ...]:
         candidates = [inbound.conversation_id]
-        if (
-            inbound.parent_conversation_id is not None
-            and inbound.parent_conversation_id != inbound.conversation_id
-        ):
+        if inbound.parent_conversation_id is not None and inbound.parent_conversation_id != inbound.conversation_id:
             candidates.append(inbound.parent_conversation_id)
         return tuple(dict.fromkeys(candidates))
 
@@ -711,15 +697,20 @@ class GatewayCliControlService:
     def _elephant_listing(self) -> str:
         herd = self._list_states(limit=12)
         if not herd:
-            return (
-                "No local Elephant Agent herd are available yet.\n"
-                "Create one from the CLI first."
-            )
+            return "No local Elephant Agent herd are available yet.\nCreate one from the CLI first."
         lines = ["Available local Elephant Agent herd:"]
         for state in herd:
-            elephant_id = str(getattr(state, "elephant_id", "") or getattr(state, "elephant_name", "") or getattr(state, "state_id", ""))
+            elephant_id = str(
+                getattr(state, "elephant_id", "")
+                or getattr(state, "elephant_name", "")
+                or getattr(state, "state_id", "")
+            )
             elephant_name = str(getattr(state, "elephant_name", "") or "").strip()
-            elephant_label = f"{elephant_name} (`{elephant_id}`)" if elephant_name and elephant_name != elephant_id else f"`{elephant_id}`"
+            elephant_label = (
+                f"{elephant_name} (`{elephant_id}`)"
+                if elephant_name and elephant_name != elephant_id
+                else f"`{elephant_id}`"
+            )
             status = str(getattr(state, "status", "") or getattr(state, "latest_status", "") or "active")
             summary = str(getattr(state, "summary", "") or "").strip()
             current_marker = ""
@@ -757,7 +748,7 @@ class GatewayCliControlService:
                 f"- /elephant use <name> · pin this {self.binding_subject} to an elephant",
                 f"- /elephant current · inspect the elephant currently handling this {self.binding_subject}",
                 f"- /status · inspect the elephant currently handling this {self.binding_subject}",
-                f"- /clear · close this Episode and open a fresh one on the same elephant",
+                "- /clear · close this Episode and open a fresh one on the same elephant",
                 f"- plain text · forward the message into the bound elephant after this {self.binding_subject} is pinned",
             )
         )
@@ -870,9 +861,7 @@ class GatewayCliControlService:
             return None
         only_state = herd[0]
         elephant_ref = str(
-            getattr(only_state, "elephant_id", "")
-            or getattr(only_state, "elephant_name", "")
-            or ""
+            getattr(only_state, "elephant_id", "") or getattr(only_state, "elephant_name", "") or ""
         ).strip()
         if not elephant_ref:
             return None

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import os
-import random
 import re
 import subprocess
 import sys
@@ -15,12 +13,15 @@ from types import SimpleNamespace
 
 import typer
 
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity, render_user_profile_text
+from packages.state import (
+    DEFAULT_ELEPHANT_IDENTITY_TEXT,
+    render_default_elephant_identity,
+    render_user_profile_text,
+)
 
 from .runtime import CliRuntime
 from .provider_flow import (
     ProviderSelectionState,
-    provider_choices as _shared_provider_choices,
     provider_setup_defaults,
     run_provider_selection_wizard,
 )
@@ -34,10 +35,8 @@ from .shell import (
     Panel,
     ProductizedShell,
     RICH_AVAILABLE,
-    Table,
     Text,
     _resolve_elephant_version,
-    render_stage_zero_elephant_mark,
 )
 from .wizard import (
     WIZARD_BACK,
@@ -46,7 +45,6 @@ from .wizard import (
     _WizardBackSignal,
     _interactive_shell_supported,
     _wizard_choice_prompt,
-    _wizard_dialogs_supported,
     _wizard_multi_choice_prompt,
     _wizard_text_prompt,
 )
@@ -89,7 +87,6 @@ CLI_THEME_WELCOME_GLYPH = "🐘"
 CLI_THEME_SUBTITLE = "Personal Model first, curious at your pace."
 
 
-
 from .cli_main_elephant_support import *  # noqa: F401,F403
 from .cli_main_elephant_support import _current_elephant_session
 from .cli_main_setup import *  # noqa: F401,F403
@@ -103,8 +100,16 @@ def _prompt_first_elephant_name(
     language: str = "en",
 ) -> str | _WizardBackSignal:
     return _wizard_text_prompt(
-        _init_text(language, "Name Your First Elephant Agent", "给你的第一个 Elephant Agent 起名"),
-        _init_text(language, "This first Elephant Agent is yours. What name feels right?", "这是你的第一个 Elephant Agent。哪个名字最合适？"),
+        _init_text(
+            language,
+            "Name Your First Elephant Agent",
+            "给你的第一个 Elephant Agent 起名",
+        ),
+        _init_text(
+            language,
+            "This first Elephant Agent is yours. What name feels right?",
+            "这是你的第一个 Elephant Agent。哪个名字最合适？",
+        ),
         default=default_name,
         allow_back=allow_back,
     )
@@ -119,24 +124,40 @@ def _prompt_learning_intensity(
     """Let the user choose how often Elephant Agent may ask Personal Model questions."""
     return _wizard_choice_prompt(
         _init_text(language, "Elephant Agent's Questions", "Elephant Agent 的问题频率"),
-        _init_text(language, "How often should Elephant Agent ask open questions to learn more about you?", "Elephant Agent 可以多频繁地问开放问题来更了解你？"),
+        _init_text(
+            language,
+            "How often should Elephant Agent ask open questions to learn more about you?",
+            "Elephant Agent 可以多频繁地问开放问题来更了解你？",
+        ),
         (
             WizardChoice(
                 value="low",
                 label=_init_text(language, "Quiet questions", "安静提问"),
-                detail=_init_text(language, "Low touch. Up to two open questions per day, usually morning or before bed.", "低频打扰。每天最多两次，通常偏早晨或睡前。"),
+                detail=_init_text(
+                    language,
+                    "Low touch. Up to two open questions per day, usually morning or before bed.",
+                    "低频打扰。每天最多两次，通常偏早晨或睡前。",
+                ),
                 emoji="🌙",
             ),
             WizardChoice(
                 value="medium",
                 label=_init_text(language, "Gentle questions", "温和提问"),
-                detail=_init_text(language, "Default. If an IM route is running, asks after roughly 3 idle hours.", "默认。如果 IM 通道在线，空闲约 3 小时后会问一个问题。"),
+                detail=_init_text(
+                    language,
+                    "Default. If an IM route is running, asks after roughly 3 idle hours.",
+                    "默认。如果 IM 通道在线，空闲约 3 小时后会问一个问题。",
+                ),
                 emoji="🌿",
             ),
             WizardChoice(
                 value="high",
                 label=_init_text(language, "Active questions", "积极提问"),
-                detail=_init_text(language, "Most active. Outside quiet hours, an IM route may ask once an elephant has been idle for 1 hour.", "最主动。静默时间外，如果 IM 通道在线，elephant 空闲 1 小时后就可以主动问。"),
+                detail=_init_text(
+                    language,
+                    "Most active. Outside quiet hours, an IM route may ask once an elephant has been idle for 1 hour.",
+                    "最主动。静默时间外，如果 IM 通道在线，elephant 空闲 1 小时后就可以主动问。",
+                ),
                 emoji="⚡",
             ),
         ),
@@ -164,8 +185,16 @@ def _prompt_first_language(default: str = "en", *, allow_back: bool = False) -> 
         "First language / 第一语言",
         "Choose the language Elephant Agent should use for the rest of init.",
         (
-            WizardChoice(value="en", label="English", detail="Use English for init and store English as your first language."),
-            WizardChoice(value="zh", label="中文", detail="后续初始化过程使用中文，并把中文记录为你的第一语言。"),
+            WizardChoice(
+                value="en",
+                label="English",
+                detail="Use English for init and store English as your first language.",
+            ),
+            WizardChoice(
+                value="zh",
+                label="中文",
+                detail="后续初始化过程使用中文，并把中文记录为你的第一语言。",
+            ),
         ),
         default=_normalize_first_language(default),
         allow_back=allow_back,
@@ -200,7 +229,11 @@ def _prompt_required_text(
     default: str = "",
     allow_back: bool = True,
 ) -> str | _WizardBackSignal:
-    required = _init_text(language, "Please add a little something here before continuing.", "这里需要写一点内容，才能继续。")
+    required = _init_text(
+        language,
+        "Please add a little something here before continuing.",
+        "这里需要写一点内容，才能继续。",
+    )
     while True:
         answer = _wizard_text_prompt(
             _init_text(language, title_en, title_zh),
@@ -312,7 +345,11 @@ def _prompt_hobbies(language: str, default: str = "", *, allow_back: bool = True
     existing = tuple(part.strip() for part in re.split(r"[,，、/]+", default or "") if part.strip())
     answer = _wizard_multi_choice_prompt(
         _init_text(language, "Personal hobbies", "个人爱好"),
-        _init_text(language, "Optional. Use Space to select any hobbies Elephant Agent should know.", "可选。用空格多选你希望 Elephant Agent 知道的个人爱好。"),
+        _init_text(
+            language,
+            "Optional. Use Space to select any hobbies Elephant Agent should know.",
+            "可选。用空格多选你希望 Elephant Agent 知道的个人爱好。",
+        ),
         tuple(_init_wizard_choice(choice) for choice in choices),
         default_values=existing,
         allow_back=allow_back,
@@ -326,33 +363,131 @@ def _prompt_hobbies(language: str, default: str = "", *, allow_back: bool = True
 
 
 _ATTENTION_CHOICES_EN = (
-    ("a project wants to move", "A project wants to move", "Work, product, writing, craft, or something you want to bring into shape.", "🚀", "Primary attention is on moving a concrete project or piece of work forward; prioritize momentum, blockers, completion pressure, and output rhythm."),
-    ("standing at a fork", "Standing at a fork", "Changing direction, deciding, leaving, or beginning a new road.", "🧭", "Currently in transition and choice, possibly changing direction, deciding, leaving an old path, or beginning a new one; prioritize trade-offs, risks, what is hard to leave, and reversible next steps."),
-    ("chewing on a new question", "Chewing on a new question", "Reading, studying, testing ideas, or trying to understand something important.", "🔎", "Drawn to a new question and forming judgment through study, research, or testing; prioritize structure, key assumptions, evidence, and the next round of exploration."),
-    ("relationships are tugging", "Relationships are tugging", "Family, friends, intimacy, distance, care, or where you belong among people.", "🤝", "Attention is being pulled by relationships, belonging, or social position; include distance, care, promises, boundaries, and emotional safety in the frame."),
-    ("body needs attention first", "Body needs attention first", "Sleep, health, rhythm, pressure, stamina, or recovery may need to be seen first.", "🌿", "Body, energy, and recovery rhythm need attention first; consider sleep, pressure, stamina, safety, and restoration before pushing intensity."),
-    ("steady the life floor", "Steady the life floor", "Home, money, routines, logistics, or making ordinary life hold you again.", "🏠", "Basic life stability needs to come first, including home, money, routines, logistics, or real-world order; prioritize structure, certainty, and low-friction arrangements that hold daily life."),
+    (
+        "a project wants to move",
+        "A project wants to move",
+        "Work, product, writing, craft, or something you want to bring into shape.",
+        "🚀",
+        "Primary attention is on moving a concrete project or piece of work forward; prioritize momentum, blockers, completion pressure, and output rhythm.",
+    ),
+    (
+        "standing at a fork",
+        "Standing at a fork",
+        "Changing direction, deciding, leaving, or beginning a new road.",
+        "🧭",
+        "Currently in transition and choice, possibly changing direction, deciding, leaving an old path, or beginning a new one; prioritize trade-offs, risks, what is hard to leave, and reversible next steps.",
+    ),
+    (
+        "chewing on a new question",
+        "Chewing on a new question",
+        "Reading, studying, testing ideas, or trying to understand something important.",
+        "🔎",
+        "Drawn to a new question and forming judgment through study, research, or testing; prioritize structure, key assumptions, evidence, and the next round of exploration.",
+    ),
+    (
+        "relationships are tugging",
+        "Relationships are tugging",
+        "Family, friends, intimacy, distance, care, or where you belong among people.",
+        "🤝",
+        "Attention is being pulled by relationships, belonging, or social position; include distance, care, promises, boundaries, and emotional safety in the frame.",
+    ),
+    (
+        "body needs attention first",
+        "Body needs attention first",
+        "Sleep, health, rhythm, pressure, stamina, or recovery may need to be seen first.",
+        "🌿",
+        "Body, energy, and recovery rhythm need attention first; consider sleep, pressure, stamina, safety, and restoration before pushing intensity.",
+    ),
+    (
+        "steady the life floor",
+        "Steady the life floor",
+        "Home, money, routines, logistics, or making ordinary life hold you again.",
+        "🏠",
+        "Basic life stability needs to come first, including home, money, routines, logistics, or real-world order; prioritize structure, certainty, and low-friction arrangements that hold daily life.",
+    ),
     ("type", "None fit; I’ll write one", "Write one short phrase instead", "✍️"),
 )
 _ATTENTION_CHOICES_ZH = (
-    ("一件作品正在往前推", "一件作品正在往前推", "像是有件东西正在手里发热，想被认真推到前面去。可能是项目、产品、写作、作品，或任何你希望它慢慢成形的事。", "🚀", "最近的主要注意力在推进一个具体作品或项目；优先关注推进节奏、阻力、完成欲和产出压力。"),
-    ("正站在一个岔路口", "正站在一个岔路口", "像站在一条路将要分开的地方，心里已经知道不能一直停在原处。可能关于换方向、做决定、离开，或开始一段新路。", "🧭", "最近处在过渡和选择中，可能正在考虑换方向、做决定、离开原来的路径或开始新路；优先澄清取舍、风险、舍不得的东西和可逆的下一步。"),
-    ("在啃一个新问题", "在啃一个新问题", "有个问题一直在脑海里发亮，想被读懂、拆开、验证。可能是学习、研究、准备，或理解某件重要的事。", "🔎", "最近被一个新问题吸引，正在通过学习、研究或验证来形成判断；优先整理问题结构、关键假设、证据和下一轮探索。"),
-    ("关系和归属感在拉扯", "关系和归属感在拉扯", "有些牵挂来自人和人之间的位置：靠近、距离、照顾、承诺，或不知道自己该站在哪里。", "🤝", "最近的注意力被关系、归属感或人际位置牵动；距离、照顾、承诺、边界和情感安全都需要一起纳入判断。"),
-    ("身体和精力先要照顾", "身体和精力先要照顾", "身体像先举了一下手，提醒你慢一点。睡眠、健康、节奏、压力、体力或恢复，可能比别的事更需要被看见。", "🌿", "最近首先需要照顾身体、精力和恢复节奏；先考虑睡眠、压力、体力、安全感和节奏修复，再谈更高强度的推进。"),
-    ("先把生活地基稳住", "先把生活地基稳住", "像先把房间的灯打开、地面扫平，让生活重新能托住你。可能关于住处、金钱、日程、杂事，或现实里的秩序。", "🏠", "最近需要先稳定生活基础，包括住处、金钱、日程、杂事或现实秩序；优先关注能承托日常的结构、确定性和低摩擦安排。"),
+    (
+        "一件作品正在往前推",
+        "一件作品正在往前推",
+        "像是有件东西正在手里发热，想被认真推到前面去。可能是项目、产品、写作、作品，或任何你希望它慢慢成形的事。",
+        "🚀",
+        "最近的主要注意力在推进一个具体作品或项目；优先关注推进节奏、阻力、完成欲和产出压力。",
+    ),
+    (
+        "正站在一个岔路口",
+        "正站在一个岔路口",
+        "像站在一条路将要分开的地方，心里已经知道不能一直停在原处。可能关于换方向、做决定、离开，或开始一段新路。",
+        "🧭",
+        "最近处在过渡和选择中，可能正在考虑换方向、做决定、离开原来的路径或开始新路；优先澄清取舍、风险、舍不得的东西和可逆的下一步。",
+    ),
+    (
+        "在啃一个新问题",
+        "在啃一个新问题",
+        "有个问题一直在脑海里发亮，想被读懂、拆开、验证。可能是学习、研究、准备，或理解某件重要的事。",
+        "🔎",
+        "最近被一个新问题吸引，正在通过学习、研究或验证来形成判断；优先整理问题结构、关键假设、证据和下一轮探索。",
+    ),
+    (
+        "关系和归属感在拉扯",
+        "关系和归属感在拉扯",
+        "有些牵挂来自人和人之间的位置：靠近、距离、照顾、承诺，或不知道自己该站在哪里。",
+        "🤝",
+        "最近的注意力被关系、归属感或人际位置牵动；距离、照顾、承诺、边界和情感安全都需要一起纳入判断。",
+    ),
+    (
+        "身体和精力先要照顾",
+        "身体和精力先要照顾",
+        "身体像先举了一下手，提醒你慢一点。睡眠、健康、节奏、压力、体力或恢复，可能比别的事更需要被看见。",
+        "🌿",
+        "最近首先需要照顾身体、精力和恢复节奏；先考虑睡眠、压力、体力、安全感和节奏修复，再谈更高强度的推进。",
+    ),
+    (
+        "先把生活地基稳住",
+        "先把生活地基稳住",
+        "像先把房间的灯打开、地面扫平，让生活重新能托住你。可能关于住处、金钱、日程、杂事，或现实里的秩序。",
+        "🏠",
+        "最近需要先稳定生活基础，包括住处、金钱、日程、杂事或现实秩序；优先关注能承托日常的结构、确定性和低摩擦安排。",
+    ),
     ("type", "都不像，我写一句", "如果上面都不贴切，可以写一个短句", "✍️"),
 )
 
 _MBTI_EMOJI = {
-    "INTJ": "♟️", "INTP": "🧩", "ENTJ": "🧭", "ENTP": "⚡",
-    "INFJ": "🌙", "INFP": "🌿", "ENFJ": "🌻", "ENFP": "✨",
-    "ISTJ": "📚", "ISFJ": "🕯️", "ESTJ": "🏗️", "ESFJ": "🤝",
-    "ISTP": "🛠️", "ISFP": "🎨", "ESTP": "🏃", "ESFP": "🎉",
+    "INTJ": "♟️",
+    "INTP": "🧩",
+    "ENTJ": "🧭",
+    "ENTP": "⚡",
+    "INFJ": "🌙",
+    "INFP": "🌿",
+    "ENFJ": "🌻",
+    "ENFP": "✨",
+    "ISTJ": "📚",
+    "ISFJ": "🕯️",
+    "ESTJ": "🏗️",
+    "ESFJ": "🤝",
+    "ISTP": "🛠️",
+    "ISFP": "🎨",
+    "ESTP": "🏃",
+    "ESFP": "🎉",
 }
 _MBTI_CODES = (
-    "INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP",
-    "ISTJ", "ISFJ", "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP",
+    "INTJ",
+    "INTP",
+    "ENTJ",
+    "ENTP",
+    "INFJ",
+    "INFP",
+    "ENFJ",
+    "ENFP",
+    "ISTJ",
+    "ISFJ",
+    "ESTJ",
+    "ESFJ",
+    "ISTP",
+    "ISFP",
+    "ESTP",
+    "ESFP",
 )
 _MBTI_TRAITS_EN = {
     "INTJ": "Architect: imaginative, strategic, private, and long-range; prefers clear plans, competence, and room to think independently",
@@ -424,12 +559,37 @@ _HOBBY_CHOICES_EN = (
     ("music", "Music", "Listening, playing, collecting, or live shows", "🎧"),
     ("films and shows", "Films / shows", "Movies, series, anime, documentaries", "🎬"),
     ("games", "Games", "Video games, board games, puzzles, or playful systems", "🎮"),
-    ("sports and movement", "Sports / movement", "Gym, running, climbing, dancing, walking", "🏃"),
-    ("food and cooking", "Food / cooking", "Eating, cooking, baking, coffee, restaurants", "🍳"),
-    ("travel and city walks", "Travel / city walks", "Exploring places, routes, neighborhoods, trips", "🧳"),
-    ("art and design", "Art / design", "Drawing, photography, visual taste, making things beautiful", "🎨"),
+    (
+        "sports and movement",
+        "Sports / movement",
+        "Gym, running, climbing, dancing, walking",
+        "🏃",
+    ),
+    (
+        "food and cooking",
+        "Food / cooking",
+        "Eating, cooking, baking, coffee, restaurants",
+        "🍳",
+    ),
+    (
+        "travel and city walks",
+        "Travel / city walks",
+        "Exploring places, routes, neighborhoods, trips",
+        "🧳",
+    ),
+    (
+        "art and design",
+        "Art / design",
+        "Drawing, photography, visual taste, making things beautiful",
+        "🎨",
+    ),
     ("writing", "Writing", "Journaling, essays, fiction, notes, scripts", "✍️"),
-    ("technology and making", "Technology / making", "Coding, gadgets, tools, building small systems", "🛠️"),
+    (
+        "technology and making",
+        "Technology / making",
+        "Coding, gadgets, tools, building small systems",
+        "🛠️",
+    ),
     ("skip", "Skip", "Leave this blank for now", "➖"),
 )
 _HOBBY_CHOICES_ZH = (
@@ -457,11 +617,20 @@ _INIT_FIELD_MODEL_HINTS = {
     "hobbies": {"lens": "identity", "topic": "identity.style.hobbies.personal"},
     "city": {"lens": "world", "topic": "world.places.city.current"},
     "food_allergies": {"lens": "identity", "topic": "identity.body.allergy.food"},
-    "medication_allergies": {"lens": "identity", "topic": "identity.body.allergy.medication"},
-    "chronic_conditions": {"lens": "identity", "topic": "identity.body.condition.chronic"},
+    "medication_allergies": {
+        "lens": "identity",
+        "topic": "identity.body.allergy.medication",
+    },
+    "chronic_conditions": {
+        "lens": "identity",
+        "topic": "identity.body.condition.chronic",
+    },
     "trauma_history": {"lens": "identity", "topic": "identity.body.history.trauma"},
     "safety_boundaries": {"lens": "identity", "topic": "identity.body.safety.boundary"},
-    "inferred_companion_posture": {"lens": "identity", "topic": "identity.style.companion.posture"},
+    "inferred_companion_posture": {
+        "lens": "identity",
+        "topic": "identity.style.companion.posture",
+    },
 }
 
 
@@ -473,18 +642,66 @@ _STARTER_QUESTIONS = (
         "en": "If your recent inner weather were an image, which one is closest?",
         "zh": "如果把你现在的内心状态想象成一种风景，会是什么样的？",
         "choices_en": (
-            ("standing in fog", "Standing in fog", "Not lost, but the horizon has not opened yet; reflect context first, then clarify the next visible step", "🌫️", "Not completely lost, but visibility and direction are not open yet; first confirm the ground underfoot, then gently clarify the next visible step."),
-            ("tabs open everywhere", "Tabs open everywhere", "Many thoughts are running in the background; help gather, order, and reduce cognitive load", "🗂️", "Many thoughts or unfinished tasks are open at once; help gather, order, and reduce cognitive load."),
-            ("boat resting in harbor", "Boat resting in harbor", "Pausing at shore before setting out again; allow recovery before asking for motion", "⚓", "In a pause, repair, or harboring phase before setting out again; do not push too quickly, allow replenishment and rhythm to return."),
-            ("small light ahead", "Small light ahead", "Direction is faint but present; protect the signal and test forward gradually", "🕯️", "A faint but meaningful direction is already visible; protect that signal and use small experiments to make the path clearer."),
+            (
+                "standing in fog",
+                "Standing in fog",
+                "Not lost, but the horizon has not opened yet; reflect context first, then clarify the next visible step",
+                "🌫️",
+                "Not completely lost, but visibility and direction are not open yet; first confirm the ground underfoot, then gently clarify the next visible step.",
+            ),
+            (
+                "tabs open everywhere",
+                "Tabs open everywhere",
+                "Many thoughts are running in the background; help gather, order, and reduce cognitive load",
+                "🗂️",
+                "Many thoughts or unfinished tasks are open at once; help gather, order, and reduce cognitive load.",
+            ),
+            (
+                "boat resting in harbor",
+                "Boat resting in harbor",
+                "Pausing at shore before setting out again; allow recovery before asking for motion",
+                "⚓",
+                "In a pause, repair, or harboring phase before setting out again; do not push too quickly, allow replenishment and rhythm to return.",
+            ),
+            (
+                "small light ahead",
+                "Small light ahead",
+                "Direction is faint but present; protect the signal and test forward gradually",
+                "🕯️",
+                "A faint but meaningful direction is already visible; protect that signal and use small experiments to make the path clearer.",
+            ),
             ("type", "None fit; I’ll describe it", "A short image or phrase", "✍️"),
             ("skip", "Leave this blank for now", "", "➖"),
         ),
         "choices_zh": (
-            ("像站在起雾的路口", "像站在起雾的路口", "雾还没有散，不是不知道往哪走，只是远处暂时看不清。也许可以先陪你确认脚下，再慢慢等下一步显出来。", "🌫️", "并非完全迷失，而是处在视野未打开、方向暂不清晰的阶段；适合先确认脚下处境，再温和澄清下一步。"),
-            ("像房间里开满标签页", "像房间里开满标签页", "脑海里像同时亮着很多窗口，每个都还在发出一点声音。也许先把它们轻轻放到桌面上，会舒服一些。", "🗂️", "近期可能同时承载很多念头和未关闭的任务；适合帮助收束、排序、减轻认知负荷。"),
-            ("像一艘船暂时靠岸", "像一艘船暂时靠岸", "不是不再出发，只是船需要靠岸、补给、修整一下。等风向更清楚时，再离岸也不迟。", "⚓", "可能处在修整、恢复或重新出发前的停靠期；不要急着推动，应允许补给和节奏恢复。"),
-            ("像远处有一盏小灯", "像远处有一盏小灯", "答案还没有完全出现，但远处已经有一点光。那点光也许很小，却值得先被守住。", "🕯️", "已有微弱但重要的方向感；适合保护这点信号，并用小步试探让方向更清晰。"),
+            (
+                "像站在起雾的路口",
+                "像站在起雾的路口",
+                "雾还没有散，不是不知道往哪走，只是远处暂时看不清。也许可以先陪你确认脚下，再慢慢等下一步显出来。",
+                "🌫️",
+                "并非完全迷失，而是处在视野未打开、方向暂不清晰的阶段；适合先确认脚下处境，再温和澄清下一步。",
+            ),
+            (
+                "像房间里开满标签页",
+                "像房间里开满标签页",
+                "脑海里像同时亮着很多窗口，每个都还在发出一点声音。也许先把它们轻轻放到桌面上，会舒服一些。",
+                "🗂️",
+                "近期可能同时承载很多念头和未关闭的任务；适合帮助收束、排序、减轻认知负荷。",
+            ),
+            (
+                "像一艘船暂时靠岸",
+                "像一艘船暂时靠岸",
+                "不是不再出发，只是船需要靠岸、补给、修整一下。等风向更清楚时，再离岸也不迟。",
+                "⚓",
+                "可能处在修整、恢复或重新出发前的停靠期；不要急着推动，应允许补给和节奏恢复。",
+            ),
+            (
+                "像远处有一盏小灯",
+                "像远处有一盏小灯",
+                "答案还没有完全出现，但远处已经有一点光。那点光也许很小，却值得先被守住。",
+                "🕯️",
+                "已有微弱但重要的方向感；适合保护这点信号，并用小步试探让方向更清晰。",
+            ),
             ("type", "都不像，我自己描述", "写一个短句或画面就好", "✍️"),
             ("skip", "暂时留空", "", "➖"),
         ),
@@ -496,20 +713,80 @@ _STARTER_QUESTIONS = (
         "en": "When you make trade-offs lately, what feels most important not to lose?",
         "zh": "最近做取舍时，你最不想弄丢的是什么？",
         "choices_en": (
-            ("keep my authorship", "Keep my authorship", "Autonomy and authorship matter in trade-offs; preserve choice space and avoid over-directing", "🧭", "Authorship and autonomy matter in trade-offs; do not over-decide on their behalf, preserve choice space and help them hold the wheel."),
-            ("keep the ground steady", "Keep the ground steady", "Safety and certainty matter in trade-offs; reduce collapse risk before optimizing", "🪨", "Safety and certainty are bottom-layer needs in the trade-off; reduce collapse risk and real-world instability before optimizing or taking bigger risks."),
-            ("stay true inside", "Stay true inside", "Authenticity and inner consistency matter in trade-offs; slower is better than self-betrayal", "💎", "Authenticity and inner consistency matter; respect the value signal rather than evaluating only by efficiency, gain, or speed."),
-            ("protect important people", "Protect important people", "Relationships, promises, and care matter in trade-offs; include responsibility and attachment in the frame", "🤲", "Relationships, promises, and care strongly shape the decision; include emotional responsibility and relational boundaries in the analysis."),
-            ("open the future", "Open the future", "Possibility matters in trade-offs; evaluate long-term space, growth, and optionality", "🌱", "Possibility, growth space, and long-term optionality matter; help evaluate which path makes the future wider."),
+            (
+                "keep my authorship",
+                "Keep my authorship",
+                "Autonomy and authorship matter in trade-offs; preserve choice space and avoid over-directing",
+                "🧭",
+                "Authorship and autonomy matter in trade-offs; do not over-decide on their behalf, preserve choice space and help them hold the wheel.",
+            ),
+            (
+                "keep the ground steady",
+                "Keep the ground steady",
+                "Safety and certainty matter in trade-offs; reduce collapse risk before optimizing",
+                "🪨",
+                "Safety and certainty are bottom-layer needs in the trade-off; reduce collapse risk and real-world instability before optimizing or taking bigger risks.",
+            ),
+            (
+                "stay true inside",
+                "Stay true inside",
+                "Authenticity and inner consistency matter in trade-offs; slower is better than self-betrayal",
+                "💎",
+                "Authenticity and inner consistency matter; respect the value signal rather than evaluating only by efficiency, gain, or speed.",
+            ),
+            (
+                "protect important people",
+                "Protect important people",
+                "Relationships, promises, and care matter in trade-offs; include responsibility and attachment in the frame",
+                "🤲",
+                "Relationships, promises, and care strongly shape the decision; include emotional responsibility and relational boundaries in the analysis.",
+            ),
+            (
+                "open the future",
+                "Open the future",
+                "Possibility matters in trade-offs; evaluate long-term space, growth, and optionality",
+                "🌱",
+                "Possibility, growth space, and long-term optionality matter; help evaluate which path makes the future wider.",
+            ),
             ("type", "None fit; I’ll name it", "A short value or phrase", "✍️"),
             ("skip", "Leave this blank for now", "", "➖"),
         ),
         "choices_zh": (
-            ("我想保住选择权", "我想保住选择权", "最怕的不是慢一点，而是把方向感交出去。这个选择最好仍然像是你自己做出的。", "🧭", "取舍中很在意自主感和作者性；不要替其下结论，应保留选择空间，帮助重新握住方向盘。"),
-            ("我想先踩稳地面", "我想先踩稳地面", "在往前之前，你可能需要先确认地面不会塌。安全感和确定性，是这次取舍里很重要的底色。", "🪨", "安全感和确定性是当前取舍中的底层需求；应先降低坍塌感和现实风险，再谈优化或冒险。"),
-            ("我不想背离真心", "我不想背离真心", "有些决定不只是对错，也关乎是否还像自己。宁可慢一点，也不想把真实感弄丢。", "💎", "真实感和内在一致性很重要；需要尊重其价值感，不要只用效率或收益衡量。"),
-            ("我想顾住重要的人", "我想顾住重要的人", "这件事不只属于你一个人。关系、承诺、照顾和亏欠感，都可能一起坐在桌边。", "🤲", "关系、承诺和照顾会显著影响判断；应把情感责任和关系边界纳入分析。"),
-            ("我想把未来打开", "我想把未来打开", "你在意这个选择会把生活带到哪里。它最好不是关上一扇门，而是让未来多一点空气。", "🌱", "重视可能性、成长空间和长期可选项；应帮助评估哪条路让未来更宽。"),
+            (
+                "我想保住选择权",
+                "我想保住选择权",
+                "最怕的不是慢一点，而是把方向感交出去。这个选择最好仍然像是你自己做出的。",
+                "🧭",
+                "取舍中很在意自主感和作者性；不要替其下结论，应保留选择空间，帮助重新握住方向盘。",
+            ),
+            (
+                "我想先踩稳地面",
+                "我想先踩稳地面",
+                "在往前之前，你可能需要先确认地面不会塌。安全感和确定性，是这次取舍里很重要的底色。",
+                "🪨",
+                "安全感和确定性是当前取舍中的底层需求；应先降低坍塌感和现实风险，再谈优化或冒险。",
+            ),
+            (
+                "我不想背离真心",
+                "我不想背离真心",
+                "有些决定不只是对错，也关乎是否还像自己。宁可慢一点，也不想把真实感弄丢。",
+                "💎",
+                "真实感和内在一致性很重要；需要尊重其价值感，不要只用效率或收益衡量。",
+            ),
+            (
+                "我想顾住重要的人",
+                "我想顾住重要的人",
+                "这件事不只属于你一个人。关系、承诺、照顾和亏欠感，都可能一起坐在桌边。",
+                "🤲",
+                "关系、承诺和照顾会显著影响判断；应把情感责任和关系边界纳入分析。",
+            ),
+            (
+                "我想把未来打开",
+                "我想把未来打开",
+                "你在意这个选择会把生活带到哪里。它最好不是关上一扇门，而是让未来多一点空气。",
+                "🌱",
+                "重视可能性、成长空间和长期可选项；应帮助评估哪条路让未来更宽。",
+            ),
             ("type", "都不像，我自己命名", "写一个词或短句就好", "✍️"),
             ("skip", "暂时留空", "", "➖"),
         ),
@@ -521,20 +798,80 @@ _STARTER_QUESTIONS = (
         "en": "When pressure rises, what do you usually do first?",
         "zh": "压力升起来时，你通常会先怎么保护自己？",
         "choices_en": (
-            ("retreat into quiet", "Retreat into quiet", "Under pressure, tends to pull inward and process quietly before speaking", "🫧", "Under pressure, low-input and low-interruption inner processing space is needed; offer quiet and buffer before inviting expression."),
-            ("comb the knots into lines", "Comb the knots into lines", "Under pressure, tends to use lists, structure, and plans to separate the knots", "🧵", "Under pressure, stability returns through structure, lists, and decomposition; organize the mess into layers and steps."),
-            ("get the wheels moving", "Get the wheels moving", "Under pressure, tends to move first and regain stability by adjusting in motion", "🏃", "Under pressure, action restores feel and stability; offer a concrete small step rather than staying in abstract analysis."),
-            ("ask where it hurts", "Ask where it hurts", "Under pressure, tends to ask what pain point, value, or meaning is being touched", "🔦", "Under pressure, the deeper pain point, value, or emotion needs to be understood; ask first about meaning and where it hurts."),
-            ("borrow another mind", "Borrow another mind", "Under pressure, tends to think with another person rather than metabolize it alone", "👂", "Under pressure, co-thinking and being held matter more than processing alone; provide companionate sorting and shared simulation."),
+            (
+                "retreat into quiet",
+                "Retreat into quiet",
+                "Under pressure, tends to pull inward and process quietly before speaking",
+                "🫧",
+                "Under pressure, low-input and low-interruption inner processing space is needed; offer quiet and buffer before inviting expression.",
+            ),
+            (
+                "comb the knots into lines",
+                "Comb the knots into lines",
+                "Under pressure, tends to use lists, structure, and plans to separate the knots",
+                "🧵",
+                "Under pressure, stability returns through structure, lists, and decomposition; organize the mess into layers and steps.",
+            ),
+            (
+                "get the wheels moving",
+                "Get the wheels moving",
+                "Under pressure, tends to move first and regain stability by adjusting in motion",
+                "🏃",
+                "Under pressure, action restores feel and stability; offer a concrete small step rather than staying in abstract analysis.",
+            ),
+            (
+                "ask where it hurts",
+                "Ask where it hurts",
+                "Under pressure, tends to ask what pain point, value, or meaning is being touched",
+                "🔦",
+                "Under pressure, the deeper pain point, value, or emotion needs to be understood; ask first about meaning and where it hurts.",
+            ),
+            (
+                "borrow another mind",
+                "Borrow another mind",
+                "Under pressure, tends to think with another person rather than metabolize it alone",
+                "👂",
+                "Under pressure, co-thinking and being held matter more than processing alone; provide companionate sorting and shared simulation.",
+            ),
             ("type", "None fit; I’ll describe it", "A short pattern is enough", "✍️"),
             ("skip", "Leave this blank for now", "", "➖"),
         ),
         "choices_zh": (
-            ("先缩回安静里", "先缩回安静里", "压力一来，你可能会先往安静处退一小步。不是逃开，是给自己一点重新听见自己的空间。", "🫧", "压力下需要低输入、低打扰的内在处理空间；应先给安静和缓冲，再邀请表达。"),
-            ("先把乱麻理成线", "先把乱麻理成线", "混乱靠近时，你会想把它拆成线、列成项、排出顺序。把看不清的东西变清楚，会让人稳一点。", "🧵", "压力下靠结构、清单和拆解恢复稳定；适合把混乱整理成层次和步骤。"),
-            ("先动手让车跑起来", "先动手让车跑起来", "你可能不是等想明白才动，而是在动起来之后找回手感。车先跑起来，方向可以边走边调。", "🏃", "压力下通过行动找回手感和稳定；适合给出可执行的小步，而不是停留在抽象分析。"),
-            ("先问这事伤到哪儿", "先问这事伤到哪儿", "你会想知道它到底碰到了哪里：是害怕、委屈、价值感，还是某个一直没被说清的东西。", "🔦", "压力下需要理解被触动的深层痛点、价值或情绪；应先追问意义和伤处。"),
-            ("先找个人一起想", "先找个人一起想", "压力太满时，一个人在房间里可能不够。你需要另一个脑子，也需要一个能接住话的人。", "👂", "压力下需要共思和被接住，而不是独自消化；应提供陪伴式梳理和共同推演。"),
+            (
+                "先缩回安静里",
+                "先缩回安静里",
+                "压力一来，你可能会先往安静处退一小步。不是逃开，是给自己一点重新听见自己的空间。",
+                "🫧",
+                "压力下需要低输入、低打扰的内在处理空间；应先给安静和缓冲，再邀请表达。",
+            ),
+            (
+                "先把乱麻理成线",
+                "先把乱麻理成线",
+                "混乱靠近时，你会想把它拆成线、列成项、排出顺序。把看不清的东西变清楚，会让人稳一点。",
+                "🧵",
+                "压力下靠结构、清单和拆解恢复稳定；适合把混乱整理成层次和步骤。",
+            ),
+            (
+                "先动手让车跑起来",
+                "先动手让车跑起来",
+                "你可能不是等想明白才动，而是在动起来之后找回手感。车先跑起来，方向可以边走边调。",
+                "🏃",
+                "压力下通过行动找回手感和稳定；适合给出可执行的小步，而不是停留在抽象分析。",
+            ),
+            (
+                "先问这事伤到哪儿",
+                "先问这事伤到哪儿",
+                "你会想知道它到底碰到了哪里：是害怕、委屈、价值感，还是某个一直没被说清的东西。",
+                "🔦",
+                "压力下需要理解被触动的深层痛点、价值或情绪；应先追问意义和伤处。",
+            ),
+            (
+                "先找个人一起想",
+                "先找个人一起想",
+                "压力太满时，一个人在房间里可能不够。你需要另一个脑子，也需要一个能接住话的人。",
+                "👂",
+                "压力下需要共思和被接住，而不是独自消化；应提供陪伴式梳理和共同推演。",
+            ),
             ("type", "都不像，我自己描述", "写一个短句就好", "✍️"),
             ("skip", "暂时留空", "", "➖"),
         ),
@@ -546,20 +883,80 @@ _STARTER_QUESTIONS = (
         "en": "When your energy is low, what usually helps you return to yourself?",
         "zh": "当你需要恢复精力、让自己舒服一点时，通常会怎么做？",
         "choices_en": (
-            ("give me a quiet corner", "Give me a quiet corner", "Low energy recovery starts with quiet space, less input, and no rushing", "🌙", "Recovery needs less input, less rushing, and space that does not require explanation; lower interruption density."),
-            ("talk softly for a while", "Talk softly for a while", "Low energy recovery is helped by calm presence and gentle conversation", "🕯️", "Steady presence and low-pressure conversation help the mind land; accompany first, solve second."),
-            ("change the body rhythm", "Change the body rhythm", "Low energy recovery is helped by walking, sleep, music, food, or a body-rhythm reset", "🌿", "Body rhythm can lead psychological recovery; consider walking, rest, music, food, or rhythm reset first."),
-            ("finish one tiny action", "Finish one tiny action", "Low energy recovery is helped by completing one tiny action and restoring agency", "✅", "Tiny completion restores agency; break suggestions into one very small step that can be completed immediately."),
-            ("use beauty and ritual", "Use beauty and ritual", "Low energy recovery is helped by beauty, light, music, order, objects, or small rituals", "✨", "Beauty, order, light, music, objects, or small rituals help return to self; support through sensory and ritualized cues."),
+            (
+                "give me a quiet corner",
+                "Give me a quiet corner",
+                "Low energy recovery starts with quiet space, less input, and no rushing",
+                "🌙",
+                "Recovery needs less input, less rushing, and space that does not require explanation; lower interruption density.",
+            ),
+            (
+                "talk softly for a while",
+                "Talk softly for a while",
+                "Low energy recovery is helped by calm presence and gentle conversation",
+                "🕯️",
+                "Steady presence and low-pressure conversation help the mind land; accompany first, solve second.",
+            ),
+            (
+                "change the body rhythm",
+                "Change the body rhythm",
+                "Low energy recovery is helped by walking, sleep, music, food, or a body-rhythm reset",
+                "🌿",
+                "Body rhythm can lead psychological recovery; consider walking, rest, music, food, or rhythm reset first.",
+            ),
+            (
+                "finish one tiny action",
+                "Finish one tiny action",
+                "Low energy recovery is helped by completing one tiny action and restoring agency",
+                "✅",
+                "Tiny completion restores agency; break suggestions into one very small step that can be completed immediately.",
+            ),
+            (
+                "use beauty and ritual",
+                "Use beauty and ritual",
+                "Low energy recovery is helped by beauty, light, music, order, objects, or small rituals",
+                "✨",
+                "Beauty, order, light, music, objects, or small rituals help return to self; support through sensory and ritualized cues.",
+            ),
             ("type", "None fit; I’ll name it", "A short recovery cue", "✍️"),
             ("skip", "Leave this blank for now", "", "➖"),
         ),
         "choices_zh": (
-            ("给我一块安静角落", "给我一块安静角落", "恢复有时不是被鼓励，而是先少一点声音、少一点催促。你需要一块不必解释自己的安静角落。", "🌙", "恢复时需要少输入、少催促、不必解释自己的空间；应降低打扰密度。"),
-            ("陪我轻轻说一会儿", "陪我轻轻说一会儿", "有时候不是要立刻解决什么，只是有人在旁边轻轻说话，心就会慢慢落回身体里。", "🕯️", "通过温和陪伴和低压对话恢复落地感；应先陪伴，再解决。"),
-            ("先让身体换个节奏", "先让身体换个节奏", "身体换了节奏，心也会跟着松一点。走路、睡觉、音乐、吃点东西，都可能是一条回来的路。", "🌿", "身体节奏会带动心理恢复；可优先建议散步、休息、音乐、饮食或节奏重置。"),
-            ("完成一个很小动作", "完成一个很小动作", "把一件很小的事做完，会像在地上放下一颗钉子：不大，却能让人重新有一点掌控感。", "✅", "微小完成感能帮助恢复掌控；应把建议切成很小、能立刻完成的一步。"),
-            ("靠一点美感和仪式", "靠一点美感和仪式", "一点光线、音乐、整理、香气或小物件，能把散掉的自己慢慢召回来。", "✨", "审美、秩序、光线、音乐或小仪式能帮助回到自己；可用更有感官和仪式感的方式支持。"),
+            (
+                "给我一块安静角落",
+                "给我一块安静角落",
+                "恢复有时不是被鼓励，而是先少一点声音、少一点催促。你需要一块不必解释自己的安静角落。",
+                "🌙",
+                "恢复时需要少输入、少催促、不必解释自己的空间；应降低打扰密度。",
+            ),
+            (
+                "陪我轻轻说一会儿",
+                "陪我轻轻说一会儿",
+                "有时候不是要立刻解决什么，只是有人在旁边轻轻说话，心就会慢慢落回身体里。",
+                "🕯️",
+                "通过温和陪伴和低压对话恢复落地感；应先陪伴，再解决。",
+            ),
+            (
+                "先让身体换个节奏",
+                "先让身体换个节奏",
+                "身体换了节奏，心也会跟着松一点。走路、睡觉、音乐、吃点东西，都可能是一条回来的路。",
+                "🌿",
+                "身体节奏会带动心理恢复；可优先建议散步、休息、音乐、饮食或节奏重置。",
+            ),
+            (
+                "完成一个很小动作",
+                "完成一个很小动作",
+                "把一件很小的事做完，会像在地上放下一颗钉子：不大，却能让人重新有一点掌控感。",
+                "✅",
+                "微小完成感能帮助恢复掌控；应把建议切成很小、能立刻完成的一步。",
+            ),
+            (
+                "靠一点美感和仪式",
+                "靠一点美感和仪式",
+                "一点光线、音乐、整理、香气或小物件，能把散掉的自己慢慢召回来。",
+                "✨",
+                "审美、秩序、光线、音乐或小仪式能帮助回到自己；可用更有感官和仪式感的方式支持。",
+            ),
             ("type", "都不像，我自己命名", "写一个短句就好", "✍️"),
             ("skip", "暂时留空", "", "➖"),
         ),
@@ -571,20 +968,80 @@ _STARTER_QUESTIONS = (
         "en": "When a choice stays unresolved, what usually brings the answer closer?",
         "zh": "当一个选择还悬在那里，什么会让你离答案近一点？",
         "choices_en": (
-            ("put trade-offs on paper", "Put trade-offs on paper", "Unresolved choices become clearer when trade-offs are written down and invisible factors become visible", "📝", "Externalizing and writing make hidden weights visible; help list trade-offs, costs, and what must be preserved."),
-            ("hear it spoken aloud", "Hear it spoken aloud", "Unresolved choices become clearer when spoken aloud, giving the problem a shape", "🗣️", "Speaking gives the problem shape; use conversational reflection, follow-up questions, and shared naming."),
-            ("lay out possible futures", "Lay out possible futures", "Unresolved choices become clearer by laying out possible futures and where each road leads", "🛤️", "Different paths need to be compared as lived future scenes; unfold possible futures rather than only listing pros and cons."),
-            ("try one small experiment", "Try one small experiment", "Unresolved choices become clearer through a small reversible experiment before deciding", "🧪", "Reversible experiments are a good way to gather feedback; design low-risk trials rather than forcing a one-shot decision."),
-            ("wait for the body signal", "Wait for the body signal", "Unresolved choices become clearer by noticing body signals like relief, resistance, energy, or fatigue", "🌡️", "Body signals help calibrate decisions; pay attention to relief, resistance, excitement, and fatigue."),
+            (
+                "put trade-offs on paper",
+                "Put trade-offs on paper",
+                "Unresolved choices become clearer when trade-offs are written down and invisible factors become visible",
+                "📝",
+                "Externalizing and writing make hidden weights visible; help list trade-offs, costs, and what must be preserved.",
+            ),
+            (
+                "hear it spoken aloud",
+                "Hear it spoken aloud",
+                "Unresolved choices become clearer when spoken aloud, giving the problem a shape",
+                "🗣️",
+                "Speaking gives the problem shape; use conversational reflection, follow-up questions, and shared naming.",
+            ),
+            (
+                "lay out possible futures",
+                "Lay out possible futures",
+                "Unresolved choices become clearer by laying out possible futures and where each road leads",
+                "🛤️",
+                "Different paths need to be compared as lived future scenes; unfold possible futures rather than only listing pros and cons.",
+            ),
+            (
+                "try one small experiment",
+                "Try one small experiment",
+                "Unresolved choices become clearer through a small reversible experiment before deciding",
+                "🧪",
+                "Reversible experiments are a good way to gather feedback; design low-risk trials rather than forcing a one-shot decision.",
+            ),
+            (
+                "wait for the body signal",
+                "Wait for the body signal",
+                "Unresolved choices become clearer by noticing body signals like relief, resistance, energy, or fatigue",
+                "🌡️",
+                "Body signals help calibrate decisions; pay attention to relief, resistance, excitement, and fatigue.",
+            ),
             ("type", "None fit; I’ll name it", "A short decision cue", "✍️"),
             ("skip", "Leave this blank for now", "", "➖"),
         ),
         "choices_zh": (
-            ("把取舍写到纸上", "把取舍写到纸上", "有些答案要先落到纸上才会显形。把取舍写出来，心里那些看不见的重量就有了位置。", "📝", "靠外化和书写看清选择里的隐形权重；应帮助列出取舍、代价和保留项。"),
-            ("说出来听听形状", "说出来听听形状", "话说出口之前，问题像一团雾；说出来以后，它会有边缘、有形状，也更容易被一起看见。", "🗣️", "通过表达来让问题成形；适合用对话复述、追问和共同命名。"),
-            ("把几种未来摆开", "把几种未来摆开", "你需要的不只是选项列表，而是看见每条路会把生活带向哪里，哪一种未来更像你。", "🛤️", "需要比较不同路径导向的生活图景；应帮助展开未来场景，而不是只列优缺点。"),
-            ("先做一个小实验", "先做一个小实验", "不用一下子把门关死。先试一个可逆的小动作，身体和现实都会给出一点回音。", "🧪", "适合通过可逆试探获得反馈；应设计低风险实验，而不是要求一次性定案。"),
-            ("等身体先给信号", "等身体先给信号", "有时候答案不是先从脑子里来，而是从身体里冒出来：放松、抗拒、兴奋，或者忽然很累。", "🌡️", "会用身体感受校准决定；应关注放松、抗拒、兴奋和疲惫等体感线索。"),
+            (
+                "把取舍写到纸上",
+                "把取舍写到纸上",
+                "有些答案要先落到纸上才会显形。把取舍写出来，心里那些看不见的重量就有了位置。",
+                "📝",
+                "靠外化和书写看清选择里的隐形权重；应帮助列出取舍、代价和保留项。",
+            ),
+            (
+                "说出来听听形状",
+                "说出来听听形状",
+                "话说出口之前，问题像一团雾；说出来以后，它会有边缘、有形状，也更容易被一起看见。",
+                "🗣️",
+                "通过表达来让问题成形；适合用对话复述、追问和共同命名。",
+            ),
+            (
+                "把几种未来摆开",
+                "把几种未来摆开",
+                "你需要的不只是选项列表，而是看见每条路会把生活带向哪里，哪一种未来更像你。",
+                "🛤️",
+                "需要比较不同路径导向的生活图景；应帮助展开未来场景，而不是只列优缺点。",
+            ),
+            (
+                "先做一个小实验",
+                "先做一个小实验",
+                "不用一下子把门关死。先试一个可逆的小动作，身体和现实都会给出一点回音。",
+                "🧪",
+                "适合通过可逆试探获得反馈；应设计低风险实验，而不是要求一次性定案。",
+            ),
+            (
+                "等身体先给信号",
+                "等身体先给信号",
+                "有时候答案不是先从脑子里来，而是从身体里冒出来：放松、抗拒、兴奋，或者忽然很累。",
+                "🌡️",
+                "会用身体感受校准决定；应关注放松、抗拒、兴奋和疲惫等体感线索。",
+            ),
             ("type", "都不像，我自己命名", "写一个短句就好", "✍️"),
             ("skip", "暂时留空", "", "➖"),
         ),
@@ -622,19 +1079,19 @@ _SAFETY_PROMPTS = (
     ),
 )
 _SAFETY_FIELD_LABELS = {
-    field_id: (title_en, title_zh)
-    for field_id, title_en, title_zh, _prompt_en, _prompt_zh in _SAFETY_PROMPTS
+    field_id: (title_en, title_zh) for field_id, title_en, title_zh, _prompt_en, _prompt_zh in _SAFETY_PROMPTS
 }
 _SAFETY_LABEL_TO_FIELD = {
-    label.casefold(): field_id
-    for field_id, labels in _SAFETY_FIELD_LABELS.items()
-    for label in (field_id, *labels)
+    label.casefold(): field_id for field_id, labels in _SAFETY_FIELD_LABELS.items() for label in (field_id, *labels)
 }
 _SAFETY_FACT_TEMPLATES = {
     "food_allergies": ("食物过敏：{value}。", "Food allergies: {value}."),
     "medication_allergies": ("药物过敏：{value}。", "Medication allergies: {value}."),
     "chronic_conditions": ("健康注意事项：{value}。", "Health notes: {value}."),
-    "trauma_history": ("不愿给别人说、藏在心里的秘密：{value}。", "Secrets you keep inside: {value}."),
+    "trauma_history": (
+        "不愿给别人说、藏在心里的秘密：{value}。",
+        "Secrets you keep inside: {value}.",
+    ),
 }
 
 
@@ -668,17 +1125,36 @@ def _print_init_section(language: str, title_en: str, title_zh: str, body_en: st
         _print_heading(title, body)
         return
     console = Console(highlight=False, soft_wrap=True)
-    console.print(Panel(body, title=f"[bold {BRAND_ACCENT}]{title}[/bold {BRAND_ACCENT}]", border_style=BRAND_ACCENT, padding=(1, 2)))
+    console.print(
+        Panel(
+            body,
+            title=f"[bold {BRAND_ACCENT}]{title}[/bold {BRAND_ACCENT}]",
+            border_style=BRAND_ACCENT,
+            padding=(1, 2),
+        )
+    )
 
 
 def _starter_question_model_hints(question_id: str) -> dict[str, str]:
     topic_map = {
         "inner_landscape": {"lens": "pulse", "topic": "pulse.mood.inner_landscape"},
-        "value_anchor": {"lens": "identity", "topic": "identity.values.trade_off_anchor"},
+        "value_anchor": {
+            "lens": "identity",
+            "topic": "identity.values.trade_off_anchor",
+        },
         "recent_resonance": {"lens": "pulse", "topic": "pulse.mood.recent_resonance"},
-        "pressure_pattern": {"lens": "identity", "topic": "identity.character.rhythm.pressure"},
-        "recovery_style": {"lens": "identity", "topic": "identity.character.rhythm.recovery"},
-        "decision_compass": {"lens": "identity", "topic": "identity.character.decision.compass"},
+        "pressure_pattern": {
+            "lens": "identity",
+            "topic": "identity.character.rhythm.pressure",
+        },
+        "recovery_style": {
+            "lens": "identity",
+            "topic": "identity.character.rhythm.recovery",
+        },
+        "decision_compass": {
+            "lens": "identity",
+            "topic": "identity.character.decision.compass",
+        },
     }
     return topic_map.get(question_id, {})
 
@@ -752,11 +1228,19 @@ def _run_embedding_birth_wizard(
 ) -> tuple[str, str, str, str, int | None, str | None] | _WizardBackSignal:
     provider = _wizard_choice_prompt(
         _init_text(language, "Choose Embedding Recall", "选择记忆嵌入方式"),
-        _init_text(language, "How should Elephant Agent's evidence grow to know you?", "Elephant Agent 应该怎样建立可检索的记忆来了解你？"),
+        _init_text(
+            language,
+            "How should Elephant Agent's evidence grow to know you?",
+            "Elephant Agent 应该怎样建立可检索的记忆来了解你？",
+        ),
         (
             WizardChoice(
                 value="local",
-                label=_init_text(language, "Local embedding (recommended & free)", "本地嵌入（推荐 & 免费）"),
+                label=_init_text(
+                    language,
+                    "Local embedding (recommended & free)",
+                    "本地嵌入（推荐 & 免费）",
+                ),
                 detail=_init_text(
                     language,
                     "Powered by sentence-transformers. Runs entirely on your machine.",
@@ -765,8 +1249,16 @@ def _run_embedding_birth_wizard(
             ),
             WizardChoice(
                 value="openai-compatible",
-                label=_init_text(language, "Embedding provider (paid & accuracy first)", "嵌入模型服务（付费 & 精度优先）"),
-                detail=_init_text(language, "Use an OpenAI-compatible embedding endpoint.", "使用 OpenAI-compatible 的嵌入接口。"),
+                label=_init_text(
+                    language,
+                    "Embedding provider (paid & accuracy first)",
+                    "嵌入模型服务（付费 & 精度优先）",
+                ),
+                detail=_init_text(
+                    language,
+                    "Use an OpenAI-compatible embedding endpoint.",
+                    "使用 OpenAI-compatible 的嵌入接口。",
+                ),
             ),
         ),
         default=default_provider or "local",
@@ -850,14 +1342,25 @@ def _run_embedding_birth_wizard(
         dimensions = default_dimensions or 1024
     api_key = _wizard_text_prompt(
         _init_text(language, "Embedding Key", "嵌入接口密钥"),
-        _init_text(language, "Enter an embedding key if this endpoint needs one.", "如果这个接口需要密钥，请输入。"),
+        _init_text(
+            language,
+            "Enter an embedding key if this endpoint needs one.",
+            "如果这个接口需要密钥，请输入。",
+        ),
         default=None,
         allow_back=True,
         password=True,
     )
     if api_key is WIZARD_BACK:
         return WIZARD_BACK
-    return (selected, "", str(base_url).strip(), str(model).strip(), dimensions, str(api_key).strip() or None)
+    return (
+        selected,
+        "",
+        str(base_url).strip(),
+        str(model).strip(),
+        dimensions,
+        str(api_key).strip() or None,
+    )
 
 
 def _mapping_or_empty(value: object) -> dict[str, object]:
@@ -893,8 +1396,27 @@ def _infer_init_companion_posture(bootstrap_state: object, *, language: str) -> 
         for token in ("quiet", "安静", "room", "房间", "walk", "走")
     ) or mbti in {"INFJ", "INFP", "INTJ", "INTP", "ISFJ", "ISFP"}
     action_signals = any(
-        token in " ".join((pressure, decision, recovery, str(getattr(bootstrap_state, "occupation", "")))).lower()
-        for token in ("experiment", "实验", "project", "项目", "next step", "下一步", "plan", "计划", "move fast", "先动")
+        token
+        in " ".join(
+            (
+                pressure,
+                decision,
+                recovery,
+                str(getattr(bootstrap_state, "occupation", "")),
+            )
+        ).lower()
+        for token in (
+            "experiment",
+            "实验",
+            "project",
+            "项目",
+            "next step",
+            "下一步",
+            "plan",
+            "计划",
+            "move fast",
+            "先动",
+        )
     ) or mbti in {"ENTJ", "ESTJ", "ESTP", "ISTP"}
     if language == "zh":
         if quiet_signals and not action_signals:
@@ -914,15 +1436,40 @@ def _learned_init_entries(language: str, bootstrap_state: object) -> list[tuple[
     is_zh = language == "zh"
     entries: list[tuple[str, dict[str, str]]] = []
     if is_zh:
-        entries.append(("中文", {"field": "first_language", **_INIT_FIELD_MODEL_HINTS["first_language"]}))
+        entries.append(
+            (
+                "中文",
+                {
+                    "field": "first_language",
+                    **_INIT_FIELD_MODEL_HINTS["first_language"],
+                },
+            )
+        )
     else:
-        entries.append(("English", {"field": "first_language", **_INIT_FIELD_MODEL_HINTS["first_language"]}))
+        entries.append(
+            (
+                "English",
+                {
+                    "field": "first_language",
+                    **_INIT_FIELD_MODEL_HINTS["first_language"],
+                },
+            )
+        )
 
     def add(field: str, value: object, extra: dict[str, str] | None = None) -> None:
         cleaned = str(value or "").strip()
         if not cleaned:
             return
-        entries.append((cleaned, {"field": field, **_INIT_FIELD_MODEL_HINTS.get(field, {}), **(extra or {})}))
+        entries.append(
+            (
+                cleaned,
+                {
+                    "field": field,
+                    **_INIT_FIELD_MODEL_HINTS.get(field, {}),
+                    **(extra or {}),
+                },
+            )
+        )
 
     add("preferred_name", getattr(bootstrap_state, "preferred_name", ""))
     add("occupation", getattr(bootstrap_state, "occupation", ""))
@@ -936,7 +1483,16 @@ def _learned_init_entries(language: str, bootstrap_state: object) -> list[tuple[
             text = f"MBTI：{mbti}；特征参考：{traits}" if traits else f"MBTI：{mbti}"
         else:
             text = f"MBTI: {mbti}; trait reference: {traits}" if traits else f"MBTI: {mbti}"
-        entries.append((text, {"field": "mbti", "mbti_traits": traits, **_INIT_FIELD_MODEL_HINTS["mbti"]}))
+        entries.append(
+            (
+                text,
+                {
+                    "field": "mbti",
+                    "mbti_traits": traits,
+                    **_INIT_FIELD_MODEL_HINTS["mbti"],
+                },
+            )
+        )
     add("hobbies", getattr(bootstrap_state, "hobbies", ""))
     for field_id, value in _init_care_entries(bootstrap_state):
         entries.append((value, {"field": field_id, **_INIT_FIELD_MODEL_HINTS[field_id]}))
@@ -948,7 +1504,15 @@ def _learned_init_entries(language: str, bootstrap_state: object) -> list[tuple[
         entries.append((answer, {"field": question_id, **hints}))
 
     posture = _infer_init_companion_posture(bootstrap_state, language=language)
-    entries.append((posture, {"field": "inferred_companion_posture", **_INIT_FIELD_MODEL_HINTS["inferred_companion_posture"]}))
+    entries.append(
+        (
+            posture,
+            {
+                "field": "inferred_companion_posture",
+                **_INIT_FIELD_MODEL_HINTS["inferred_companion_posture"],
+            },
+        )
+    )
     return entries
 
 
@@ -1066,7 +1630,9 @@ def _run_interactive_birth_wizard(
                 if not _go_back():
                     return None
                 continue
-            state.occupation = str(occupation).strip() or _choice_saved_value(attention_choices, str(attention_choices[0][0]))
+            state.occupation = str(occupation).strip() or _choice_saved_value(
+                attention_choices, str(attention_choices[0][0])
+            )
 
             gender = _prompt_choice_with_type(
                 state.first_language,
@@ -1221,7 +1787,9 @@ def _run_interactive_birth_wizard(
             step_index += 1
             continue
         if step == "learning_intensity":
-            answer = _prompt_learning_intensity(state.learning_intensity, allow_back=True, language=state.first_language)
+            answer = _prompt_learning_intensity(
+                state.learning_intensity, allow_back=True, language=state.first_language
+            )
             if answer is WIZARD_CANCEL:
                 return None
             if answer is WIZARD_BACK:
@@ -1268,6 +1836,7 @@ def _persist_init_question_config(runtime: CliRuntime, *, first_language: str, l
             load_global_config,
             write_global_config,
         )
+
         config_path = global_config_path_for_state_dir(runtime.paths.state_dir)
         config = load_global_config(config_path, state_dir=runtime.paths.state_dir)
         question_config = personal_model_question_config_from_global(config)
@@ -1284,7 +1853,9 @@ def _persist_init_question_config(runtime: CliRuntime, *, first_language: str, l
         return
 
 
-def _proactive_ask_config_for_learning_intensity(learning_intensity: str) -> dict[str, object]:
+def _proactive_ask_config_for_learning_intensity(
+    learning_intensity: str,
+) -> dict[str, object]:
     intensity = str(learning_intensity or "").strip().lower()
     if intensity == "low":
         return {"idle_threshold_minutes": 720, "daily_max": 2, "quiet_hours": [23, 7]}
@@ -1370,6 +1941,7 @@ def _bootstrap_personal_model_from_init(runtime: CliRuntime, session, bootstrap_
     language = _normalize_first_language(getattr(bootstrap_state, "first_language", "en"))
     try:
         from dataclasses import replace as _dc_replace
+
         profile = runtime.repository.load_personal_model_runtime_state(personal_model_id)
         if profile is not None:
             preferences = list(tuple(getattr(profile, "preferences", ()) or ()))
@@ -1410,9 +1982,7 @@ def _bootstrap_personal_model_from_init(runtime: CliRuntime, session, bootstrap_
         repository=runtime.repository,
         semantic_summary_indexer=semantic_summary_indexer,
         semantic_searcher=(
-            runtime.semantic_index_bundle.searcher
-            if runtime.semantic_index_bundle is not None
-            else None
+            runtime.semantic_index_bundle.searcher if runtime.semantic_index_bundle is not None else None
         ),
         embedding_service=embedding_service,
     )
@@ -1441,9 +2011,7 @@ def _bootstrap_personal_model_from_init(runtime: CliRuntime, session, bootstrap_
                 summary="initial profile and skill-affinity learning",
                 metadata=_init_profile_learning_metadata(
                     bootstrap_state,
-                    learning_intensity=str(
-                        getattr(bootstrap_state, "learning_intensity", "medium") or "medium"
-                    ),
+                    learning_intensity=str(getattr(bootstrap_state, "learning_intensity", "medium") or "medium"),
                     language=language,
                 ),
             )
@@ -1473,7 +2041,6 @@ def _bootstrap_personal_model_from_init(runtime: CliRuntime, session, bootstrap_
         pass
 
 
-
 def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
     provider_id = args.provider_id
     loaded = runtime.current_profile()
@@ -1486,11 +2053,14 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
     else:
         display_name = _suggest_elephant_name(runtime)
     mode = "companion"
-    personality_preset = _default_personality_preset(
-        runtime,
-        mode=mode,
-        current=(loaded.companion.personality_preset if loaded.companion is not None else None),
-    ) or "companion"
+    personality_preset = (
+        _default_personality_preset(
+            runtime,
+            mode=mode,
+            current=(loaded.companion.personality_preset if loaded.companion is not None else None),
+        )
+        or "companion"
+    )
     initiative = loaded.companion.initiative if loaded.companion is not None else "gentle"
     requested_elephant_identity_text = getattr(args, "elephant_identity_text", None)
     secret_env_var = getattr(args, "secret_env_var", None)
@@ -1651,6 +2221,7 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
         profile_state = runtime.repository.load_personal_model_runtime_state(configured.state.profile_id)
         if profile_state is not None:
             from dataclasses import replace as _dc_replace
+
             runtime.repository.upsert_personal_model_runtime_state(
                 _dc_replace(profile_state, learning_intensity=learning_intensity)
             )
@@ -1689,6 +2260,7 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
     )
     try:
         from dataclasses import replace as _dc_replace
+
         profile_state = runtime.repository.load_personal_model_runtime_state(first_elephant.personal_model_id)
         if profile_state is not None:
             runtime.repository.upsert_personal_model_runtime_state(
@@ -1698,7 +2270,10 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
         pass
     _bootstrap_personal_model_from_init(runtime, first_elephant, bootstrap_state)
     if first_elephant_status == "created":
-        _play_creating_transition("Elephant Agent init", f"{display_name} is becoming a continuing personal AI thread.")
+        _play_creating_transition(
+            "Elephant Agent init",
+            f"{display_name} is becoming a continuing personal AI thread.",
+        )
     readiness_lines = [
         f"elephant · {runtime.elephant_id_for_session(first_elephant)}",
         f"status · {first_elephant_status}",
@@ -1733,6 +2308,7 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
     )
     return 0
 
+
 def _run_brain(runtime: CliRuntime, args: argparse.Namespace) -> int:
     action = str(getattr(args, "provider_command", "configure") or "configure")
     if action == "status":
@@ -1759,7 +2335,12 @@ def _run_brain(runtime: CliRuntime, args: argparse.Namespace) -> int:
     )
     initial_state.api_key = args.api_key
     initial_state.reasoning_effort = (
-        str(getattr(args, "reasoning_effort", None) or provider.get("reasoning_effort") or initial_state.reasoning_effort).strip() or None
+        str(
+            getattr(args, "reasoning_effort", None)
+            or provider.get("reasoning_effort")
+            or initial_state.reasoning_effort
+        ).strip()
+        or None
     )
     if args.context_window_mode is not None:
         initial_state.context_window_mode = args.context_window_mode
@@ -1796,7 +2377,9 @@ def _run_brain(runtime: CliRuntime, args: argparse.Namespace) -> int:
         and not configured.api_key
         and not _provider_secret_ready(runtime, provider_id=configured.provider_id)
     ):
-        raise SystemExit("provider requires a provider key for API-key providers; rerun interactively or pass --api-key")
+        raise SystemExit(
+            "provider requires a provider key for API-key providers; rerun interactively or pass --api-key"
+        )
 
     context_window_tokens = configured.context_window_tokens
     if context_window_tokens is None and configured.model_id:
@@ -1845,7 +2428,10 @@ def _run_embedding_setup_wizard(runtime: CliRuntime) -> int:
     # Detect user's first language from global config.
     language = "en"
     try:
-        from packages.runtime_config import global_config_path_for_state_dir, load_global_config
+        from packages.runtime_config import (
+            global_config_path_for_state_dir,
+            load_global_config,
+        )
 
         config_path = global_config_path_for_state_dir(runtime.paths.state_dir)
         config = load_global_config(config_path, state_dir=runtime.paths.state_dir)
@@ -1885,7 +2471,10 @@ def _run_embedding_setup_wizard(runtime: CliRuntime) -> int:
             "Embedding provider updated",
             "Elephant Agent will use the local embedding model for semantic retrieval.",
             sections=tuple(sections),
-            next_commands=("elephant provider embeddings status", "elephant provider status"),
+            next_commands=(
+                "elephant provider embeddings status",
+                "elephant provider status",
+            ),
         )
     else:
         if not base_url or not model or dimensions is None:
@@ -1914,7 +2503,10 @@ def _run_embedding_setup_wizard(runtime: CliRuntime) -> int:
                     ),
                 ),
             ),
-            next_commands=("elephant provider embeddings status", "elephant provider status"),
+            next_commands=(
+                "elephant provider embeddings status",
+                "elephant provider status",
+            ),
         )
     return 0
 
@@ -1950,7 +2542,10 @@ def _run_embedding_provider(runtime: CliRuntime, args: argparse.Namespace) -> in
             "Embedding provider updated",
             "Elephant Agent will fall back to the local embedding default for semantic retrieval.",
             sections=tuple(sections),
-            next_commands=("elephant provider embeddings status", "elephant provider status"),
+            next_commands=(
+                "elephant provider embeddings status",
+                "elephant provider status",
+            ),
         )
         return 0
     if action != "openai-compatible":
@@ -1994,9 +2589,13 @@ def _run_embedding_provider(runtime: CliRuntime, args: argparse.Namespace) -> in
                 ),
             ),
         ),
-        next_commands=("elephant provider embeddings status", "elephant provider status"),
+        next_commands=(
+            "elephant provider embeddings status",
+            "elephant provider status",
+        ),
     )
     return 0
+
 
 def _run_elephant(runtime: CliRuntime, args: argparse.Namespace) -> int:
     report = runtime.provider_doctor()
@@ -2006,7 +2605,10 @@ def _run_elephant(runtime: CliRuntime, args: argparse.Namespace) -> int:
     raw_elephant_name = args.elephant_name
     interactive_shell = _interactive_shell_supported()
     if raw_elephant_name is None and not interactive_shell:
-        _print_heading("Name needed", "Run elephant herd new <name>, or rerun in a TTY and Elephant Agent will ask you.")
+        _print_heading(
+            "Name needed",
+            "Run elephant herd new <name>, or rerun in a TTY and Elephant Agent will ask you.",
+        )
         _print_command_hints("elephant herd new <name>", "elephant wake", "elephant herd")
         return 1
     if interactive_shell and raw_elephant_name is None:
@@ -2039,9 +2641,15 @@ def _run_elephant(runtime: CliRuntime, args: argparse.Namespace) -> int:
         _print_assistant_turn(runtime, outcome)
         return 0
     if _interactive_shell_supported():
-        return ProductizedShell(runtime, session_id=session.episode_id, opened="Shaped new", debug=args.debug).run()
+        return ProductizedShell(
+            runtime,
+            session_id=session.episode_id,
+            opened="Shaped new",
+            debug=args.debug,
+        ).run()
     _print_elephant_created(runtime, session.episode_id)
     return 0
+
 
 def _run_herd(runtime: CliRuntime, args: argparse.Namespace) -> int:
     if args.herd_command is None:
@@ -2064,7 +2672,11 @@ def _run_herd(runtime: CliRuntime, args: argparse.Namespace) -> int:
                     _print_cli_card(
                         "Elephant selection paused",
                         "No current elephant was changed.",
-                        next_commands=("elephant herd", "elephant wake", "elephant herd new <name>"),
+                        next_commands=(
+                            "elephant herd",
+                            "elephant wake",
+                            "elephant herd new <name>",
+                        ),
                     )
                     return 0
                 elephant_id = selected.elephant_id
@@ -2175,7 +2787,11 @@ def _print_fact_list(runtime: CliRuntime, *, elephant_id: str | None = None) -> 
     status_breakdown = ", ".join(_fact_status_breakdown(entries)) or "<empty>"
     fact_line_list: list[str] = []
     for entry in entries[:10]:
-        timestamp = entry.committed_at.isoformat(timespec="seconds") if getattr(entry, "committed_at", None) is not None else "<time?>"
+        timestamp = (
+            entry.committed_at.isoformat(timespec="seconds")
+            if getattr(entry, "committed_at", None) is not None
+            else "<time?>"
+        )
         metadata = dict(getattr(entry, "metadata", {}) or {})
         facet = str(metadata.get("facet") or metadata.get("topic") or "claim").strip()
         fact_line_list.append(f"{entry.fact_id} · {entry.lens}.{facet} · status={entry.status} · {timestamp}")
@@ -2206,16 +2822,23 @@ def _print_fact_list(runtime: CliRuntime, *, elephant_id: str | None = None) -> 
     )
 
 
-def _delete_personal_model_fact(runtime: CliRuntime, *, elephant_id: str | None, fact_id: str, reason: str | None) -> None:
+def _delete_personal_model_fact(
+    runtime: CliRuntime, *, elephant_id: str | None, fact_id: str, reason: str | None
+) -> None:
     session, state, resolved_elephant_id = _resolve_fact_target(runtime, elephant_id=elephant_id)
     owner_id = _fact_owner_id(session, state)
     deletion_reason = reason or "fact retired from elephant evidence command"
-    facts = tuple(runtime.repository.list_personal_model_facts(personal_model_id=owner_id, status=("active", "retired", "disputed")))
+    facts = tuple(
+        runtime.repository.list_personal_model_facts(
+            personal_model_id=owner_id, status=("active", "retired", "disputed")
+        )
+    )
     current = next((fact for fact in facts if getattr(fact, "fact_id", "") == fact_id), None)
     if current is None:
         raise ValueError(f"unknown Personal Model entry: {fact_id}")
     from dataclasses import replace as _dc_replace
     from datetime import datetime, timezone
+
     updated = _dc_replace(
         current,
         status="deleted",
@@ -2257,7 +2880,11 @@ def _run_facts(runtime: CliRuntime, args: argparse.Namespace) -> int:
         _print_cli_card(
             "Elephant Agent evidence",
             "No elephant is available yet.",
-            next_commands=("elephant init", "elephant herd new <name>", "elephant wake"),
+            next_commands=(
+                "elephant init",
+                "elephant herd new <name>",
+                "elephant wake",
+            ),
         )
         return 1
     command = args.facts_command or "list"
@@ -2325,7 +2952,10 @@ def _learning_job_lines(jobs: Iterable[object], *, runtime: CliRuntime | None = 
 
 
 def _learning_worker_lines(runtime: CliRuntime) -> tuple[str, ...]:
-    from apps.learning_worker_runtime import load_learning_worker_record, learning_worker_is_running
+    from apps.learning_worker_runtime import (
+        load_learning_worker_record,
+        learning_worker_is_running,
+    )
 
     record = load_learning_worker_record(runtime.paths.state_dir) or {}
     return (
@@ -2346,7 +2976,11 @@ def _print_learning_history(runtime: CliRuntime, *, limit: int) -> None:
             CliCardSection("Worker", _learning_worker_lines(runtime)),
             CliCardSection("Jobs", _learning_job_lines(jobs, runtime=runtime)),
         ),
-        next_commands=("elephant reflect status", "elephant reflect start", "elephant wake"),
+        next_commands=(
+            "elephant reflect status",
+            "elephant reflect start",
+            "elephant wake",
+        ),
     )
 
 
@@ -2392,7 +3026,11 @@ def _print_learning_status(runtime: CliRuntime, *, elephant_id: str | None, limi
             CliCardSection("Counts", tuple(lines)),
             CliCardSection("Recent jobs", tuple(job_lines) or ("<no learning jobs>",)),
         ),
-        next_commands=("elephant reflect queue", "elephant reflect run", "elephant reflect history"),
+        next_commands=(
+            "elephant reflect queue",
+            "elephant reflect run",
+            "elephant reflect history",
+        ),
     )
 
 
@@ -2475,7 +3113,9 @@ def _run_learn(runtime: CliRuntime, args: argparse.Namespace) -> int:
             )
             worker_exit_code = int(completed.returncode or 0)
             if worker_exit_code:
-                from apps.learning_worker_runtime import mark_learning_job_terminal_failure
+                from apps.learning_worker_runtime import (
+                    mark_learning_job_terminal_failure,
+                )
 
                 mark_learning_job_terminal_failure(
                     runtime,
@@ -2499,7 +3139,11 @@ def _run_learn(runtime: CliRuntime, args: argparse.Namespace) -> int:
                     ),
                 ),
             ),
-            next_commands=("elephant reflect list", "elephant reflect kill", "elephant wake"),
+            next_commands=(
+                "elephant reflect list",
+                "elephant reflect kill",
+                "elephant wake",
+            ),
         )
         return worker_exit_code
     raise ValueError(f"unknown learn command: {command}")
@@ -2562,7 +3206,11 @@ def _run_grow(runtime: CliRuntime, args: argparse.Namespace) -> int:
         _print_cli_card(
             "Grow paused",
             "No elephant was selected.",
-            next_commands=("elephant wake", "elephant herd", "elephant herd new <name>"),
+            next_commands=(
+                "elephant wake",
+                "elephant herd",
+                "elephant herd new <name>",
+            ),
         )
         return 0
     except LookupError:
@@ -2584,6 +3232,7 @@ def _run_grow(runtime: CliRuntime, args: argparse.Namespace) -> int:
     runtime.prepare_session_surface(episode_id)
     return _run_stream_grow_loop(runtime, episode_id, sys.stdin)
 
+
 def _run_stream_grow_loop(runtime: CliRuntime, session_id: str, stream: Iterable[str]) -> int:
     for line in stream:
         prompt = line.rstrip("\n").strip()
@@ -2596,6 +3245,7 @@ def _run_stream_grow_loop(runtime: CliRuntime, session_id: str, stream: Iterable
             return 1
         _print_assistant_turn(runtime, outcome)
     return 0
+
 
 def _run_default_entry(runtime: CliRuntime) -> int:
     _print_root_cli_help()
@@ -2616,8 +3266,14 @@ def _show_cli_banner() -> None:
         console = Console(highlight=False, soft_wrap=True)
         header = Text()
         header.append("🐘  Elephant Agent CLI\n", style=f"bold {BRAND_LIGHT}")
-        header.append("A warm, steady way back to the elephant that remembers your path.\n", style=BRAND_MUTED)
-        header.append(f"🐾  v{_resolve_elephant_version()} · here with you, built to stay.", style=BRAND_ACCENT)
+        header.append(
+            "A warm, steady way back to the elephant that remembers your path.\n",
+            style=BRAND_MUTED,
+        )
+        header.append(
+            f"🐾  v{_resolve_elephant_version()} · here with you, built to stay.",
+            style=BRAND_ACCENT,
+        )
         console.print(
             Panel(
                 Group(
@@ -2625,7 +3281,10 @@ def _show_cli_banner() -> None:
                     Text(" "),
                     Align.center(_render_cli_banner_mark()),
                     Text(" "),
-                    Text("Model what matters · ask gently · follow the path", style=BRAND_LIGHT),
+                    Text(
+                        "Model what matters · ask gently · follow the path",
+                        style=BRAND_LIGHT,
+                    ),
                 ),
                 border_style=BRAND_ACCENT,
                 title=f"[bold {BRAND_ACCENT}]Welcome[/bold {BRAND_ACCENT}]",
@@ -2644,7 +3303,10 @@ def _print_root_cli_help() -> None:
         commands=CLI_HELP_COMMANDS,
         options=(
             ("--help", "Show this message and exit."),
-            ("--no-animation", "Prefer steady output over animated transitions when the terminal supports motion."),
+            (
+                "--no-animation",
+                "Prefer steady output over animated transitions when the terminal supports motion.",
+            ),
             ("--color <auto|always|never>", "Control colorized output."),
         ),
         next_commands=CLI_HELP_NEXT_COMMANDS,
@@ -2727,36 +3389,128 @@ def build_typer_app() -> typer.Typer:
     @app.command("init")
     def init_command(
         ctx: typer.Context,
-        provider_id: str = typer.Option(DEFAULT_PROVIDER_ID, "--provider-id", help="Provider id to configure for dialogue turns."),
-        display_name: str | None = typer.Option(None, "--display-name", help="Display name to persist for the active profile."),
-        elephant_text: str | None = typer.Option(None, "--elephant-text", help="Optional identity text for the first elephant."),
-        elephant_name: str | None = typer.Option(None, "--elephant-name", help="Name for the first elephant created during init."),
+        provider_id: str = typer.Option(
+            DEFAULT_PROVIDER_ID,
+            "--provider-id",
+            help="Provider id to configure for dialogue turns.",
+        ),
+        display_name: str | None = typer.Option(
+            None,
+            "--display-name",
+            help="Display name to persist for the active profile.",
+        ),
+        elephant_text: str | None = typer.Option(
+            None,
+            "--elephant-text",
+            help="Optional identity text for the first elephant.",
+        ),
+        elephant_name: str | None = typer.Option(
+            None,
+            "--elephant-name",
+            help="Name for the first elephant created during init.",
+        ),
         base_url: str | None = typer.Option(None, "--base-url", help="Provider base URL."),
         model_id: str | None = typer.Option(None, "--model-id", help="Dialogue model id to save as default."),
         api_key: str | None = typer.Option(None, "--api-key", help="Provider API key to persist or use immediately."),
-        secret_env_var: str | None = typer.Option(None, "--secret-env-var", help="Environment variable name to read the provider key from."),
-        embedding_provider: str = typer.Option("local", "--embedding-provider", help="Embedding provider kind: local or openai-compatible."),
-        embedding_base_url: str | None = typer.Option(None, "--embedding-base-url", help="Embedding provider base URL."),
+        secret_env_var: str | None = typer.Option(
+            None,
+            "--secret-env-var",
+            help="Environment variable name to read the provider key from.",
+        ),
+        embedding_provider: str = typer.Option(
+            "local",
+            "--embedding-provider",
+            help="Embedding provider kind: local or openai-compatible.",
+        ),
+        embedding_base_url: str | None = typer.Option(
+            None, "--embedding-base-url", help="Embedding provider base URL."
+        ),
         embedding_model: str | None = typer.Option(None, "--embedding-model", help="Embedding model id."),
-        embedding_dimensions: str | None = typer.Option(None, "--embedding-dimensions", help="Embedding vector dimensions."),
+        embedding_dimensions: str | None = typer.Option(
+            None, "--embedding-dimensions", help="Embedding vector dimensions."
+        ),
         embedding_api_key: str | None = typer.Option(None, "--embedding-api-key", help="Embedding API key."),
-        embedding_secret_env_var: str | None = typer.Option(None, "--embedding-secret-env-var", help="Environment variable name for the embedding provider key."),
-        context_window_mode: str | None = typer.Option(None, "--context-window-mode", help="Context window selection mode."),
-        context_window: str | None = typer.Option(None, "--context-window", help="Explicit context window token count."),
-        first_language: str = typer.Option("en", "--first-language", help="User first language for Personal Model bootstrap: en or zh."),
-        learning_intensity: str = typer.Option("medium", "--learning-intensity", help="Personal Model question cadence tier: low, medium, or high."),
-        preferred_name: str | None = typer.Option(None, "--preferred-name", help="Preferred name for Personal Model bootstrap."),
-        age: str | None = typer.Option(None, "--age", help="Optional age or age range for Personal Model bootstrap."),
-        birth_date: str | None = typer.Option(None, "--birth-date", help="Optional birth date for Personal Model bootstrap."),
-        gender: str | None = typer.Option(None, "--gender", help="Optional gender/self-description for Personal Model bootstrap."),
-        occupation: str | None = typer.Option(None, "--occupation", help="Optional role or occupation for Personal Model bootstrap."),
-        city: str | None = typer.Option(None, "--city", help="Optional city or timezone for Personal Model bootstrap."),
-        mbti: str | None = typer.Option(None, "--mbti", help="Optional MBTI/self-label for Personal Model bootstrap."),
-        hobbies: str | None = typer.Option(None, "--hobbies", help="Optional comma-separated personal hobbies for Personal Model bootstrap."),
-        astrology: str | None = typer.Option(None, "--astrology", help="Optional astrology/zodiac self-label for Personal Model bootstrap."),
-        safety_boundaries: str | None = typer.Option(None, "--safety-boundaries", help="Optional boundaries Elephant Agent should respect."),
-        communication_preference: str | None = typer.Option(None, "--communication-preference", help="Optional communication preference for Personal Model bootstrap."),
-        relationship_mode: str | None = typer.Option(None, "--relationship-mode", help="Optional starting relationship mode for Personal Model bootstrap."),
+        embedding_secret_env_var: str | None = typer.Option(
+            None,
+            "--embedding-secret-env-var",
+            help="Environment variable name for the embedding provider key.",
+        ),
+        context_window_mode: str | None = typer.Option(
+            None, "--context-window-mode", help="Context window selection mode."
+        ),
+        context_window: str | None = typer.Option(
+            None, "--context-window", help="Explicit context window token count."
+        ),
+        first_language: str = typer.Option(
+            "en",
+            "--first-language",
+            help="User first language for Personal Model bootstrap: en or zh.",
+        ),
+        learning_intensity: str = typer.Option(
+            "medium",
+            "--learning-intensity",
+            help="Personal Model question cadence tier: low, medium, or high.",
+        ),
+        preferred_name: str | None = typer.Option(
+            None,
+            "--preferred-name",
+            help="Preferred name for Personal Model bootstrap.",
+        ),
+        age: str | None = typer.Option(
+            None,
+            "--age",
+            help="Optional age or age range for Personal Model bootstrap.",
+        ),
+        birth_date: str | None = typer.Option(
+            None,
+            "--birth-date",
+            help="Optional birth date for Personal Model bootstrap.",
+        ),
+        gender: str | None = typer.Option(
+            None,
+            "--gender",
+            help="Optional gender/self-description for Personal Model bootstrap.",
+        ),
+        occupation: str | None = typer.Option(
+            None,
+            "--occupation",
+            help="Optional role or occupation for Personal Model bootstrap.",
+        ),
+        city: str | None = typer.Option(
+            None,
+            "--city",
+            help="Optional city or timezone for Personal Model bootstrap.",
+        ),
+        mbti: str | None = typer.Option(
+            None,
+            "--mbti",
+            help="Optional MBTI/self-label for Personal Model bootstrap.",
+        ),
+        hobbies: str | None = typer.Option(
+            None,
+            "--hobbies",
+            help="Optional comma-separated personal hobbies for Personal Model bootstrap.",
+        ),
+        astrology: str | None = typer.Option(
+            None,
+            "--astrology",
+            help="Optional astrology/zodiac self-label for Personal Model bootstrap.",
+        ),
+        safety_boundaries: str | None = typer.Option(
+            None,
+            "--safety-boundaries",
+            help="Optional boundaries Elephant Agent should respect.",
+        ),
+        communication_preference: str | None = typer.Option(
+            None,
+            "--communication-preference",
+            help="Optional communication preference for Personal Model bootstrap.",
+        ),
+        relationship_mode: str | None = typer.Option(
+            None,
+            "--relationship-mode",
+            help="Optional starting relationship mode for Personal Model bootstrap.",
+        ),
         non_interactive: bool = typer.Option(False, "--non-interactive", help="Skip wizards and rely on flags only."),
     ) -> None:
         params = ctx.parent.params if ctx.parent is not None else ctx.params
@@ -2809,7 +3563,9 @@ def build_typer_app() -> typer.Typer:
     @app.command("wake")
     def wake_command(
         ctx: typer.Context,
-        elephant_id: str | None = typer.Option(None, "--elephant-id", help="Open the next Episode for a known elephant."),
+        elephant_id: str | None = typer.Option(
+            None, "--elephant-id", help="Open the next Episode for a known elephant."
+        ),
         debug: bool = typer.Option(False, "--debug", help="Show runtime diagnostics inside the wake surface."),
         message: str | None = typer.Option(None, "--message", help="Run one wake turn and exit."),
     ) -> None:
@@ -2857,7 +3613,9 @@ def build_typer_app() -> typer.Typer:
     @provider_app.command("models")
     def provider_models_command(
         ctx: typer.Context,
-        provider_id: str | None = typer.Option(None, "--provider-id", help="Inspect models for a specific provider id."),
+        provider_id: str | None = typer.Option(
+            None, "--provider-id", help="Inspect models for a specific provider id."
+        ),
     ) -> None:
         params = ctx.parent.parent.params if ctx.parent is not None and ctx.parent.parent is not None else ctx.params
         runtime = _cli_runtime(params["state_dir"])
@@ -2870,10 +3628,22 @@ def build_typer_app() -> typer.Typer:
         base_url: str | None = typer.Option(None, "--base-url", help="Provider base URL."),
         model_id: str | None = typer.Option(None, "--model-id", help="Dialogue model id."),
         api_key: str | None = typer.Option(None, "--api-key", help="Provider API key."),
-        secret_env_var: str | None = typer.Option(None, "--secret-env-var", help="Environment variable name to read the provider key from."),
-        reasoning_effort: str | None = typer.Option(None, "--reasoning-effort", help="Reasoning effort to save for the active model."),
-        context_window_mode: str | None = typer.Option(None, "--context-window-mode", help="Context window selection mode."),
-        context_window: str | None = typer.Option(None, "--context-window", help="Explicit context window token count."),
+        secret_env_var: str | None = typer.Option(
+            None,
+            "--secret-env-var",
+            help="Environment variable name to read the provider key from.",
+        ),
+        reasoning_effort: str | None = typer.Option(
+            None,
+            "--reasoning-effort",
+            help="Reasoning effort to save for the active model.",
+        ),
+        context_window_mode: str | None = typer.Option(
+            None, "--context-window-mode", help="Context window selection mode."
+        ),
+        context_window: str | None = typer.Option(
+            None, "--context-window", help="Explicit context window token count."
+        ),
         non_interactive: bool = typer.Option(False, "--non-interactive", help="Skip interactive provider selection."),
     ) -> None:
         params = ctx.parent.parent.params if ctx.parent is not None and ctx.parent.parent is not None else ctx.params
@@ -2894,25 +3664,56 @@ def build_typer_app() -> typer.Typer:
 
     @provider_embeddings_app.command("status")
     def provider_embeddings_status_command(ctx: typer.Context) -> None:
-        params = ctx.parent.parent.parent.params if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent else ctx.params
+        params = (
+            ctx.parent.parent.parent.params
+            if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent
+            else ctx.params
+        )
         runtime = _cli_runtime(params["state_dir"])
-        raise typer.Exit(_run_brain(runtime, _namespace(provider_command="embeddings", embedding_command="status")))
+        raise typer.Exit(
+            _run_brain(
+                runtime,
+                _namespace(provider_command="embeddings", embedding_command="status"),
+            )
+        )
 
     @provider_embeddings_app.command("local")
     def provider_embeddings_local_command(
         ctx: typer.Context,
         source: str = typer.Option("huggingface", "--source", help="Model source: huggingface or modelscope."),
     ) -> None:
-        params = ctx.parent.parent.parent.params if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent else ctx.params
+        params = (
+            ctx.parent.parent.parent.params
+            if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent
+            else ctx.params
+        )
         runtime = _cli_runtime(params["state_dir"])
-        raise typer.Exit(_run_brain(runtime, _namespace(provider_command="embeddings", embedding_command="local", embedding_source=source)))
+        raise typer.Exit(
+            _run_brain(
+                runtime,
+                _namespace(
+                    provider_command="embeddings",
+                    embedding_command="local",
+                    embedding_source=source,
+                ),
+            )
+        )
 
     @provider_embeddings_app.command("setup")
     def provider_embeddings_setup_command(ctx: typer.Context) -> None:
         """Interactive embedding provider setup wizard."""
-        params = ctx.parent.parent.parent.params if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent else ctx.params
+        params = (
+            ctx.parent.parent.parent.params
+            if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent
+            else ctx.params
+        )
         runtime = _cli_runtime(params["state_dir"])
-        raise typer.Exit(_run_brain(runtime, _namespace(provider_command="embeddings", embedding_command="setup")))
+        raise typer.Exit(
+            _run_brain(
+                runtime,
+                _namespace(provider_command="embeddings", embedding_command="setup"),
+            )
+        )
 
     @provider_embeddings_app.command("openai-compatible")
     def provider_embeddings_openai_command(
@@ -2921,9 +3722,17 @@ def build_typer_app() -> typer.Typer:
         model: str = typer.Option(..., "--model", help="Embedding model id."),
         dimensions: str = typer.Option(..., "--dimensions", help="Embedding vector dimensions."),
         api_key: str | None = typer.Option(None, "--api-key", help="Embedding API key."),
-        secret_env_var: str | None = typer.Option(None, "--secret-env-var", help="Environment variable name for the embedding provider key."),
+        secret_env_var: str | None = typer.Option(
+            None,
+            "--secret-env-var",
+            help="Environment variable name for the embedding provider key.",
+        ),
     ) -> None:
-        params = ctx.parent.parent.parent.params if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent else ctx.params
+        params = (
+            ctx.parent.parent.parent.params
+            if ctx.parent and ctx.parent.parent and ctx.parent.parent.parent
+            else ctx.params
+        )
         runtime = _cli_runtime(params["state_dir"])
         args = _namespace(
             provider_command="embeddings",
@@ -2996,7 +3805,14 @@ def build_typer_app() -> typer.Typer:
         runtime = _cli_runtime(params["state_dir"])
         try:
             raise typer.Exit(
-                _run_herd(runtime, _namespace(herd_command="delete", elephant_id=elephant_id, delete_all=delete_all))
+                _run_herd(
+                    runtime,
+                    _namespace(
+                        herd_command="delete",
+                        elephant_id=elephant_id,
+                        delete_all=delete_all,
+                    ),
+                )
             )
         except ValueError as error:
             raise typer.BadParameter(str(error)) from error
@@ -3011,7 +3827,11 @@ def build_typer_app() -> typer.Typer:
     @facts_app.command("list")
     def facts_list_command(
         ctx: typer.Context,
-        elephant_id: str | None = typer.Option(None, "--elephant-id", help="Resolve Personal Model facts through a named elephant."),
+        elephant_id: str | None = typer.Option(
+            None,
+            "--elephant-id",
+            help="Resolve Personal Model facts through a named elephant.",
+        ),
     ) -> None:
         params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
         runtime = _cli_runtime(params["state_dir"])
@@ -3021,8 +3841,16 @@ def build_typer_app() -> typer.Typer:
     def facts_delete_command(
         ctx: typer.Context,
         fact_id: str = typer.Argument(..., help="Name the Personal Model entry to retire."),
-        elephant_id: str | None = typer.Option(None, "--elephant-id", help="Resolve Personal Model facts through a named elephant."),
-        reason: str | None = typer.Option(None, "--reason", help="Record why this Personal Model entry is being retired."),
+        elephant_id: str | None = typer.Option(
+            None,
+            "--elephant-id",
+            help="Resolve Personal Model facts through a named elephant.",
+        ),
+        reason: str | None = typer.Option(
+            None,
+            "--reason",
+            help="Record why this Personal Model entry is being retired.",
+        ),
     ) -> None:
         params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
         runtime = _cli_runtime(params["state_dir"])
@@ -3030,7 +3858,12 @@ def build_typer_app() -> typer.Typer:
             raise typer.Exit(
                 _run_facts(
                     runtime,
-                    _namespace(facts_command="delete", elephant_id=elephant_id, fact_id=fact_id, reason=reason),
+                    _namespace(
+                        facts_command="delete",
+                        elephant_id=elephant_id,
+                        fact_id=fact_id,
+                        reason=reason,
+                    ),
                 )
             )
         except ValueError as error:
@@ -3046,7 +3879,12 @@ def build_typer_app() -> typer.Typer:
             params = ctx.parent.params if ctx.parent is not None else ctx.params
             runtime = _cli_runtime(params["state_dir"])
             try:
-                raise typer.Exit(_run_learn(runtime, _namespace(learn_command="list", elephant_id=elephant_id, limit=limit)))
+                raise typer.Exit(
+                    _run_learn(
+                        runtime,
+                        _namespace(learn_command="list", elephant_id=elephant_id, limit=limit),
+                    )
+                )
             except ValueError as error:
                 raise typer.BadParameter(str(error)) from error
 
@@ -3064,10 +3902,22 @@ def build_typer_app() -> typer.Typer:
     def reflect_run_command(
         ctx: typer.Context,
         elephant_id: str | None = typer.Option(None, "--elephant-id", help="Run reflect for a named elephant."),
-        features: str | None = typer.Option(None, "--features", help="Comma-separated feature set (pm,questions,dream,diary,skills,recall,compress)."),
-        date: str | None = typer.Option(None, "--date", help="Target date for dream/diary feature (YYYY-MM-DD). Defaults to today for dream and yesterday for diary."),
+        features: str | None = typer.Option(
+            None,
+            "--features",
+            help="Comma-separated feature set (pm,questions,dream,diary,skills,recall,compress).",
+        ),
+        date: str | None = typer.Option(
+            None,
+            "--date",
+            help="Target date for dream/diary feature (YYYY-MM-DD). Defaults to today for dream and yesterday for diary.",
+        ),
         wait: bool = typer.Option(False, "--wait", help="Wait for the reflect agent to finish."),
-        install_cron: bool = typer.Option(False, "--install-cron", help="Install the built-in nightly Dream learning cron job."),
+        install_cron: bool = typer.Option(
+            False,
+            "--install-cron",
+            help="Install the built-in nightly Dream learning cron job.",
+        ),
     ) -> None:
         """Run a reflect agent with the specified features."""
         from datetime import date as date_type, timedelta
@@ -3082,13 +3932,19 @@ def build_typer_app() -> typer.Typer:
                 cron_label = "Nightly dream cron job installed."
             else:
                 if "dream" not in requested_features:
-                    raise typer.BadParameter("--install-cron only installs the dream feature; diary remains manual-only outside Dream")
+                    raise typer.BadParameter(
+                        "--install-cron only installs the dream feature; diary remains manual-only outside Dream"
+                    )
                 _ensure_dream_cron(runtime)
                 cron_label = "Nightly dream cron job installed."
             _print_cli_card(
                 "Elephant Agent learning cron",
                 cron_label,
-                next_commands=("elephant reflect run --features dream --date <YYYY-MM-DD>", "elephant reflect run --features diary --date <YYYY-MM-DD>", "elephant cron list"),
+                next_commands=(
+                    "elephant reflect run --features dream --date <YYYY-MM-DD>",
+                    "elephant reflect run --features diary --date <YYYY-MM-DD>",
+                    "elephant cron list",
+                ),
             )
             if not features:
                 raise typer.Exit(0)
@@ -3125,7 +3981,14 @@ def build_typer_app() -> typer.Typer:
             worker_exit_code = 0
             if wait:
                 completed = subprocess.run(
-                    (sys.executable, "-m", "apps.learning_worker_command", "--state-dir", str(runtime.paths.state_dir), "--once"),
+                    (
+                        sys.executable,
+                        "-m",
+                        "apps.learning_worker_command",
+                        "--state-dir",
+                        str(runtime.paths.state_dir),
+                        "--once",
+                    ),
                     check=False,
                 )
                 worker_exit_code = int(completed.returncode or 0)
@@ -3134,12 +3997,15 @@ def build_typer_app() -> typer.Typer:
                 "Elephant Agent reflect",
                 f"Reflect agent {'completed' if wait else 'queued'}.",
                 sections=(
-                    CliCardSection("Job", (
-                        f"job_id · {job.job_id}",
-                        f"trigger · {trigger}",
-                        f"features · {features or '(trigger default)'}",
-                        f"status · {worker_line}",
-                    )),
+                    CliCardSection(
+                        "Job",
+                        (
+                            f"job_id · {job.job_id}",
+                            f"trigger · {trigger}",
+                            f"features · {features or '(trigger default)'}",
+                            f"status · {worker_line}",
+                        ),
+                    ),
                 ),
                 next_commands=("elephant reflect list",),
             )

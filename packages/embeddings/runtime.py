@@ -18,7 +18,9 @@ ELEPHANT_EMBED_MODEL_ID = "llm-semantic-router/elephant-embeddings-v1-text-small
 ELEPHANT_EMBED_SOURCE_URL = "https://huggingface.co/llm-semantic-router/elephant-embeddings-v1-text-small"
 ELEPHANT_EMBED_MODEL_ROOT = str(Path.home() / ".elephant" / "models" / "elephant-embeddings-v1-text-small")
 ELEPHANT_EMBED_MODELSCOPE_ID = "agentic-intelligence-lab/elephant-embeddings-v1-text-small"
-ELEPHANT_EMBED_MODELSCOPE_URL = "https://modelscope.cn/models/agentic-intelligence-lab/elephant-embeddings-v1-text-small"
+ELEPHANT_EMBED_MODELSCOPE_URL = (
+    "https://modelscope.cn/models/agentic-intelligence-lab/elephant-embeddings-v1-text-small"
+)
 ELEPHANT_EMBED_ONLINE_DIMENSIONS = (64, 256, 768)
 _ALLOWED_EMBEDDING_STATUSES = frozenset({"pending", "downloading", "ready", "skipped", "failed"})
 _ALLOWED_PRELOAD_STATUSES = frozenset({"idle", "steadying", "ready", "failed", "skipped"})
@@ -47,6 +49,7 @@ def _suppress_local_embedding_load_warnings(model_root: str | None = None) -> No
     global _LOCAL_EMBEDDING_LOG_FILTER_INSTALLED
     _LOCAL_EMBEDDING_WARNING_MODEL_ROOTS.add(str(embedding_model_root_path(model_root)))
     if not _LOCAL_EMBEDDING_LOG_FILTER_INSTALLED:
+
         class _LocalEmbeddingLoadFilter(logging.Filter):
             def filter(self, record: logging.LogRecord) -> bool:
                 message = record.getMessage()
@@ -84,9 +87,7 @@ def sentence_transformers_dependencies_ready() -> bool:
 def resolve_embedding_dimensions(latency_mode: str = "balanced", *, dimensions: int | None = None) -> int:
     if dimensions is not None:
         if dimensions not in ELEPHANT_EMBED_ONLINE_DIMENSIONS:
-            raise ValueError(
-                f"embedding dimensions must be one of {ELEPHANT_EMBED_ONLINE_DIMENSIONS}: {dimensions}"
-            )
+            raise ValueError(f"embedding dimensions must be one of {ELEPHANT_EMBED_ONLINE_DIMENSIONS}: {dimensions}")
         return dimensions
     normalized = latency_mode.strip().lower()
     if normalized in {"fast", "low-latency", "64d"}:
@@ -253,11 +254,19 @@ class EmbeddingProvider(Protocol):
     def preload_state(self) -> EmbeddingPreloadState: ...
 
     def preload(
-        self, *, target: str, entries: tuple[EmbeddingPreloadEntry, ...], latency_mode: str = "balanced"
+        self,
+        *,
+        target: str,
+        entries: tuple[EmbeddingPreloadEntry, ...],
+        latency_mode: str = "balanced",
     ) -> EmbeddingPreloadState: ...
 
     def queue_backfill(
-        self, *, target: str, entries: tuple[EmbeddingPreloadEntry, ...], latency_mode: str = "balanced"
+        self,
+        *,
+        target: str,
+        entries: tuple[EmbeddingPreloadEntry, ...],
+        latency_mode: str = "balanced",
     ) -> EmbeddingPreloadState: ...
 
     def cached_vector(self, *, target: str, cache_key: str, dimensions: int) -> EmbeddingVector | None: ...
@@ -501,9 +510,7 @@ class SentenceTransformerEmbeddingProvider:
     def _prune_expired_failures_locked(self) -> None:
         current = _utc_now()
         expired = [
-            worker_key
-            for worker_key, (_message, retry_at) in self._failure_by_target.items()
-            if retry_at <= current
+            worker_key for worker_key, (_message, retry_at) in self._failure_by_target.items() if retry_at <= current
         ]
         for worker_key in expired:
             self._failure_by_target.pop(worker_key, None)
@@ -523,12 +530,18 @@ class SentenceTransformerEmbeddingProvider:
     def _is_pending_locked(self, *, target: str, cache_key: str, dimensions: int) -> bool:
         normalized_target = _normalize_target(target)
         resolved_cache_key = str(cache_key).strip()
-        for (pending_target, pending_dimensions), bucket in self._queued_entries.items():
+        for (
+            pending_target,
+            pending_dimensions,
+        ), bucket in self._queued_entries.items():
             if pending_target != normalized_target or pending_dimensions < dimensions:
                 continue
             if resolved_cache_key in bucket:
                 return True
-        for (pending_target, pending_dimensions), inflight in self._inflight_entries.items():
+        for (
+            pending_target,
+            pending_dimensions,
+        ), inflight in self._inflight_entries.items():
             if pending_target != normalized_target or pending_dimensions < dimensions:
                 continue
             if resolved_cache_key in inflight:
@@ -608,7 +621,11 @@ class SentenceTransformerEmbeddingProvider:
                 source_text=text,
             )
             for index, (text, values) in enumerate(
-                zip(request.texts, self._encode_texts(request.texts, dimensions=dimensions), strict=True)
+                zip(
+                    request.texts,
+                    self._encode_texts(request.texts, dimensions=dimensions),
+                    strict=True,
+                )
             )
         )
         return EmbeddingBatch(
@@ -630,10 +647,7 @@ class SentenceTransformerEmbeddingProvider:
         runtime_state = self._runtime_state()
         with self._cache_lock:
             self._prune_expired_failures_locked()
-            failures = tuple(
-                f"{target}:{dimensions}d"
-                for (target, dimensions) in sorted(self._failure_by_target)
-            )
+            failures = tuple(f"{target}:{dimensions}d" for (target, dimensions) in sorted(self._failure_by_target))
             ready_dimensions = tuple(sorted(self._ready_targets_by_dimension))
         if status == "ready":
             if runtime_state == "steadying":
@@ -665,16 +679,11 @@ class SentenceTransformerEmbeddingProvider:
         with self._cache_lock:
             self._prune_expired_failures_locked()
             active_workers = {key for key, worker in self._workers.items() if worker.is_alive()}
-            queued = {
-                key: value
-                for key, value in self._queued_entries.items()
-                if value
-            }
-            pending_targets = {
-                target
-                for target, _dimensions in (*active_workers, *queued.keys())
-            }
-            ready_targets = set().union(*self._ready_targets_by_dimension.values()) if self._ready_targets_by_dimension else set()
+            queued = {key: value for key, value in self._queued_entries.items() if value}
+            pending_targets = {target for target, _dimensions in (*active_workers, *queued.keys())}
+            ready_targets = (
+                set().union(*self._ready_targets_by_dimension.values()) if self._ready_targets_by_dimension else set()
+            )
             pending_targets.update(target for target in _DEFAULT_PRELOAD_TARGETS if target not in ready_targets)
             ready_dimensions = tuple(sorted(self._ready_targets_by_dimension))
             failures = tuple(sorted(self._failure_by_target.items()))

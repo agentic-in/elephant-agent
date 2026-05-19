@@ -69,7 +69,9 @@ class CompanionScenarioFixturesTest(unittest.TestCase):
         self.assertTrue(relationship_policy.text_first)
         self.assertIn("companion text-first continuity", relationship_policy.summary())
 
-    def test_companion_governance_path_distinguishes_defaults_from_onboarded_identity(self) -> None:
+    def test_companion_governance_path_distinguishes_defaults_from_onboarded_identity(
+        self,
+    ) -> None:
         from packages.contracts.runtime import PersonalModelRuntimeState
         from packages.state import (
             CompanionSettings,
@@ -199,7 +201,9 @@ class CompanionScenarioFixturesTest(unittest.TestCase):
         self.assertEqual(identity.personality_preset, "operator")
         self.assertEqual(user.preferred_name, "Bit")
 
-    def test_companion_turn_reconciliation_does_not_mutate_profile_without_management_tools(self) -> None:
+    def test_companion_turn_reconciliation_does_not_mutate_profile_without_management_tools(
+        self,
+    ) -> None:
         from apps.cli.runtime import CliRuntime
 
         with tempfile.TemporaryDirectory() as tmpdir:

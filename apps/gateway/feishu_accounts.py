@@ -1,42 +1,25 @@
 """Account discovery and credential resolution for the Feishu gateway."""
 
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
-import importlib.util
-import json
 import logging
 import os
-import queue
-import threading
-import time
-from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
-from uuid import uuid4
 
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
-    GatewayExchange,
-    GatewayInboundMessage,
-    GatewayOutboundMessage,
 )
 
 from apps.provider_runtime import secret_reference_from_payload
-from apps.runtime_layout import default_cli_state_dir
-from packages.auth import AuthProfile, EnvironmentSecretStore, ProfileCredentialResolver, SecretReference
-
-from .cli_control import (
-    CliRuntimeFactory,
-    FeishuCliBindingStore,
-    FeishuCliControlService,
-    load_feishu_cli_control_config,
+from packages.auth import (
+    AuthProfile,
+    EnvironmentSecretStore,
+    ProfileCredentialResolver,
+    SecretReference,
 )
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
-from .runtime import FEISHU_ADAPTER_ID, FeishuMessagingAdapter, GatewayApp, build_gateway_app
+
+from .runtime import FEISHU_ADAPTER_ID, GatewayApp
 
 DEFAULT_FEISHU_APP_ID_ENV = "ELEPHANT_FEISHU_APP_ID"
 DEFAULT_FEISHU_APP_SECRET_ENV = "ELEPHANT_FEISHU_APP_SECRET"
@@ -63,7 +46,10 @@ LOGGER = logging.getLogger(__name__)
 
 from .feishu_support import *  # noqa: F401,F403
 
-def _feishu_event_identifiers(payload: Mapping[str, object]) -> tuple[str | None, str | None]:
+
+def _feishu_event_identifiers(
+    payload: Mapping[str, object],
+) -> tuple[str | None, str | None]:
     header = _mapping(payload.get("header")) or {}
     event = _mapping(payload.get("event")) or {}
     message = _mapping(event.get("message")) or {}
@@ -71,6 +57,7 @@ def _feishu_event_identifiers(payload: Mapping[str, object]) -> tuple[str | None
         _optional_text(header.get("event_id")),
         _optional_text(message.get("message_id")),
     )
+
 
 def _feishu_secret_reference_from_payload(
     payload: Mapping[str, object],
@@ -80,17 +67,14 @@ def _feishu_secret_reference_from_payload(
     normalized_payload = dict(payload)
     secret_key = str(normalized_payload.get("secret_key") or "")
     if not secret_key:
-        raise ValueError(
-            f"feishu account '{account_id}' secret_references entries must declare secret_key"
-        )
+        raise ValueError(f"feishu account '{account_id}' secret_references entries must declare secret_key")
     normalized_payload.setdefault("provider_id", FEISHU_ADAPTER_ID)
     normalized_payload.setdefault("secret_name", secret_key)
     reference = secret_reference_from_payload(normalized_payload)
     if reference.provider_id != FEISHU_ADAPTER_ID:
-        raise ValueError(
-            f"feishu account '{account_id}' secret reference provider_id must be {FEISHU_ADAPTER_ID}"
-        )
+        raise ValueError(f"feishu account '{account_id}' secret reference provider_id must be {FEISHU_ADAPTER_ID}")
     return reference
+
 
 def _secret_reference_env_alias(
     references: tuple[SecretReference, ...],
@@ -104,17 +88,17 @@ def _secret_reference_env_alias(
             return candidates[0]
     return None
 
+
 def _credential_env_vars(config: FeishuGatewayAccountConfig) -> tuple[str, ...]:
     if config.secret_references:
         return tuple(
             dict.fromkeys(
-                env_var
-                for reference in config.secret_references
-                for env_var in reference.env_var_candidates()
+                env_var for reference in config.secret_references for env_var in reference.env_var_candidates()
             )
         )
     env_vars = [config.app_id_env_var, config.app_secret_env_var]
     return tuple(dict.fromkeys(value for value in env_vars if value))
+
 
 def _feishu_account_profile(config: FeishuGatewayAccountConfig) -> AuthProfile:
     return AuthProfile(
@@ -129,6 +113,7 @@ def _feishu_account_profile(config: FeishuGatewayAccountConfig) -> AuthProfile:
             "account_id": config.account_id,
         },
     )
+
 
 def load_feishu_gateway_accounts(
     app: GatewayApp,
@@ -145,9 +130,7 @@ def load_feishu_gateway_accounts(
     default_surface = _normalize_configured_transport((feishu_payload or {}).get("surface"))
     default_event_path = _normalize_path((feishu_payload or {}).get("event_path"))
     default_base_url = str((feishu_payload or {}).get("base_url") or DEFAULT_FEISHU_BASE_URL)
-    default_token_path = _normalize_path(
-        (feishu_payload or {}).get("token_path") or DEFAULT_FEISHU_TOKEN_PATH
-    )
+    default_token_path = _normalize_path((feishu_payload or {}).get("token_path") or DEFAULT_FEISHU_TOKEN_PATH)
     accounts_payload = (feishu_payload or {}).get("accounts")
     if isinstance(accounts_payload, list) and accounts_payload:
         resolved: list[FeishuGatewayAccountConfig] = []
@@ -167,13 +150,9 @@ def load_feishu_gateway_accounts(
                     if isinstance(item, Mapping)
                 )
                 if len(secret_references) != len(secret_references_payload):
-                    raise ValueError(
-                        f"feishu account '{account_id}' secret_references entries must be JSON objects"
-                    )
+                    raise ValueError(f"feishu account '{account_id}' secret_references entries must be JSON objects")
             else:
-                raise ValueError(
-                    f"feishu account '{account_id}' secret_references must be a JSON array"
-                )
+                raise ValueError(f"feishu account '{account_id}' secret_references must be a JSON array")
             app_id_env_var = str(
                 env_payload.get("app_id")
                 or _secret_reference_env_alias(secret_references, "app_id")
@@ -208,6 +187,7 @@ def load_feishu_gateway_accounts(
         ),
     )
 
+
 def resolve_feishu_account(
     config: FeishuGatewayAccountConfig,
     *,
@@ -215,9 +195,9 @@ def resolve_feishu_account(
 ) -> FeishuResolvedAccount:
     env = environ or os.environ
     if config.secret_references:
-        credentials = ProfileCredentialResolver(EnvironmentSecretStore(env)).resolve(
-            _feishu_account_profile(config)
-        ).as_mapping()
+        credentials = (
+            ProfileCredentialResolver(EnvironmentSecretStore(env)).resolve(_feishu_account_profile(config)).as_mapping()
+        )
         app_id = str(credentials.get("app_id") or "")
         app_secret = str(credentials.get("app_secret") or "")
         if not app_id or not app_secret:
@@ -239,8 +219,7 @@ def resolve_feishu_account(
         app_secret = str(env.get(LEGACY_FEISHU_APP_SECRET_ENV) or "")
     if not app_id or not app_secret:
         raise LookupError(
-            f"feishu account '{config.account_id}' requires "
-            f"{config.app_id_env_var} and {config.app_secret_env_var}"
+            f"feishu account '{config.account_id}' requires {config.app_id_env_var} and {config.app_secret_env_var}"
         )
     return FeishuResolvedAccount(
         account_id=config.account_id,
@@ -248,6 +227,7 @@ def resolve_feishu_account(
         app_secret=app_secret,
         config=config,
     )
+
 
 __all__ = [
     "DEFAULT_FEISHU_APP_ID_ENV",

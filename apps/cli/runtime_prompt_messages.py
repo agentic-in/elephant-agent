@@ -29,7 +29,13 @@ def session_history_messages(
     if summary:
         messages.append(PromptMessage(role="assistant", content=summary))
     if delivery is not None and delivery.summary.strip():
-        messages.append(PromptMessage(role="assistant", content=delivery.summary.strip(), metadata={"source": "delivery"}))
+        messages.append(
+            PromptMessage(
+                role="assistant",
+                content=delivery.summary.strip(),
+                metadata={"source": "delivery"},
+            )
+        )
     return tuple(messages)
 
 
@@ -82,4 +88,3 @@ def prompt_messages_tuple(value: Any) -> tuple[PromptMessage, ...]:
                 )
             )
     return tuple(messages)
-

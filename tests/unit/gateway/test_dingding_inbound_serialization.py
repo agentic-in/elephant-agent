@@ -1,4 +1,5 @@
 """Unit tests for DingDing same-conversation inbound serialization."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +8,10 @@ import unittest
 from unittest import mock
 
 from apps.gateway.dingding_service import DingdingGatewayService
-from apps.gateway.dingding_support import DingdingGatewayAccountConfig, DingdingResolvedAccount
+from apps.gateway.dingding_support import (
+    DingdingGatewayAccountConfig,
+    DingdingResolvedAccount,
+)
 
 
 def _make_account(account_id: str = "ops-dingding") -> DingdingResolvedAccount:
@@ -45,7 +49,9 @@ class _FakeGatewayApp:
         self.runtime_calls: list[str] = []
         self.loaded_profile = None
         self.state_dir = None
-        self.core = SimpleNamespace(route_inbound=lambda *a, **kw: SimpleNamespace(delivery=SimpleNamespace(outbound=None)))
+        self.core = SimpleNamespace(
+            route_inbound=lambda *a, **kw: SimpleNamespace(delivery=SimpleNamespace(outbound=None))
+        )
         self.loaded_profile = None
 
     def handle_message(self, inbound, **kwargs):
@@ -137,7 +143,11 @@ class DingdingInboundSerializationTests(unittest.TestCase):
                 else:
                     second_started.set()
 
-            with mock.patch.object(type(app), "handle_message", side_effect=AssertionError("should not run")):
+            with mock.patch.object(
+                type(app),
+                "handle_message",
+                side_effect=AssertionError("should not run"),
+            ):
                 with mock.patch.object(type(service), "_send_dingtalk_reply", new=send_stub):
                     first_task = asyncio.create_task(
                         service._on_dingtalk_message_safe(

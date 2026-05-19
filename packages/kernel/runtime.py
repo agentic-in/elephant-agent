@@ -9,4 +9,3 @@ from __future__ import annotations
 
 from .runtime_support import *  # noqa: F401,F403
 from .lifecycle_support import *  # noqa: F401,F403
-from .runtime_impl import KernelService

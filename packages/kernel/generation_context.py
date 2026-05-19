@@ -119,7 +119,10 @@ def _augment_with_system_layers(
         frozen_prefix = cached[1]
     else:
         frozen_prefix = _build_frozen_prefix(
-            frozen_prefix, committed_pm_lines, resume_lines, skill_index_section,
+            frozen_prefix,
+            committed_pm_lines,
+            resume_lines,
+            skill_index_section,
         )
         if episode_id:
             if len(_prefix_cache) >= _PREFIX_CACHE_MAX and episode_id not in _prefix_cache:
@@ -176,9 +179,9 @@ _LENS_DESCRIPTIONS = {
 # Canonical facet order within each lens (for stable rendering order).
 _LENS_FACET_ORDER: dict[str, tuple[str, ...]] = {
     "identity": ("anchor", "character", "values", "style", "body"),
-    "world":    ("people", "projects", "tools", "places", "assets"),
-    "pulse":    ("chapter", "focus", "mood", "blockers", "intent"),
-    "journey":  ("lessons", "patterns", "decisions", "milestones"),
+    "world": ("people", "projects", "tools", "places", "assets"),
+    "pulse": ("chapter", "focus", "mood", "blockers", "intent"),
+    "journey": ("lessons", "patterns", "decisions", "milestones"),
 }
 
 _KNOWN_LENSES = frozenset({"identity", "world", "pulse", "journey"})
@@ -208,15 +211,15 @@ def _prefix_input_hash(
 ) -> str:
     h = hashlib.sha256()
     h.update(base_prefix.encode())
-    h.update(b'\x00')
+    h.update(b"\x00")
     for line in pm_lines:
         h.update(len(line).to_bytes(4, "big"))
         h.update(line.encode())
-    h.update(b'\x00')
+    h.update(b"\x00")
     for line in resume_lines:
         h.update(len(line).to_bytes(4, "big"))
         h.update(line.encode())
-    h.update(b'\x00')
+    h.update(b"\x00")
     h.update(skill_section.encode())
     return h.hexdigest()
 
@@ -300,9 +303,7 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
         return ()
 
     # by_lens_facet[lens][facet] = [fact, ...]
-    by_lens_facet: dict[str, dict[str, list]] = {
-        lens: {} for lens in ("identity", "world", "pulse", "journey")
-    }
+    by_lens_facet: dict[str, dict[str, list]] = {lens: {} for lens in ("identity", "world", "pulse", "journey")}
     for fact in facts:
         if fact.confidence < 0.6:
             continue
@@ -332,7 +333,13 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
         ordered_facets = [f for f in canonical if f in facet_map]
         ordered_facets += sorted(f for f in facet_map if f not in canonical)
         for facet in ordered_facets:
-            facet_facts = sorted(facet_map[facet], key=lambda f: (-f.confidence, getattr(f, "fact_id", "") or getattr(f, "text", "")))
+            facet_facts = sorted(
+                facet_map[facet],
+                key=lambda f: (
+                    -f.confidence,
+                    getattr(f, "fact_id", "") or getattr(f, "text", ""),
+                ),
+            )
             lines.append(f"#### {facet}")
             for fact in facet_facts:
                 text = _fact_prompt_text(fact)
@@ -341,11 +348,14 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
     return tuple(lines)
 
 
-
 def _fact_visible_in_core_prompt(fact: Any, metadata: dict[str, Any]) -> bool:
     recall_policy = str(metadata.get("recall_policy") or "").strip().lower()
     lifecycle = str(metadata.get("retention_lifecycle") or "").strip().lower()
-    if recall_policy in {"temporary", "review"} or lifecycle in {"temporal", "draft", "working"}:
+    if recall_policy in {"temporary", "review"} or lifecycle in {
+        "temporal",
+        "draft",
+        "working",
+    }:
         return False
     text = str(getattr(fact, "text", "") or "").strip()
     if text.startswith("Question-bank signal for "):
@@ -359,8 +369,6 @@ def _fact_prompt_text(fact: Any) -> str:
     return str(getattr(fact, "text", "") or "").strip()
 
 
-
-
 def _facts_for(storage: Any, personal_model_id: str) -> tuple[Any, ...]:
     list_facts = getattr(storage, "list_personal_model_facts", None)
     if not callable(list_facts):
@@ -369,7 +377,6 @@ def _facts_for(storage: Any, personal_model_id: str) -> tuple[Any, ...]:
         return tuple(list_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
         return ()
-
 
 
 def _episode_resume_lines(storage: Any, *, request: Any, session: Any) -> tuple[str, ...]:
@@ -431,8 +438,6 @@ def _clean_state_field(raw: Any) -> str:
     return text
 
 
-
-
 def _dynamic_system_layer_lines(
     storage: Any,
     request: Any,
@@ -441,7 +446,6 @@ def _dynamic_system_layer_lines(
 ) -> tuple[str, ...]:
     del storage, request, prior_surfaced_text
     return ()
-
 
 
 def _render_section_line(line: str) -> str:
@@ -454,7 +458,12 @@ def _render_section_line(line: str) -> str:
 
 
 def _render_prompt_section(heading: str, lines: tuple[str, ...]) -> str:
-    return "\n".join((f"### {heading}", *(_render_section_line(line) for line in lines if str(line or "").strip()))).strip()
+    return "\n".join(
+        (
+            f"### {heading}",
+            *(_render_section_line(line) for line in lines if str(line or "").strip()),
+        )
+    ).strip()
 
 
 def _append_raw_prompt_section(current: str, section: str) -> str:
@@ -516,7 +525,7 @@ def _extract_prompt_section_content(current: str, heading: str) -> str:
         if lines[index].startswith("### "):
             end = index
             break
-    return "\n".join(lines[start + 1:end]).strip()
+    return "\n".join(lines[start + 1 : end]).strip()
 
 
 def _strip_prompt_section(current: str, heading: str) -> str:
@@ -574,7 +583,12 @@ def _insert_prompt_section_after(
 def _append_rendered_section(current: str | None, heading: str, lines: tuple[str, ...]) -> str | None:
     if not lines:
         return current
-    section = "\n".join((f"### {heading}", *(_render_section_line(line) for line in lines if str(line or "").strip()))).strip()
+    section = "\n".join(
+        (
+            f"### {heading}",
+            *(_render_section_line(line) for line in lines if str(line or "").strip()),
+        )
+    ).strip()
     existing = str(current or "").strip()
     return section if not existing else f"{existing}\n\n{section}"
 

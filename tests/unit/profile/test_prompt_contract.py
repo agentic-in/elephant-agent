@@ -55,7 +55,9 @@ class PromptContractTest(unittest.TestCase):
             ),
         )
 
-    def test_full_prompt_contract_includes_canonical_identity_and_user_sections(self) -> None:
+    def test_full_prompt_contract_includes_canonical_identity_and_user_sections(
+        self,
+    ) -> None:
         loaded = self._build_loaded_profile()
         contract = build_prompt_contract(loaded, prompt_mode="full")
 
@@ -117,12 +119,17 @@ class PromptContractTest(unittest.TestCase):
         self.assertNotIn("### What you know about the user", rendered)
         self.assertNotIn("- Preferred name: Bit", rendered)
         self.assertNotIn("Continuity reminders for this elephant: recover long arcs.", rendered)
-        self.assertIn("Use `tool.personal_model.questions` only when one timely question would improve future help.", rendered)
+        self.assertIn(
+            "Use `tool.personal_model.questions` only when one timely question would improve future help.",
+            rendered,
+        )
         self.assertIn("Keep Personal Model writes small", rendered)
         self.assertNotIn("state-onboarding=", rendered)
         self.assertNotIn("grounding-policy=", rendered)
 
-    def test_minimal_prompt_contract_stays_compact_but_keeps_canonical_user_snapshot(self) -> None:
+    def test_minimal_prompt_contract_stays_compact_but_keeps_canonical_user_snapshot(
+        self,
+    ) -> None:
         loaded = self._build_loaded_profile()
         contract = build_prompt_contract(loaded, prompt_mode="minimal")
 

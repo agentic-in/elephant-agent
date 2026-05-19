@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
 import hashlib
@@ -11,8 +11,18 @@ import time
 from typing import Any
 
 from packages.contracts.layers import Episode
-from packages.contracts.runtime import ContextBundle, ExecutionResult, PersonalModelRuntimeState, PromptEnvelope, PromptMessage
-from packages.embeddings import EmbeddingPreloadEntry, cosine_similarity, embedding_runtime_is_loaded
+from packages.contracts.runtime import (
+    ContextBundle,
+    ExecutionResult,
+    PersonalModelRuntimeState,
+    PromptEnvelope,
+    PromptMessage,
+)
+from packages.embeddings import (
+    EmbeddingPreloadEntry,
+    cosine_similarity,
+    embedding_runtime_is_loaded,
+)
 from packages.context.projection_types import (
     ContextProjectionCompactionResult,
     ProjectionCompactionPolicy,
@@ -33,9 +43,7 @@ from packages.context.projection_support import (
     projection_group_preload_entries as _projection_group_preload_entries,
     projection_query_text as _projection_query_text,
     normalize_projection_query_text as _normalize_projection_query_text,
-    projection_result_with_estimated_tokens,
     prompt_message_projection_line as _prompt_message_projection_line,
-    tool_call_id as _tool_call_id,
     tool_call_name as _tool_call_name,
 )
 
@@ -60,6 +68,7 @@ def _get_tiktoken_encoding():
         return _TIKTOKEN_ENCODING
     try:
         import tiktoken
+
         _TIKTOKEN_ENCODING = tiktoken.get_encoding("cl100k_base")
         _USE_TIKTOKEN = True
         return _TIKTOKEN_ENCODING
@@ -73,7 +82,7 @@ def estimate_projection_tokens(text: str) -> int:
     normalized = str(text or "")
     if not normalized:
         return 0
-    
+
     # Use tiktoken for more accurate estimation if available
     encoding = _get_tiktoken_encoding()
     if encoding is not None:
@@ -82,7 +91,7 @@ def estimate_projection_tokens(text: str) -> int:
         except Exception:
             # Fallback to character-based estimation
             pass
-    
+
     # Fallback to character-based estimation
     return max(1, len(normalized) // _CHARS_PER_TOKEN)
 
@@ -145,8 +154,7 @@ class CheapToolResultPruner:
                 tool_name = message.tool_name.strip() or self._tool_name(line)
                 content = _compact_text(message.content, limit=max(80, max_chars // 2))
                 pruned.append(
-                    f"tool-result-pruned: {tool_name} "
-                    f"tool_call_id={message.tool_call_id or '<none>'} | {content}"
+                    f"tool-result-pruned: {tool_name} tool_call_id={message.tool_call_id or '<none>'} | {content}"
                 )
                 continue
             if message.role == "assistant" and message.tool_calls:
@@ -245,7 +253,11 @@ class EmbeddingProjectionRelevanceScorer:
         cached_vector = getattr(self.embedding_service, "cached_vector", None)
         pending_vector = getattr(self.embedding_service, "pending_vector", None)
         if not callable(cached_vector):
-            return None, {}, ProjectionSemanticAnchorStats(candidate_count=len(candidates))
+            return (
+                None,
+                {},
+                ProjectionSemanticAnchorStats(candidate_count=len(candidates)),
+            )
 
         query_key = _projection_embedding_cache_key("query", query)
         query_vector = None
@@ -337,7 +349,11 @@ class EmbeddingProjectionRelevanceScorer:
             entries[query_key] = EmbeddingPreloadEntry(
                 cache_key=query_key,
                 text=query,
-                metadata={"surface": "context-projection", "kind": "query", "priority": "recent"},
+                metadata={
+                    "surface": "context-projection",
+                    "kind": "query",
+                    "priority": "recent",
+                },
             )
         for index, candidate in reversed(tuple(enumerate(candidates))):
             normalized_candidate = _projection_embedding_text(candidate)
@@ -345,11 +361,14 @@ class EmbeddingProjectionRelevanceScorer:
                 continue
             key = _projection_embedding_cache_key("group", normalized_candidate)
             try:
-                if self.embedding_service.cached_vector(
-                    target=PROJECTION_EMBEDDING_TARGET,
-                    cache_key=key,
-                    dimensions=self.dimensions,
-                ) is not None:
+                if (
+                    self.embedding_service.cached_vector(
+                        target=PROJECTION_EMBEDDING_TARGET,
+                        cache_key=key,
+                        dimensions=self.dimensions,
+                    )
+                    is not None
+                ):
                     continue
             except Exception:
                 continue
@@ -419,7 +438,11 @@ def queue_projection_history_embedding_backfill(
         entries[query_key] = EmbeddingPreloadEntry(
             cache_key=query_key,
             text=query_text,
-            metadata={"surface": "context-projection", "kind": "query", "priority": "recent"},
+            metadata={
+                "surface": "context-projection",
+                "kind": "query",
+                "priority": "recent",
+            },
         )
     for entry in _projection_group_preload_entries(messages, recent_first=True):
         entries.setdefault(entry.cache_key, entry)
@@ -462,12 +485,20 @@ class DeterministicProjectionSummaryHook:
             parts.extend(
                 (
                     "## Relevant facts/events",
-                    _compact_text(previous_summary, limit=max(360, token_budget * _CHARS_PER_TOKEN // 3)),
+                    _compact_text(
+                        previous_summary,
+                        limit=max(360, token_budget * _CHARS_PER_TOKEN // 3),
+                    ),
                 )
             )
         tail_note = _latest_user_line(protected_tail) or thread_focus.strip()
         if tail_note:
-            parts.extend(("## Handoff notes for recent tail", f"- {_compact_text(tail_note, limit=220)}"))
+            parts.extend(
+                (
+                    "## Handoff notes for recent tail",
+                    f"- {_compact_text(tail_note, limit=220)}",
+                )
+            )
         return _ensure_reference_only_summary("\n".join(parts).strip())
 
 
@@ -588,13 +619,25 @@ class ProviderProjectionSummaryHook:
 
 def _message_projection_surface(message: PromptMessage) -> str:
     metadata = dict(message.metadata or {})
-    return str(metadata.get("projection_surface") or metadata.get("surface") or metadata.get("source") or "").strip().lower()
+    return (
+        str(metadata.get("projection_surface") or metadata.get("surface") or metadata.get("source") or "")
+        .strip()
+        .lower()
+    )
 
 
 def _history_is_im(messages: tuple[PromptMessage, ...]) -> bool:
     for message in messages:
         surface = _message_projection_surface(message)
-        if surface == "im" or surface.startswith("gateway:") or surface.startswith("feishu") or surface.startswith("wecom") or surface.startswith("weixin") or surface.startswith("dingding") or surface.startswith("discord"):
+        if (
+            surface == "im"
+            or surface.startswith("gateway:")
+            or surface.startswith("feishu")
+            or surface.startswith("wecom")
+            or surface.startswith("weixin")
+            or surface.startswith("dingding")
+            or surface.startswith("discord")
+        ):
             return True
     return False
 
@@ -619,7 +662,10 @@ def _im_burst_tail_start(
 ) -> int | None:
     if not groups:
         return None
-    latest = next((_message_created_at(message) for message in reversed(messages) if _message_created_at(message) is not None), None)
+    latest = next(
+        (_message_created_at(message) for message in reversed(messages) if _message_created_at(message) is not None),
+        None,
+    )
     if latest is None:
         return None
     tail_start = len(messages)
@@ -628,16 +674,16 @@ def _im_burst_tail_start(
         if end <= head_end:
             break
         group_times = tuple(
-            timestamp
-            for message in messages[start:end]
-            if (timestamp := _message_created_at(message)) is not None
+            timestamp for message in messages[start:end] if (timestamp := _message_created_at(message)) is not None
         )
         group_time = max(group_times) if group_times else previous_group_time
         if group_time is None:
             break
         if max(0.0, (latest - group_time).total_seconds()) > max(1, window_seconds):
             break
-        if previous_group_time is not None and max(0.0, (previous_group_time - group_time).total_seconds()) > max(1, idle_gap_seconds):
+        if previous_group_time is not None and max(0.0, (previous_group_time - group_time).total_seconds()) > max(
+            1, idle_gap_seconds
+        ):
             break
         tail_start = start
         previous_group_time = group_time
@@ -670,7 +716,9 @@ class SessionProjectionCompactor:
         reason: str = "manual",
         force: bool = False,
     ) -> SessionMessageProjection:
-        normalized = tuple(message for message in (_normalize_prompt_message(message) for message in messages) if message is not None)
+        normalized = tuple(
+            message for message in (_normalize_prompt_message(message) for message in messages) if message is not None
+        )
         rendered = tuple(_prompt_message_projection_line(message) for message in normalized)
         before_tokens = estimate_projection_lines_tokens(rendered)
         before_count = len(normalized)
@@ -692,7 +740,10 @@ class SessionProjectionCompactor:
                         head_count=min(self.policy.protected_head_lines, before_count),
                         tail_count=min(
                             self.policy.protected_tail_lines,
-                            max(0, before_count - min(self.policy.protected_head_lines, before_count)),
+                            max(
+                                0,
+                                before_count - min(self.policy.protected_head_lines, before_count),
+                            ),
                         ),
                     ),
                     summary_hash=_projection_summary_hash(previous_summary),
@@ -743,7 +794,13 @@ class SessionProjectionCompactor:
             head_count=len(head),
             tail_count=len(tail),
         )
-        anchor_messages, compacted_middle, anchor_stats, selected_raw_ids, compaction_query = self._semantic_anchor_messages(
+        (
+            anchor_messages,
+            compacted_middle,
+            anchor_stats,
+            selected_raw_ids,
+            compaction_query,
+        ) = self._semantic_anchor_messages(
             middle,
             thread_focus=thread_focus,
             protected_tail=tail,
@@ -826,9 +883,7 @@ class SessionProjectionCompactor:
             return (), (), ()
         groups = _message_groups(messages)
         resolved_head_lines = (
-            self.policy.protected_head_lines
-            if protected_head_lines is None
-            else max(0, protected_head_lines)
+            self.policy.protected_head_lines if protected_head_lines is None else max(0, protected_head_lines)
         )
         head_target = min(resolved_head_lines, len(messages))
         head_end = _group_end_at_or_after(groups, head_target)
@@ -863,9 +918,7 @@ class SessionProjectionCompactor:
         if not remaining_groups:
             return len(messages)
         min_tail_messages = (
-            self.policy.protected_tail_lines
-            if protected_tail_lines is None
-            else max(0, protected_tail_lines)
+            self.policy.protected_tail_lines if protected_tail_lines is None else max(0, protected_tail_lines)
         )
         if force and len(messages) > head_end + 3:
             min_tail_messages = max(3, self.policy.protected_tail_lines // 2)
@@ -888,7 +941,9 @@ class SessionProjectionCompactor:
         tail_start = len(messages)
         for start, end in reversed(remaining_groups):
             group = messages[start:end]
-            token_count += estimate_projection_lines_tokens(tuple(_prompt_message_projection_line(message) for message in group))
+            token_count += estimate_projection_lines_tokens(
+                tuple(_prompt_message_projection_line(message) for message in group)
+            )
             message_count += len(group)
             tail_start = start
             if protected_tail_lines is not None and message_count >= min_tail_messages:
@@ -933,7 +988,13 @@ class SessionProjectionCompactor:
         )
         candidate_ids = tuple(_projection_embedding_cache_key("group", candidate) for candidate in candidates)
         if not query:
-            return (), middle, ProjectionSemanticAnchorStats(candidate_count=len(candidates)), (), query
+            return (
+                (),
+                middle,
+                ProjectionSemanticAnchorStats(candidate_count=len(candidates)),
+                (),
+                query,
+            )
         try:
             ranked_groups = tuple(self.relevance_scorer.rank(query=query, candidates=candidates, limit=max_anchors))
             stats = getattr(self.relevance_scorer, "last_stats", None)
@@ -943,7 +1004,13 @@ class SessionProjectionCompactor:
                     selected_group_count=len(ranked_groups),
                 )
         except Exception:
-            return (), middle, ProjectionSemanticAnchorStats(candidate_count=len(candidates)), (), query
+            return (
+                (),
+                middle,
+                ProjectionSemanticAnchorStats(candidate_count=len(candidates)),
+                (),
+                query,
+            )
         if not ranked_groups:
             return (), middle, stats, (), query
         anchor_indexes: set[int] = set()

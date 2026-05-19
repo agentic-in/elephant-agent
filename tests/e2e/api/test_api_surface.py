@@ -109,15 +109,25 @@ class _ProviderStubServer:
                                 }
                             }
                         ],
-                        "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+                        "usage": {
+                            "prompt_tokens": 7,
+                            "completion_tokens": 3,
+                            "total_tokens": 10,
+                        },
                     }
                 elif self.path == "/v1/responses":
                     content = f"live-response:{Handler._responses_input_text(payload.get('input'))}"
                     if payload.get("stream"):
                         midpoint = max(1, len(content) // 2)
                         events = (
-                            ("response.output_text.delta", {"delta": content[:midpoint]}),
-                            ("response.output_text.delta", {"delta": content[midpoint:]}),
+                            (
+                                "response.output_text.delta",
+                                {"delta": content[:midpoint]},
+                            ),
+                            (
+                                "response.output_text.delta",
+                                {"delta": content[midpoint:]},
+                            ),
                             (
                                 "response.completed",
                                 {
@@ -125,7 +135,11 @@ class _ProviderStubServer:
                                         "id": "resp-stub",
                                         "model": payload["model"],
                                         "output_text": content,
-                                        "usage": {"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+                                        "usage": {
+                                            "input_tokens": 6,
+                                            "output_tokens": 3,
+                                            "total_tokens": 9,
+                                        },
                                     }
                                 },
                             ),
@@ -145,7 +159,11 @@ class _ProviderStubServer:
                         "id": "resp-stub",
                         "model": payload["model"],
                         "output_text": content,
-                        "usage": {"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+                        "usage": {
+                            "input_tokens": 6,
+                            "output_tokens": 3,
+                            "total_tokens": 9,
+                        },
                     }
                 elif self.path == "/v1/messages":
                     response = {
@@ -186,7 +204,11 @@ class _ProviderStubServer:
                 if self.path == "/v1/models":
                     response = {
                         "data": [
-                            {"id": "openai/gpt-4o-mini", "owned_by": "stub", "context_window": 128000},
+                            {
+                                "id": "openai/gpt-4o-mini",
+                                "owned_by": "stub",
+                                "context_window": 128000,
+                            },
                             {"id": "openai/gpt-4.1-mini", "owned_by": "stub"},
                         ]
                     }
@@ -352,22 +374,33 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(turn.status_code, 200)
         self.assertEqual(turn.payload["episode"]["episode_id"], "session-turn")
         self.assertEqual(turn.payload["outcome"]["event"]["episode_id"], "session-turn")
-        self.assertEqual(turn.payload["outcome"]["event"]["payload"]["state_query"], "Continue the release plan")
+        self.assertEqual(
+            turn.payload["outcome"]["event"]["payload"]["state_query"],
+            "Continue the release plan",
+        )
         self.assertEqual(turn.payload["outcome"]["state"]["elephant_id"], "elephant-1")
         self.assertNotIn("active_task", turn.payload["outcome"]["state"])
         self.assertGreaterEqual(len(turn.payload["outcome"]["stages"]), 6)
         self.assertGreaterEqual(len(turn.payload["outcome"]["steps"]), 6)
         self.assertGreaterEqual(turn.payload["inspection"]["recall_count"], 0)
         self.assertGreaterEqual(turn.payload["inspection"]["telemetry_count"], 1)
-        self.assertEqual(turn.payload["inspection"]["progression"]["stage_title"], "learning the path")
-        self.assertTrue(
-            turn.payload["outcome"]["execution"]["summary"].startswith(
-                "live-chat:What should we do next?"
-            )
+        self.assertEqual(
+            turn.payload["inspection"]["progression"]["stage_title"],
+            "learning the path",
         )
-        self.assertIn("transport=openai_chat_compatible", turn.payload["outcome"]["execution"]["side_effects"])
-        self.assertIn("credential_keys=api_key", turn.payload["outcome"]["execution"]["side_effects"])
-        self.assertEqual(turn.payload["inspection"]["provider_profile"]["profile_id"], "provider-openrouter")
+        self.assertTrue(turn.payload["outcome"]["execution"]["summary"].startswith("live-chat:What should we do next?"))
+        self.assertIn(
+            "transport=openai_chat_compatible",
+            turn.payload["outcome"]["execution"]["side_effects"],
+        )
+        self.assertIn(
+            "credential_keys=api_key",
+            turn.payload["outcome"]["execution"]["side_effects"],
+        )
+        self.assertEqual(
+            turn.payload["inspection"]["provider_profile"]["profile_id"],
+            "provider-openrouter",
+        )
 
         tool_turn = self.app.dispatch(
             "POST",
@@ -382,10 +415,19 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertEqual(tool_turn.status_code, 200)
         self.assertEqual(tool_turn.payload["outcome"]["execution"]["outcome"], "success")
-        self.assertEqual(tool_turn.payload["outcome"]["execution"]["side_effects"], ["code", "python", "sandbox"])
+        self.assertEqual(
+            tool_turn.payload["outcome"]["execution"]["side_effects"],
+            ["code", "python", "sandbox"],
+        )
         self.assertIn("hello api tool", tool_turn.payload["outcome"]["execution"]["summary"])
-        self.assertEqual(tool_turn.payload["latest_loop"]["request"]["tool_name"], "tool.code.execute")
-        self.assertEqual(tool_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"], "tool.code.execute")
+        self.assertEqual(
+            tool_turn.payload["latest_loop"]["request"]["tool_name"],
+            "tool.code.execute",
+        )
+        self.assertEqual(
+            tool_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"],
+            "tool.code.execute",
+        )
 
         clarify_turn = self.app.dispatch(
             "POST",
@@ -404,7 +446,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertEqual(clarify_turn.status_code, 200)
         self.assertEqual(clarify_turn.payload["outcome"]["execution"]["outcome"], "success")
-        self.assertIn("user_response: beta", clarify_turn.payload["outcome"]["execution"]["summary"])
+        self.assertIn(
+            "user_response: beta",
+            clarify_turn.payload["outcome"]["execution"]["summary"],
+        )
         self.assertEqual(clarify_turn.payload["latest_loop"]["request"]["tool_name"], "tool.clarify")
 
         inspect = self.app.dispatch("GET", "/v1/episodes/session-turn")
@@ -421,7 +466,10 @@ class APISurfaceE2ETest(unittest.TestCase):
             ("PATCH", "/v1/episodes/session-turn/goals/work-launch"),
         ):
             with self.subTest(method=method, route=route):
-                self.assertEqual(self.app.dispatch(method, route, body=self._body({})).status_code, 404)
+                self.assertEqual(
+                    self.app.dispatch(method, route, body=self._body({})).status_code,
+                    404,
+                )
 
         profile_surface = self.app.dispatch("GET", "/v1/episodes/session-turn/profile")
         self.assertEqual(profile_surface.status_code, 200)
@@ -488,7 +536,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertIn("skill", result.side_effects)
         self.assertNotEqual(result.summary.strip(), "<empty>")
 
-    def test_canonical_state_routes_expose_identity_user_relationship_and_continuity(self) -> None:
+    def test_canonical_state_routes_expose_identity_user_relationship_and_continuity(
+        self,
+    ) -> None:
         created = self.app.dispatch(
             "POST",
             "/v1/episodes",
@@ -540,7 +590,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertEqual(updated_user.status_code, 200)
         self.assertEqual(updated_user.payload["user"]["preferred_name"], "Bit")
-        self.assertIn("current_work:Build Elephant Agent", updated_user.payload["user"]["biography_fragments"])
+        self.assertIn(
+            "current_work:Build Elephant Agent",
+            updated_user.payload["user"]["biography_fragments"],
+        )
 
         updated_relationship = self.app.dispatch(
             "PATCH",
@@ -566,7 +619,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertIn("wake_summary", continuity.payload)
         self.assertIn("continuity", continuity.payload)
 
-    def test_elephant_management_routes_create_update_delete_state_file_and_level(self) -> None:
+    def test_elephant_management_routes_create_update_delete_state_file_and_level(
+        self,
+    ) -> None:
         created = self.app.dispatch(
             "POST",
             "/v1/herd",
@@ -632,7 +687,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertIsNone(self.app.repository.load_state("state:atlas"))
         self.assertFalse(state_file.exists())
 
-    def test_turn_without_seed_graph_does_not_form_a_goal_from_prompt_alone(self) -> None:
+    def test_turn_without_seed_graph_does_not_form_a_goal_from_prompt_alone(
+        self,
+    ) -> None:
         self.app.dispatch(
             "POST",
             "/v1/episodes",
@@ -656,9 +713,14 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("goals", turn.payload["inspection"])
         self.assertNotIn("work_items", turn.payload["inspection"])
         self.assertNotIn("active_task", turn.payload["outcome"]["state"])
-        self.assertIn("current-work lifecycle", turn.payload["outcome"]["event"]["payload"]["message"])
+        self.assertIn(
+            "current-work lifecycle",
+            turn.payload["outcome"]["event"]["payload"]["message"],
+        )
 
-    def test_turn_does_not_mutate_profile_without_explicit_profile_surface(self) -> None:
+    def test_turn_does_not_mutate_profile_without_explicit_profile_surface(
+        self,
+    ) -> None:
         self.app.dispatch(
             "POST",
             "/v1/episodes",
@@ -717,7 +779,10 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         self.assertEqual(turn.status_code, 200)
         self.assertNotIn("active_task", turn.payload["outcome"]["state"])
-        self.assertIn("current-work lifecycle", turn.payload["outcome"]["event"]["payload"]["state_query"].lower())
+        self.assertIn(
+            "current-work lifecycle",
+            turn.payload["outcome"]["event"]["payload"]["state_query"].lower(),
+        )
 
     def test_openai_provider_profile_uses_first_party_runtime_resolution(self) -> None:
         created = self.app.dispatch(
@@ -749,12 +814,16 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertEqual(turn.status_code, 200)
         self.assertTrue(
-            turn.payload["outcome"]["execution"]["summary"].startswith(
-                "live-response:Summarize the next release step."
-            )
+            turn.payload["outcome"]["execution"]["summary"].startswith("live-response:Summarize the next release step.")
         )
-        self.assertIn("transport=openai_responses", turn.payload["outcome"]["execution"]["side_effects"])
-        self.assertIn("credential_keys=api_key", turn.payload["outcome"]["execution"]["side_effects"])
+        self.assertIn(
+            "transport=openai_responses",
+            turn.payload["outcome"]["execution"]["side_effects"],
+        )
+        self.assertIn(
+            "credential_keys=api_key",
+            turn.payload["outcome"]["execution"]["side_effects"],
+        )
         self.assertEqual(turn.payload["inspection"]["provider_profile"]["provider_id"], "openai")
 
     def test_anthropic_provider_profile_uses_native_messages_runtime(self) -> None:
@@ -790,9 +859,18 @@ class APISurfaceE2ETest(unittest.TestCase):
             turn.payload["outcome"]["execution"]["summary"],
             "live-anthropic:Explain the provider boundary.",
         )
-        self.assertIn("transport=anthropic_messages", turn.payload["outcome"]["execution"]["side_effects"])
-        self.assertIn("credential_keys=api_key", turn.payload["outcome"]["execution"]["side_effects"])
-        self.assertEqual(turn.payload["inspection"]["provider_profile"]["transport_id"], "anthropic_messages")
+        self.assertIn(
+            "transport=anthropic_messages",
+            turn.payload["outcome"]["execution"]["side_effects"],
+        )
+        self.assertIn(
+            "credential_keys=api_key",
+            turn.payload["outcome"]["execution"]["side_effects"],
+        )
+        self.assertEqual(
+            turn.payload["inspection"]["provider_profile"]["transport_id"],
+            "anthropic_messages",
+        )
 
     def test_provider_onboarding_and_default_provider_flow(self) -> None:
         provider_profile = self._provider_profile(
@@ -815,11 +893,19 @@ class APISurfaceE2ETest(unittest.TestCase):
         models = self.app.dispatch(
             "POST",
             "/v1/providers/models",
-            body=self._body({"providerId": "openai-compatible", "baseUrl": self.stub.openai_base_url}),
+            body=self._body(
+                {
+                    "providerId": "openai-compatible",
+                    "baseUrl": self.stub.openai_base_url,
+                }
+            ),
         )
         self.assertEqual(models.status_code, 200)
         self.assertEqual(models.payload["providerId"], "openai-compatible")
-        self.assertIn("openai/gpt-4o-mini", [model["model_id"] for model in models.payload["models"]])
+        self.assertIn(
+            "openai/gpt-4o-mini",
+            [model["model_id"] for model in models.payload["models"]],
+        )
 
         defaulted = self.app.dispatch(
             "POST",
@@ -833,7 +919,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(defaulted.payload["active_provider"]["model_id"], "openai/gpt-4o-mini")
         self.assertEqual(defaulted.payload["active_provider"]["context_window_tokens"], 128000)
         self.assertEqual(defaulted.payload["active_provider"]["context_window_mode"], "auto")
-        self.assertIn(defaulted.payload["active_provider"]["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
+        self.assertIn(
+            defaulted.payload["active_provider"]["embedding_bootstrap_status"],
+            EMBEDDING_BOOTSTRAP_STATUSES,
+        )
         config = load_global_config(
             global_config_path_for_state_dir(self.app.repository.database_path.parent),
             state_dir=self.app.repository.database_path.parent,
@@ -881,7 +970,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertEqual(external_embedding.status_code, 200)
         self.assertEqual(external_embedding.payload["embedding_provider"]["source"], "configured")
-        self.assertEqual(external_embedding.payload["embedding_provider"]["model_id"], "text-embedding-3-large")
+        self.assertEqual(
+            external_embedding.payload["embedding_provider"]["model_id"],
+            "text-embedding-3-large",
+        )
         self.assertEqual(external_embedding.payload["embedding_provider"]["secret_status"], "stored")
         local_embedding = self.app.dispatch(
             "POST",
@@ -900,7 +992,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(doctor.payload["status"], "ready")
         self.assertEqual(doctor.payload["active_provider"]["provider_id"], "openai-compatible")
         self.assertIn("runtime", [check["check"] for check in doctor.payload["checks"]])
-        self.assertIn("embedding_bootstrap", [check["check"] for check in doctor.payload["checks"]])
+        self.assertIn(
+            "embedding_bootstrap",
+            [check["check"] for check in doctor.payload["checks"]],
+        )
 
         test = self.app.dispatch(
             "POST",
@@ -936,16 +1031,10 @@ class APISurfaceE2ETest(unittest.TestCase):
             else turn.payload["outcome"]["execution"]
         )
         execution_summary = execution.summary if hasattr(execution, "summary") else execution["summary"]
-        self.assertTrue(
-            execution_summary.startswith(
-                "live-chat:What should we do next?"
-            )
-        )
+        self.assertTrue(execution_summary.startswith("live-chat:What should we do next?"))
         inspection = turn.payload["inspection"]
         provider_profile = (
-            inspection.provider_profile
-            if hasattr(inspection, "provider_profile")
-            else inspection["provider_profile"]
+            inspection.provider_profile if hasattr(inspection, "provider_profile") else inspection["provider_profile"]
         )
         provider_id = (
             provider_profile.provider_id
@@ -1017,9 +1106,7 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         doctor = self.app.dispatch("GET", "/v1/providers/doctor")
         self.assertEqual(doctor.status_code, 200)
-        bootstrap_check = next(
-            check for check in doctor.payload["checks"] if check["check"] == "embedding_bootstrap"
-        )
+        bootstrap_check = next(check for check in doctor.payload["checks"] if check["check"] == "embedding_bootstrap")
         self.assertIn(bootstrap_check["status"], EMBEDDING_BOOTSTRAP_STATUSES)
         self.assertEqual(doctor.payload["status"], "ready")
 
@@ -1100,7 +1187,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("cli-feishu-secret", json.dumps(manifest))
         self.assertEqual(
             [ref["metadata"]["env_var"] for ref in account["secret_references"]],
-            ["ELEPHANT_FEISHU_OPS_FEISHU_APP_ID", "ELEPHANT_FEISHU_OPS_FEISHU_APP_SECRET"],
+            [
+                "ELEPHANT_FEISHU_OPS_FEISHU_APP_ID",
+                "ELEPHANT_FEISHU_OPS_FEISHU_APP_SECRET",
+            ],
         )
         secret_file = Path(self.tempdir.name) / "gateway-local-secrets.json"
         local_secrets = json.loads(secret_file.read_text(encoding="utf-8"))
@@ -1125,7 +1215,14 @@ class APISurfaceE2ETest(unittest.TestCase):
             started = self.app.dispatch(
                 "POST",
                 "/v1/operator/gateway",
-                body=self._body({"service": "feishu", "action": "start", "accountId": "ops-feishu", "transport": "long-connection"}),
+                body=self._body(
+                    {
+                        "service": "feishu",
+                        "action": "start",
+                        "accountId": "ops-feishu",
+                        "transport": "long-connection",
+                    }
+                ),
             )
         self.assertEqual(started.status_code, 200)
         command = run_mock.call_args.args[0]
@@ -1273,9 +1370,15 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertIn("globalConfig", operations["settings"])
         self.assertNotIn("eggStateFiles", operations["settings"])
         self.assertNotIn("eggStateFilesDir", operations["settings"])
-        self.assertNotIn("models.state_focus_mode", json.dumps(operations["settings"], sort_keys=True))
+        self.assertNotIn(
+            "models.state_focus_mode",
+            json.dumps(operations["settings"], sort_keys=True),
+        )
         elephant = next(row for row in payload["herd"] if row["elephant_id"] == "profile-console")
-        self.assertEqual(elephant["elephant_identity_file"]["path"], str(elephant_root / "ELEPHANT.md"))
+        self.assertEqual(
+            elephant["elephant_identity_file"]["path"],
+            str(elephant_root / "ELEPHANT.md"),
+        )
         self.assertTrue(elephant["elephant_identity_file"]["exists"])
         self.assertIn("- Stay exact.", elephant["elephant_identity_file"]["text"])
         self.assertTrue(operations["skills"])
@@ -1304,7 +1407,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         profile_json = Path(patched.payload["profileManifestPath"])
         self.assertTrue(profile_json.exists())
         patched_config = load_global_config(profile_json, state_dir=self.app.repository.database_path.parent)
-        self.assertEqual(patched_config["runtime"]["state_dir"], str(self.app.repository.database_path.parent))
+        self.assertEqual(
+            patched_config["runtime"]["state_dir"],
+            str(self.app.repository.database_path.parent),
+        )
 
         global_config = self.app.dispatch(
             "PATCH",
@@ -1355,7 +1461,11 @@ class APISurfaceE2ETest(unittest.TestCase):
                     "serverLabel": "Filesystem",
                     "transport": "stdio",
                     "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                    "args": [
+                        "-y",
+                        "@modelcontextprotocol/server-filesystem",
+                        "/tmp/demo",
+                    ],
                     "env": {"ALLOW": "1"},
                     "displayName": "Read File",
                     "description": "Read a file from the mounted elephant file area.",
@@ -1388,7 +1498,9 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         refreshed = self.app.dispatch("GET", "/v1/internal/dashboard/tools")
         custom_mcp_tool = next(
-            tool for tool in refreshed.payload["dashboard"]["operations"]["mcp"]["tools"] if tool["toolKey"] == "filesystem:read_file"
+            tool
+            for tool in refreshed.payload["dashboard"]["operations"]["mcp"]["tools"]
+            if tool["toolKey"] == "filesystem:read_file"
         )
         self.assertEqual(custom_mcp_tool["displayName"], "Read File")
         self.assertTrue(custom_mcp_tool["enabled"])
@@ -1415,9 +1527,7 @@ class APISurfaceE2ETest(unittest.TestCase):
             stored_global_config["mcp_servers"]["filesystem"]["tools"]["read_file"]["display_name"],
             "Read File (updated)",
         )
-        self.assertTrue(
-            stored_global_config["mcp_servers"]["filesystem"]["tools"]["read_file"]["touches_secrets"]
-        )
+        self.assertTrue(stored_global_config["mcp_servers"]["filesystem"]["tools"]["read_file"]["touches_secrets"])
         runtime_tool = self.app.tool_runtime.describe("mcp.filesystem.read_file")
         self.assertEqual(runtime_tool.display_name, "Read File (updated)")
         self.assertTrue(runtime_tool.side_effects.touches_secrets)
@@ -1440,7 +1550,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertFalse(self.app.tool_runtime.describe("mcp.filesystem.read_file").enabled)
         refreshed = self.app.dispatch("GET", "/v1/internal/dashboard/tools")
         custom_mcp_tool = next(
-            tool for tool in refreshed.payload["dashboard"]["operations"]["mcp"]["tools"] if tool["toolKey"] == "filesystem:read_file"
+            tool
+            for tool in refreshed.payload["dashboard"]["operations"]["mcp"]["tools"]
+            if tool["toolKey"] == "filesystem:read_file"
         )
         self.assertFalse(custom_mcp_tool["enabled"])
 
@@ -1466,7 +1578,9 @@ class APISurfaceE2ETest(unittest.TestCase):
             {server["serverId"] for server in refreshed.payload["dashboard"]["operations"]["mcp"]["servers"]},
         )
 
-    def test_operator_mcp_server_sync_persists_multiple_tools_and_deletes_server(self) -> None:
+    def test_operator_mcp_server_sync_persists_multiple_tools_and_deletes_server(
+        self,
+    ) -> None:
         synced_server = self.app.dispatch(
             "POST",
             "/v1/operator/mcp/servers",
@@ -1569,7 +1683,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("km", stored_global_config.get("mcp_servers", {}))
         self.assertIsNone(self.app.tool_runtime.describe("mcp.km.list_articles"))
 
-    def test_internal_dashboard_surfaces_configured_external_skill_shelves(self) -> None:
+    def test_internal_dashboard_surfaces_configured_external_skill_shelves(
+        self,
+    ) -> None:
         external_root = Path(self.tempdir.name) / ".agents" / "skills"
         skill_dir = external_root / "personal-journal"
         skill_dir.mkdir(parents=True)
@@ -1698,7 +1814,11 @@ class APISurfaceE2ETest(unittest.TestCase):
                         "serverId": "filesystem",
                         "transport": "stdio",
                         "command": "npx",
-                        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                        "args": [
+                            "-y",
+                            "@modelcontextprotocol/server-filesystem",
+                            "/tmp/demo",
+                        ],
                         "env": {"ALLOW": "1"},
                     }
                 ),
@@ -1759,11 +1879,16 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(dashboard.status_code, 200)
         payload = dashboard.payload["dashboard"]
         self.assertNotIn("sessions", payload)
-        self.assertIn("profile-orphan", [elephant["personal_model_id"] for elephant in payload["herd"]])
+        self.assertIn(
+            "profile-orphan",
+            [elephant["personal_model_id"] for elephant in payload["herd"]],
+        )
         self.assertIn("state:profile-orphan", [state["state_id"] for state in payload["states"]])
         self.assertEqual(payload["overview"]["counts"]["episodes"], 0)
 
-    def test_internal_dashboard_excludes_personal_model_growth_state_lanes(self) -> None:
+    def test_internal_dashboard_excludes_personal_model_growth_state_lanes(
+        self,
+    ) -> None:
         created = self.app.dispatch(
             "POST",
             "/v1/episodes",
@@ -1792,7 +1917,8 @@ class APISurfaceE2ETest(unittest.TestCase):
 
         self.assertEqual(dashboard.status_code, 200)
         elephant = next(
-            elephant for elephant in dashboard.payload["dashboard"]["herd"]
+            elephant
+            for elephant in dashboard.payload["dashboard"]["herd"]
             if elephant["elephant_id"] == "profile-stale-growth"
         )
         self.assertNotIn("growth_score", elephant)
@@ -1804,7 +1930,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(dashboard.status_code, 404)
         self.assertEqual(console.status_code, 404)
 
-    def test_wsgi_get_request_with_no_content_length_returns_without_blocking(self) -> None:
+    def test_wsgi_get_request_with_no_content_length_returns_without_blocking(
+        self,
+    ) -> None:
         captured: dict[str, object] = {}
 
         def start_response(status: str, headers: list[tuple[str, str]]) -> None:
@@ -1824,9 +1952,14 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
 
         self.assertEqual(captured["status"], "200 OK")
-        self.assertEqual(json.loads(body.decode("utf-8")), {"status": "ok", "service": "elephant-api"})
+        self.assertEqual(
+            json.loads(body.decode("utf-8")),
+            {"status": "ok", "service": "elephant-api"},
+        )
 
-    def test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence(self) -> None:
+    def test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence(
+        self,
+    ) -> None:
         provider_profile = self._provider_profile(
             profile_id="provider-dashboard",
             base_url=self.stub.openai_base_url,
@@ -2004,7 +2137,11 @@ class APISurfaceE2ETest(unittest.TestCase):
                         },
                     ),
                 ),
-                metadata={"embedding_active": "true", "dimensions": "1536", "configured_from": "test"},
+                metadata={
+                    "embedding_active": "true",
+                    "dimensions": "1536",
+                    "configured_from": "test",
+                },
             )
         )
         self.app.repository.upsert_semantic_index_entry(
@@ -2042,7 +2179,15 @@ class APISurfaceE2ETest(unittest.TestCase):
             )
         )
 
-        projection = self._dashboard_sections("overview", "personal-models", "runtime", "reflect", "evidence", "providers", "usage")
+        projection = self._dashboard_sections(
+            "overview",
+            "personal-models",
+            "runtime",
+            "reflect",
+            "evidence",
+            "providers",
+            "usage",
+        )
         self.assertEqual(projection["overview"]["counts"]["personal_models"], 1)
         self.assertEqual(projection["overview"]["counts"]["states"], 1)
         self.assertEqual(projection["overview"]["counts"]["episodes"], 1)
@@ -2072,12 +2217,14 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(personal_model_row["states"][0]["state_id"], state.state_id)
         self.assertEqual(personal_model_row["user_preferred_name"], "Bit")
         self.assertEqual(personal_model_row["user_profile"]["preferred_name"], "Bit")
-        self.assertEqual(personal_model_row["user_profile"]["current_work"], "Building durable agent systems.")
+        self.assertEqual(
+            personal_model_row["user_profile"]["current_work"],
+            "Building durable agent systems.",
+        )
         overview_only = self._dashboard_section("overview")
         self.assertEqual(overview_only["personal_models"][0]["user_preferred_name"], "Bit")
         component_rows = {
-            component["component_key"]: component
-            for component in personal_model_row["understanding_components"]
+            component["component_key"]: component for component in personal_model_row["understanding_components"]
         }
         self.assertEqual(component_rows["identity"]["status"], "active")
         self.assertEqual(component_rows["identity"]["claim_count"], 2)
@@ -2086,11 +2233,17 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(personal_model_row["personal_model_fact_count"], 3)
         personal_model_fact_text = {fact["text"] for fact in personal_model_row["personal_model_facts"]}
         self.assertIn("Prefers concise, grounded replies.", personal_model_fact_text)
-        self.assertNotIn("State-only tool test evidence", json.dumps(personal_model_row, sort_keys=True))
+        self.assertNotIn(
+            "State-only tool test evidence",
+            json.dumps(personal_model_row, sort_keys=True),
+        )
         self.assertNotIn("Display name: Miles", json.dumps(personal_model_row, sort_keys=True))
         self.assertNotIn("reflection_proposals", personal_model_row)
         self.assertNotIn("skill_affinities", personal_model_row)
-        self.assertEqual(personal_model_row["semantic_index_entries"][0]["semantic_index_entry_id"], "semantic-dashboard")
+        self.assertEqual(
+            personal_model_row["semantic_index_entries"][0]["semantic_index_entry_id"],
+            "semantic-dashboard",
+        )
         self.assertEqual(projection["runtime"]["episodes"][0]["episode_id"], episode.episode_id)
         self.assertEqual(projection["runtime"]["episodes"][0]["loop_count"], 1)
         self.assertEqual(projection["runtime"]["episodes"][0]["step_count"], 1)
@@ -2101,7 +2254,10 @@ class APISurfaceE2ETest(unittest.TestCase):
         for legacy_table in LEGACY_STORAGE_TABLES:
             self.assertNotIn(f"result_{legacy_table}", projection["learning"]["jobs"][0])
         self.assertEqual(projection["learning"]["jobs"][0]["result_status"], "completed")
-        self.assertEqual(projection["learning"]["jobs"][0]["learning_result"]["summary"], "Dashboard learning result.")
+        self.assertEqual(
+            projection["learning"]["jobs"][0]["learning_result"]["summary"],
+            "Dashboard learning result.",
+        )
         self.assertEqual(
             projection["runtime"]["episode_traces"][0]["timeline"][0]["detail"]["assistant_reasoning"],
             "Inspect provider posture before opening the dashboard trace.",
@@ -2131,13 +2287,18 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("state_focus_mode", projection["providers"]["active_provider"])
         self.assertNotIn("strong_model", projection["providers"]["active_provider"])
         self.assertNotIn("weak_model", projection["providers"]["active_provider"])
-        self.assertNotIn("state_focus_mode", json.dumps(projection["providers"]["doctor"], sort_keys=True))
+        self.assertNotIn(
+            "state_focus_mode",
+            json.dumps(projection["providers"]["doctor"], sort_keys=True),
+        )
         self.assertNotIn("stateLanes", projection)
         self.assertNotIn("sessions", projection)
         serialized = json.dumps(projection, sort_keys=True)
         self.assertNotIn("sk-live-123", serialized)
 
-    def test_internal_dashboard_projection_ignores_legacy_session_graph_rows(self) -> None:
+    def test_internal_dashboard_projection_ignores_legacy_session_graph_rows(
+        self,
+    ) -> None:
         provider_profile = self._provider_profile(
             profile_id="provider-dashboard",
             base_url=self.stub.openai_base_url,
@@ -2174,7 +2335,9 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertNotIn("sessions", projection)
         self.assertNotIn("ops", projection)
 
-    def test_default_provider_bad_request_hides_legacy_profile_field_names(self) -> None:
+    def test_default_provider_bad_request_hides_legacy_profile_field_names(
+        self,
+    ) -> None:
         response = self.app.dispatch(
             "POST",
             "/v1/providers/default",
@@ -2194,7 +2357,14 @@ class APISurfaceE2ETest(unittest.TestCase):
 
     def _dashboard_sections(self, *sections: str) -> dict[str, Any]:
         top_level_keys = {
-            "overview": ("overview", "herd", "states", "personal_models", "runtime", "learning"),
+            "overview": (
+                "overview",
+                "herd",
+                "states",
+                "personal_models",
+                "runtime",
+                "learning",
+            ),
             "personal-models": ("personal_models",),
             "herd": ("herd", "states"),
             "runtime": ("herd", "states", "runtime"),

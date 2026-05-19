@@ -6,7 +6,10 @@ from collections.abc import Mapping
 from dataclasses import replace
 
 from packages.contracts import ElephantIdentityRecord
-from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
+from packages.state.rendered_views import (
+    RenderedRelationshipView,
+    RenderedUserProfileView,
+)
 from packages.contracts.runtime import PersonalModelRuntimeState
 
 from .governance import render_user_profile_text as render_user_profile_content
@@ -14,7 +17,9 @@ from .loader import LoadedProfile
 from .policy import CompanionSettings, resolve_personality_preset
 
 
-def render_user_profile_projection_text(record: RenderedUserProfileView | None) -> str | None:
+def render_user_profile_projection_text(
+    record: RenderedUserProfileView | None,
+) -> str | None:
     if record is None:
         return None
     field_values: dict[str, str | None] = {
@@ -52,7 +57,9 @@ def overlay_canonical_profile_state(
         identity_record=identity_record,
         relationship_record=relationship_record,
     )
-    user_profile_text = render_user_profile_projection_text(user_profile) if user_profile is not None else profile.user_profile_text
+    user_profile_text = (
+        render_user_profile_projection_text(user_profile) if user_profile is not None else profile.user_profile_text
+    )
     elephant_identity_text = profile.elephant_identity_text
     if identity_record is not None and identity_record.elephant_identity_text is not None:
         elephant_identity_text = identity_record.elephant_identity_text
@@ -111,7 +118,9 @@ def _project_companion_settings(
     if identity_record is None and relationship_record is None:
         return resolved_current
     governance_flags = set(identity_record.governance_flags if identity_record is not None else ())
-    preset_id = identity_record.personality_preset if identity_record is not None else resolved_current.personality_preset
+    preset_id = (
+        identity_record.personality_preset if identity_record is not None else resolved_current.personality_preset
+    )
     traits = _project_personality_traits(
         current=resolved_current,
         mode=mode,
@@ -121,7 +130,11 @@ def _project_companion_settings(
     initiative = identity_record.initiative if identity_record is not None else resolved_current.initiative
     notes = relationship_record.continuity_notes if relationship_record is not None else resolved_current.notes
     return CompanionSettings(
-        text_first=_flag_enabled(governance_flags, positive="text-first", fallback=resolved_current.text_first),
+        text_first=_flag_enabled(
+            governance_flags,
+            positive="text-first",
+            fallback=resolved_current.text_first,
+        ),
         personality_preset=preset_id,
         personality=traits,
         initiative=initiative,

@@ -160,11 +160,9 @@ class UnifiedRecallRepository(Protocol):
         *,
         state_id: str | None = None,
         limit: int | None = None,
-    ) -> tuple[Any, ...]:
-        ...
+    ) -> tuple[Any, ...]: ...
 
-    def list_steps(self, *, loop_id: str | None = None) -> tuple[Any, ...]:
-        ...
+    def list_steps(self, *, loop_id: str | None = None) -> tuple[Any, ...]: ...
 
     def list_semantic_index_entries(
         self,
@@ -174,8 +172,7 @@ class UnifiedRecallRepository(Protocol):
         personal_model_id: str | None = None,
         provider_id: str | None = None,
         model_id: str | None = None,
-    ) -> tuple[SemanticIndexEntry, ...]:
-        ...
+    ) -> tuple[SemanticIndexEntry, ...]: ...
 
 
 def _aware(value: datetime) -> datetime:
@@ -262,7 +259,17 @@ def documents_from_episodes(episodes: Iterable[Any]) -> list[RecallDocument]:
         summary = str(getattr(episode, "exit_summary", "") or "").strip()
         entry_surface = str(getattr(episode, "entry_surface", "") or "").strip()
         metadata = dict(getattr(episode, "metadata", {}) or {})
-        body = " | ".join(part for part in (summary, entry_surface, metadata.get("topic", ""), metadata.get("focus", ""), metadata.get("note", "")) if str(part or "").strip())
+        body = " | ".join(
+            part
+            for part in (
+                summary,
+                entry_surface,
+                metadata.get("topic", ""),
+                metadata.get("focus", ""),
+                metadata.get("note", ""),
+            )
+            if str(part or "").strip()
+        )
         if not body:
             continue
         out.append(
@@ -275,7 +282,10 @@ def documents_from_episodes(episodes: Iterable[Any]) -> list[RecallDocument]:
                 personal_model_id=getattr(episode, "personal_model_id", None),
                 state_id=getattr(episode, "state_id", None),
                 episode_id=getattr(episode, "episode_id", None),
-                metadata={**{str(k): str(v) for k, v in metadata.items()}, "recall_source": "episode"},
+                metadata={
+                    **{str(k): str(v) for k, v in metadata.items()},
+                    "recall_source": "episode",
+                },
             )
         )
     return out
@@ -326,7 +336,10 @@ def _step_text(step: Any, metadata: Mapping[str, str]) -> str:
     elif normalized_action == "emit_response":
         parts = [str(metadata.get("final_response") or metadata.get("assistant_response") or summary).strip()]
     elif normalized_action == "reply":
-        parts = [summary, str(metadata.get("final_response") or metadata.get("assistant_response") or "").strip()]
+        parts = [
+            summary,
+            str(metadata.get("final_response") or metadata.get("assistant_response") or "").strip(),
+        ]
     else:
         parts = [
             summary,
@@ -363,7 +376,8 @@ def _collect_recall_documents(
             except Exception:
                 episodes = ()
             documents.extend(
-                document for document in documents_from_episodes(episodes or ())
+                document
+                for document in documents_from_episodes(episodes or ())
                 if not _is_excluded_episode(document.episode_id, excluded)
             )
         elif scope == "steps":
@@ -372,16 +386,17 @@ def _collect_recall_documents(
             except Exception:
                 steps = ()
             documents.extend(
-                document for document in documents_from_steps(steps or ())
+                document
+                for document in documents_from_steps(steps or ())
                 if (not state_id or document.state_id in {None, "", state_id})
                 and not _is_excluded_episode(document.episode_id, excluded)
             )
         # Legacy scopes (personal_model, state, sources) are no longer supported.
         # Steps + episodes + semantic index are the canonical search path.
     return [
-        document for document in documents
-        if _in_time_range(document.when, time_range)
-        and not _is_excluded_episode(document.episode_id, excluded)
+        document
+        for document in documents
+        if _in_time_range(document.when, time_range) and not _is_excluded_episode(document.episode_id, excluded)
     ]
 
 
@@ -668,8 +683,7 @@ def recall_timeline(
         if query and score <= 0.0:
             continue
         anchor_items = [
-            item for item in items
-            if item.text.strip() and (not query or _text_relevance_score(query, item.text) > 0.0)
+            item for item in items if item.text.strip() and (not query or _text_relevance_score(query, item.text) > 0.0)
         ]
         anchors = tuple(
             {"kind": item.kind, "text": _anchor_text(item.text)}
@@ -689,7 +703,12 @@ def recall_timeline(
             payload["anchors"] = anchors
         ranges.append(payload)
     if query:
-        ranges.sort(key=lambda item: (-float(item.get("score", 0.0)), str(item.get("start_at", ""))))
+        ranges.sort(
+            key=lambda item: (
+                -float(item.get("score", 0.0)),
+                str(item.get("start_at", "")),
+            )
+        )
     else:
         ranges.sort(key=lambda item: str(item.get("start_at", "")))
     selected = tuple(ranges[:capped])
@@ -729,7 +748,7 @@ def unified_recall(
         tuple of RecallHit ordered best-to-worst.
     """
     capped = max(1, min(int(request.limit or 5), 20))
-    now_ts = (request.now or datetime.now(timezone.utc))
+    now_ts = request.now or datetime.now(timezone.utc)
     query_plan = plan_recall_query(request.query)
     query = query_plan.search_query.strip()
     scopes = tuple(request.scopes) or CONVERSATION_SEARCH_SCOPES
@@ -760,7 +779,9 @@ def unified_recall(
             embedding_available = False
     query_vector_cache: dict[int | None, tuple[tuple[float, ...], int | None]] = {}
 
-    def query_vector_for(dimensions: int | None) -> tuple[tuple[float, ...], int | None]:
+    def query_vector_for(
+        dimensions: int | None,
+    ) -> tuple[tuple[float, ...], int | None]:
         if dimensions in query_vector_cache:
             return query_vector_cache[dimensions]
         if not embedding_available:
@@ -786,7 +807,11 @@ def unified_recall(
 
     # Attempt hybrid per-scope; collect matches into one ranked list.
     hits: list[RecallHit] = []
-    per_scope_limit = max(capped, capped * (8 if time_range is not None else 2), 50 if time_range is not None else capped)
+    per_scope_limit = max(
+        capped,
+        capped * (8 if time_range is not None else 2),
+        50 if time_range is not None else capped,
+    )
     require_text_anchor = _query_needs_text_anchor(query)
     excluded = _excluded_episode_ids(request.exclude_episode_ids)
     for scope in scopes:
@@ -832,7 +857,11 @@ def unified_recall(
             if scope == "steps" and _semantic_step_is_noise(document, hit):
                 continue
             hit_episode_id = dict(getattr(hit, "extra_metadata", {}) or {}).get("episode_id") if hit is not None else ""
-            if hit is not None and not _is_excluded_episode(hit_episode_id, excluded) and _in_time_range(hit.when_datetime, time_range):
+            if (
+                hit is not None
+                and not _is_excluded_episode(hit_episode_id, excluded)
+                and _in_time_range(hit.when_datetime, time_range)
+            ):
                 hits.append(hit)
 
     step_candidates = _collect_fallback_candidates(
@@ -844,7 +873,14 @@ def unified_recall(
         time_range=time_range,
         exclude_episode_ids=request.exclude_episode_ids,
     )
-    hits.extend(rank_recall_candidates(request.query, step_candidates, limit=max(capped, len(step_candidates)), now=now_ts))
+    hits.extend(
+        rank_recall_candidates(
+            request.query,
+            step_candidates,
+            limit=max(capped, len(step_candidates)),
+            now=now_ts,
+        )
+    )
 
     # Merge: sort by relevance plus intent-aware freshness, then de-duplicate by provenance first.
     ranked_hits = rerank_recall_hits(tuple(hits), plan=query_plan, now=now_ts)
@@ -854,8 +890,7 @@ def unified_recall(
         hit = ranked_hit.hit
         metadata = dict(hit.extra_metadata or {})
         provenance = "|".join(
-            str(metadata.get(key) or "").strip()
-            for key in ("episode_id", "loop_id", "step_id", "source_id")
+            str(metadata.get(key) or "").strip() for key in ("episode_id", "loop_id", "step_id", "source_id")
         ).strip("|")
         key = provenance or hit.content.casefold()
         if key in seen_keys:

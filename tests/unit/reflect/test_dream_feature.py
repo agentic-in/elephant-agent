@@ -13,33 +13,51 @@ class DreamFeatureTest(unittest.TestCase):
     def test_dream_trigger_resolves_to_single_nightly_bundle(self) -> None:
         features = resolve_features("dream")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("dream", "questions", "skills", "diary"))
+        self.assertEqual(
+            tuple(feature.feature_id for feature in features),
+            ("dream", "questions", "skills", "diary"),
+        )
 
     def test_explicit_dream_drops_pm_learning_but_preserves_questions(self) -> None:
         features = resolve_features("manual", explicit_features=("pm", "questions", "dream", "recall"))
 
         self.assertEqual(tuple(feature.feature_id for feature in features), ("dream", "questions"))
 
-    def test_dream_trigger_with_legacy_explicit_metadata_adds_nightly_bundle(self) -> None:
+    def test_dream_trigger_with_legacy_explicit_metadata_adds_nightly_bundle(
+        self,
+    ) -> None:
         features = resolve_features("dream", explicit_features=("dream", "questions"))
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("dream", "questions", "skills", "diary"))
+        self.assertEqual(
+            tuple(feature.feature_id for feature in features),
+            ("dream", "questions", "skills", "diary"),
+        )
 
     def test_explicit_dream_alone_stays_dream_only(self) -> None:
         features = resolve_features("manual", explicit_features=("dream",))
 
         self.assertEqual(tuple(feature.feature_id for feature in features), ("dream",))
 
-    def test_episode_close_resolves_to_pm_questions_and_skills_without_conversation_search(self) -> None:
+    def test_episode_close_resolves_to_pm_questions_and_skills_without_conversation_search(
+        self,
+    ) -> None:
         features = resolve_features("episode_close")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills"))
+        self.assertEqual(
+            tuple(feature.feature_id for feature in features),
+            ("pm", "questions", "skills"),
+        )
         self.assertNotIn("tool.conversation.search", _compose_tools(features))
 
-    def test_init_profile_resolves_without_diary_and_uses_bootstrap_prompt_rules(self) -> None:
+    def test_init_profile_resolves_without_diary_and_uses_bootstrap_prompt_rules(
+        self,
+    ) -> None:
         features = resolve_features("init_profile")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills"))
+        self.assertEqual(
+            tuple(feature.feature_id for feature in features),
+            ("pm", "questions", "skills"),
+        )
 
         prompt = _assemble_system_prompt(features, conservatism="low")
 
@@ -104,7 +122,9 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("CLAIM TEXT RULE", prompt)
         self.assertIn("short, clear, explicit, and unambiguous", prompt)
 
-    def test_dream_evidence_omits_episode_close_packet_when_questions_are_present(self) -> None:
+    def test_dream_evidence_omits_episode_close_packet_when_questions_are_present(
+        self,
+    ) -> None:
         class Repository:
             def load_episode(self, episode_id: str) -> SimpleNamespace:
                 return SimpleNamespace(exit_summary="episode close summary should not appear")

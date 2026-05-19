@@ -12,7 +12,7 @@ import json
 from packages.auth.runtime import AuthProfile, SecretValueResolution
 
 from .model_metadata import resolve_provider_model_metadata
-from .provider_catalog import default_provider_definitions, provider_definition
+from .provider_catalog import provider_definition
 from .provider_runtime import ProviderRuntimeResolver, provider_auth_headers
 
 RequestJsonCallable = Callable[..., dict[str, Any]]
@@ -307,7 +307,9 @@ def heuristic_context_window(model_id: str) -> int | None:
     return DEFAULT_CONTEXT_WINDOW_TOKENS
 
 
-def _hinted_models(provider_id: str, *, runtime_resolver: ProviderRuntimeResolver) -> tuple[DiscoveredProviderModel, ...]:
+def _hinted_models(
+    provider_id: str, *, runtime_resolver: ProviderRuntimeResolver
+) -> tuple[DiscoveredProviderModel, ...]:
     definition = provider_definition(provider_id)
     if definition is None:
         return ()
@@ -438,9 +440,7 @@ class _GenericProviderMetadataProbe:
                     raw_efforts = supports_payload.get("reasoning_effort")
                     if isinstance(raw_efforts, list):
                         reasoning_efforts = tuple(
-                            str(value).strip().lower()
-                            for value in raw_efforts
-                            if str(value).strip()
+                            str(value).strip().lower() for value in raw_efforts if str(value).strip()
                         )
             models.append(
                 DiscoveredProviderModel(
@@ -516,7 +516,11 @@ class _OllamaProviderMetadataProbe:
             with request.urlopen(http_request, timeout=5.0) as response:
                 raw_body = response.read().decode("utf-8")
                 payload = json.loads(raw_body) if raw_body else {}
-        except (error.HTTPError, error.URLError, json.JSONDecodeError):  # pragma: no cover
+        except (
+            error.HTTPError,
+            error.URLError,
+            json.JSONDecodeError,
+        ):  # pragma: no cover
             return None
         if not isinstance(payload, Mapping):
             return None
@@ -584,12 +588,16 @@ class ProviderMetadataDiscoveryService:
         extra_headers: Mapping[str, str] | None = None,
         hinted_models: tuple[DiscoveredProviderModel, ...] | None = None,
     ) -> int | None:
-        models = hinted_models if hinted_models is not None else self.discover_models(
-            provider_id=provider_id,
-            base_url=base_url,
-            api_key=api_key,
-            extra_headers=extra_headers,
-            default_model_id=model_id,
+        models = (
+            hinted_models
+            if hinted_models is not None
+            else self.discover_models(
+                provider_id=provider_id,
+                base_url=base_url,
+                api_key=api_key,
+                extra_headers=extra_headers,
+                default_model_id=model_id,
+            )
         )
         normalized_provider_id = provider_id.strip().lower()
         for item in models:

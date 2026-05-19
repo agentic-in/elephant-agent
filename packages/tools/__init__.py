@@ -37,7 +37,11 @@ from .runtime import (
     ToolRuntime,
     ToolSideEffectMetadata,
 )
-from .surfaces import BrowserVisionAnalyzer, BuiltinToolDependencies, InMemorySessionTodoStore
+from .surfaces import (
+    BrowserVisionAnalyzer,
+    BuiltinToolDependencies,
+    InMemorySessionTodoStore,
+)
 
 __all__ = [
     "ApprovalGateway",

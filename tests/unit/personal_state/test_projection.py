@@ -8,7 +8,9 @@ from packages.state import CompanionSettings
 
 
 class PersonalStateProjectionTest(unittest.TestCase):
-    def test_build_loaded_profile_from_state_preserves_custom_personality_traits(self) -> None:
+    def test_build_loaded_profile_from_state_preserves_custom_personality_traits(
+        self,
+    ) -> None:
         loaded = build_loaded_profile_from_state(
             PersonalModelRuntimeState(
                 profile_id="profile-companion",

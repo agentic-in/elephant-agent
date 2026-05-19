@@ -49,7 +49,10 @@ _SECRET_TEXT_PATTERNS = (
         lambda _match: _REDACTED,
     ),
     (
-        re.compile(r"(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----)(.*?)(-----END [A-Z ]*PRIVATE KEY-----)", re.DOTALL),
+        re.compile(
+            r"(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----)(.*?)(-----END [A-Z ]*PRIVATE KEY-----)",
+            re.DOTALL,
+        ),
         lambda match: f"{match.group(1)}\n{_REDACTED}\n{match.group(3)}",
     ),
 )
@@ -296,19 +299,31 @@ def default_surface_policy_bundles() -> tuple[SurfacePolicyBundle, ...]:
         SurfacePolicyBundle(
             surface_id="cli.operator",
             label="CLI operator path",
-            approval_classes=(ApprovalClass.READ, ApprovalClass.WRITE, ApprovalClass.VOICE_DEVICE),
+            approval_classes=(
+                ApprovalClass.READ,
+                ApprovalClass.WRITE,
+                ApprovalClass.VOICE_DEVICE,
+            ),
             summary="Local shell inspection, governed edits, and optional voice extension.",
         ),
         SurfacePolicyBundle(
             surface_id="gateway.messaging",
             label="Gateway messaging path",
-            approval_classes=(ApprovalClass.READ, ApprovalClass.MESSAGING, ApprovalClass.NETWORK),
+            approval_classes=(
+                ApprovalClass.READ,
+                ApprovalClass.MESSAGING,
+                ApprovalClass.NETWORK,
+            ),
             summary="Outbound messaging and remote delivery across recipient and boundary checks.",
         ),
         SurfacePolicyBundle(
             surface_id="deploy.support",
             label="Deploy and support path",
-            approval_classes=(ApprovalClass.READ, ApprovalClass.EXEC, ApprovalClass.NETWORK),
+            approval_classes=(
+                ApprovalClass.READ,
+                ApprovalClass.EXEC,
+                ApprovalClass.NETWORK,
+            ),
             summary="Install, doctor, deploy, and support collection without secret exfiltration.",
         ),
     )
@@ -545,11 +560,7 @@ class SecurityTelemetryTrail:
         if result.rule_id != "unregistered-surface" and result.decision != PolicyDecision.DENY:
             return None
         severity: FailureSeverity = "critical" if result.rule_id == "unregistered-surface" else "warning"
-        error_kind = (
-            "approval_context_missing"
-            if result.rule_id == "unregistered-surface"
-            else "approval_denied"
-        )
+        error_kind = "approval_context_missing" if result.rule_id == "unregistered-surface" else "approval_denied"
         return emit_failure_event(
             self.sink,
             event_id=f"{request.request_id}:failure.side_effect.reported",

@@ -82,7 +82,9 @@ class PublicInstallScriptSmokeTest(unittest.TestCase):
         health = self._run_install("health")
         self.assertIn("Elephant Agent status", health.stdout)
 
-    def test_public_install_script_defaults_to_dev_channel_and_supports_stable_override(self) -> None:
+    def test_public_install_script_defaults_to_dev_channel_and_supports_stable_override(
+        self,
+    ) -> None:
         content = (ROOT / "install.sh").read_text(encoding="utf-8")
         self.assertIn('channel="${ELEPHANT_INSTALL_CHANNEL:-dev}"', content)
         self.assertIn("--channel CHANNEL", content)
@@ -102,7 +104,7 @@ class PublicInstallScriptSmokeTest(unittest.TestCase):
         self.assertIn("- main", content)
         self.assertIn("environment: PYPI_API_TOKEN", content)
         self.assertIn("f'version = \"{target}\"'", content)
-        self.assertIn("base = re.sub(r\"\\.dev\\d+$\", \"\", current)", content)
+        self.assertIn('base = re.sub(r"\\.dev\\d+$", "", current)', content)
         self.assertIn("make package-build", content)
         self.assertIn("make package-verify", content)
         self.assertIn("apps/site/node_modules", makefile_content)
@@ -114,7 +116,10 @@ class PublicInstallScriptSmokeTest(unittest.TestCase):
 
     def test_pyproject_excludes_site_packages_from_python_distribution(self) -> None:
         content = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertIn('include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "packages*"]', content)
+        self.assertIn(
+            'include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "packages*"]',
+            content,
+        )
         self.assertIn('exclude = ["tests*", ".worktrees*", "apps.site*"]', content)
         self.assertIn('"apps.dashboard" = ["dist/*", "dist/assets/*"]', content)
 

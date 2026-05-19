@@ -29,7 +29,11 @@ def run_sub_agents_action(
         wait_timeout_seconds = None
         if action in {"join", "wait"}:
             wait_timeout_seconds = float(
-                _int_value(invocation.arguments.get("timeout_seconds"), default=3600, name="timeout_seconds")
+                _int_value(
+                    invocation.arguments.get("timeout_seconds"),
+                    default=3600,
+                    name="timeout_seconds",
+                )
             )
         result = surface.inspect_sub_agent_run(
             session_id=invocation.session_id,
@@ -62,7 +66,11 @@ def run_sub_agents_action(
         result = runner(
             session_id=invocation.session_id,
             tasks=tasks,
-            max_concurrency=_int_value(invocation.arguments.get("max_concurrency"), default=3, name="max_concurrency"),
+            max_concurrency=_int_value(
+                invocation.arguments.get("max_concurrency"),
+                default=3,
+                name="max_concurrency",
+            ),
         )
         if isinstance(result, ExecutionResult):
             return result

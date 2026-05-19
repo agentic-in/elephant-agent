@@ -20,8 +20,7 @@ def _normalize_services(
         return {str(key): value for key, value in services.items()}
     if isinstance(services, Sequence) and not isinstance(services, (str, bytes, bytearray)):
         return {
-            str(getattr(service, "service_key", f"service-{index}")): service
-            for index, service in enumerate(services)
+            str(getattr(service, "service_key", f"service-{index}")): service for index, service in enumerate(services)
         }
     service = services
     return {str(getattr(service, "service_key", "service")): service}
@@ -61,10 +60,7 @@ def create_gateway_web_app(
         if method == "GET" and path == "/healthz":
             payload: dict[str, object] = {
                 "ok": True,
-                "services": {
-                    key: dict(service.describe())
-                    for key, service in service_map.items()
-                },
+                "services": {key: dict(service.describe()) for key, service in service_map.items()},
             }
             if gateway_app is not None and hasattr(gateway_app, "setup_summary"):
                 payload["gateway"] = gateway_app.setup_summary()

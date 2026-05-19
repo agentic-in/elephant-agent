@@ -8,7 +8,6 @@ import io
 import json
 import os
 from pathlib import Path
-import signal
 import sys
 import tempfile
 import threading
@@ -51,7 +50,7 @@ from apps.gateway.weixin_service import MessageDeduplicator
 import apps.gateway.__main__ as gateway_main
 from apps.gateway.__main__ import command_main
 from apps.gateway.gateway_main_parser import _build_app
-from apps.provider_runtime import provider_profile_from_payload, runtime_local_secret_env_path
+from apps.provider_runtime import provider_profile_from_payload
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayAccountRef,
@@ -65,7 +64,12 @@ from packages.gateway_core import (
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import EvidenceRetrievalRequest
 from packages.models import SurfaceModelProviderCapability
-from packages.runtime_config import global_config_path_for_state_dir, load_global_config, save_provider_to_config, write_global_config
+from packages.runtime_config import (
+    global_config_path_for_state_dir,
+    load_global_config,
+    save_provider_to_config,
+    write_global_config,
+)
 from packages.security.runtime import PolicyDecision
 from packages.storage import RuntimeStorageRepository
 
@@ -142,6 +146,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             },
         }
         self._write_profile_manifest(self.profile_manifest)
+
     def tearDown(self) -> None:
         self.ensure_discord_sdk_patcher.stop()
         self.ensure_feishu_sdk_patcher.stop()
@@ -155,7 +160,11 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         class FakeRecallRuntime:
             def retrieve_evidence(self, request):
                 calls.append({"evidence_request": request})
-                return SimpleNamespace(candidates=(SimpleNamespace(recall="personal-recall"),), scope_episode_ids=request.lineage_episode_ids, scope_reason=request.scope_reason)
+                return SimpleNamespace(
+                    candidates=(SimpleNamespace(recall="personal-recall"),),
+                    scope_episode_ids=request.lineage_episode_ids,
+                    scope_reason=request.scope_reason,
+                )
 
         capability = GatewayRecallCapability(FakeRecallRuntime())
 
@@ -170,7 +179,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         )
         retrieval = capability.retrieve_evidence(evidence_request)
         self.assertEqual(retrieval.candidates[0].recall, "personal-recall")
-        self.assertEqual(calls[0]["evidence_request"].scopes, ("episode", "elephant", "personal_model"))
+        self.assertEqual(
+            calls[0]["evidence_request"].scopes,
+            ("episode", "elephant", "personal_model"),
+        )
         self.assertEqual(calls[0]["evidence_request"].personal_model_id, "personal-model:zoey")
 
     def test_gateway_cli_app_reuses_cli_provider_when_im_profile_has_none(self) -> None:
@@ -211,9 +223,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(app.provider_runtime["provider_id"], "openai-compatible")
         self.assertEqual(app.provider_runtime["default_model"], "openai/gpt-4o-mini")
         self.assertEqual(app.provider_runtime["source"], "configured")
-        self.assertEqual(app.model_provider.surface.resolve_credentials(app.provider_profile)["api_key"], "sk-cli-local-vault")
+        self.assertEqual(
+            app.model_provider.surface.resolve_credentials(app.provider_profile)["api_key"],
+            "sk-cli-local-vault",
+        )
 
-    def test_gateway_cli_app_reuses_default_local_provider_when_dashboard_profile_has_none(self) -> None:
+    def test_gateway_cli_app_reuses_default_local_provider_when_dashboard_profile_has_none(
+        self,
+    ) -> None:
         gateway_profile_dir = Path(self.tempdir.name) / "dashboard-profile"
         cli_profile_dir = Path(self.tempdir.name) / "dashboard-cli-profile"
         default_home = Path(self.tempdir.name) / "default-home"
@@ -221,10 +238,17 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         gateway_profile_dir.mkdir()
         cli_profile_dir.mkdir()
         default_profile_dir.mkdir(parents=True)
-        minimal_manifest = {"profile_id": "profile:gateway", "display_name": "Gateway", "mode": "default"}
+        minimal_manifest = {
+            "profile_id": "profile:gateway",
+            "display_name": "Gateway",
+            "mode": "default",
+        }
         (gateway_profile_dir / "profile.json").write_text(json.dumps(minimal_manifest), encoding="utf-8")
         (cli_profile_dir / "profile.json").write_text(json.dumps(minimal_manifest), encoding="utf-8")
-        (default_profile_dir / "profile.json").write_text((self.profile_dir / "profile.json").read_text(encoding="utf-8"), encoding="utf-8")
+        (default_profile_dir / "profile.json").write_text(
+            (self.profile_dir / "profile.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
         default_state_dir = default_home / "herd"
         default_state_dir.mkdir(parents=True)
         save_provider_to_config(
@@ -310,7 +334,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(exit_info.exception.code, 0)
         rendered = output.getvalue()
         self.assertNotIn("==SUPPRESS==", rendered)
-        self.assertIn("{setup,status,doctor,describe,feishu,discord,dingding,weixin,wecom}", rendered)
+        self.assertIn(
+            "{setup,status,doctor,describe,feishu,discord,dingding,weixin,wecom}",
+            rendered,
+        )
         self.assertNotIn("\n    serve", rendered)
         self.assertNotIn("\n    add", rendered)
 
@@ -640,7 +667,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             self.requests.append((normalized_request, account))
             return {"id": "discord-reply-1"}
 
-    def test_gateway_add_feishu_command_writes_secret_reference_profile_config(self) -> None:
+    def test_gateway_add_feishu_command_writes_secret_reference_profile_config(
+        self,
+    ) -> None:
         self._update_manifest(lambda payload: payload.pop("gateway", None))
 
         output = io.StringIO()
@@ -778,7 +807,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         finally:
             self.ensure_discord_sdk = self.ensure_discord_sdk_patcher.start()
 
-    def test_gateway_add_discord_command_writes_profile_config_and_local_secret(self) -> None:
+    def test_gateway_add_discord_command_writes_profile_config_and_local_secret(
+        self,
+    ) -> None:
         self._update_manifest(lambda payload: payload["gateway"]["adapters"].pop("discord", None))
 
         output = io.StringIO()
@@ -851,13 +882,24 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(account["credentials_status"], "configured")
         self.assertEqual(account["bot_token_env_var"], "ELEPHANT_TEST_DISCORD_BOT_TOKEN")
 
-    def test_gateway_add_discord_command_uses_wizard_by_default_when_shell_is_interactive(self) -> None:
+    def test_gateway_add_discord_command_uses_wizard_by_default_when_shell_is_interactive(
+        self,
+    ) -> None:
         self._update_manifest(lambda payload: payload["gateway"]["adapters"].pop("discord", None))
         output = io.StringIO()
         with (
-            mock.patch("apps.gateway.gateway_main_setup_impl._interactive_shell_supported", return_value=True),
-            mock.patch("apps.gateway.gateway_main_setup_impl._start_discord_runtime_after_setup", return_value=0) as auto_start,
-            mock.patch("apps.gateway.gateway_main_setup_impl.getpass.getpass", return_value="wizard-discord-token"),
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl._interactive_shell_supported",
+                return_value=True,
+            ),
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl._start_discord_runtime_after_setup",
+                return_value=0,
+            ) as auto_start,
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl.getpass.getpass",
+                return_value="wizard-discord-token",
+            ),
             redirect_stdout(output),
         ):
             exit_code = command_main(
@@ -897,7 +939,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         local_secrets = json.loads((self.state_dir / "gateway-local-secrets.json").read_text(encoding="utf-8"))
         self.assertEqual(local_secrets[DEFAULT_DISCORD_BOT_TOKEN_ENV], "wizard-discord-token")
 
-    def test_gateway_add_discord_command_replaces_unconfigured_default_placeholder(self) -> None:
+    def test_gateway_add_discord_command_replaces_unconfigured_default_placeholder(
+        self,
+    ) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
             exit_code = command_main(
@@ -927,7 +971,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertNotIn("Configure the Discord bot token", rendered)
 
-    def test_gateway_add_discord_command_can_disable_account_without_disabling_adapter(self) -> None:
+    def test_gateway_add_discord_command_can_disable_account_without_disabling_adapter(
+        self,
+    ) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
             exit_code = command_main(
@@ -956,7 +1002,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertFalse(discord["accounts"][0]["enabled"])
         self.assertIn("Discord account enabled for default runtime starts: no", output.getvalue())
 
-    def test_gateway_add_feishu_command_updates_existing_account_without_clobbering_profile(self) -> None:
+    def test_gateway_add_feishu_command_updates_existing_account_without_clobbering_profile(
+        self,
+    ) -> None:
         output = io.StringIO()
         with redirect_stdout(output):
             exit_code = command_main(
@@ -1030,7 +1078,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             ("secret-feishu-ops-feishu-app-id", "secret-feishu-ops-feishu-app-secret"),
         )
 
-    def test_gateway_add_feishu_command_persists_local_secret_file_for_raw_credentials(self) -> None:
+    def test_gateway_add_feishu_command_persists_local_secret_file_for_raw_credentials(
+        self,
+    ) -> None:
         self._update_manifest(lambda payload: payload.pop("gateway", None))
 
         output = io.StringIO()
@@ -1082,9 +1132,15 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         output = io.StringIO()
         with (
-            mock.patch("apps.gateway.gateway_main_setup_impl._start_feishu_runtime_after_setup", return_value=0) as auto_start,
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl._start_feishu_runtime_after_setup",
+                return_value=0,
+            ) as auto_start,
             mock.patch("builtins.input", side_effect=lambda _prompt="": next(scripted_answers)),
-            mock.patch("apps.gateway.gateway_main_setup_impl.getpass.getpass", return_value="wizard-app-secret-789"),
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl.getpass.getpass",
+                return_value="wizard-app-secret-789",
+            ),
             redirect_stdout(output),
         ):
             exit_code = command_main(
@@ -1136,9 +1192,15 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         scripted_answers = iter(["3", "wizard-app-id-single"])
 
         with (
-            mock.patch("apps.gateway.gateway_main_setup_impl._start_feishu_runtime_after_setup", return_value=0),
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl._start_feishu_runtime_after_setup",
+                return_value=0,
+            ),
             mock.patch("builtins.input", side_effect=lambda _prompt="": next(scripted_answers)),
-            mock.patch("apps.gateway.gateway_main_setup_impl.getpass.getpass", return_value="wizard-app-secret-single"),
+            mock.patch(
+                "apps.gateway.gateway_main_setup_impl.getpass.getpass",
+                return_value="wizard-app-secret-single",
+            ),
         ):
             exit_code = command_main(
                 ["setup"],
@@ -1174,7 +1236,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_info.exception.code, 0)
         rendered = output.getvalue()
-        self.assertIn("{setup,remove,start,status,stop,restart,logs,describe,doctor,message}", rendered)
+        self.assertIn(
+            "{setup,remove,start,status,stop,restart,logs,describe,doctor,message}",
+            rendered,
+        )
         self.assertIn("setup               Add or update a Feishu account.", rendered)
         self.assertIn("remove              Remove a Feishu account.", rendered)
         self.assertIn("status              Show Feishu status.", rendered)
@@ -1202,7 +1267,15 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         output = io.StringIO()
         with redirect_stdout(output):
             exit_code = command_main(
-                ["feishu", "logs", "ops-feishu", "--transport", "long-connection", "--tail", "2"],
+                [
+                    "feishu",
+                    "logs",
+                    "ops-feishu",
+                    "--transport",
+                    "long-connection",
+                    "--tail",
+                    "2",
+                ],
                 default_state_dir=self.state_dir,
                 default_control_state_dir=self.state_dir,
             )
@@ -1213,7 +1286,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         path_output = io.StringIO()
         with redirect_stdout(path_output):
             exit_code = command_main(
-                ["feishu", "logs", "ops-feishu", "--transport", "long-connection", "--path"],
+                [
+                    "feishu",
+                    "logs",
+                    "ops-feishu",
+                    "--transport",
+                    "long-connection",
+                    "--path",
+                ],
                 default_state_dir=self.state_dir,
                 default_control_state_dir=self.state_dir,
             )
@@ -1236,7 +1316,13 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "pid_path": str(pid_path),
                     "log_path": str(self.state_dir / "feishu-long-connection.log"),
                     "record_path": str(record_path),
-                    "command": [sys.executable, "-m", "apps.launcher", "gateway", "start"],
+                    "command": [
+                        sys.executable,
+                        "-m",
+                        "apps.launcher",
+                        "gateway",
+                        "start",
+                    ],
                     "profile_dir": str(self.profile_dir),
                     "state_dir": str(self.state_dir),
                     "cli_profile_dir": str(self.profile_dir),
@@ -1270,7 +1356,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         output = io.StringIO()
         with redirect_stdout(output):
             exit_code = command_main(
-                ["feishu", "stop", "--transport", "long-connection", "--timeout", "0.1"],
+                [
+                    "feishu",
+                    "stop",
+                    "--transport",
+                    "long-connection",
+                    "--timeout",
+                    "0.1",
+                ],
                 default_state_dir=self.state_dir,
                 default_control_state_dir=self.state_dir,
             )
@@ -1294,14 +1387,25 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 side_effect=[
                     None,
                     None,
-                    {"status": "running", "pid": 54321, "state_dir": str(self.state_dir)},
+                    {
+                        "status": "running",
+                        "pid": 54321,
+                        "state_dir": str(self.state_dir),
+                    },
                 ],
             ),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
             redirect_stdout(output),
         ):
             exit_code = command_main(
-                ["feishu", "restart", "--transport", "long-connection", "--timeout", "0.1"],
+                [
+                    "feishu",
+                    "restart",
+                    "--transport",
+                    "long-connection",
+                    "--timeout",
+                    "0.1",
+                ],
                 default_state_dir=self.state_dir,
                 default_control_state_dir=self.state_dir,
             )
@@ -1339,7 +1443,11 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "apps.daemon_command._daemon_healthz_payload",
                 side_effect=[
                     None,
-                    {"status": "running", "pid": 43210, "state_dir": str(self.state_dir)},
+                    {
+                        "status": "running",
+                        "pid": 43210,
+                        "state_dir": str(self.state_dir),
+                    },
                 ],
             ),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
@@ -1379,7 +1487,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(command[command.index("--cli-state-dir") + 1], str(self.state_dir))
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
-    def test_gateway_feishu_start_detach_launches_unified_daemon_with_cli_state(self) -> None:
+    def test_gateway_feishu_start_detach_launches_unified_daemon_with_cli_state(
+        self,
+    ) -> None:
         class FakeProcess:
             pid = 43211
 
@@ -1394,7 +1504,11 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "apps.daemon_command._daemon_healthz_payload",
                 side_effect=[
                     None,
-                    {"status": "running", "pid": 43211, "state_dir": str(self.state_dir)},
+                    {
+                        "status": "running",
+                        "pid": 43211,
+                        "state_dir": str(self.state_dir),
+                    },
                 ],
             ),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
@@ -1433,7 +1547,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(summary["provider"]["profile_id"], "provider-openrouter")
         self.assertEqual(summary["provider"]["default_model"], "openai/gpt-4o-mini")
         self.assertEqual(summary["provider"]["model_id"], "openai/gpt-4o-mini")
-        self.assertIn(summary["provider"]["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
+        self.assertIn(
+            summary["provider"]["embedding_bootstrap_status"],
+            EMBEDDING_BOOTSTRAP_STATUSES,
+        )
         self.assertEqual(
             summary["adapter_setup"]["feishu"]["preferred_transport"],
             "long-connection",
@@ -1509,7 +1626,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertNotIn("tool.memory.note", model_visible)
         self.assertNotIn("tool.skill.manage", model_visible)
 
-    def test_gateway_chat_context_discloses_skill_index_and_allows_skill_list_tool(self) -> None:
+    def test_gateway_chat_context_discloses_skill_index_and_allows_skill_list_tool(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         self._bind_gateway_conversation(
             app,
@@ -1620,7 +1739,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             DEFAULT_GATEWAY_ACCOUNT_ID,
         )
 
-    def test_load_discord_gateway_accounts_reads_allowlists_and_runtime_metadata(self) -> None:
+    def test_load_discord_gateway_accounts_reads_allowlists_and_runtime_metadata(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -1654,7 +1775,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(account.runtime_metadata["shard_count"], 2)
         self.assertEqual(tuple(account.runtime_metadata["shard_ids"]), (0, 1))
 
-    def test_load_discord_gateway_accounts_skips_disabled_accounts_but_describe_reports_them(self) -> None:
+    def test_load_discord_gateway_accounts_skips_disabled_accounts_but_describe_reports_them(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -1775,7 +1898,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "pid_path": str(pid_path),
                     "log_path": str(log_path),
                     "record_path": str(record_path),
-                    "command": [sys.executable, "-m", "apps.launcher", "gateway", "discord", "start"],
+                    "command": [
+                        sys.executable,
+                        "-m",
+                        "apps.launcher",
+                        "gateway",
+                        "discord",
+                        "start",
+                    ],
                     "profile_dir": str(self.profile_dir),
                     "state_dir": str(self.state_dir),
                     "started_at": datetime.now(UTC).isoformat(),
@@ -1840,7 +1970,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "pid_path": str(pid_path),
                     "log_path": str(self.state_dir / "discord-gateway.log"),
                     "record_path": str(record_path),
-                    "command": [sys.executable, "-m", "apps.launcher", "gateway", "discord", "start"],
+                    "command": [
+                        sys.executable,
+                        "-m",
+                        "apps.launcher",
+                        "gateway",
+                        "discord",
+                        "start",
+                    ],
                     "profile_dir": str(self.profile_dir),
                     "state_dir": str(self.state_dir),
                     "started_at": datetime.now(UTC).isoformat(),
@@ -1878,7 +2015,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(exit_info.exception.code, 0)
         rendered = output.getvalue()
-        self.assertIn("{setup,remove,start,status,stop,restart,logs,describe,doctor,message}", rendered)
+        self.assertIn(
+            "{setup,remove,start,status,stop,restart,logs,describe,doctor,message}",
+            rendered,
+        )
         self.assertIn("setup               Add or update a Discord account.", rendered)
         self.assertIn("remove              Remove a Discord account.", rendered)
         self.assertIn("status              Show Discord status.", rendered)
@@ -1914,7 +2054,11 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 "apps.daemon_command._daemon_healthz_payload",
                 side_effect=[
                     None,
-                    {"status": "running", "pid": 54322, "state_dir": str(self.state_dir)},
+                    {
+                        "status": "running",
+                        "pid": 54322,
+                        "state_dir": str(self.state_dir),
+                    },
                 ],
             ),
             mock.patch("apps.gateway.__main__.time.sleep", return_value=None),
@@ -1954,7 +2098,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(command[command.index("--cli-state-dir") + 1], str(self.state_dir))
         self.assertTrue(launcher_calls[0].kwargs["start_new_session"])
 
-    def test_discord_service_dispatch_event_delivers_dm_reply_with_mentions_suppressed(self) -> None:
+    def test_discord_service_dispatch_event_delivers_dm_reply_with_mentions_suppressed(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -2161,7 +2307,16 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(result.response_body["session_id"], expected_session_id)
         self.assertEqual(result.response_body["delivery_outcome"], "delivered")
         self.assertEqual(result.response_body["external_message_id"], "discord-reply-1")
-        self.assertEqual(shared_runtime_calls, [{"session_id": expected_session_id, "prompt": "hello from discord control", "conversation_id": "dm-control-1"}])
+        self.assertEqual(
+            shared_runtime_calls,
+            [
+                {
+                    "session_id": expected_session_id,
+                    "prompt": "hello from discord control",
+                    "conversation_id": "dm-control-1",
+                }
+            ],
+        )
         self.assertEqual(len(delivery_transport.requests), 2)
         request, account = delivery_transport.requests[-1]
         self.assertEqual(account.account_id, "ops-discord")
@@ -2172,7 +2327,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             "msg-control-1",
         )
 
-    def test_weixin_and_wecom_default_control_bridge_handles_elephant_commands(self) -> None:
+    def test_weixin_and_wecom_default_control_bridge_handles_elephant_commands(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -2288,7 +2445,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     app=app,
                     cli_runtime_factory=lambda profile_dir, state_dir: FakeCliRuntime(),
                     default_cli_state_dir=str(self.state_dir),
-                    environ={"ELEPHANT_TEST_WECOM_BOT_ID": "bot-id", "ELEPHANT_TEST_WECOM_SECRET": "secret"},
+                    environ={
+                        "ELEPHANT_TEST_WECOM_BOT_ID": "bot-id",
+                        "ELEPHANT_TEST_WECOM_SECRET": "secret",
+                    },
                 ),
                 WECOM_ADAPTER_ID,
                 "ops-wecom",
@@ -2309,7 +2469,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             ),
         )
 
-        for service, adapter_id, account_id, conversation_id, _transport, inbound_factory in cases:
+        for (
+            service,
+            adapter_id,
+            account_id,
+            conversation_id,
+            _transport,
+            inbound_factory,
+        ) in cases:
             with self.subTest(service=service.service_key):
                 self.assertIsNotNone(service.cli_control)
                 control = service.describe()["control"]
@@ -2338,7 +2505,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 self.assertEqual(follow_up.elephant_id, "demo")
                 self.assertEqual(follow_up.session_id, bind_result.session_id)
 
-    def test_weixin_ilink_serializes_same_conversation_across_runtime_and_reply_send(self) -> None:
+    def test_weixin_ilink_serializes_same_conversation_across_runtime_and_reply_send(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         service = WeixinGatewayService(app=app)
         service._resolved_account_id = "ops-weixin"
@@ -2403,7 +2572,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-    def test_weixin_ilink_serializes_same_conversation_for_cli_control_messages(self) -> None:
+    def test_weixin_ilink_serializes_same_conversation_for_cli_control_messages(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         service = WeixinGatewayService(app=app)
         service._resolved_account_id = "ops-weixin"
@@ -2444,7 +2615,11 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     "item_list": [{"type": 1, "text_item": {"text": text}}],
                 }
 
-            with mock.patch.object(type(app), "handle_message", side_effect=AssertionError("shared runtime should not run for handled control messages")):
+            with mock.patch.object(
+                type(app),
+                "handle_message",
+                side_effect=AssertionError("shared runtime should not run for handled control messages"),
+            ):
                 with mock.patch.object(type(service), "_send_ilink_message", new=send_stub):
                     first_task = asyncio.create_task(
                         service._process_message_safe(inbound_message("wx-control-1", "first control"))
@@ -2513,9 +2688,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(exchange.route.inbound.conversation.parent_conversation_id, "channel-7")
         self.assertEqual(exchange.route.inbound.conversation.thread_id, "thread-42")
         self.assertEqual(exchange.route.inbound.chat_type, "topic")
-        self.assertEqual(exchange.route.session.session_id, "session:messaging.discord:ops-discord:thread-42")
+        self.assertEqual(
+            exchange.route.session.session_id,
+            "session:messaging.discord:ops-discord:thread-42",
+        )
 
-    def test_discord_service_should_ignore_bot_self_and_system_sdk_messages(self) -> None:
+    def test_discord_service_should_ignore_bot_self_and_system_sdk_messages(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         service = DiscordGatewayService(app=app)
 
@@ -2553,7 +2733,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             )
         )
 
-    def test_discord_gateway_service_starts_sdk_client_and_dispatches_replies(self) -> None:
+    def test_discord_gateway_service_starts_sdk_client_and_dispatches_replies(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -2825,7 +3007,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("```python\ndef add(a, b):\n    return a + b\n```", content)
         self.assertIn("```tex\nx^2 + y^2 = z^2\n```", content)
 
-    def test_discord_delivery_transport_keeps_fenced_blocks_balanced_across_chunks(self) -> None:
+    def test_discord_delivery_transport_keeps_fenced_blocks_balanced_across_chunks(
+        self,
+    ) -> None:
         requests: list[dict[str, object]] = []
 
         class FakeAllowedMentions:
@@ -2911,7 +3095,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertTrue(str(requests[0]["content"]).startswith("```python"))
         self.assertTrue(str(requests[-1]["content"]).rstrip().endswith("```"))
 
-    def test_discord_delivery_transport_uses_attachment_fallback_for_very_long_reply(self) -> None:
+    def test_discord_delivery_transport_uses_attachment_fallback_for_very_long_reply(
+        self,
+    ) -> None:
         requests: list[dict[str, object]] = []
 
         class FakeAllowedMentions:
@@ -2978,7 +3164,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             AllowedMentions = FakeAllowedMentions
             File = FakeFile
 
-        long_content = ("HTTP SERVER\n" * 900)
+        long_content = "HTTP SERVER\n" * 900
         transport = DiscordPyDeliveryTransport(client=FakeClient(), discord_module=FakeDiscord())
 
         response = asyncio.run(
@@ -3007,7 +3193,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(requests[0]["file"].description, "Full Discord reply body")
         self.assertEqual(requests[0]["file"].content, long_content)
 
-    def test_discord_gateway_service_skips_blocked_enabled_accounts_during_multi_start(self) -> None:
+    def test_discord_gateway_service_skips_blocked_enabled_accounts_during_multi_start(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -3078,7 +3266,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertIn("Skipping Discord account 'shadow-discord'", stderr.getvalue())
         self.assertEqual(service.describe()["account_status"]["service_status"], "degraded")
 
-    def test_chat_bot_identity_mapping_and_session_reuse_persist_across_restart(self) -> None:
+    def test_chat_bot_identity_mapping_and_session_reuse_persist_across_restart(
+        self,
+    ) -> None:
         app, chat_adapter, _ = self._build()
         self._bind_gateway_conversation(
             app,
@@ -3109,10 +3299,17 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertNotEqual(first.delivery.outbound.body, "ack: hello")
         first_records = app.recall_evidence_records(first.route.session.session_id)
         self.assertEqual(
-            tuple(record.metadata.get("raw_user_query") for record in first_records if record.kind == "effective_user_query"),
+            tuple(
+                record.metadata.get("raw_user_query")
+                for record in first_records
+                if record.kind == "effective_user_query"
+            ),
             ("hello",),
         )
-        self.assertEqual(len(tuple(record for record in first_records if record.kind == "emit_response")), 1)
+        self.assertEqual(
+            len(tuple(record for record in first_records if record.kind == "emit_response")),
+            1,
+        )
 
         restarted_app, restarted_chat, _ = self._build()
         second = restarted_chat.receive_text(
@@ -3138,10 +3335,17 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         assert second.delivery.outbound is not None
         second_records = restarted_app.recall_evidence_records(second.route.session.session_id)
         self.assertEqual(
-            tuple(record.metadata.get("raw_user_query") for record in second_records if record.kind == "effective_user_query"),
+            tuple(
+                record.metadata.get("raw_user_query")
+                for record in second_records
+                if record.kind == "effective_user_query"
+            ),
             ("hello", "follow-up"),
         )
-        self.assertEqual(len(tuple(record for record in second_records if record.kind == "emit_response")), 2)
+        self.assertEqual(
+            len(tuple(record for record in second_records if record.kind == "emit_response")),
+            2,
+        )
         self.assertEqual(len(restarted_app.identity_records()), 1)
         self.assertEqual(len(restarted_app.session_records()), 1)
 
@@ -3179,8 +3383,14 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertNotEqual(first.route.session.session_id, second.route.session.session_id)
         self.assertEqual(first.route.identity.key.account_id, "ops-bot")
         self.assertEqual(second.route.identity.key.account_id, "support-bot")
-        self.assertEqual(first.route.session.session_id, f"session:{CHAT_BOT_ADAPTER_ID}:ops-bot:chat-1")
-        self.assertEqual(second.route.session.session_id, f"session:{CHAT_BOT_ADAPTER_ID}:support-bot:chat-1")
+        self.assertEqual(
+            first.route.session.session_id,
+            f"session:{CHAT_BOT_ADAPTER_ID}:ops-bot:chat-1",
+        )
+        self.assertEqual(
+            second.route.session.session_id,
+            f"session:{CHAT_BOT_ADAPTER_ID}:support-bot:chat-1",
+        )
         self.assertEqual(len(app.identity_records()), 2)
         self.assertEqual(len(app.session_records()), 2)
 
@@ -3337,7 +3547,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(len(restarted_app.identity_records()), 1)
         self.assertEqual(len(restarted_app.session_records()), 1)
 
-    def test_feishu_group_thread_defaults_to_review_and_builds_reply_request(self) -> None:
+    def test_feishu_group_thread_defaults_to_review_and_builds_reply_request(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         feishu = FeishuMessagingAdapter(app=app)
 
@@ -3573,7 +3785,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             ),
         )
 
-    def test_feishu_gateway_service_uses_manifest_account_and_dispatches_reply(self) -> None:
+    def test_feishu_gateway_service_uses_manifest_account_and_dispatches_reply(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         shared_runtime_calls = self._install_shared_runtime_stub(app)
         expected_session_id = self._gateway_route_session_id(
@@ -3976,10 +4190,10 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         )
         self.assertEqual(len(requests), 3)
 
-    def test_feishu_gateway_service_can_ignore_disabled_flag_when_requested(self) -> None:
-        self._update_manifest(
-            lambda payload: payload["gateway"]["adapters"]["feishu"].update({"enabled": False})
-        )
+    def test_feishu_gateway_service_can_ignore_disabled_flag_when_requested(
+        self,
+    ) -> None:
+        self._update_manifest(lambda payload: payload["gateway"]["adapters"]["feishu"].update({"enabled": False}))
         app, _, _ = self._build()
 
         self.assertEqual(load_feishu_gateway_accounts(app), ())
@@ -4000,7 +4214,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(description["accounts"][0]["account_id"], "ops-feishu")
         self.assertEqual(description["accounts"][0]["credentials_status"], "configured")
 
-    def test_feishu_gateway_service_routes_replies_back_to_matched_account(self) -> None:
+    def test_feishu_gateway_service_routes_replies_back_to_matched_account(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"]["feishu"].update(
                 {
@@ -4099,13 +4315,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             return {
                 "code": 0,
                 "msg": "ok",
-                "data": {
-                    "message_id": (
-                        "om_reply_ops"
-                        if auth == "Bearer tenant-token-ops"
-                        else "om_reply_support"
-                    )
-                },
+                "data": {"message_id": ("om_reply_ops" if auth == "Bearer tenant-token-ops" else "om_reply_support")},
             }
 
         fake_runtime = FakeCliRuntime()
@@ -4277,10 +4487,15 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         )
         self.assertEqual(event_status, "200 OK")
         self.assertEqual(event_body["delivery_outcome"], "delivered")
-        self.assertEqual(event_body["delivery_request_path"], "/open-apis/im/v1/messages/om_web_1/reply")
+        self.assertEqual(
+            event_body["delivery_request_path"],
+            "/open-apis/im/v1/messages/om_web_1/reply",
+        )
         self.assertEqual(len(requests), 2)
 
-    def test_feishu_gateway_service_dedupes_duplicate_shared_runtime_events(self) -> None:
+    def test_feishu_gateway_service_dedupes_duplicate_shared_runtime_events(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
 
@@ -4349,7 +4564,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(duplicate.response_body["external_message_id"], "om_reply_dedupe_1")
         self.assertEqual(len(requests), 2)
 
-    def test_telegram_gateway_service_uses_manifest_account_and_dispatches_reply(self) -> None:
+    def test_telegram_gateway_service_uses_manifest_account_and_dispatches_reply(
+        self,
+    ) -> None:
         self._update_manifest(
             lambda payload: payload["gateway"]["adapters"].update(
                 {
@@ -4771,7 +4988,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         finally:
             service.shutdown_async_processing()
 
-    def test_feishu_gateway_service_dedupes_duplicate_long_connection_control_events(self) -> None:
+    def test_feishu_gateway_service_dedupes_duplicate_long_connection_control_events(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         shared_runtime_calls = self._install_shared_runtime_stub(app)
         expected_session_id = self._gateway_route_session_id(
@@ -5155,8 +5374,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             transport="long-connection",
         )
 
-        with mock.patch.object(FeishuGatewayService, "_ensure_async_workers"), mock.patch.object(
-            FeishuGatewayService, "_schedule_async_job", return_value=False
+        with (
+            mock.patch.object(FeishuGatewayService, "_ensure_async_workers"),
+            mock.patch.object(FeishuGatewayService, "_schedule_async_job", return_value=False),
         ):
             job_key, _, created = service.async_job_store.create_or_get(
                 account_id=inbound.account_id,
@@ -5352,12 +5572,17 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                 lambda: len(shared_runtime_calls) == 2 and len(requests) == 5,
                 message="expected serialized same-conversation jobs to finish with two placeholders and two replies",
             )
-            self.assertEqual([call["prompt"] for call in shared_runtime_calls], ["first message", "second message"])
+            self.assertEqual(
+                [call["prompt"] for call in shared_runtime_calls],
+                ["first message", "second message"],
+            )
         finally:
             first_release.set()
             service.shutdown_async_processing()
 
-    def test_feishu_async_long_connection_runs_different_conversations_in_parallel(self) -> None:
+    def test_feishu_async_long_connection_runs_different_conversations_in_parallel(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
         first_started = threading.Event()
@@ -5520,7 +5745,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             release_runtime.set()
             service.shutdown_async_processing()
 
-    def test_feishu_async_long_connection_failure_marks_job_and_surfaces_doctor_status(self) -> None:
+    def test_feishu_async_long_connection_failure_marks_job_and_surfaces_doctor_status(
+        self,
+    ) -> None:
         app, _, _ = self._build()
 
         def fail_shared_runtime(_inbound, _session_id: str) -> None:
@@ -5655,7 +5882,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         finally:
             service.shutdown_async_processing()
 
-    def test_feishu_async_long_connection_recovers_incomplete_jobs_on_startup(self) -> None:
+    def test_feishu_async_long_connection_recovers_incomplete_jobs_on_startup(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         shared_runtime_calls = self._install_shared_runtime_stub(app)
         requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
@@ -5801,7 +6030,15 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             def latest_session_for_elephant(self, elephant_id: str):
                 return None
 
-            def create_elephant(self, *, elephant_id: str, profile_id=None, display_name=None, mode=None, session_id=None):
+            def create_elephant(
+                self,
+                *,
+                elephant_id: str,
+                profile_id=None,
+                display_name=None,
+                mode=None,
+                session_id=None,
+            ):
                 raise AssertionError("create_elephant should not be called in describe path")
 
             def inspect_session(self, session_id: str):
@@ -5838,7 +6075,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(control["runtime_status"], "ready")
         self.assertEqual(control["known_elephants"], ("demo",))
 
-    def test_feishu_control_bridge_binds_conversation_to_selected_elephant(self) -> None:
+    def test_feishu_control_bridge_binds_conversation_to_selected_elephant(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
         expected_session_id = self._gateway_route_session_id(
@@ -5894,6 +6133,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     started_at=now,
                     updated_at=now,
                 )
+
             def list_herd(self, *, limit: int = 12) -> tuple[object, ...]:
                 return (
                     SimpleNamespace(
@@ -6010,7 +6250,16 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(follow_up.response_body["elephant_id"], "demo")
         self.assertEqual(follow_up.response_body["session_id"], expected_session_id)
-        self.assertEqual(shared_runtime_calls, [{"session_id": expected_session_id, "prompt": "keep coding", "conversation_id": "oc_control_1"}])
+        self.assertEqual(
+            shared_runtime_calls,
+            [
+                {
+                    "session_id": expected_session_id,
+                    "prompt": "keep coding",
+                    "conversation_id": "oc_control_1",
+                }
+            ],
+        )
         self.assertEqual(len(requests), 3)
 
     def test_feishu_control_bridge_can_list_and_report_current_elephant(self) -> None:
@@ -6070,6 +6319,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     updated_at=now,
                     parent_episode_id=self.demo_root_session.episode_id,
                 )
+
             def list_herd(self, *, limit: int = 12) -> tuple[object, ...]:
                 return (
                     SimpleNamespace(
@@ -6238,10 +6488,21 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(follow_up.response_body["elephant_id"], "demo")
         self.assertEqual(follow_up.response_body["session_id"], expected_session_id)
-        self.assertEqual(shared_runtime_calls, [{"session_id": expected_session_id, "prompt": "stay on the active elephant", "conversation_id": "oc_control_elephant_status"}])
+        self.assertEqual(
+            shared_runtime_calls,
+            [
+                {
+                    "session_id": expected_session_id,
+                    "prompt": "stay on the active elephant",
+                    "conversation_id": "oc_control_elephant_status",
+                }
+            ],
+        )
         self.assertGreaterEqual(len(requests), 5)
 
-    def test_feishu_control_bridge_accepts_post_command_wrapped_elephant_use(self) -> None:
+    def test_feishu_control_bridge_accepts_post_command_wrapped_elephant_use(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
 
@@ -6351,7 +6612,11 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                                 "content": [
                                     [
                                         {"tag": "text", "text": "- "},
-                                        {"tag": "text", "text": "/elephant create leo", "style": ["bold"]},
+                                        {
+                                            "tag": "text",
+                                            "text": "/elephant create leo",
+                                            "style": ["bold"],
+                                        },
                                     ]
                                 ],
                             }
@@ -6373,7 +6638,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         self.assertEqual(bind_result.response_body["summary"], "elephant shaped")
         self.assertGreaterEqual(len(requests), 2)
 
-    def test_feishu_control_bridge_reuses_parent_binding_inside_topic_replies(self) -> None:
+    def test_feishu_control_bridge_reuses_parent_binding_inside_topic_replies(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
         parent_session_id = self._gateway_route_session_id(
@@ -6452,6 +6719,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
                     updated_at=now,
                     parent_episode_id=self.demo_root_session.episode_id,
                 )
+
             def list_herd(self, *, limit: int = 12) -> tuple[object, ...]:
                 return (
                     SimpleNamespace(
@@ -6557,7 +6825,16 @@ class GatewayAdapterE2ETests(unittest.TestCase):
 
         self.assertEqual(topic_follow_up.response_body["elephant_id"], "demo")
         self.assertEqual(topic_follow_up.response_body["session_id"], child_session_id)
-        self.assertEqual(shared_runtime_calls, [{"session_id": child_session_id, "prompt": "继续这个 session", "conversation_id": "oc_topic_chat:om_topic_root"}])
+        self.assertEqual(
+            shared_runtime_calls,
+            [
+                {
+                    "session_id": child_session_id,
+                    "prompt": "继续这个 session",
+                    "conversation_id": "oc_topic_chat:om_topic_root",
+                }
+            ],
+        )
         self.assertGreaterEqual(len(requests), 3)
 
         thread_identity = app.core.dependencies.identity_store.lookup(
@@ -6571,7 +6848,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
         assert thread_identity is not None
         self.assertEqual(thread_identity.session_id, child_session_id)
 
-    def test_feishu_control_bridge_requires_binding_before_plain_text_routes(self) -> None:
+    def test_feishu_control_bridge_requires_binding_before_plain_text_routes(
+        self,
+    ) -> None:
         app, _, _ = self._build()
 
         def fake_request(
@@ -6659,9 +6938,7 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             def explain_next_step(self, **kwargs):
                 self.explain_calls.append(dict(kwargs))
                 prompt = str(kwargs["prompt"])
-                return SimpleNamespace(
-                    execution=SimpleNamespace(summary=f"cli-handled:{prompt}")
-                )
+                return SimpleNamespace(execution=SimpleNamespace(summary=f"cli-handled:{prompt}"))
 
             def wake(self, session_id: str, *, inspect_only: bool = False):
                 raise AssertionError("wake should not be used in this test")
@@ -6755,7 +7032,9 @@ class GatewayAdapterE2ETests(unittest.TestCase):
             "awaiting-operator-reply",
         )
 
-    def test_telegram_private_update_reuses_identity_mapping_across_restart(self) -> None:
+    def test_telegram_private_update_reuses_identity_mapping_across_restart(
+        self,
+    ) -> None:
         app, _, _ = self._build()
         telegram = TelegramMessagingAdapter(app=app)
 

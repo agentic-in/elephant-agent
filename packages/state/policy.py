@@ -80,11 +80,7 @@ def is_companion_mode(mode: str | None) -> bool:
 
 
 def default_personality_preset_id(mode: str = DEFAULT_PROFILE_MODE) -> str:
-    return (
-        DEFAULT_COMPANION_PERSONALITY_PRESET_ID
-        if is_companion_mode(mode)
-        else DEFAULT_PERSONALITY_PRESET_ID
-    )
+    return DEFAULT_COMPANION_PERSONALITY_PRESET_ID if is_companion_mode(mode) else DEFAULT_PERSONALITY_PRESET_ID
 
 
 def resolve_personality_preset(

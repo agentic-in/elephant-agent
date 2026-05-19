@@ -1,12 +1,9 @@
 """Feishu gateway implementation assembled from support and store modules."""
 
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
-import importlib.util
-import json
+from dataclasses import dataclass, field
 import logging
 import os
 import queue
@@ -14,15 +11,11 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from packages.gateway_core import (
-    DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayAccountRef,
     GatewayConversationRef,
-    GatewayExchange,
     GatewayInboundMessage,
     GatewayOutboundMessage,
     GatewayOutboundQueue,
@@ -32,9 +25,7 @@ from packages.gateway_core import (
     run_outbound_drain_thread,
 )
 
-from apps.provider_runtime import secret_reference_from_payload
 from apps.runtime_layout import default_cli_state_dir
-from packages.auth import AuthProfile, EnvironmentSecretStore, ProfileCredentialResolver, SecretReference
 from packages.cron import CronJob, CronJobExecution
 
 from .cli_control import (
@@ -43,7 +34,11 @@ from .cli_control import (
     FeishuCliControlService,
     load_feishu_cli_control_config,
 )
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
+from .plugins import (
+    GatewayManagedRuntime,
+    GatewayPluginRegistry,
+    default_gateway_runtime_path,
+)
 from .runtime import (
     FEISHU_ADAPTER_ID,
     FeishuMessagingAdapter,
@@ -155,22 +150,12 @@ class FeishuGatewayService(FeishuDispatchMixin):
             )
         if self.inbound_event_store is None:
             state_root = self.app.state_dir
-            dedupe_path = (
-                None
-                if state_root is None
-                else os.path.join(state_root, "feishu-inbound-events.json")
-            )
-            self.inbound_event_store = FeishuInboundEventStore(
-                path=None if dedupe_path is None else Path(dedupe_path)
-            )
+            dedupe_path = None if state_root is None else os.path.join(state_root, "feishu-inbound-events.json")
+            self.inbound_event_store = FeishuInboundEventStore(path=None if dedupe_path is None else Path(dedupe_path))
         if self.async_job_store is None:
             state_root = self.app.state_dir
-            async_jobs_path = (
-                None if state_root is None else os.path.join(state_root, "feishu-async-jobs.json")
-            )
-            self.async_job_store = FeishuAsyncJobStore(
-                path=None if async_jobs_path is None else Path(async_jobs_path)
-            )
+            async_jobs_path = None if state_root is None else os.path.join(state_root, "feishu-async-jobs.json")
+            self.async_job_store = FeishuAsyncJobStore(path=None if async_jobs_path is None else Path(async_jobs_path))
         if self.adapter is None:
             self.adapter = FeishuMessagingAdapter(app=self.app)
         if self.cli_control is None and self.app.loaded_profile is not None:
@@ -179,14 +164,8 @@ class FeishuGatewayService(FeishuDispatchMixin):
                 binding_store = self.cli_binding_store
                 if binding_store is None:
                     state_root = self.app.state_dir
-                    binding_path = (
-                        None
-                        if state_root is None
-                        else os.path.join(state_root, "feishu-cli-bindings.json")
-                    )
-                    binding_store = FeishuCliBindingStore(
-                        path=None if binding_path is None else Path(binding_path)
-                    )
+                    binding_path = None if state_root is None else os.path.join(state_root, "feishu-cli-bindings.json")
+                    binding_store = FeishuCliBindingStore(path=None if binding_path is None else Path(binding_path))
                 self.cli_control = FeishuCliControlService(
                     config=self._resolved_cli_control_config(config),
                     app=self.app,
@@ -494,12 +473,8 @@ class FeishuGatewayService(FeishuDispatchMixin):
                     "app_id_env_var": config.app_id_env_var,
                     "app_secret_env_var": config.app_secret_env_var,
                     "credential_env_vars": _credential_env_vars(config),
-                    "secret_reference_ids": tuple(
-                        reference.reference_id for reference in config.secret_references
-                    ),
-                    "credentials_source": (
-                        "secret_references" if config.secret_references else "environment"
-                    ),
+                    "secret_reference_ids": tuple(reference.reference_id for reference in config.secret_references),
+                    "credentials_source": ("secret_references" if config.secret_references else "environment"),
                     "credentials_status": status,
                     "resolved_app_id": resolved_app_id,
                 }
@@ -514,9 +489,7 @@ class FeishuGatewayService(FeishuDispatchMixin):
             "adapter_id": FEISHU_ADAPTER_ID,
             "profile_id": self.app.profile_id,
             "preferred_transport": "long-connection",
-            "implemented_transports": (
-                "python-sdk-long-connection",
-            ),
+            "implemented_transports": ("python-sdk-long-connection",),
             "configured_transport": configured_transport,
             "configured_transport_error": configured_transport_error,
             "sdk_dependency_status": _lark_sdk_dependency_status(),
@@ -530,16 +503,18 @@ class FeishuGatewayService(FeishuDispatchMixin):
             "control": (
                 self.cli_control.describe()
                 if self.cli_control is not None
-                else {"enabled": True, "runtime": "cli-runtime", "runtime_status": "unavailable"}
+                else {
+                    "enabled": True,
+                    "runtime": "cli-runtime",
+                    "runtime_status": "unavailable",
+                }
             ),
         }
 
     def configured_transport(self) -> str:
         if not self.account_configs:
             return "long-connection"
-        transports = tuple(
-            dict.fromkeys(_normalize_transport(config.surface) for config in self.account_configs)
-        )
+        transports = tuple(dict.fromkeys(_normalize_transport(config.surface) for config in self.account_configs))
         if len(transports) == 1:
             return transports[0]
         raise LookupError(
@@ -713,10 +688,7 @@ class FeishuGatewayService(FeishuDispatchMixin):
                 # Only warn when we have Feishu identities but cannot disambiguate — if
                 # there are zero Feishu identities, the scheduler's fan-out simply asked
                 # the wrong adapter, which is expected noise.
-                any_feishu = any(
-                    r.key.adapter_id == FEISHU_ADAPTER_ID
-                    for r in identity_store.list_records()
-                )
+                any_feishu = any(r.key.adapter_id == FEISHU_ADAPTER_ID for r in identity_store.list_records())
                 if any_feishu:
                     LOGGER.warning(
                         "cron delivery: skipping job=%s — no job.elephant_id and multiple feishu herd",
@@ -780,9 +752,7 @@ class FeishuGatewayService(FeishuDispatchMixin):
         try:
             account = self._resolve_account_by_id(row.account_id)
         except LookupError as error:
-            raise RuntimeError(
-                f"cannot resolve feishu account for queued row: {row.account_id}"
-            ) from error
+            raise RuntimeError(f"cannot resolve feishu account for queued row: {row.account_id}") from error
         if self.adapter is None:
             self._ensure_runtime_dependencies()
         assert self.adapter is not None
@@ -890,13 +860,17 @@ class FeishuGatewayService(FeishuDispatchMixin):
                 pass
         self._daemon_task = None
 
-def register_feishu_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+
+def register_feishu_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     registry.register_service(
         "feishu",
         factory=lambda app, **kwargs: FeishuGatewayService(app=app, **kwargs),
         enabled_by_default=True,
     )
     return registry
+
 
 def build_feishu_gateway_service(
     *,
@@ -918,14 +892,12 @@ def build_feishu_gateway_service(
         app=app,
         http_requester=http_requester,
         environ=dict(environ or os.environ),
-        default_cli_state_dir=(
-            None if default_cli_state_dir is None else str(Path(default_cli_state_dir))
-        ),
+        default_cli_state_dir=(None if default_cli_state_dir is None else str(Path(default_cli_state_dir))),
     )
+
 
 def create_gateway_web_app(service: FeishuGatewayService):
     return create_gateway_http_app(service, app=service.app)
-
 
 
 __all__ = [

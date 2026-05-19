@@ -203,7 +203,13 @@ def _skill_affinity_index_ids(repository: RuntimeStorageRepository, *, personal_
         if not (topic.startswith("world.skills.affinity.") or topic.startswith("skills.affinity.")):
             continue
         projection_policy = str(metadata.get("projection_policy") or "").strip().lower()
-        if projection_policy in {"exclude", "excluded", "disabled", "retired", "not_relevant"}:
+        if projection_policy in {
+            "exclude",
+            "excluded",
+            "disabled",
+            "retired",
+            "not_relevant",
+        }:
             continue
         skill_id = str(metadata.get("skill_id") or "").strip()
         index_id = str(metadata.get("index_id") or "").strip() or topic.rsplit(".", 1)[-1]
@@ -296,9 +302,7 @@ def resolved_session_skills(
     if not prompt_visible_only:
         return skills
     return tuple(
-        skill
-        for skill in skills
-        if _metadata_bool(skill.metadata.get("include_in_prompt_index"), default=True)
+        skill for skill in skills if _metadata_bool(skill.metadata.get("include_in_prompt_index"), default=True)
     )
 
 
@@ -508,9 +512,7 @@ class RuntimeSkillManagementSurface:
     def _write_override(self, skill_id: str, enabled: bool) -> None:
         manifest = self._read_manifest()
         overrides = (
-            dict(manifest.get("skill_overrides", {}))
-            if isinstance(manifest.get("skill_overrides"), Mapping)
-            else {}
+            dict(manifest.get("skill_overrides", {})) if isinstance(manifest.get("skill_overrides"), Mapping) else {}
         )
         overrides[skill_id] = {"enabled": enabled}
         manifest["skill_overrides"] = overrides

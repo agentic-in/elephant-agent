@@ -354,9 +354,7 @@ class FeishuDispatchMixin:
         duplicate_response["delivery_outcome"] = "deduplicated"
         duplicate_response["duplicate_event"] = True
         duplicate_response["duplicate_handling"] = "replayed-no-delivery"
-        duplicate_response["summary"] = (
-            "Duplicate Feishu event ignored; the original event was already processed."
-        )
+        duplicate_response["summary"] = "Duplicate Feishu event ignored; the original event was already processed."
         return FeishuGatewayEventResult(exchange=None, response_body=duplicate_response)
 
     def _inflight_duplicate_event_result(

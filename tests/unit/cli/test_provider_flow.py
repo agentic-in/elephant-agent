@@ -3,11 +3,17 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from apps.cli.provider_flow import ProviderSelectionState, provider_setup_defaults, run_provider_selection_wizard
+from apps.cli.provider_flow import (
+    ProviderSelectionState,
+    provider_setup_defaults,
+    run_provider_selection_wizard,
+)
 
 
 class ProviderFlowWizardTests(unittest.TestCase):
-    def test_provider_setup_defaults_falls_back_from_preview_to_default_provider(self) -> None:
+    def test_provider_setup_defaults_falls_back_from_preview_to_default_provider(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.provider_setup_guide.side_effect = [
             LookupError("preview is not a real provider"),
@@ -36,15 +42,25 @@ class ProviderFlowWizardTests(unittest.TestCase):
             auth_type="oauth_external",
         )
         runtime.discovered_provider.return_value = mock.Mock(status="authenticated", source="codex-cli")
-        runtime.provider_summary.return_value = {"provider_id": "openai-codex", "secret_status": "stored"}
+        runtime.provider_summary.return_value = {
+            "provider_id": "openai-codex",
+            "secret_status": "stored",
+        }
         runtime.discover_provider_models.return_value = (
-            mock.Mock(model_id="gpt-5.4", context_window_tokens=128000, max_output_tokens=16384),
+            mock.Mock(
+                model_id="gpt-5.4",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
         )
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("gpt-5.4", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt",
+                side_effect=("gpt-5.4", "auto"),
+            ),
             mock.patch("apps.cli.provider_flow._wizard_text_prompt") as text_prompt,
         ):
             result = run_provider_selection_wizard(
@@ -74,9 +90,16 @@ class ProviderFlowWizardTests(unittest.TestCase):
             auth_type="api_key",
         )
         runtime.discovered_provider.return_value = mock.Mock(status="authenticated", source="gh-cli")
-        runtime.provider_summary.return_value = {"provider_id": "copilot", "secret_status": "stored"}
+        runtime.provider_summary.return_value = {
+            "provider_id": "copilot",
+            "secret_status": "stored",
+        }
         runtime.discover_provider_models.return_value = (
-            mock.Mock(model_id="gpt-5.4", context_window_tokens=128000, max_output_tokens=16384),
+            mock.Mock(
+                model_id="gpt-5.4",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
         )
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
@@ -112,10 +135,21 @@ class ProviderFlowWizardTests(unittest.TestCase):
             auth_type="oauth_external",
         )
         runtime.discovered_provider.return_value = mock.Mock(status="authenticated", source="codex-cli")
-        runtime.provider_summary.return_value = {"provider_id": "openai-codex", "secret_status": "stored"}
+        runtime.provider_summary.return_value = {
+            "provider_id": "openai-codex",
+            "secret_status": "stored",
+        }
         runtime.discover_provider_models.return_value = (
-            mock.Mock(model_id="gpt-5.4", context_window_tokens=128000, max_output_tokens=16384),
-            mock.Mock(model_id="gpt-5.4-mini", context_window_tokens=128000, max_output_tokens=16384),
+            mock.Mock(
+                model_id="gpt-5.4",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
+            mock.Mock(
+                model_id="gpt-5.4-mini",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
         )
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
@@ -142,7 +176,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         self.assertEqual(result.model_id, "gpt-5.4-mini")
         self.assertEqual(choice_prompt.call_count, 2)
 
-    def test_openai_compatible_prompts_for_key_again_when_base_url_changes(self) -> None:
+    def test_openai_compatible_prompts_for_key_again_when_base_url_changes(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.provider_setup_guide.return_value = mock.Mock(
             required_config_keys=("base_url", "model_id"),
@@ -156,13 +192,20 @@ class ProviderFlowWizardTests(unittest.TestCase):
             "base_url": "https://old.example.test/v1",
         }
         runtime.discover_provider_models.return_value = (
-            mock.Mock(model_id="openai/gpt-4o-mini", context_window_tokens=128000, max_output_tokens=16384),
+            mock.Mock(
+                model_id="openai/gpt-4o-mini",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
         )
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("openai/gpt-4o-mini", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt",
+                side_effect=("openai/gpt-4o-mini", "auto"),
+            ),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("https://new.example.test/v1", "sk-new-key"),
@@ -186,7 +229,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         self.assertEqual(result.api_key, "sk-new-key")
         self.assertEqual(text_prompt.call_count, 2)
 
-    def test_openai_compatible_configured_state_still_prompts_for_key_when_endpoint_changes(self) -> None:
+    def test_openai_compatible_configured_state_still_prompts_for_key_when_endpoint_changes(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.provider_setup_guide.return_value = mock.Mock(
             required_config_keys=("base_url", "model_id"),
@@ -204,13 +249,20 @@ class ProviderFlowWizardTests(unittest.TestCase):
             "base_url": "https://api.githubcopilot.com",
         }
         runtime.discover_provider_models.return_value = (
-            mock.Mock(model_id="openai/gpt-4o-mini", context_window_tokens=128000, max_output_tokens=16384),
+            mock.Mock(
+                model_id="openai/gpt-4o-mini",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
         )
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
 
         with (
-            mock.patch("apps.cli.provider_flow._wizard_choice_prompt", side_effect=("openai/gpt-4o-mini", "auto")),
+            mock.patch(
+                "apps.cli.provider_flow._wizard_choice_prompt",
+                side_effect=("openai/gpt-4o-mini", "auto"),
+            ),
             mock.patch(
                 "apps.cli.provider_flow._wizard_text_prompt",
                 side_effect=("https://new.example.test/v1", "sk-new-key"),
@@ -234,7 +286,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         self.assertEqual(result.api_key, "sk-new-key")
         self.assertEqual(text_prompt.call_count, 2)
 
-    def test_openai_compatible_reuses_configured_key_when_endpoint_matches(self) -> None:
+    def test_openai_compatible_reuses_configured_key_when_endpoint_matches(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.provider_setup_guide.return_value = mock.Mock(
             required_config_keys=("base_url", "model_id"),
@@ -252,7 +306,11 @@ class ProviderFlowWizardTests(unittest.TestCase):
             "base_url": "https://irrelevant.example.test/v1",
         }
         runtime.discover_provider_models.return_value = (
-            mock.Mock(model_id="openai/gpt-4o-mini", context_window_tokens=128000, max_output_tokens=16384),
+            mock.Mock(
+                model_id="openai/gpt-4o-mini",
+                context_window_tokens=128000,
+                max_output_tokens=16384,
+            ),
         )
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
@@ -282,7 +340,9 @@ class ProviderFlowWizardTests(unittest.TestCase):
         self.assertIsNone(result.api_key)
         self.assertEqual(text_prompt.call_count, 1)
 
-    def test_api_key_provider_retries_key_before_manual_model_when_catalog_is_unavailable(self) -> None:
+    def test_api_key_provider_retries_key_before_manual_model_when_catalog_is_unavailable(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.provider_setup_guide.return_value = mock.Mock(
             required_config_keys=("model_id",),
@@ -301,8 +361,20 @@ class ProviderFlowWizardTests(unittest.TestCase):
         }
         runtime.discover_provider_models.side_effect = [
             (),
-            (mock.Mock(model_id="openai/gpt-4o-mini", context_window_tokens=128000, max_output_tokens=16384),),
-            (mock.Mock(model_id="openai/gpt-4o-mini", context_window_tokens=128000, max_output_tokens=16384),),
+            (
+                mock.Mock(
+                    model_id="openai/gpt-4o-mini",
+                    context_window_tokens=128000,
+                    max_output_tokens=16384,
+                ),
+            ),
+            (
+                mock.Mock(
+                    model_id="openai/gpt-4o-mini",
+                    context_window_tokens=128000,
+                    max_output_tokens=16384,
+                ),
+            ),
         ]
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000
@@ -341,7 +413,11 @@ class ProviderFlowWizardTests(unittest.TestCase):
             auth_type="api_key",
         )
         runtime.discovered_provider.return_value = mock.Mock(status="authenticated", source="gh-cli", base_url="")
-        runtime.provider_summary.return_value = {"provider_id": "copilot", "secret_status": "stored", "base_url": ""}
+        runtime.provider_summary.return_value = {
+            "provider_id": "copilot",
+            "secret_status": "stored",
+            "base_url": "",
+        }
         runtime.discover_provider_models.return_value = ()
         runtime.provider_reasoning_efforts.return_value = ()
         runtime.detect_provider_context_window.return_value = 128000

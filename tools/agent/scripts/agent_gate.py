@@ -73,10 +73,22 @@ RESET_BANNED_TERM_ALLOWLIST_PATTERNS: tuple[str, ...] = (
     "tools/agent/scripts/agent_gate.py",
 )
 RESET_BANNED_TERMS: tuple[tuple[str, str], ...] = (
-    (" ".join(("voice", "mode")), "speech-mode contract is removed from reset surfaces"),
-    (" ".join(("voice", "prompt")), "speech prompt contract is removed from reset surfaces"),
-    (" ".join(("goal", "graph")), "current-work graph wording is removed from reset surfaces"),
-    (" ".join(("activity", "graph")), "activity-tree wording is removed from reset surfaces"),
+    (
+        " ".join(("voice", "mode")),
+        "speech-mode contract is removed from reset surfaces",
+    ),
+    (
+        " ".join(("voice", "prompt")),
+        "speech prompt contract is removed from reset surfaces",
+    ),
+    (
+        " ".join(("goal", "graph")),
+        "current-work graph wording is removed from reset surfaces",
+    ),
+    (
+        " ".join(("activity", "graph")),
+        "activity-tree wording is removed from reset surfaces",
+    ),
     ("packages.goals", "goal package is removed from reset surfaces"),
     ("GoalNode", "goal-node contract is removed from reset surfaces"),
     ("WorklineSnapshot", "workline snapshot contract is removed from reset surfaces"),
@@ -90,21 +102,48 @@ RESET_BANNED_TERMS: tuple[tuple[str, str], ...] = (
     ("goal_snapshot", "legacy goal snapshot event type is removed from reset surfaces"),
     ("goal_refs", "work_item_refs replaces goal_refs in reset surfaces"),
     ("goal_ids", "work_item_ids replaces goal_ids in reset surfaces"),
-    ("focus_activity_ids", "focus_work_item_ids replaces focus_activity_ids in reset surfaces"),
-    ("activity_candidates", "work_item_candidates replaces activity_candidates in reset surfaces"),
-    ("build_activity_routing_section", "work routing replaces activity routing in reset surfaces"),
+    (
+        "focus_activity_ids",
+        "focus_work_item_ids replaces focus_activity_ids in reset surfaces",
+    ),
+    (
+        "activity_candidates",
+        "work_item_candidates replaces activity_candidates in reset surfaces",
+    ),
+    (
+        "build_activity_routing_section",
+        "work routing replaces activity routing in reset surfaces",
+    ),
     ("tool.profile.manage", "memory.curate owns model-visible durable memory writes"),
     ("tool.memory.upload", "upload cannot represent capture semantics"),
     ("tool.procedure.inspect", "procedure inspection is not model-visible"),
     ("tool.procedure.manage", "direct procedure management is not model-visible"),
-    ("DeterministicEpisodeObserver", "Personal Model learning must not use keyword observer fallback"),
-    ("PatternClusterer", "skill crystallization must not use ExperienceRecord-first clustering"),
-    ("DerivedProcedureCandidateStore", "skill crystallization candidates come from trajectory metrics"),
-    ("list_pattern_clusters", "ExperienceRecord-first learning cluster APIs are removed"),
-    ("list_procedure_candidates", "procedure candidates are no longer ExperienceRecord-derived"),
+    (
+        "DeterministicEpisodeObserver",
+        "Personal Model learning must not use keyword observer fallback",
+    ),
+    (
+        "PatternClusterer",
+        "skill crystallization must not use ExperienceRecord-first clustering",
+    ),
+    (
+        "DerivedProcedureCandidateStore",
+        "skill crystallization candidates come from trajectory metrics",
+    ),
+    (
+        "list_pattern_clusters",
+        "ExperienceRecord-first learning cluster APIs are removed",
+    ),
+    (
+        "list_procedure_candidates",
+        "procedure candidates are no longer ExperienceRecord-derived",
+    ),
     ("/goals", "session-era goal routes are removed from reset surfaces"),
     ("/procedure", "session-era procedure routes are removed from reset surfaces"),
-    (" ".join(("intent", "layer")), "intent routing wording is removed from reset surfaces"),
+    (
+        " ".join(("intent", "layer")),
+        "intent routing wording is removed from reset surfaces",
+    ),
     (
         "/".join(("strong", "weak")) + " " + "model selection",
         "strong-or-weak routing wording is removed from reset surfaces",
@@ -317,8 +356,7 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
 
     defaults = context_map.get("defaults", {})
     start_here = [
-        SurfaceRef(path=entry["path"], reason=entry.get("reason", ""))
-        for entry in defaults.get("start_here", [])
+        SurfaceRef(path=entry["path"], reason=entry.get("reason", "")) for entry in defaults.get("start_here", [])
     ]
 
     primary = matches[0] if matches else None
@@ -363,10 +401,7 @@ def build_context_pack(changed_files: list[str], matches: list[RuleMatch]) -> Co
     resolved_surface_paths: dict[str, tuple[str, ...]] = {}
     for surface_name in sorted(active_surfaces):
         refs = surfaces_section.get(surface_name, [])
-        resolved_surfaces[surface_name] = [
-            SurfaceRef(path=ref["path"], reason=ref.get("reason", ""))
-            for ref in refs
-        ]
+        resolved_surfaces[surface_name] = [SurfaceRef(path=ref["path"], reason=ref.get("reason", "")) for ref in refs]
         resolved_surface_paths[surface_name] = surface_path_map.get(surface_name, ())
 
     # Also add rule-specific context from context-map rules section
@@ -438,7 +473,7 @@ def context_repair_prompt() -> str:
         "tools/agent/context-map.yaml for path/surface gaps; update "
         "tools/agent/task-matrix.yaml or tools/agent/skill-registry.yaml if "
         "the primary skill, validation ladder, or required context is wrong; "
-        "then rerun make agent-context-audit CHANGED_FILES=\"...\"."
+        'then rerun make agent-context-audit CHANGED_FILES="...".'
     )
 
 
@@ -569,9 +604,7 @@ def scan_reset_banned_terms(
             line_lower = line.lower()
             for term, rationale in banned_terms:
                 if term.lower() in line_lower:
-                    errors.append(
-                        f"reset banned term in {relative_path}:{line_number}: {term} ({rationale})"
-                    )
+                    errors.append(f"reset banned term in {relative_path}:{line_number}: {term} ({rationale})")
     return errors
 
 
@@ -705,7 +738,9 @@ def print_report(
     print("  - If this diff is one controlled atomic unit and validation is green, ship it with:")
     print("  - make agent-ship AGENT_COMMIT_MESSAGE='<type>(<scope>): <summary>'")
     print("  - agent-ship reruns the PR gate, creates a signed commit, and pushes the current branch to origin.")
-    print("  - Leave changes unshipped only when publish was explicitly deferred, the diff still needs splitting, or a validation failure remains.")
+    print(
+        "  - Leave changes unshipped only when publish was explicitly deferred, the diff still needs splitting, or a validation failure remains."
+    )
 
     if audit and pack.audit_warnings:
         print()
@@ -794,13 +829,13 @@ def lint_python_file_lengths(changed_files: list[str], *, root: Path = ROOT) -> 
             continue
         line_count = _line_count(path)
         if line_count > MAX_PYTHON_FILE_LINES:
-            errors.append(
-                f"python file exceeds {MAX_PYTHON_FILE_LINES} lines: {relative_path} ({line_count} lines)"
-            )
+            errors.append(f"python file exceeds {MAX_PYTHON_FILE_LINES} lines: {relative_path} ({line_count} lines)")
     return errors
 
 
-def frontend_typecheck_commands(changed_files: list[str]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+def frontend_typecheck_commands(
+    changed_files: list[str],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
     selected: list[tuple[str, tuple[str, ...]]] = []
     for name, patterns, command in FRONTEND_TYPECHECKS:
         if any(match_any(path, patterns) for path in changed_files):
@@ -873,7 +908,12 @@ def main() -> int:
         sub.add_argument("--changed-files-path", default="")
         if name == "report":
             sub.add_argument("--context-detail", choices=["compact", "full"], default="compact")
-            sub.add_argument("--format", choices=["text", "json"], default="text", dest="output_format")
+            sub.add_argument(
+                "--format",
+                choices=["text", "json"],
+                default="text",
+                dest="output_format",
+            )
             sub.add_argument("--audit", action="store_true", default=False)
 
     args = parser.parse_args()

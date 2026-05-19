@@ -99,9 +99,7 @@ class WeixinMessagingAdapter:
             reply_to_message_id=message_id,
             attachment_refs=(),
             policy_hint=_policy_hint(
-                target_trusted_default=(
-                    target_trusted_default if target_trusted is None else target_trusted
-                ),
+                target_trusted_default=(target_trusted_default if target_trusted is None else target_trusted),
                 consent_default=consent_default if consent_given is None else consent_given,
                 is_external_default=external_default if is_external is None else is_external,
                 audience_scope=chat_type,

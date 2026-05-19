@@ -21,7 +21,13 @@ from packages.state.projection import build_loaded_profile_from_state
 
 
 class UserProfileGovernanceTest(unittest.TestCase):
-    def _load_profile(self, root: Path, *, display_name: str = "Aeon", user_profile_text: str | None = None):
+    def _load_profile(
+        self,
+        root: Path,
+        *,
+        display_name: str = "Aeon",
+        user_profile_text: str | None = None,
+    ):
         """Build a LoadedProfile with explicit identity (no profile.json).
 
         ``root`` is accepted for signature parity with the old fixture; it's
@@ -71,8 +77,14 @@ class UserProfileGovernanceTest(unittest.TestCase):
             required = missing_required_user_fields(loaded)
             optional = missing_optional_user_fields(loaded)
 
-        self.assertEqual(tuple(question.field_id for question in required), ("preferred_name", "current_work"))
-        self.assertEqual(tuple(question.field_id for question in optional[:2]), ("school", "current_city"))
+        self.assertEqual(
+            tuple(question.field_id for question in required),
+            ("preferred_name", "current_work"),
+        )
+        self.assertEqual(
+            tuple(question.field_id for question in optional[:2]),
+            ("school", "current_city"),
+        )
 
     def test_user_profile_updates_normalize_loose_field_labels(self) -> None:
         updates = user_profile_updates(
@@ -139,7 +151,9 @@ class UserProfileGovernanceTest(unittest.TestCase):
             ),
         )
 
-    def test_build_companion_identity_state_prefers_elephant_state_display_name(self) -> None:
+    def test_build_companion_identity_state_prefers_elephant_state_display_name(
+        self,
+    ) -> None:
         """``State.elephant_name`` → ``profile.state.display_name`` is canonical.
 
         ELEPHANT.md is authoring-only; the parser is a write-path helper, not a
@@ -182,7 +196,10 @@ class UserProfileGovernanceTest(unittest.TestCase):
         self.assertEqual(onboarding.missing_fields, ())
         self.assertEqual(onboarding.next_step, "continue-normal-conversation")
         self.assertIn("normal turns", onboarding.summary)
-        self.assertEqual(tuple(checkpoint.status for checkpoint in onboarding.checkpoints), ("ready", "ready", "ready"))
+        self.assertEqual(
+            tuple(checkpoint.status for checkpoint in onboarding.checkpoints),
+            ("ready", "ready", "ready"),
+        )
 
 
 if __name__ == "__main__":

@@ -8,4 +8,3 @@ Rules:
 - cover registry, loader, scope, dependency, and execution wiring together
 - keep fixtures JSON-shaped so the loader stays stdlib-only
 - do not add app-level process assumptions here
-

@@ -69,11 +69,7 @@ def prompt_message_projection_line(message: PromptMessage) -> str:
         name = message.tool_name.strip() or "unknown"
         return f"tool: {name} tool_call_id={message.tool_call_id or '<none>'} summary: {message.content}"
     if role == "assistant" and message.tool_calls:
-        call_names = ", ".join(
-            tool_call_name(call)
-            for call in message.tool_calls
-            if isinstance(call, Mapping)
-        )
+        call_names = ", ".join(tool_call_name(call) for call in message.tool_calls if isinstance(call, Mapping))
         text = message.content.strip()
         suffix = f" tool_calls: {call_names}" if call_names else ""
         return f"assistant: {text}{suffix}".strip()
@@ -126,9 +122,7 @@ def projection_group_preload_entries(
     recent_first: bool = False,
 ) -> tuple[EmbeddingPreloadEntry, ...]:
     normalized = tuple(
-        message
-        for message in (normalize_prompt_message(message) for message in messages)
-        if message is not None
+        message for message in (normalize_prompt_message(message) for message in messages) if message is not None
     )
     entries: list[EmbeddingPreloadEntry] = []
     groups = tuple(enumerate(message_groups(normalized)))
@@ -188,9 +182,7 @@ def message_groups(messages: tuple[PromptMessage, ...]) -> tuple[tuple[int, int]
         end = index + 1
         if message.role == "assistant" and message.tool_calls:
             call_ids = {
-                call_id
-                for call in message.tool_calls
-                if isinstance(call, Mapping) and (call_id := tool_call_id(call))
+                call_id for call in message.tool_calls if isinstance(call, Mapping) and (call_id := tool_call_id(call))
             }
             while end < len(messages) and messages[end].role == "tool":
                 if call_ids and messages[end].tool_call_id and messages[end].tool_call_id not in call_ids:

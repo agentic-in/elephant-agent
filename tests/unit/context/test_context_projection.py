@@ -24,11 +24,22 @@ from packages.context import (
 from packages.contracts import ContextBundle, ExecutionResult, PromptMessage
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import PersonalModelRuntimeState
-from packages.embeddings import EmbeddingHealth, EmbeddingPreloadEntry, EmbeddingPreloadState, EmbeddingVector
+from packages.embeddings import (
+    EmbeddingHealth,
+    EmbeddingPreloadEntry,
+    EmbeddingPreloadState,
+    EmbeddingVector,
+)
 
 
 class _FakeProjectionEmbeddingService:
-    def __init__(self, *, loaded: bool = True, auto_cache: bool = True, promote_pending_on_probe: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        loaded: bool = True,
+        auto_cache: bool = True,
+        promote_pending_on_probe: bool = False,
+    ) -> None:
         self.loaded = loaded
         self.auto_cache = auto_cache
         self.promote_pending_on_probe = promote_pending_on_probe
@@ -48,7 +59,14 @@ class _FakeProjectionEmbeddingService:
             metadata={"runtime_state": "loaded" if self.loaded else "cold"},
         )
 
-    def queue_backfill(self, *, target: str, entries, latency_mode: str = "balanced", provider_id: str | None = None):
+    def queue_backfill(
+        self,
+        *,
+        target: str,
+        entries,
+        latency_mode: str = "balanced",
+        provider_id: str | None = None,
+    ):
         del provider_id
         queued_entries = tuple(entries)
         self.queued_targets.append((target, len(queued_entries), latency_mode))
@@ -64,7 +82,9 @@ class _FakeProjectionEmbeddingService:
             )
         for index, entry in enumerate(queued_entries):
             vector_index = 0 if entry.metadata.get("kind") == "query" or "database" in entry.text else 1
-            self.cache[(target, entry.cache_key, 64)] = _unit_vector(64, index=vector_index, source_text=entry.text, text_index=index)
+            self.cache[(target, entry.cache_key, 64)] = _unit_vector(
+                64, index=vector_index, source_text=entry.text, text_index=index
+            )
         return EmbeddingPreloadState(
             provider_id="elephant-local-embed",
             model_id="llm-semantic-router/elephant-embed",
@@ -74,11 +94,25 @@ class _FakeProjectionEmbeddingService:
             pending_targets=(),
         )
 
-    def cached_vector(self, *, target: str, cache_key: str, dimensions: int, provider_id: str | None = None):
+    def cached_vector(
+        self,
+        *,
+        target: str,
+        cache_key: str,
+        dimensions: int,
+        provider_id: str | None = None,
+    ):
         del provider_id
         return self.cache.get((target, cache_key, dimensions))
 
-    def pending_vector(self, *, target: str, cache_key: str, dimensions: int, provider_id: str | None = None) -> bool:
+    def pending_vector(
+        self,
+        *,
+        target: str,
+        cache_key: str,
+        dimensions: int,
+        provider_id: str | None = None,
+    ) -> bool:
         del provider_id
         key = (target, cache_key, dimensions)
         if key not in self.pending_keys:
@@ -169,13 +203,19 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertEqual(projection.messages[:2], messages[:2])
         self.assertEqual(projection.messages[-4:], messages[-4:])
         self.assertLess(len(projection.messages), len(messages))
-        self.assertEqual(projection.result.compacted_line_count, len(messages) - len(projection.messages))
+        self.assertEqual(
+            projection.result.compacted_line_count,
+            len(messages) - len(projection.messages),
+        )
 
     def test_message_compaction_preserves_roles_and_tool_results_in_tail(self) -> None:
         messages = tuple(
             PromptMessage(role="user", content=f"completed request {index} " + ("payload " * 100))
             if index % 3 == 0
-            else PromptMessage(role="assistant", content=f"completed response {index} " + ("implementation " * 100))
+            else PromptMessage(
+                role="assistant",
+                content=f"completed response {index} " + ("implementation " * 100),
+            )
             if index % 3 == 1
             else PromptMessage(
                 role="tool",
@@ -202,7 +242,10 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         )
 
         self.assertTrue(projection.result.compacted)
-        self.assertEqual(tuple(message.role for message in projection.messages[:2]), ("user", "assistant"))
+        self.assertEqual(
+            tuple(message.role for message in projection.messages[:2]),
+            ("user", "assistant"),
+        )
         self.assertEqual(projection.messages[-1].role, "tool")
         self.assertEqual(projection.messages[-1].tool_call_id, "call-29")
         self.assertIn("CONTEXT COMPACTION - REFERENCE ONLY", projection.summary)
@@ -242,13 +285,19 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         )
 
         self.assertTrue(projection.result.compacted)
-        self.assertEqual(tuple(message.role for message in projection.messages[-2:]), ("assistant", "tool"))
+        self.assertEqual(
+            tuple(message.role for message in projection.messages[-2:]),
+            ("assistant", "tool"),
+        )
         self.assertEqual(projection.messages[-2].tool_calls[0]["id"], "call-live")
         self.assertEqual(projection.messages[-1].tool_call_id, "call-live")
 
     def test_usage_force_can_summarize_a_single_oversized_completed_turn(self) -> None:
         messages = (
-            PromptMessage(role="user", content="oversized completed request " + ("payload " * 5000)),
+            PromptMessage(
+                role="user",
+                content="oversized completed request " + ("payload " * 5000),
+            ),
             PromptMessage(role="assistant", content="completed answer"),
         )
         compactor = SessionProjectionCompactor(
@@ -277,10 +326,35 @@ class SessionProjectionCompactorTest(unittest.TestCase):
     def test_im_compaction_uses_burst_tail_without_protecting_old_head(self) -> None:
         base = datetime(2026, 5, 9, 8, 0, tzinfo=timezone.utc)
         messages = (
-            PromptMessage(role="user", content="morning topic", metadata={"projection_surface": "im", "created_at": base.isoformat()}),
-            PromptMessage(role="assistant", content="morning reply", metadata={"projection_surface": "im", "created_at": (base + timedelta(minutes=1)).isoformat()}),
-            PromptMessage(role="user", content="evening topic", metadata={"projection_surface": "im", "created_at": (base + timedelta(hours=10)).isoformat()}),
-            PromptMessage(role="assistant", content="evening reply", metadata={"projection_surface": "im", "created_at": (base + timedelta(hours=10, minutes=1)).isoformat()}),
+            PromptMessage(
+                role="user",
+                content="morning topic",
+                metadata={"projection_surface": "im", "created_at": base.isoformat()},
+            ),
+            PromptMessage(
+                role="assistant",
+                content="morning reply",
+                metadata={
+                    "projection_surface": "im",
+                    "created_at": (base + timedelta(minutes=1)).isoformat(),
+                },
+            ),
+            PromptMessage(
+                role="user",
+                content="evening topic",
+                metadata={
+                    "projection_surface": "im",
+                    "created_at": (base + timedelta(hours=10)).isoformat(),
+                },
+            ),
+            PromptMessage(
+                role="assistant",
+                content="evening reply",
+                metadata={
+                    "projection_surface": "im",
+                    "created_at": (base + timedelta(hours=10, minutes=1)).isoformat(),
+                },
+            ),
         )
         compactor = SessionProjectionCompactor(
             policy=ProjectionCompactionPolicy(
@@ -301,7 +375,10 @@ class SessionProjectionCompactorTest(unittest.TestCase):
 
         self.assertTrue(projection.result.compacted)
         self.assertEqual(projection.result.protected_head_count, 0)
-        self.assertEqual(tuple(message.content for message in projection.messages), ("evening topic", "evening reply"))
+        self.assertEqual(
+            tuple(message.content for message in projection.messages),
+            ("evening topic", "evening reply"),
+        )
         self.assertNotIn("morning topic", [message.content for message in projection.messages])
 
     def test_embedding_ranked_middle_anchor_stays_role_preserved(self) -> None:
@@ -351,9 +428,14 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertEqual(projection.result.protected_ranges, ("head:0-0", "tail:5-5"))
         self.assertEqual(len(projection.result.selected_raw_ids), 1)
         self.assertTrue(projection.result.summary_hash)
-        self.assertIn("semantic anchor: database migration decision", [message.content for message in projection.messages])
+        self.assertIn(
+            "semantic anchor: database migration decision",
+            [message.content for message in projection.messages],
+        )
 
-    def test_projection_embedding_backfill_queues_cached_turn_groups_after_runtime_is_loaded(self) -> None:
+    def test_projection_embedding_backfill_queues_cached_turn_groups_after_runtime_is_loaded(
+        self,
+    ) -> None:
         service = _FakeProjectionEmbeddingService(loaded=True)
         messages = (
             PromptMessage(role="user", content="continue the database migration"),
@@ -374,7 +456,9 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertEqual(service.embed_calls, 0)
         self.assertEqual(service.embed_text_calls, 0)
 
-    def test_projection_embedding_backfill_skips_cold_runtime_to_avoid_query_latency(self) -> None:
+    def test_projection_embedding_backfill_skips_cold_runtime_to_avoid_query_latency(
+        self,
+    ) -> None:
         service = _FakeProjectionEmbeddingService(loaded=False)
 
         state = queue_projection_history_embedding_backfill(
@@ -388,13 +472,18 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertEqual(service.embed_calls, 0)
         self.assertEqual(service.embed_text_calls, 0)
 
-    def test_embedding_projection_scorer_reads_cache_without_sync_embedding(self) -> None:
+    def test_embedding_projection_scorer_reads_cache_without_sync_embedding(
+        self,
+    ) -> None:
         service = _FakeProjectionEmbeddingService(loaded=True)
         queue_projection_history_embedding_backfill(
             service,
             messages=(
                 PromptMessage(role="user", content="continue the database migration"),
-                PromptMessage(role="assistant", content="semantic anchor: database migration decision"),
+                PromptMessage(
+                    role="assistant",
+                    content="semantic anchor: database migration decision",
+                ),
             ),
             thread_focus="database migration",
         )
@@ -413,13 +502,18 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertEqual(service.embed_calls, 0)
         self.assertEqual(service.embed_text_calls, 0)
 
-    def test_embedding_projection_scorer_records_pending_and_missed_cache_state(self) -> None:
+    def test_embedding_projection_scorer_records_pending_and_missed_cache_state(
+        self,
+    ) -> None:
         service = _FakeProjectionEmbeddingService(loaded=True, auto_cache=False)
         queue_projection_history_embedding_backfill(
             service,
             messages=(
                 PromptMessage(role="user", content="continue the database migration"),
-                PromptMessage(role="assistant", content="semantic anchor: database migration decision"),
+                PromptMessage(
+                    role="assistant",
+                    content="semantic anchor: database migration decision",
+                ),
                 PromptMessage(role="assistant", content="pending architecture detail"),
             ),
             thread_focus="database migration",
@@ -463,7 +557,10 @@ class SessionProjectionCompactorTest(unittest.TestCase):
             service,
             messages=(
                 PromptMessage(role="user", content="continue the database migration"),
-                PromptMessage(role="assistant", content="semantic anchor: database migration decision"),
+                PromptMessage(
+                    role="assistant",
+                    content="semantic anchor: database migration decision",
+                ),
             ),
             thread_focus="database migration",
         )
@@ -538,7 +635,9 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertIn("## Handoff notes for recent tail", projection.summary)
         self.assertIn("follow-up 17", projection.summary)
 
-    def test_provider_summary_hook_uses_model_and_preserves_reference_only_header(self) -> None:
+    def test_provider_summary_hook_uses_model_and_preserves_reference_only_header(
+        self,
+    ) -> None:
         class _Provider:
             def __init__(self) -> None:
                 self.calls: list[dict[str, object]] = []
@@ -558,7 +657,11 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         now = datetime.now(timezone.utc)
         hook = ProviderProjectionSummaryHook(
             provider=provider,
-            profile=PersonalModelRuntimeState(profile_id="profile-test", display_name="Elephant Agent", mode="companion"),
+            profile=PersonalModelRuntimeState(
+                profile_id="profile-test",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             session=Episode(
                 episode_id="session-test",
                 state_id="state:test",
@@ -583,7 +686,9 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertTrue(summary.startswith("[CONTEXT COMPACTION - REFERENCE ONLY]"))
         self.assertIn("Compact context safely", summary)
 
-    def test_provider_summary_hook_suppresses_stream_observer_during_internal_summary(self) -> None:
+    def test_provider_summary_hook_suppresses_stream_observer_during_internal_summary(
+        self,
+    ) -> None:
         streamed: list[str] = []
 
         class _Provider:
@@ -608,7 +713,11 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         now = datetime.now(timezone.utc)
         hook = ProviderProjectionSummaryHook(
             provider=provider,
-            profile=PersonalModelRuntimeState(profile_id="profile-test", display_name="Elephant Agent", mode="companion"),
+            profile=PersonalModelRuntimeState(
+                profile_id="profile-test",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             session=Episode(
                 episode_id="session-test",
                 state_id="state:test",

@@ -33,7 +33,9 @@ class CliRuntimeExtensionsTest(unittest.TestCase):
         self.assertFalse(hasattr(manifest, "mcp_overrides"))
         self.assertFalse(hasattr(manifest, "mcp_definitions"))
 
-    def test_serialize_manifest_path_keeps_relative_paths_inside_profile_dir(self) -> None:
+    def test_serialize_manifest_path_keeps_relative_paths_inside_profile_dir(
+        self,
+    ) -> None:
         profile_dir = Path("/tmp/elephant-profile")
 
         self.assertEqual(
@@ -45,7 +47,9 @@ class CliRuntimeExtensionsTest(unittest.TestCase):
             "/opt/shared/tool.yaml",
         )
 
-    def test_cli_tool_catalog_includes_global_custom_mcp_tools_after_refresh(self) -> None:
+    def test_cli_tool_catalog_includes_global_custom_mcp_tools_after_refresh(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             state_dir = root / "state"
@@ -70,7 +74,11 @@ class CliRuntimeExtensionsTest(unittest.TestCase):
                                 "label": "Filesystem",
                                 "transport": "stdio",
                                 "command": "npx",
-                                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                                "args": [
+                                    "-y",
+                                    "@modelcontextprotocol/server-filesystem",
+                                    "/tmp/demo",
+                                ],
                                 "tools": {
                                     "read_file": {
                                         "display_name": "Read File",

@@ -51,6 +51,7 @@ _SUPPORTED_LENSES = tuple(ALLOWED_LENSES)
 
 # ── CJK-capable stub embedder ────────────────────────────────────────────
 
+
 class _CJKCapableStubEmbeddingService:
     """Character-category bucket embedder that handles ASCII, CJK, Hangul, Kana.
 
@@ -149,6 +150,7 @@ class _DimensionAwareSemanticStubEmbeddingService:
 
 # ── Test fixture helpers ─────────────────────────────────────────────────
 
+
 @dataclass
 class MultilingualFixture:
     surface: PersonalModelUnderstandingSurface
@@ -208,7 +210,14 @@ def _seed_pm_fact(fx: MultilingualFixture, *, fact_id: str, lens: str, text: str
     fx.indexer.index_personal_model_claim(fact)
 
 
-def _seed_step(fx: MultilingualFixture, *, step_id: str, summary: str, action: str = "record_input", sequence: int = 1) -> None:
+def _seed_step(
+    fx: MultilingualFixture,
+    *,
+    step_id: str,
+    summary: str,
+    action: str = "record_input",
+    sequence: int = 1,
+) -> None:
     """Write one Step (user turn) through the repository + index it for conversation recall."""
     episode_id = f"episode-{step_id.split(':')[0].replace('_', '-')}"
     loop_id = f"loop-{step_id.split(':')[0].replace('_', '-')}"
@@ -305,6 +314,7 @@ def _conversation_recall(fx: MultilingualFixture, query: str, scopes: tuple[str,
 
 # ── Tests ────────────────────────────────────────────────────────────────
 
+
 class MultiLingualRecallAndPMTest(unittest.TestCase):
     """Comprehensive multilingual test for both conversation recall and PM search."""
 
@@ -314,10 +324,34 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """PM search with Chinese query: exact token, fuzzy CJK n-gram."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_pm_fact(fx, fact_id="cn:fog", lens="identity", text="我喜欢像站在起雾的路口那样慢慢做决定。", topic="test.decision.fog")
-            _seed_pm_fact(fx, fact_id="cn:quiet", lens="pulse", text="能量低的时候，我需要一个安静角落。", topic="test.recovery.corner")
-            _seed_pm_fact(fx, fact_id="cn:social-pos", lens="world", text="我喜欢周末约朋友去热闹的 bar。", topic="test.social.bar")
-            _seed_pm_fact(fx, fact_id="cn:social-neg", lens="identity", text="我不喜欢参加需要大声说话才能沟通的聚会。", topic="test.social.party")
+            _seed_pm_fact(
+                fx,
+                fact_id="cn:fog",
+                lens="identity",
+                text="我喜欢像站在起雾的路口那样慢慢做决定。",
+                topic="test.decision.fog",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="cn:quiet",
+                lens="pulse",
+                text="能量低的时候，我需要一个安静角落。",
+                topic="test.recovery.corner",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="cn:social-pos",
+                lens="world",
+                text="我喜欢周末约朋友去热闹的 bar。",
+                topic="test.social.bar",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="cn:social-neg",
+                lens="identity",
+                text="我不喜欢参加需要大声说话才能沟通的聚会。",
+                topic="test.social.party",
+            )
 
             # Exact token match
             self.assertEqual(_top_pm_ref(fx, "起雾 路口"), "cn:fog")
@@ -335,8 +369,18 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """Conversation recall (tool.conversation.search) with Chinese queries."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_step(fx, step_id="cn:step-fog", summary="用户说：我喜欢像站在起雾的路口那样慢慢做决定。", sequence=1)
-            _seed_step(fx, step_id="cn:step-quiet", summary="用户说：能量低的时候，我需要一个安静角落。", sequence=1)
+            _seed_step(
+                fx,
+                step_id="cn:step-fog",
+                summary="用户说：我喜欢像站在起雾的路口那样慢慢做决定。",
+                sequence=1,
+            )
+            _seed_step(
+                fx,
+                step_id="cn:step-quiet",
+                summary="用户说：能量低的时候，我需要一个安静角落。",
+                sequence=1,
+            )
 
             # Token match: "起雾的路口" is an exact substring of the step text
             hits = _conversation_recall(fx, "起雾的路口")
@@ -356,9 +400,27 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """PM search with English query: exact, synonym, conceptual."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_pm_fact(fx, fact_id="en:redis", lens="world", text="User chose Redis caching over memcached for the aegis project.", topic="test.caching")
-            _seed_pm_fact(fx, fact_id="en:lego", lens="identity", text="好的代码像是拼好的乐高，每块都刚好卡在它该在的位置。", topic="test.code.metaphor")
-            _seed_pm_fact(fx, fact_id="en:citywalk", lens="pulse", text="周末最喜欢做的事是 city walk，在成都的街头漫无目的地走。", topic="test.weekend.routine")
+            _seed_pm_fact(
+                fx,
+                fact_id="en:redis",
+                lens="world",
+                text="User chose Redis caching over memcached for the aegis project.",
+                topic="test.caching",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="en:lego",
+                lens="identity",
+                text="好的代码像是拼好的乐高，每块都刚好卡在它该在的位置。",
+                topic="test.code.metaphor",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="en:citywalk",
+                lens="pulse",
+                text="周末最喜欢做的事是 city walk，在成都的街头漫无目的地走。",
+                topic="test.weekend.routine",
+            )
 
             # Exact match
             self.assertEqual(_top_pm_ref(fx, "redis caching"), "en:redis")
@@ -369,8 +431,16 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """Conversation recall with English queries."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_step(fx, step_id="en:step-redis", summary="User decided to use Redis caching over memcached.")
-            _seed_step(fx, step_id="en:step-lego", summary="好的代码像是拼好的乐高——每块都刚好卡在它该在的位置。")
+            _seed_step(
+                fx,
+                step_id="en:step-redis",
+                summary="User decided to use Redis caching over memcached.",
+            )
+            _seed_step(
+                fx,
+                step_id="en:step-lego",
+                summary="好的代码像是拼好的乐高——每块都刚好卡在它该在的位置。",
+            )
 
             # English token overlap: "redis" is a token match via _TOKEN_RE
             hits = _conversation_recall(fx, "redis caching")
@@ -390,9 +460,27 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """PM search with cross-lingual query_variants bridges CN↔EN."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_pm_fact(fx, fact_id="xl:music", lens="identity", text="个人爱好包含音乐和周末听唱片。", topic="test.music")
-            _seed_pm_fact(fx, fact_id="xl:solitude", lens="identity", text="孤独有时候是干净的。", topic="test.trait.solitude")
-            _seed_pm_fact(fx, fact_id="xl:citywalk", lens="pulse", text="周末 city walk 是我最放松的方式。", topic="test.weekend.citywalk")
+            _seed_pm_fact(
+                fx,
+                fact_id="xl:music",
+                lens="identity",
+                text="个人爱好包含音乐和周末听唱片。",
+                topic="test.music",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="xl:solitude",
+                lens="identity",
+                text="孤独有时候是干净的。",
+                topic="test.trait.solitude",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="xl:citywalk",
+                lens="pulse",
+                text="周末 city walk 是我最放松的方式。",
+                topic="test.weekend.citywalk",
+            )
 
             # EN query → CN variant → should find CN fact
             self.assertEqual(
@@ -417,7 +505,11 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """Conversation recall with cross-lingual queries."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_step(fx, step_id="xl:step-music", summary="用户分享说个人爱好包含音乐和周末听唱片。")
+            _seed_step(
+                fx,
+                step_id="xl:step-music",
+                summary="用户分享说个人爱好包含音乐和周末听唱片。",
+            )
 
             # EN query — lexical fallback may not bridge CN→EN without variants,
             # but should still surface the step if tokens overlap
@@ -432,9 +524,27 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """PM search with Japanese and Korean content."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_pm_fact(fx, fact_id="jp:calm", lens="identity", text="静かな場所で本を読むのが好きです。", topic="test.jp.reading")
-            _seed_pm_fact(fx, fact_id="kr:walking", lens="pulse", text="주말에 도시를 걷는 것을 좋아합니다.", topic="test.kr.walking")
-            _seed_pm_fact(fx, fact_id="en:jazz", lens="identity", text="I love listening to jazz on weekend mornings.", topic="test.jazz.morning")
+            _seed_pm_fact(
+                fx,
+                fact_id="jp:calm",
+                lens="identity",
+                text="静かな場所で本を読むのが好きです。",
+                topic="test.jp.reading",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="kr:walking",
+                lens="pulse",
+                text="주말에 도시를 걷는 것을 좋아합니다.",
+                topic="test.kr.walking",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="en:jazz",
+                lens="identity",
+                text="I love listening to jazz on weekend mornings.",
+                topic="test.jazz.morning",
+            )
 
             # JP query with JP variant
             self.assertEqual(
@@ -453,8 +563,16 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """Conversation recall with Japanese and Korean content."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_step(fx, step_id="jp:step-calm", summary="ユーザー：静かな場所で本を読むのが好きです。")
-            _seed_step(fx, step_id="kr:step-walking", summary="사용자：주말에 도시를 걷는 것을 좋아합니다.")
+            _seed_step(
+                fx,
+                step_id="jp:step-calm",
+                summary="ユーザー：静かな場所で本を読むのが好きです。",
+            )
+            _seed_step(
+                fx,
+                step_id="kr:step-walking",
+                summary="사용자：주말에 도시를 걷는 것을 좋아합니다.",
+            )
 
             # JP lexical match
             hits = _conversation_recall(fx, "静かな場所 本を読む")
@@ -474,28 +592,45 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """PM search with mixed CN/EN content."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_pm_fact(fx, fact_id="mx:citywalk", lens="pulse",
+            _seed_pm_fact(
+                fx,
+                fact_id="mx:citywalk",
+                lens="pulse",
                 text="周末 city walk 是我最放松的方式。在成都的街头漫无目的地走。",
-                topic="test.weekend.mixed")
-            _seed_pm_fact(fx, fact_id="mx:code", lens="identity",
+                topic="test.weekend.mixed",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="mx:code",
+                lens="identity",
                 text="喜欢用 Python 写一些小工具来自动化日常工作。",
-                topic="test.workflow.automation")
+                topic="test.workflow.automation",
+            )
 
             # CN tokens should match
             self.assertEqual(_top_pm_ref(fx, "周末 city walk"), "mx:citywalk")
             # Mixed query
             self.assertEqual(_top_pm_ref(fx, "Python 自动化"), "mx:code")
             # EN-only token inside mixed fact
-            self.assertEqual(_top_pm_ref(fx, "Python automation tools", query_variants=("Python 小工具",)), "mx:code")
+            self.assertEqual(
+                _top_pm_ref(fx, "Python automation tools", query_variants=("Python 小工具",)),
+                "mx:code",
+            )
 
     def test_mixed_language_conversation_recall(self) -> None:
         """Conversation recall with mixed CN/EN content."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_step(fx, step_id="mx:step-citywalk",
-                summary="用户说周末 city walk 是最放松的方式，在成都的街头漫无目的地走。")
-            _seed_step(fx, step_id="mx:step-python",
-                summary="用户说喜欢用 Python 写一些小工具来自动化日常工作。")
+            _seed_step(
+                fx,
+                step_id="mx:step-citywalk",
+                summary="用户说周末 city walk 是最放松的方式，在成都的街头漫无目的地走。",
+            )
+            _seed_step(
+                fx,
+                step_id="mx:step-python",
+                summary="用户说喜欢用 Python 写一些小工具来自动化日常工作。",
+            )
 
             # CN token match
             hits = _conversation_recall(fx, "成都的街头")
@@ -516,7 +651,13 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
             pm_text = "周末最喜欢在成都 city walk，漫无目的地走。"
             step_summary = f"用户说：{pm_text}"
 
-            _seed_pm_fact(fx, fact_id="cmp:citywalk", lens="pulse", text=pm_text, topic="test.weekend.citywalk")
+            _seed_pm_fact(
+                fx,
+                fact_id="cmp:citywalk",
+                lens="pulse",
+                text=pm_text,
+                topic="test.weekend.citywalk",
+            )
             _seed_step(fx, step_id="cmp:step-citywalk", summary=step_summary)
 
             # PM search path
@@ -537,13 +678,19 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
             # Tool step — should be filtered out
-            _seed_step(fx, step_id="noise:tool",
+            _seed_step(
+                fx,
+                step_id="noise:tool",
                 summary="tool result: 家庭权力结构分析完成",
-                action="call_tool")
+                action="call_tool",
+            )
             # User step — should be recallable
-            _seed_step(fx, step_id="noise:user",
+            _seed_step(
+                fx,
+                step_id="noise:user",
                 summary="用户说：我们讨论了家庭权力结构的问题。",
-                action="record_input")
+                action="record_input",
+            )
 
             hits = _conversation_recall(fx, "家庭权力结构")
             contents = "\n".join(h.content for h in hits)
@@ -558,28 +705,41 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
             fx = _build_fixture(tmpdir)
             # Distractors
             for i in range(15):
-                _seed_pm_fact(fx, fact_id=f"dist:{i:03d}", lens="world",
+                _seed_pm_fact(
+                    fx,
+                    fact_id=f"dist:{i:03d}",
+                    lens="world",
                     text=f"Distractor fact number {i} about random topic xyz.",
-                    topic=f"distractor_{i}")
+                    topic=f"distractor_{i}",
+                )
 
             # Target facts about "architecture" in mixed CN/EN
             for i in range(5):
-                _seed_pm_fact(fx, fact_id=f"arch:{i:03d}", lens="world",
+                _seed_pm_fact(
+                    fx,
+                    fact_id=f"arch:{i:03d}",
+                    lens="world",
                     text=f"关于系统架构的讨论，第{i}条：微服务和事件驱动设计的取舍。",
-                    topic=f"architecture_{i}")
+                    topic=f"architecture_{i}",
+                )
 
             # More distractors
             for i in range(15, 20):
-                _seed_pm_fact(fx, fact_id=f"dist:{i:03d}", lens="world",
+                _seed_pm_fact(
+                    fx,
+                    fact_id=f"dist:{i:03d}",
+                    lens="world",
                     text=f"Late distractor fact number {i} about random topic abc.",
-                    topic=f"distractor_{i}")
+                    topic=f"distractor_{i}",
+                )
 
             result = _pm_search(fx, "微服务 架构 事件驱动")
             claims = tuple(result.get("claims") or ())
             self.assertTrue(claims, "should find architecture facts")
             arch_hits = sum(1 for c in claims if c["ref"].startswith("arch:"))
             self.assertGreaterEqual(
-                arch_hits, 2,
+                arch_hits,
+                2,
                 f"expected >=2 architecture facts in top-5, got {arch_hits}: {[c['ref'] for c in claims]}",
             )
 
@@ -589,10 +749,20 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
         """PM search with topic-only (no query text) should match by topic."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fx = _build_fixture(tmpdir)
-            _seed_pm_fact(fx, fact_id="to:optionality", lens="identity",
-                text="重要的是保住选择权。", topic="test.choice.optionality")
-            _seed_pm_fact(fx, fact_id="to:choice", lens="identity",
-                text="做取舍时最不想丢掉的是选择权。", topic="test.choice.preference")
+            _seed_pm_fact(
+                fx,
+                fact_id="to:optionality",
+                lens="identity",
+                text="重要的是保住选择权。",
+                topic="test.choice.optionality",
+            )
+            _seed_pm_fact(
+                fx,
+                fact_id="to:choice",
+                lens="identity",
+                text="做取舍时最不想丢掉的是选择权。",
+                topic="test.choice.preference",
+            )
 
             topic_only = _pm_search(fx, "", topic="test.choice.optionality", include_diagnostics=True)
             claims = tuple(topic_only.get("claims") or ())
@@ -631,8 +801,13 @@ class MultiLingualRecallAndPMTest(unittest.TestCase):
                 indexer=indexer,
             )
 
-            _seed_pm_fact(fx, fact_id="dg:citywalk", lens="pulse",
-                text="周末最喜欢在成都 city walk。", topic="test.weekend.citywalk")
+            _seed_pm_fact(
+                fx,
+                fact_id="dg:citywalk",
+                lens="pulse",
+                text="周末最喜欢在成都 city walk。",
+                topic="test.weekend.citywalk",
+            )
 
             # Should still find via lexical signals even without embeddings
             result = _pm_search(fx, "周末 成都 city walk")

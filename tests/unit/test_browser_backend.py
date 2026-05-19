@@ -8,7 +8,11 @@ import unittest
 from unittest import mock
 
 from packages.tools import browser_backend as browser_backend_module
-from packages.tools.browser_backend import BrowserBackendConfig, PlaywrightBrowserBackend, _is_private_url
+from packages.tools.browser_backend import (
+    BrowserBackendConfig,
+    PlaywrightBrowserBackend,
+    _is_private_url,
+)
 from packages.tools.builtins import builtin_tool_definitions
 from packages.tools.handlers_network import run_browser_action
 from packages.tools.runtime import ToolInvocation
@@ -88,12 +92,30 @@ class _FakePage:
                 "text": "Welcome Sign in Email",
                 "elementCount": 2,
                 "elements": [
-                    {"ref": "@e1", "role": "button", "label": "Sign in", "disabled": False},
-                    {"ref": "@e2", "role": "input", "label": "Email", "disabled": False},
+                    {
+                        "ref": "@e1",
+                        "role": "button",
+                        "label": "Sign in",
+                        "disabled": False,
+                    },
+                    {
+                        "ref": "@e2",
+                        "role": "input",
+                        "label": "Email",
+                        "disabled": False,
+                    },
                 ],
             }
         if "document.images" in script:
-            return [{"index": 1, "src": "https://example.com/a.png", "alt": "A", "width": 10, "height": 20}]
+            return [
+                {
+                    "index": 1,
+                    "src": "https://example.com/a.png",
+                    "alt": "A",
+                    "width": 10,
+                    "height": 20,
+                }
+            ]
         if "data-elephant-browser-annotation" in script:
             return 2
         if script == "document.title":
@@ -263,21 +285,36 @@ class BrowserBackendTest(unittest.TestCase):
     def test_type_images_console_and_vision_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             backend = self._backend(Path(tmpdir))
-            backend.invoke("navigate", self._invoke("tool.browser.navigate", {"url": "https://example.com"}))
+            backend.invoke(
+                "navigate",
+                self._invoke("tool.browser.navigate", {"url": "https://example.com"}),
+            )
             page = backend._sessions["session-1"].page
             page.handlers["console"](_FakeMessage())
 
-            typed = backend.invoke("type", self._invoke("tool.browser.type", {"ref": "e2", "text": "a@example.com"}))
+            typed = backend.invoke(
+                "type",
+                self._invoke("tool.browser.type", {"ref": "e2", "text": "a@example.com"}),
+            )
             images = backend.invoke("images", self._invoke("tool.browser.images", {}))
-            console = backend.invoke("console", self._invoke("tool.browser.console", {"expression": "document.title"}))
+            console = backend.invoke(
+                "console",
+                self._invoke("tool.browser.console", {"expression": "document.title"}),
+            )
             analyzer = _FakeVisionAnalyzer()
             vision = backend.invoke(
                 "vision",
-                self._invoke("tool.browser.vision", {"question": "what is visible?", "annotate": True}),
+                self._invoke(
+                    "tool.browser.vision",
+                    {"question": "what is visible?", "annotate": True},
+                ),
                 vision_analyzer=analyzer,
             )
 
-            self.assertEqual(json.loads(typed["summary"])["target"], '[data-elephant-browser-ref="@e2"]')
+            self.assertEqual(
+                json.loads(typed["summary"])["target"],
+                '[data-elephant-browser-ref="@e2"]',
+            )
             self.assertEqual(json.loads(images["summary"])["count"], 1)
             self.assertEqual(json.loads(console["summary"])["result"], "Example")
             vision_payload = json.loads(vision["summary"])
@@ -292,13 +329,22 @@ class BrowserBackendTest(unittest.TestCase):
     def test_browser_vision_without_analyzer_returns_setup_hint(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             backend = self._backend(Path(tmpdir))
-            backend.invoke("navigate", self._invoke("tool.browser.navigate", {"url": "https://example.com"}))
+            backend.invoke(
+                "navigate",
+                self._invoke("tool.browser.navigate", {"url": "https://example.com"}),
+            )
 
-            vision = backend.invoke("vision", self._invoke("tool.browser.vision", {"question": "what is visible?"}))
+            vision = backend.invoke(
+                "vision",
+                self._invoke("tool.browser.vision", {"question": "what is visible?"}),
+            )
 
             vision_payload = json.loads(vision["summary"])
             self.assertFalse(vision_payload["vision_analyzer_configured"])
-            self.assertIn("Configure a browser vision analyzer", vision_payload["vision_setup_hint"])
+            self.assertIn(
+                "Configure a browser vision analyzer",
+                vision_payload["vision_setup_hint"],
+            )
 
     def test_browser_schema_is_ref_first_with_selector_fallback(self) -> None:
         definitions = {
@@ -329,7 +375,10 @@ class BrowserBackendTest(unittest.TestCase):
 
         self.assertTrue(definitions["tool.browser.navigate"].available)
         self.assertFalse(definitions["tool.browser.vision"].available)
-        self.assertIn("vision analyzer", definitions["tool.browser.vision"].availability.reason or "")
+        self.assertIn(
+            "vision analyzer",
+            definitions["tool.browser.vision"].availability.reason or "",
+        )
 
     def test_browser_vision_is_available_with_analyzer(self) -> None:
         definitions = {
@@ -359,7 +408,10 @@ class BrowserBackendTest(unittest.TestCase):
         def _run_navigation() -> None:
             caller_thread_ids.append(threading.get_ident())
             try:
-                backend.invoke("navigate", self._invoke("tool.browser.navigate", {"url": "example.com"}))
+                backend.invoke(
+                    "navigate",
+                    self._invoke("tool.browser.navigate", {"url": "example.com"}),
+                )
             except BaseException as exc:
                 errors.append(exc)
 

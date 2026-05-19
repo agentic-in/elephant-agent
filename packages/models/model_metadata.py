@@ -24,7 +24,11 @@ _OPENROUTER_CACHE_TTL_SECONDS = 3600
 _ENDPOINT_CACHE_TTL_SECONDS = 300
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
-_CONTAINER_LOCAL_SUFFIXES = (".docker.internal", ".containers.internal", ".lima.internal")
+_CONTAINER_LOCAL_SUFFIXES = (
+    ".docker.internal",
+    ".containers.internal",
+    ".lima.internal",
+)
 
 _CONTEXT_KEYS = (
     "context_length",
@@ -263,7 +267,11 @@ def query_local_endpoint_metadata(
 
     props = _request_json_object(f"{server_root}/v1/props", headers=_bearer_headers(api_key), timeout_seconds=2.0)
     if not props:
-        props = _request_json_object(f"{server_root}/props", headers=_bearer_headers(api_key), timeout_seconds=2.0)
+        props = _request_json_object(
+            f"{server_root}/props",
+            headers=_bearer_headers(api_key),
+            timeout_seconds=2.0,
+        )
     if props:
         context = _extract_nested_int(props, _CONTEXT_KEYS)
         if context is not None:
@@ -430,7 +438,7 @@ def _request_json_object(
     try:
         with request.urlopen(http_request, timeout=timeout_seconds) as response:
             raw_body = response.read().decode("utf-8")
-    except (error.HTTPError, error.URLError, TimeoutError) as exc:
+    except (error.HTTPError, error.URLError, TimeoutError):
         return None
     try:
         payload = json.loads(raw_body) if raw_body else {}

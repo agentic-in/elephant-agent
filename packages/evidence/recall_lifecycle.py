@@ -35,13 +35,15 @@ _LIFECYCLE_TO_POLICY: Mapping[str, str] = {
     "review": "review",
     "episode": "episode",
 }
-_TIME_METADATA_KEYS = frozenset({
-    "effective_at",
-    "expires_at",
-    "last_verified_at",
-    "verified_at",
-    "review_after_days",
-})
+_TIME_METADATA_KEYS = frozenset(
+    {
+        "effective_at",
+        "expires_at",
+        "last_verified_at",
+        "verified_at",
+        "review_after_days",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,9 +72,7 @@ def _explicit_policy(metadata: Mapping[str, object]) -> str:
 
 def _explicit_lifecycle(metadata: Mapping[str, object]) -> str:
     lifecycle = _clean(
-        metadata.get("retention_lifecycle")
-        or metadata.get("lifecycle")
-        or metadata.get("staleness_policy")
+        metadata.get("retention_lifecycle") or metadata.get("lifecycle") or metadata.get("staleness_policy")
     )
     return lifecycle if lifecycle in _ALLOWED_LIFECYCLES else ""
 

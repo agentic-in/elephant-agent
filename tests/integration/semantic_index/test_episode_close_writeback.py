@@ -37,7 +37,12 @@ _NOW = datetime(2026, 4, 30, 10, 0, tzinfo=timezone.utc)
 class _StubEmbeddingService:
     """Deterministic embedding: letters map to one-hot buckets."""
 
-    def __init__(self, provider_id: str = "stub", model_id: str = "stub-embed", dimensions: int = 64) -> None:
+    def __init__(
+        self,
+        provider_id: str = "stub",
+        model_id: str = "stub-embed",
+        dimensions: int = 64,
+    ) -> None:
         self._provider_id = provider_id
         self._model_id = model_id
         self._dimensions = dimensions

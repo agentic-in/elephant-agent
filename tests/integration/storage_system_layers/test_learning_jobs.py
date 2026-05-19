@@ -10,7 +10,9 @@ from packages.storage import RuntimeStorageRepository
 
 
 class StorageLearningJobsTest(unittest.TestCase):
-    def test_learning_job_lifecycle_supports_queue_claim_retry_and_complete(self) -> None:
+    def test_learning_job_lifecycle_supports_queue_claim_retry_and_complete(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
             repository.bootstrap()
@@ -179,7 +181,12 @@ class StorageLearningJobsTest(unittest.TestCase):
 
             self.assertNotEqual(first.job_id, manual.job_id)
             self.assertEqual(len(repository.list_learning_jobs(state_id=state.state_id)), 2)
-            self.assertEqual(repository.load_learning_job_for_episode(job_type="episode_boundary_learning", episode_id=episode.episode_id).job_id, manual.job_id)
+            self.assertEqual(
+                repository.load_learning_job_for_episode(
+                    job_type="episode_boundary_learning", episode_id=episode.episode_id
+                ).job_id,
+                manual.job_id,
+            )
 
 
 if __name__ == "__main__":

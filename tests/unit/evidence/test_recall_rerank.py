@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from packages.evidence import RecallHit, plan_recall_query, rerank_recall_hits, score_recall_hit
+from packages.evidence import (
+    RecallHit,
+    plan_recall_query,
+    rerank_recall_hits,
+    score_recall_hit,
+)
 
 _NOW = datetime(2026, 5, 8, tzinfo=timezone.utc)
 

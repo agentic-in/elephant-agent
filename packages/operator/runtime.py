@@ -9,7 +9,10 @@ from packages.contracts import (
     ProcedureRecord,
 )
 from packages.contracts.runtime import RecallEvidence
-from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
+from packages.state.rendered_views import (
+    RenderedRelationshipView,
+    RenderedUserProfileView,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +147,7 @@ class DashboardEggRecord:
     tone: str
     details: tuple["DashboardDetailItem", ...] = ()
 
+
 @dataclass(frozen=True, slots=True)
 class DashboardDetailItem:
     label: str
@@ -178,6 +182,7 @@ class DashboardSessionRecord:
     last_touch: str
     tone: str
     details: tuple[DashboardDetailItem, ...] = ()
+
 
 @dataclass(frozen=True, slots=True)
 class DashboardOpsRecord:
@@ -271,7 +276,12 @@ def build_profile_operator_surface(
         identity=identity,
         user=user,
         relationship=relationship,
-        provenance=provenance or ("state.identity", "pm_facts.user_profile_view", "pm_facts.relationship_view"),
+        provenance=provenance
+        or (
+            "state.identity",
+            "pm_facts.user_profile_view",
+            "pm_facts.relationship_view",
+        ),
     )
 
 
@@ -606,7 +616,9 @@ def render_profile_lines(surface: ProfileOperatorSurface) -> tuple[str, ...]:
     )
 
 
-def render_recall_evidence_lines(surface: RecallEvidenceOperatorSurface) -> tuple[str, ...]:
+def render_recall_evidence_lines(
+    surface: RecallEvidenceOperatorSurface,
+) -> tuple[str, ...]:
     lines: list[str] = []
     for item in surface.evidence_items:
         lines.append(
@@ -616,7 +628,13 @@ def render_recall_evidence_lines(surface: RecallEvidenceOperatorSurface) -> tupl
     if not lines:
         lines.append("<empty>")
     if surface.search_query is not None:
-        lines.extend(("", f"search_query: {surface.search_query}", f"scope_reason: {surface.scope_reason or '<none>'}"))
+        lines.extend(
+            (
+                "",
+                f"search_query: {surface.search_query}",
+                f"scope_reason: {surface.scope_reason or '<none>'}",
+            )
+        )
         for hit in surface.search_hits:
             lines.append(
                 f"- {hit.evidence.evidence_id} | score={hit.score:.2f} | reasons={'; '.join(hit.reasons) or '<none>'} | {hit.evidence.content}"
@@ -625,7 +643,10 @@ def render_recall_evidence_lines(surface: RecallEvidenceOperatorSurface) -> tupl
 
 
 def render_procedure_lines(surface: ProcedureOperatorSurface) -> tuple[str, ...]:
-    lines = [f"profile_id: {surface.profile_id}", f"procedure_count: {len(surface.procedures)}"]
+    lines = [
+        f"profile_id: {surface.profile_id}",
+        f"procedure_count: {len(surface.procedures)}",
+    ]
     if surface.procedures:
         lines.append("procedures:")
         lines.extend(

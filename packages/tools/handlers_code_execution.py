@@ -157,7 +157,10 @@ def _run_code_subprocess(
             timeout_seconds=timeout_seconds,
         )
         tool_call_count = 0
-        with stdout_path.open("wb") as stdout_file, stderr_path.open("wb") as stderr_file:
+        with (
+            stdout_path.open("wb") as stdout_file,
+            stderr_path.open("wb") as stderr_file,
+        ):
             process = subprocess.Popen(
                 [child_python, str(runner_path)],
                 cwd=child_cwd,
@@ -215,8 +218,28 @@ def _code_subprocess_env(
     response_dir: Path,
     timeout_seconds: int,
 ) -> dict[str, str]:
-    safe_prefixes = ("PATH", "HOME", "USER", "LANG", "LC_", "TERM", "TMP", "TEMP", "SHELL", "VIRTUAL_ENV", "CONDA")
-    secret_fragments = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "PASSWD", "AUTH")
+    safe_prefixes = (
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "LC_",
+        "TERM",
+        "TMP",
+        "TEMP",
+        "SHELL",
+        "VIRTUAL_ENV",
+        "CONDA",
+    )
+    secret_fragments = (
+        "KEY",
+        "TOKEN",
+        "SECRET",
+        "PASSWORD",
+        "CREDENTIAL",
+        "PASSWD",
+        "AUTH",
+    )
     env: dict[str, str] = {}
     for key, value in os.environ.items():
         if any(fragment in key.upper() for fragment in secret_fragments):
@@ -267,7 +290,11 @@ def _code_child_python(*, mode: str) -> str:
 def _is_usable_code_python(candidate: Path) -> bool:
     try:
         completed = subprocess.run(
-            [str(candidate), "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)"],
+            [
+                str(candidate),
+                "-c",
+                "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)",
+            ],
             capture_output=True,
             timeout=5,
         )
@@ -292,12 +319,21 @@ def _serve_code_tool_requests(
             tool_id = str(request.get("tool_id") or "")
             arguments = request.get("arguments") if isinstance(request.get("arguments"), Mapping) else {}
             if tool_id not in allowlist:
-                response: Mapping[str, Any] = {"ok": False, "error": f"tool RPC is not allowed for {tool_id}"}
+                response: Mapping[str, Any] = {
+                    "ok": False,
+                    "error": f"tool RPC is not allowed for {tool_id}",
+                }
             elif tool_call_count >= MAX_CODE_TOOL_CALLS:
-                response = {"ok": False, "error": f"tool.code.execute exceeded {MAX_CODE_TOOL_CALLS} nested tool calls"}
+                response = {
+                    "ok": False,
+                    "error": f"tool.code.execute exceeded {MAX_CODE_TOOL_CALLS} nested tool calls",
+                }
             elif tool_id == "tool.terminal.exec" and _blocked_code_terminal_arguments(arguments):
                 blocked = ", ".join(sorted(_blocked_code_terminal_arguments(arguments)))
-                response = {"ok": False, "error": f"tool.code.execute does not allow tool.terminal.exec arguments: {blocked}"}
+                response = {
+                    "ok": False,
+                    "error": f"tool.code.execute does not allow tool.terminal.exec arguments: {blocked}",
+                }
             else:
                 tool_call_count += 1
                 result = runtime.invoke(
@@ -335,7 +371,7 @@ def _write_code_response(path: Path, payload: Mapping[str, Any]) -> None:
 
 
 def _code_runner_source() -> str:
-    return r'''
+    return r"""
 from __future__ import annotations
 
 import importlib
@@ -454,7 +490,7 @@ locals_dict = {}
 exec(compile(source, "<elephant-tool-code>", "exec"), namespace, locals_dict)
 if "result" in locals_dict:
     print("__ELEPHANT_RESULT_JSON__=" + json.dumps(locals_dict["result"], ensure_ascii=False, default=repr))
-'''.lstrip()
+""".lstrip()
 
 
 def _read_limited_text(path: Path, *, limit: int) -> str:

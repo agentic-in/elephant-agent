@@ -81,7 +81,11 @@ class ProfileLoader:
         display_name: str | None = None,
         mode: str | None = None,
     ) -> LoadedProfile:
-        del profile_id, display_name, mode  # legacy kwargs — identity no longer read here.
+        del (
+            profile_id,
+            display_name,
+            mode,
+        )  # legacy kwargs — identity no longer read here.
         manifest_path = self.profile_dir / EXTENSIONS_MANIFEST_FILENAME
         manifest = self._load_manifest(manifest_path)
         state = PersonalModelRuntimeState(
@@ -142,7 +146,9 @@ def write_extensions_manifest(profile_dir: Path, manifest: Mapping[str, Any]) ->
 write_profile_manifest = write_extensions_manifest
 
 
-def companion_manifest_payload(companion: CompanionSettings | None) -> dict[str, Any] | None:
+def companion_manifest_payload(
+    companion: CompanionSettings | None,
+) -> dict[str, Any] | None:
     """Serialize companion settings for transport or diagnostic views.
 
     Used only by diagnostic surfaces; never persisted back to disk as
@@ -374,9 +380,7 @@ def _resolve_state_row(
     if explicit_personal_model_id:
         canonical = canonical_personal_model_id(explicit_personal_model_id)
         matching = tuple(
-            state
-            for state in repository.list_states(status="active")
-            if state.personal_model_id == canonical
+            state for state in repository.list_states(status="active") if state.personal_model_id == canonical
         )
         if len(matching) == 1:
             return matching[0]

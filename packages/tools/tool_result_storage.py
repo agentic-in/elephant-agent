@@ -28,9 +28,7 @@ class ToolResultBudgetConfig:
     result_size_chars: int | float = DEFAULT_RESULT_SIZE_CHARS
     turn_budget_chars: int = DEFAULT_TURN_BUDGET_CHARS
     preview_size_chars: int = DEFAULT_PREVIEW_SIZE_CHARS
-    pinned_thresholds: Mapping[str, int | float] = field(
-        default_factory=lambda: dict(DEFAULT_PINNED_THRESHOLDS)
-    )
+    pinned_thresholds: Mapping[str, int | float] = field(default_factory=lambda: dict(DEFAULT_PINNED_THRESHOLDS))
 
 
 def maybe_persist_tool_result(

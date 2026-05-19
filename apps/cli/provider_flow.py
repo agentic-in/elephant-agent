@@ -51,10 +51,7 @@ def provider_setup_defaults(runtime: CliRuntime, provider_id: str) -> ProviderSe
     summary = dict(runtime.provider_summary())
     same_provider = str(summary.get("provider_id", "")).strip().lower() == normalized_provider_id
     base_url = str(
-        (summary.get("base_url") if same_provider else None)
-        or discovered.base_url
-        or guide.suggested_base_url
-        or ""
+        (summary.get("base_url") if same_provider else None) or discovered.base_url or guide.suggested_base_url or ""
     ).strip()
     model_id = str(
         (summary.get("model_id") if same_provider else None)
@@ -68,10 +65,7 @@ def provider_setup_defaults(runtime: CliRuntime, provider_id: str) -> ProviderSe
             context_window_tokens = int(summary["context_window_tokens"])
         except (TypeError, ValueError):
             context_window_tokens = None
-    context_window_mode = str(
-        (summary.get("context_window_mode") if same_provider else None)
-        or "auto"
-    )
+    context_window_mode = str((summary.get("context_window_mode") if same_provider else None) or "auto")
     reasoning_effort = (
         str(summary.get("reasoning_effort")).strip()
         if same_provider and summary.get("reasoning_effort") is not None
@@ -101,7 +95,9 @@ def _manual_model_default(provider_id: str, model_id: str | None) -> str | None:
 def _should_retry_provider_key_on_model_discovery_failure(provider_id: str, auth_type: str) -> bool:
     normalized_provider = str(provider_id or "").strip().lower()
     normalized_auth_type = str(auth_type or "").strip().lower()
-    return normalized_auth_type == "api_key" and normalized_provider not in _MODEL_DISCOVERY_KEY_RETRY_EXCLUDED_PROVIDERS
+    return (
+        normalized_auth_type == "api_key" and normalized_provider not in _MODEL_DISCOVERY_KEY_RETRY_EXCLUDED_PROVIDERS
+    )
 
 
 def _choose_model(
@@ -126,7 +122,11 @@ def _choose_model(
     if not models and _should_retry_provider_key_on_model_discovery_failure(state.provider_id, auth_type):
         refreshed_key = _wizard_text_prompt(
             _pf_text(language, "Refresh The Provider Key", "重新输入模型服务密钥"),
-            _pf_text(language, "Elephant Agent could not read the provider model catalog. Re-enter the provider key so it can retry live model discovery.", "Elephant Agent 读取不到模型列表。请重新输入密钥，让它重试实时模型发现。"),
+            _pf_text(
+                language,
+                "Elephant Agent could not read the provider model catalog. Re-enter the provider key so it can retry live model discovery.",
+                "Elephant Agent 读取不到模型列表。请重新输入密钥，让它重试实时模型发现。",
+            ),
             allow_back=allow_back,
             password=True,
         )
@@ -156,17 +156,23 @@ def _choose_model(
             WizardChoice(
                 value=MANUAL_MODEL_SENTINEL,
                 label=_pf_text(language, "Manual model id", "手动输入模型 ID"),
-                detail=_pf_text(language, "Type a model id that is not advertised by the provider catalog.", "输入模型列表里没有展示的模型 ID。"),
+                detail=_pf_text(
+                    language,
+                    "Type a model id that is not advertised by the provider catalog.",
+                    "输入模型列表里没有展示的模型 ID。",
+                ),
             ),
         )
         default_value = (
-            state.model_id
-            if any(model.model_id == state.model_id for model in models)
-            else models[0].model_id
+            state.model_id if any(model.model_id == state.model_id for model in models) else models[0].model_id
         )
         answer = _wizard_choice_prompt(
             _pf_text(language, "Choose The Model", "选择模型"),
-            _pf_text(language, "Pick the model Elephant Agent should use from this provider endpoint.", "从这个服务端点里选择 Elephant Agent 要使用的模型。"),
+            _pf_text(
+                language,
+                "Pick the model Elephant Agent should use from this provider endpoint.",
+                "从这个服务端点里选择 Elephant Agent 要使用的模型。",
+            ),
             model_choices,
             default=default_value,
             allow_back=allow_back,
@@ -259,7 +265,11 @@ def run_provider_selection_wizard(
         if step == "provider_id":
             answer = _wizard_choice_prompt(
                 _pf_text(language, "Choose A Provider", "选择模型服务"),
-                _pf_text(language, "Where should Elephant Agent think from next?", "Elephant Agent 接下来应该从哪里思考？"),
+                _pf_text(
+                    language,
+                    "Where should Elephant Agent think from next?",
+                    "Elephant Agent 接下来应该从哪里思考？",
+                ),
                 provider_choices(runtime),
                 default=state.provider_id,
                 allow_back=allow_back,
@@ -285,13 +295,13 @@ def run_provider_selection_wizard(
         state_base_url = str(state.base_url or "").strip()
         supports_custom_base_url = "base_url" in guide.required_config_keys
         known_base_url = summary_base_url if same_provider and summary_base_url else discovered_base_url
-        same_endpoint = (
-            not supports_custom_base_url
-            or (bool(state_base_url) and bool(known_base_url) and state_base_url == known_base_url)
+        same_endpoint = not supports_custom_base_url or (
+            bool(state_base_url) and bool(known_base_url) and state_base_url == known_base_url
         )
-        discovered_secret_reusable = discovered.status in {"authenticated", "configured"} and (
-            not supports_custom_base_url or same_endpoint
-        )
+        discovered_secret_reusable = discovered.status in {
+            "authenticated",
+            "configured",
+        } and (not supports_custom_base_url or same_endpoint)
         has_resolved_secret = (
             same_provider and same_endpoint and summary.get("secret_status") in {"stored", "not-required"}
         ) or discovered_secret_reusable
@@ -302,7 +312,11 @@ def run_provider_selection_wizard(
                 continue
             answer = _wizard_text_prompt(
                 _pf_text(language, "Set The Endpoint", "设置接口地址"),
-                _pf_text(language, "What endpoint should Elephant Agent call?", "Elephant Agent 应该调用哪个接口？"),
+                _pf_text(
+                    language,
+                    "What endpoint should Elephant Agent call?",
+                    "Elephant Agent 应该调用哪个接口？",
+                ),
                 default=state.base_url,
                 allow_back=allow_back and step_index > 0,
             )
@@ -317,10 +331,11 @@ def run_provider_selection_wizard(
             continue
 
         if step == "api_key":
-            if (
-                not guide.required_secret_keys
-                or guide.auth_type in {"oauth_external", "oauth_device_code", "external_process"}
-            ):
+            if not guide.required_secret_keys or guide.auth_type in {
+                "oauth_external",
+                "oauth_device_code",
+                "external_process",
+            }:
                 state.api_key = None
                 step_index += 1
                 continue
@@ -410,7 +425,11 @@ def run_provider_selection_wizard(
                     WizardChoice(
                         value="",
                         label=_pf_text(language, "Provider default", "服务默认"),
-                        detail=_pf_text(language, "Let the provider choose its default reasoning budget.", "让模型服务使用默认推理预算。"),
+                        detail=_pf_text(
+                            language,
+                            "Let the provider choose its default reasoning budget.",
+                            "让模型服务使用默认推理预算。",
+                        ),
                     ),
                     *tuple(
                         WizardChoice(
@@ -445,7 +464,11 @@ def run_provider_selection_wizard(
             auto_value = detected or state.context_window_tokens or DEFAULT_CONTEXT_WINDOW_TOKENS
             answer = _wizard_choice_prompt(
                 _pf_text(language, "Choose The Context Window", "选择上下文窗口"),
-                _pf_text(language, "How should Elephant Agent size the context budget?", "Elephant Agent 应该怎样设置上下文预算？"),
+                _pf_text(
+                    language,
+                    "How should Elephant Agent size the context budget?",
+                    "Elephant Agent 应该怎样设置上下文预算？",
+                ),
                 (
                     WizardChoice(
                         value="auto",
@@ -486,7 +509,11 @@ def run_provider_selection_wizard(
             default_tokens = str(state.context_window_tokens or detected or DEFAULT_CONTEXT_WINDOW_TOKENS)
             answer = _wizard_text_prompt(
                 _pf_text(language, "Enter The Context Window", "输入上下文窗口"),
-                _pf_text(language, "How many tokens of context should Elephant Agent budget for this model?", "Elephant Agent 应该为这个模型预留多少上下文 token？"),
+                _pf_text(
+                    language,
+                    "How many tokens of context should Elephant Agent budget for this model?",
+                    "Elephant Agent 应该为这个模型预留多少上下文 token？",
+                ),
                 default=default_tokens,
                 allow_back=allow_back and step_index > 0,
             )

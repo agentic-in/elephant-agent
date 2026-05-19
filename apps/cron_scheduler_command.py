@@ -15,7 +15,6 @@ from apps.gateway.gateway_main_runtime import (
     _gateway_runtime_environ,
     _run_logs,
     _run_status,
-    _run_stop,
 )
 from apps.runtime_layout import (
     default_cli_state_dir,
@@ -47,7 +46,10 @@ def _build_parser(*, defaults: dict[str, Path]) -> ArgumentParser:
     common.add_argument("--cli-state-dir", type=Path, default=defaults["cli_state_dir"])
     common.add_argument("--elephant-id", default="elephant:gateway")
 
-    parser = ArgumentParser(prog="elephant cron", description="Manage the Elephant Agent cron scheduler daemon.")
+    parser = ArgumentParser(
+        prog="elephant cron",
+        description="Manage the Elephant Agent cron scheduler daemon.",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     start = subparsers.add_parser("start", parents=[common], help="Start the cron scheduler.")
@@ -82,19 +84,43 @@ def _build_parser(*, defaults: dict[str, Path]) -> ArgumentParser:
 
 def _add_target_options(parser: ArgumentParser) -> None:
     parser.set_defaults(runtime_target="scheduler")
-    parser.add_argument("--target", dest="runtime_target", choices=("configured", "scheduler"), default="scheduler", help=SUPPRESS)
+    parser.add_argument(
+        "--target",
+        dest="runtime_target",
+        choices=("configured", "scheduler"),
+        default="scheduler",
+        help=SUPPRESS,
+    )
 
 
 def _add_start_options(parser: ArgumentParser) -> None:
     _add_target_options(parser)
-    parser.add_argument("--detach", action="store_true", help="Start in a background process and return immediately.")
-    parser.add_argument("--interval-seconds", type=float, default=60.0, help="Seconds between scheduler ticks.")
+    parser.add_argument(
+        "--detach",
+        action="store_true",
+        help="Start in a background process and return immediately.",
+    )
+    parser.add_argument(
+        "--interval-seconds",
+        type=float,
+        default=60.0,
+        help="Seconds between scheduler ticks.",
+    )
 
 
 def _add_stop_options(parser: ArgumentParser) -> None:
     _add_target_options(parser)
-    parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait before failing or forcing.")
-    parser.add_argument("--force", action="store_true", help="Send SIGKILL when the process does not exit.")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="Seconds to wait before failing or forcing.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Send SIGKILL when the process does not exit.",
+    )
 
 
 def _add_logs_options(parser: ArgumentParser) -> None:
@@ -198,9 +224,17 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     def start_command(
         state_dir: Path | None = typer.Option(None, "--state-dir", hidden=True),
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
-        elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
+        elephant_id: str = typer.Option(
+            "elephant:gateway",
+            "--elephant-id",
+            help="Scoped runtime elephant id for scheduler operations.",
+        ),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
-        detach: bool = typer.Option(False, "--detach", help="Start in a background process and return immediately."),
+        detach: bool = typer.Option(
+            False,
+            "--detach",
+            help="Start in a background process and return immediately.",
+        ),
         interval_seconds: float = typer.Option(60.0, "--interval-seconds", help="Seconds between scheduler ticks."),
     ) -> None:
         args = _common_args(state_dir, cli_state_dir, elephant_id)
@@ -217,7 +251,11 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     def run_command(
         state_dir: Path | None = typer.Option(None, "--state-dir", hidden=True),
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
-        elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
+        elephant_id: str = typer.Option(
+            "elephant:gateway",
+            "--elephant-id",
+            help="Scoped runtime elephant id for scheduler operations.",
+        ),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
         interval_seconds: float = typer.Option(60.0, "--interval-seconds", help="Seconds between scheduler ticks."),
         once: bool = typer.Option(False, "--once", help="Run one scheduler tick and exit."),
@@ -234,7 +272,11 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     def status_command(
         state_dir: Path | None = typer.Option(None, "--state-dir", hidden=True),
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
-        elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
+        elephant_id: str = typer.Option(
+            "elephant:gateway",
+            "--elephant-id",
+            help="Scoped runtime elephant id for scheduler operations.",
+        ),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
     ) -> None:
         args = _common_args(state_dir, cli_state_dir, elephant_id)
@@ -246,7 +288,11 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     def stop_command(
         state_dir: Path | None = typer.Option(None, "--state-dir", hidden=True),
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
-        elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
+        elephant_id: str = typer.Option(
+            "elephant:gateway",
+            "--elephant-id",
+            help="Scoped runtime elephant id for scheduler operations.",
+        ),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
         timeout: float = typer.Option(10.0, "--timeout", help="Seconds to wait before failing or forcing."),
         force: bool = typer.Option(False, "--force", help="Send SIGKILL when the process does not exit."),
@@ -257,6 +303,7 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         args.force = force
         if daemon_is_running(args.state_dir):
             from apps.daemon_command import stop_daemon
+
             raise typer.Exit(stop_daemon(args.state_dir, timeout=timeout, force=force))
         print("Elephant daemon is not running. Nothing to stop.")
         raise typer.Exit(0)
@@ -265,9 +312,17 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     def restart_command(
         state_dir: Path | None = typer.Option(None, "--state-dir", hidden=True),
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
-        elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
+        elephant_id: str = typer.Option(
+            "elephant:gateway",
+            "--elephant-id",
+            help="Scoped runtime elephant id for scheduler operations.",
+        ),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
-        detach: bool = typer.Option(True, "--detach/--foreground", help="Restart in the background by default, or keep it in the foreground."),
+        detach: bool = typer.Option(
+            True,
+            "--detach/--foreground",
+            help="Restart in the background by default, or keep it in the foreground.",
+        ),
         interval_seconds: float = typer.Option(60.0, "--interval-seconds", help="Seconds between scheduler ticks."),
         timeout: float = typer.Option(10.0, "--timeout", hidden=True),
         force: bool = typer.Option(False, "--force", hidden=True),
@@ -280,12 +335,15 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         args.force = force
         if daemon_is_running(args.state_dir):
             from apps.daemon_command import restart_daemon
-            raise typer.Exit(restart_daemon(
-                args.state_dir,
-                args.cli_state_dir,
-                timeout=timeout,
-                force=force,
-            ))
+
+            raise typer.Exit(
+                restart_daemon(
+                    args.state_dir,
+                    args.cli_state_dir,
+                    timeout=timeout,
+                    force=force,
+                )
+            )
         # No daemon running — start a fresh daemon
         raise typer.Exit(_cron_start_via_daemon(args))
 
@@ -293,7 +351,11 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     def logs_command(
         state_dir: Path | None = typer.Option(None, "--state-dir", hidden=True),
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
-        elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
+        elephant_id: str = typer.Option(
+            "elephant:gateway",
+            "--elephant-id",
+            help="Scoped runtime elephant id for scheduler operations.",
+        ),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
         tail: int = typer.Option(80, "--tail", help="Show the last N log lines."),
         follow: bool = typer.Option(False, "--follow", help="Keep streaming appended log output."),

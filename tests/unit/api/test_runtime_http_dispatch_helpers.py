@@ -19,7 +19,10 @@ class CronJobDispatchHelpersTest(unittest.TestCase):
             status="scheduled",
             profile_id=None,
             elephant_id=None,
-            payload={"trigger": "dream", "summary": "nightly Personal Model consolidation"},
+            payload={
+                "trigger": "dream",
+                "summary": "nightly Personal Model consolidation",
+            },
             created_at=now,
             updated_at=now,
             next_run_at=now,

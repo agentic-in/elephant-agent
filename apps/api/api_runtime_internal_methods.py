@@ -20,7 +20,7 @@ from .api_runtime_console import (
     _tools,
 )
 from .api_runtime_console_usage import normalize_token_usage_row
-from .api_runtime_support import _jsonable, _now
+from .api_runtime_support import _jsonable
 
 
 _INTERNAL_DASHBOARD_QUERY_CONTRACT = (
@@ -43,7 +43,10 @@ def _sort_items(items: tuple[Any, ...], *, id_field: str, time_field: str | None
     return tuple(
         sorted(
             items,
-            key=lambda item: (str(getattr(item, time_field) or ""), str(getattr(item, id_field))),
+            key=lambda item: (
+                str(getattr(item, time_field) or ""),
+                str(getattr(item, id_field)),
+            ),
             reverse=True,
         )
     )
@@ -163,11 +166,7 @@ def _usage_by_elephant(events: list[dict[str, Any]]) -> tuple[dict[str, Any], ..
     grouped: dict[str, dict[str, Any]] = {}
     for row in events:
         elephant_id = str(
-            row.get("eggId")
-            or row.get("elephant_id")
-            or row.get("profile_id")
-            or row.get("session_id")
-            or "unknown"
+            row.get("eggId") or row.get("elephant_id") or row.get("profile_id") or row.get("session_id") or "unknown"
         )
         elephant_name = str(row.get("eggName") or row.get("elephant_name") or elephant_id)
         bucket = grouped.setdefault(
@@ -193,7 +192,10 @@ def _usage_by_elephant(events: list[dict[str, Any]]) -> tuple[dict[str, Any], ..
     return tuple(
         sorted(
             grouped.values(),
-            key=lambda row: (_usage_int(row.get("totalTokens")), str(row.get("lastUsedAt") or "")),
+            key=lambda row: (
+                _usage_int(row.get("totalTokens")),
+                str(row.get("lastUsedAt") or ""),
+            ),
             reverse=True,
         )[:50]
     )
@@ -323,7 +325,10 @@ def _learning_snapshot(
     list_jobs = getattr(self.repository, "list_learning_jobs", None)
     jobs = tuple(list_jobs(limit=500)) if callable(list_jobs) else ()
     try:
-        from apps.learning_worker_runtime import load_learning_worker_record, learning_worker_is_running
+        from apps.learning_worker_runtime import (
+            load_learning_worker_record,
+            learning_worker_is_running,
+        )
 
         worker = dict(load_learning_worker_record(state_dir) or {})
         worker.setdefault("running", learning_worker_is_running(state_dir))
@@ -369,7 +374,9 @@ def _learning_snapshot(
     }
 
 
-def _operation_snapshot(self, *, active_provider: Mapping[str, Any], provider_doctor: Mapping[str, Any]) -> dict[str, Any]:
+def _operation_snapshot(
+    self, *, active_provider: Mapping[str, Any], provider_doctor: Mapping[str, Any]
+) -> dict[str, Any]:
     database_path = self.repository.database_path
     state_dir = database_path.parent
     settings = _settings(state_dir, database_path)
@@ -400,10 +407,26 @@ def _operation_snapshot(self, *, active_provider: Mapping[str, Any], provider_do
 
 
 _PERSONAL_MODEL_LENSES = (
-    ("identity", "Identity", "Who the person is — durable attributes: character, values, style, and body."),
-    ("world", "World", "What is around the person — environment: people, projects, tools, and places."),
-    ("pulse", "Pulse", "How the person is right now — current state: chapter, focus, mood, and blockers."),
-    ("journey", "Journey", "What the person has been through — accumulated experience: lessons, patterns, and decisions."),
+    (
+        "identity",
+        "Identity",
+        "Who the person is — durable attributes: character, values, style, and body.",
+    ),
+    (
+        "world",
+        "World",
+        "What is around the person — environment: people, projects, tools, and places.",
+    ),
+    (
+        "pulse",
+        "Pulse",
+        "How the person is right now — current state: chapter, focus, mood, and blockers.",
+    ),
+    (
+        "journey",
+        "Journey",
+        "What the person has been through — accumulated experience: lessons, patterns, and decisions.",
+    ),
 )
 
 
@@ -446,16 +469,18 @@ def _personal_model_lens_summaries(
     for key, label, description in _PERSONAL_MODEL_LENSES:
         lens_facts = tuple(facts_by_lens[key])
         latest = _latest_time(lens_facts)
-        rows.append({
-            "component_key": key,
-            "lens": key,
-            "label": label,
-            "description": description,
-            "claim_count": len(lens_facts),
-            "active_claim_count": len(lens_facts),
-            "latest_observation_at": latest,
-            "status": "active" if lens_facts else "empty",
-        })
+        rows.append(
+            {
+                "component_key": key,
+                "lens": key,
+                "label": label,
+                "description": description,
+                "claim_count": len(lens_facts),
+                "active_claim_count": len(lens_facts),
+                "latest_observation_at": latest,
+                "status": "active" if lens_facts else "empty",
+            }
+        )
     return tuple(rows)
 
 
@@ -520,9 +545,17 @@ def _step_event_content(step: Any, source_payloads: Mapping[str, Mapping[str, An
     metadata = _step_metadata(step)
     event_type = _step_event_type(step)
     if event_type == "user_query":
-        return _metadata_text(metadata, "effective_user_query") or _metadata_text(metadata, "user_query") or _payload_ref_prompt(step, source_payloads)
+        return (
+            _metadata_text(metadata, "effective_user_query")
+            or _metadata_text(metadata, "user_query")
+            or _payload_ref_prompt(step, source_payloads)
+        )
     if event_type == "source_input":
-        return _metadata_text(metadata, "user_query") or _metadata_text(metadata, "raw_user_query") or _payload_ref_prompt(step, source_payloads)
+        return (
+            _metadata_text(metadata, "user_query")
+            or _metadata_text(metadata, "raw_user_query")
+            or _payload_ref_prompt(step, source_payloads)
+        )
     if event_type == "system_prompt":
         return _metadata_text(metadata, "system_prompt") or _metadata_text(metadata, "model_prompt")
     if event_type == "tool_call":
@@ -579,7 +612,10 @@ def _runtime_traces(
         episode_loops = tuple(
             sorted(
                 loops_by_episode.get(episode.episode_id, ()),
-                key=lambda item: (str(getattr(item, "started_at", "") or ""), str(getattr(item, "loop_id", ""))),
+                key=lambda item: (
+                    str(getattr(item, "started_at", "") or ""),
+                    str(getattr(item, "loop_id", "")),
+                ),
             )
         )
         loop_rows = []
@@ -588,7 +624,10 @@ def _runtime_traces(
             loop_steps = tuple(
                 sorted(
                     steps_by_loop.get(loop.loop_id, ()),
-                    key=lambda item: (int(getattr(item, "sequence", 0) or 0), str(getattr(item, "created_at", "") or "")),
+                    key=lambda item: (
+                        int(getattr(item, "sequence", 0) or 0),
+                        str(getattr(item, "created_at", "") or ""),
+                    ),
                 )
             )
             step_rows = tuple(_dashboard_step_row(step, source_payloads) for step in loop_steps)
@@ -607,7 +646,16 @@ def _runtime_traces(
 
 
 from .api_runtime_internal_sections import inspect_internal_dashboard
-from .api_runtime_internal_triggers import delete_diary_entry, trigger_diary_write, trigger_reflect_job
+from .api_runtime_internal_triggers import (
+    delete_diary_entry,
+    trigger_diary_write,
+    trigger_reflect_job,
+)
 
 
-__all__ = ["delete_diary_entry", "inspect_internal_dashboard", "trigger_diary_write", "trigger_reflect_job"]
+__all__ = [
+    "delete_diary_entry",
+    "inspect_internal_dashboard",
+    "trigger_diary_write",
+    "trigger_reflect_job",
+]

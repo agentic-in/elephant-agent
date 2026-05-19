@@ -10,7 +10,9 @@ from apps.cli.shell_opening import (
 
 
 class ShellOpeningTest(unittest.TestCase):
-    def test_compose_shell_opener_requests_name_when_user_profile_is_blank(self) -> None:
+    def test_compose_shell_opener_requests_name_when_user_profile_is_blank(
+        self,
+    ) -> None:
         opener = compose_shell_opener(
             ShellOpeningContext(
                 opened="Shaped new",
@@ -30,7 +32,9 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertIn("What should I call you", opener)
         self.assertNotIn("one durable thing I should keep in mind from the start", opener)
 
-    def test_compose_shell_opener_uses_wake_summary_when_user_profile_exists(self) -> None:
+    def test_compose_shell_opener_uses_wake_summary_when_user_profile_exists(
+        self,
+    ) -> None:
         opener = compose_shell_opener(
             ShellOpeningContext(
                 opened="Opened elephant atlas",
@@ -45,10 +49,18 @@ class ShellOpeningTest(unittest.TestCase):
         )
 
         self.assertIn("I'm here, Bit. I still have the useful shape of our current work.", opener)
-        self.assertIn("I'll keep the next useful step visible without turning this into a status report.", opener)
-        self.assertIn("I still have Ship the release in view; do you want to keep going there?", opener)
+        self.assertIn(
+            "I'll keep the next useful step visible without turning this into a status report.",
+            opener,
+        )
+        self.assertIn(
+            "I still have Ship the release in view; do you want to keep going there?",
+            opener,
+        )
 
-    def test_compose_shell_opener_invites_current_work_when_state_focus_is_missing(self) -> None:
+    def test_compose_shell_opener_invites_current_work_when_state_focus_is_missing(
+        self,
+    ) -> None:
         opener = compose_shell_opener(
             ShellOpeningContext(
                 opened="Opened elephant atlas",
@@ -112,7 +124,9 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertNotIn("not a greeter or product surface", prompt)
         self.assertNotIn("optionally include one gentle question", prompt)
 
-    def test_compose_shell_opening_instruction_surfaces_known_name_and_current_work(self) -> None:
+    def test_compose_shell_opening_instruction_surfaces_known_name_and_current_work(
+        self,
+    ) -> None:
         prompt = compose_shell_opening_instruction(
             ShellOpeningContext(
                 opened="Opened elephant atlas",
@@ -144,7 +158,9 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertNotIn("work item ids", prompt)
         self.assertNotIn("do not mention prompts", prompt.lower())
 
-    def test_compose_shell_opening_instruction_after_init_requests_warm_live_opener(self) -> None:
+    def test_compose_shell_opening_instruction_after_init_requests_warm_live_opener(
+        self,
+    ) -> None:
         prompt = compose_shell_opening_instruction(
             ShellOpeningContext(
                 opened="Born new",
@@ -189,7 +205,9 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertNotIn("personal hobbies: reading, music", prompt)
         self.assertNotIn("Output: one natural message", prompt)
 
-    def test_compose_shell_opening_instruction_sanitizes_internal_wake_refs(self) -> None:
+    def test_compose_shell_opening_instruction_sanitizes_internal_wake_refs(
+        self,
+    ) -> None:
         prompt = compose_shell_opening_instruction(
             ShellOpeningContext(
                 opened="Opened elephant atlas",
@@ -201,7 +219,7 @@ class ShellOpeningTest(unittest.TestCase):
                 wake_summary=(
                     "The episode resumed from a prior collaboration and should continue the active elephant. "
                     "Replay evidence event:f526dcf07c2048f0af65226e60807364:structured-turn:memory retains a successful action chain for this work. "
-                    "The internal projection keeps \"i am xunzhuo\" active as the next step."
+                    'The internal projection keeps "i am xunzhuo" active as the next step.'
                 ),
                 has_state_focus=True,
             )
@@ -227,11 +245,16 @@ class ShellOpeningTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("I still have The active elephant is ready to continue in view; do you want to keep going there?", opener)
+        self.assertIn(
+            "I still have The active elephant is ready to continue in view; do you want to keep going there?",
+            opener,
+        )
         self.assertNotIn("work:90920371a588", opener)
         self.assertNotIn("event:f526", opener)
 
-    def test_compose_shell_opening_instruction_omits_deferred_wake_summary(self) -> None:
+    def test_compose_shell_opening_instruction_omits_deferred_wake_summary(
+        self,
+    ) -> None:
         prompt = compose_shell_opening_instruction(
             ShellOpeningContext(
                 opened="Opened elephant atlas",
@@ -255,7 +278,9 @@ class ShellOpeningTest(unittest.TestCase):
         self.assertNotIn("something is already open —", prompt)
         self.assertNotIn("No actionable current work was available", prompt)
 
-    def test_compose_shell_opening_instruction_includes_init_first_language(self) -> None:
+    def test_compose_shell_opening_instruction_includes_init_first_language(
+        self,
+    ) -> None:
         prompt = compose_shell_opening_instruction(
             ShellOpeningContext(
                 opened="Born new",

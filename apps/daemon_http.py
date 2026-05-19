@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -133,6 +132,7 @@ def _resolve_dashboard_static_dir(daemon: Any) -> Path | None:
     # Installed package: <install_root>/dashboard/dist/
     try:
         from packages.runtime_layout import infer_install_root_from_state_dir
+
         install_root = infer_install_root_from_state_dir(daemon.cli_state_dir)
         installed_dist = install_root / "dashboard" / "dist"
         if (installed_dist / "index.html").is_file():

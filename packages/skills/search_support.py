@@ -99,6 +99,7 @@ class SkillSearchSource(Protocol):
     def fetch(self, reference: str) -> RawSkillBundle | None:
         """Fetch a remote skill bundle."""
 
+
 def _configured_github_taps() -> tuple[Mapping[str, str], ...]:
     configured = os.environ.get("ELEPHANT_SKILL_SEARCH_GITHUB_TAPS", "").strip()
     if not configured:
@@ -120,7 +121,9 @@ def _configured_github_taps() -> tuple[Mapping[str, str], ...]:
     return tuple(taps) or _DEFAULT_GITHUB_TAPS
 
 
-def _dedupe_search_entries(entries: Sequence[SkillSearchEntry]) -> list[SkillSearchEntry]:
+def _dedupe_search_entries(
+    entries: Sequence[SkillSearchEntry],
+) -> list[SkillSearchEntry]:
     resolved: dict[str, SkillSearchEntry] = {}
     for entry in entries:
         existing = resolved.get(entry.dedupe_key)

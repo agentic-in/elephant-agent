@@ -2,48 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import os
 import re
-import threading
-import time
 from typing import TYPE_CHECKING
 
-from packages.kernel.runtime import KernelOutcome
-from packages.tools import ToolLifecycleEvent
-
-from .shell_stack import (
-    Application,
-    Condition,
-    ConditionalContainer,
-    FormattedText,
-    FormattedTextControl,
-    Group,
-    Layout,
-    Live,
-    Panel,
-    RICH_AVAILABLE,
-    Text,
-    Window,
-)
-from .shell_ui import (
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_DARK,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    LIVE_DIFF_ADD_FG,
-    LIVE_DIFF_CONTEXT_FG,
-    LIVE_DIFF_FILE_FG,
-    LIVE_DIFF_HUNK_FG,
-    LIVE_DIFF_REMOVE_FG,
-    QUEUE_PREVIEW_INSET,
-    compact_line,
-    strip_markdown_bold,
-)
 
 if TYPE_CHECKING:
-    from .shell import ProductizedShell
+    pass
 
 
 _STREAM_TOOL_BLOCK_PATTERNS = (
@@ -68,7 +32,6 @@ _STREAM_OPEN_TOOL_TAG_PATTERN = re.compile(
     r"<(?:[\w.-]+:)?(?:tool_call|invoke|parameter)\b[^>]*>",
     re.IGNORECASE,
 )
-
 
 
 from .shell_progress_support import (

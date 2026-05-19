@@ -102,17 +102,21 @@ class BuiltinWebSearchIntegrationTest(unittest.TestCase):
     def test_web_search_keeps_long_result_lists_readable(self) -> None:
         runtime = self._make_runtime()
         snippet = "Long paper summary sentence. " * 10
-        html = "<html><body>" + "".join(
-            f'''
+        html = (
+            "<html><body>"
+            + "".join(
+                f"""
             <div class="result">
               <h2 class="result__title">
                 <a class="result__a" href="https://example.com/paper-{index}">Paper {index}</a>
               </h2>
               <div class="result__snippet">{snippet}</div>
             </div>
-            '''
-            for index in range(1, 7)
-        ) + "</body></html>"
+            """
+                for index in range(1, 7)
+            )
+            + "</body></html>"
+        )
 
         with mock.patch(
             "packages.tools.handlers_network.urlopen",
@@ -129,7 +133,9 @@ class BuiltinWebSearchIntegrationTest(unittest.TestCase):
         self.assertIn("6. Paper 6", result.summary)
         self.assertGreater(len(result.summary), 1600)
 
-    def test_web_search_falls_back_to_instant_answer_when_html_results_are_empty(self) -> None:
+    def test_web_search_falls_back_to_instant_answer_when_html_results_are_empty(
+        self,
+    ) -> None:
         runtime = self._make_runtime()
         html = "<html><body><p>no direct results</p></body></html>"
         instant_answer = json.dumps(

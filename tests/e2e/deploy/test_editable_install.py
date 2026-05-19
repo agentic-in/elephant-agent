@@ -45,7 +45,12 @@ class EditableInstallSmokeTest(unittest.TestCase):
         )
 
     def test_editable_install_exposes_elephant_command(self) -> None:
-        subprocess.run([sys.executable, "-m", "venv", str(self.venv_dir)], cwd=ROOT, check=True, text=True)
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(self.venv_dir)],
+            cwd=ROOT,
+            check=True,
+            text=True,
+        )
         python_bin = self._python_bin()
         subprocess.run(
             [str(python_bin), "-m", "pip", "install", "-e", "."],

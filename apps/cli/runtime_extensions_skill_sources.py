@@ -17,7 +17,9 @@ from packages.skills import (
 )
 
 
-def source_descriptor_for_hub_entry(entry: SkillHubEntry) -> PublicSkillSourceDescriptor | None:
+def source_descriptor_for_hub_entry(
+    entry: SkillHubEntry,
+) -> PublicSkillSourceDescriptor | None:
     existing = public_skill_source_descriptor_from_metadata(entry.metadata)
     source_reference = public_hub_source_reference(entry)
     install_reference = public_hub_install_reference(entry)
@@ -97,7 +99,11 @@ def local_skill_trust_level(source_id: str, metadata: Mapping[str, Any]) -> str:
         return configured
     if source_id == "builtin":
         return "builtin"
-    if source_id in {"path", "elephant-installed", "elephant-authored"} or source_id.startswith("custom-"):
+    if source_id in {
+        "path",
+        "elephant-installed",
+        "elephant-authored",
+    } or source_id.startswith("custom-"):
         return "trusted"
     return "community"
 

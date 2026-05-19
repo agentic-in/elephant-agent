@@ -72,7 +72,13 @@ class GatewayRecallCapability(RecallCapability):
 
 
 class GatewayContextCapability(ContextCapability):
-    def __init__(self, profile: LoadedProfile, *, total_tokens: int = 3072, install_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        profile: LoadedProfile,
+        *,
+        total_tokens: int = 3072,
+        install_root: Path | None = None,
+    ) -> None:
         self.profile = profile
         self.install_root = install_root
         self.prompt_contract = build_prompt_contract(profile, prompt_mode="full")

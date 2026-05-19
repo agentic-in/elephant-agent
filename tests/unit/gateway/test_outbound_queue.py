@@ -16,7 +16,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import unittest
-from unittest.mock import patch
 
 from packages.gateway_core import GatewayOutboundQueue
 
@@ -73,8 +72,18 @@ class GatewayOutboundQueueTest(unittest.TestCase):
         self.assertEqual(self.queue.list_rows(), ())
 
     def test_claim_filters_by_adapter(self) -> None:
-        self.queue.enqueue(adapter_id="messaging.weixin", account_id="a", conversation_id="c1", body="w")
-        self.queue.enqueue(adapter_id="messaging.feishu", account_id="a", conversation_id="c2", body="f")
+        self.queue.enqueue(
+            adapter_id="messaging.weixin",
+            account_id="a",
+            conversation_id="c1",
+            body="w",
+        )
+        self.queue.enqueue(
+            adapter_id="messaging.feishu",
+            account_id="a",
+            conversation_id="c2",
+            body="f",
+        )
 
         weixin = self.queue.claim(adapter_id="messaging.weixin")
         self.assertEqual(len(weixin), 1)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import os
 import re
 import threading
 import time
@@ -18,30 +16,26 @@ from .shell_stack import (
     ConditionalContainer,
     FormattedText,
     FormattedTextControl,
-    Group,
     Layout,
     Live,
-    Panel,
-    RICH_AVAILABLE,
     Text,
     Window,
 )
 from .shell_ui import (
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_DARK,
     BRAND_LIGHT,
-    BRAND_MUTED,
     LIVE_DIFF_ADD_FG,
     LIVE_DIFF_CONTEXT_FG,
     LIVE_DIFF_FILE_FG,
     LIVE_DIFF_HUNK_FG,
     LIVE_DIFF_REMOVE_FG,
     QUEUE_PREVIEW_INSET,
-    compact_line,
     strip_markdown_bold,
 )
-from .shell_clarify import build_clarify_window, route_clarify_answer, set_clarify_invalidator
+from .shell_clarify import (
+    build_clarify_window,
+    route_clarify_answer,
+    set_clarify_invalidator,
+)
 from .shell_composer import _compose_submission, run_prompt_toolkit_application
 
 if TYPE_CHECKING:
@@ -72,22 +66,15 @@ _STREAM_OPEN_TOOL_TAG_PATTERN = re.compile(
 )
 
 
-
 from .shell_progress_support import (
-    _ToolTraceDisplayParts,
     _VisibleToolEvent,
     animations_enabled,
     live_tool_feed_lines,
-    pending_tool_display_lines,
-    pending_tool_output_lines,
-    pending_tooltrace_lines,
-    summarize_progress_prompt,
     loop_context_progress_line,
     recall_progress_line,
     turn_state_focus_progress_line,
     turn_phase,
     turn_title,
-    turn_tool_progress_lines,
 )
 from .shell_progress_trace import (
     _stream_display_parts,
@@ -96,6 +83,7 @@ from .shell_progress_trace import (
     render_tool_frame,
     render_turn_frame,
 )
+
 
 def _slow_op_hint_fragments(shell: ProductizedShell) -> list[tuple[str, str]]:
     """Telegraph long-running turns so the user knows we're still working.
@@ -145,11 +133,11 @@ def render_turn_progress_fragments(
         ("class:progress-active-detail", f" {phase_detail}"),
     ]
     fragments.append(("", "\n"))
-    fragments.extend(render_live_tool_line_fragments(turn_state_focus_progress_line(kernel_stage_events=kernel_stage_events)))
+    fragments.extend(
+        render_live_tool_line_fragments(turn_state_focus_progress_line(kernel_stage_events=kernel_stage_events))
+    )
     context_line = loop_context_progress_line(kernel_stage_events=kernel_stage_events)
-    if context_line.startswith("┊ 🧩 context") and (
-        "projection" in context_line or "compressing" in context_line
-    ):
+    if context_line.startswith("┊ 🧩 context") and ("projection" in context_line or "compressing" in context_line):
         fragments.extend(
             render_live_tool_line_fragments(
                 context_line,
@@ -197,9 +185,10 @@ def render_turn_progress_fragments(
             fragments.extend(stream_fragments)
         for live_line in live_tool_feed_lines(shell, tool_event=tool_event, tool_events=tool_events):
             fragments.extend(render_live_tool_line_fragments(live_line, leading_newline=True))
-    
+
     fragments.append(("", "\n"))
     return FormattedText(fragments)
+
 
 def render_stream_response_fragments(
     shell: ProductizedShell,
@@ -211,6 +200,7 @@ def render_stream_response_fragments(
     if not fragments:
         return FormattedText([])
     return FormattedText(fragments)
+
 
 def build_turn_progress_window(
     shell: ProductizedShell,
@@ -243,6 +233,7 @@ def build_turn_progress_window(
         dont_extend_height=True,
     )
 
+
 def build_stream_response_window(shell: ProductizedShell, *, stream_holder, stream_lock):
     # Stream text is rendered inside render_turn_progress_fragments before tool lines.
     # This hidden container keeps the layout factory shape simple.
@@ -255,8 +246,10 @@ def build_stream_response_window(shell: ProductizedShell, *, stream_holder, stre
         filter=Condition(lambda: False),  # Always hidden
     )
 
+
 def set_streaming_response_active(shell: ProductizedShell, active: bool) -> None:
     shell._streaming_response_active = active
+
 
 def render_tool_output_fragments(line: str, *, leading_newline: bool = False) -> list[tuple[str, str]]:
     fragments: list[tuple[str, str]] = []
@@ -276,6 +269,7 @@ def render_tool_output_fragments(line: str, *, leading_newline: bool = False) ->
     fragments.append((style, line))
     return fragments
 
+
 def render_tool_output_text(line: str) -> Text:
     style = BRAND_LIGHT
     if line.startswith("a/") and " → b/" in line:
@@ -290,6 +284,7 @@ def render_tool_output_text(line: str) -> Text:
         style = LIVE_DIFF_CONTEXT_FG
     return Text(line, style=style)
 
+
 def render_live_tool_line_fragments(line: str, *, leading_newline: bool = False) -> list[tuple[str, str]]:
     if line.startswith("┊ "):
         from .shell_progress_trace import render_tool_trace_fragments
@@ -297,12 +292,14 @@ def render_live_tool_line_fragments(line: str, *, leading_newline: bool = False)
         return render_tool_trace_fragments(line, leading_newline=leading_newline)
     return render_tool_output_fragments(line, leading_newline=leading_newline)
 
+
 def render_live_tool_line_text(line: str) -> Text:
     if line.startswith("┊ "):
         from .shell_progress_trace import render_tool_trace_text
 
         return render_tool_trace_text(line)
     return render_tool_output_text(line)
+
 
 def render_queued_followup_fragments(shell: ProductizedShell) -> FormattedText:
     fragments: list[tuple[str, str]] = []
@@ -318,8 +315,10 @@ def render_queued_followup_fragments(shell: ProductizedShell) -> FormattedText:
         fragments.pop()
     return FormattedText(fragments)
 
+
 def queued_turn_input_supported(shell: ProductizedShell) -> bool:
     return shell._prompt_toolkit_composer_available()
+
 
 def resolve_turn_outcome(holder: dict[str, object]) -> KernelOutcome:
     error = holder.get("error")
@@ -329,6 +328,7 @@ def resolve_turn_outcome(holder: dict[str, object]) -> KernelOutcome:
     if not isinstance(outcome, KernelOutcome):
         raise RuntimeError("turn completed without a kernel outcome")
     return outcome
+
 
 def run_turn_with_queued_input(
     shell: ProductizedShell,
@@ -375,8 +375,7 @@ def run_turn_with_queued_input(
         stream_lock=stream_lock,
     )
     kernel_stage_holder, kernel_stage_lock, kernel_observer = kernel_event_tracker(
-        shell._record_kernel_event_trace,
-        lambda _event: invalidate_application()
+        shell._record_kernel_event_trace, lambda _event: invalidate_application()
     )
     previous_clarify_surface = shell.runtime.clarify_surface
     shell.runtime.set_clarify_surface(shell._interactive_clarify_surface())
@@ -500,6 +499,7 @@ def run_turn_with_queued_input(
         shell.runtime.set_clarify_surface(previous_clarify_surface)
     return resolve_turn_outcome(holder)
 
+
 def run_turn_with_progress(
     shell: ProductizedShell,
     prompt: str,
@@ -543,9 +543,7 @@ def run_turn_with_progress(
         stream_holder=stream_holder,
         stream_lock=stream_lock,
     )
-    kernel_stage_holder, kernel_stage_lock, kernel_observer = kernel_event_tracker(
-        shell._record_kernel_event_trace
-    )
+    kernel_stage_holder, kernel_stage_lock, kernel_observer = kernel_event_tracker(shell._record_kernel_event_trace)
     unsubscribe = shell.runtime.tool_runtime.subscribe(tool_observer)
     shell.runtime.set_model_stream_observer(stream_observer)
     shell.runtime.set_kernel_event_observer(kernel_observer)
@@ -640,6 +638,7 @@ def run_turn_with_progress(
         unsubscribe()
     return resolve_turn_outcome(holder)
 
+
 def run_tool_with_progress(shell: ProductizedShell, tool_id: str, arguments: dict[str, str]):
     shell.runtime.prepare_session_surface(shell.session_id)
     tool_runtime = shell.runtime.tool_runtime
@@ -726,6 +725,7 @@ def run_tool_with_progress(shell: ProductizedShell, tool_id: str, arguments: dic
         raise RuntimeError("tool call completed without a result")
     return result
 
+
 def tool_event_tracker(*extra_observers, stream_holder=None, stream_lock=None):
     holder: dict[str, object] = {
         "latest": None,
@@ -740,9 +740,7 @@ def tool_event_tracker(*extra_observers, stream_holder=None, stream_lock=None):
         with lock:
             holder["latest"] = event
             feed = [
-                item
-                for item in holder.get("feed", [])
-                if isinstance(item, _VisibleToolEvent) and item.expires_at > now
+                item for item in holder.get("feed", []) if isinstance(item, _VisibleToolEvent) and item.expires_at > now
             ]
             snapshots = {
                 key: value
@@ -774,9 +772,7 @@ def tool_event_tracker(*extra_observers, stream_holder=None, stream_lock=None):
                 anchors.append(visible_event)
             holder["stream_anchors"] = anchors[-24:]
             active_invocation_ids = {
-                item.event.invocation.invocation_id
-                for item in feed
-                if isinstance(item, _VisibleToolEvent)
+                item.event.invocation.invocation_id for item in feed if isinstance(item, _VisibleToolEvent)
             }
             holder["stream_snapshots"] = {
                 key: value for key, value in snapshots.items() if key in active_invocation_ids
@@ -789,17 +785,17 @@ def tool_event_tracker(*extra_observers, stream_holder=None, stream_lock=None):
 
     return holder, lock, observer
 
+
 def latest_tool_event(holder, lock) -> ToolLifecycleEvent | None:
     with lock:
         return holder.get("latest")
+
 
 def visible_tool_events(holder, lock) -> tuple[_VisibleToolEvent, ...]:
     now = time.monotonic()
     with lock:
         feed = [
-            item
-            for item in holder.get("feed", [])
-            if isinstance(item, _VisibleToolEvent) and item.expires_at > now
+            item for item in holder.get("feed", []) if isinstance(item, _VisibleToolEvent) and item.expires_at > now
         ]
         holder["feed"] = feed
         return tuple(feed)
@@ -822,6 +818,7 @@ def stream_anchor_events(holder, lock) -> tuple[_VisibleToolEvent, ...]:
         ]
         holder["stream_anchors"] = anchors
         return tuple(anchors)
+
 
 def kernel_event_tracker(*extra_observers):
     holder: dict[str, object] = {"stages": []}
@@ -854,6 +851,7 @@ def kernel_event_tracker(*extra_observers):
 
     return holder, lock, observer
 
+
 def visible_kernel_stage_events(holder, lock) -> tuple[dict[str, object], ...]:
     with lock:
         stages = holder.get("stages", ())
@@ -862,7 +860,10 @@ def visible_kernel_stage_events(holder, lock) -> tuple[dict[str, object], ...]:
         visible = [stage for stage in stages if isinstance(stage, dict)]
         state_focus_prefix = [
             stage
-            for stage in (holder.get("last_state_focus_previous"), holder.get("last_state_focus"))
+            for stage in (
+                holder.get("last_state_focus_previous"),
+                holder.get("last_state_focus"),
+            )
             if isinstance(stage, dict) and stage not in visible
         ]
         if state_focus_prefix:
@@ -898,6 +899,7 @@ def remember_context_compaction_frame(
     }
     shell._pending_context_compaction_frame_rendered = False
 
+
 def kernel_stages_include_compaction(stages: tuple[dict[str, object], ...]) -> bool:
     for stage_event in stages:
         payload = stage_event.get("payload")
@@ -905,12 +907,19 @@ def kernel_stages_include_compaction(stages: tuple[dict[str, object], ...]) -> b
             return True
     return False
 
+
 def _tool_event_hold_seconds(phase: str) -> float:
     if phase in {"requested", "execution.started"}:
         return 0.45
-    if phase in {"execution.completed", "execution.failed", "approval.denied", "approval.deferred"}:
+    if phase in {
+        "execution.completed",
+        "execution.failed",
+        "approval.denied",
+        "approval.deferred",
+    }:
         return 1.1
     return 0.35
+
 
 def stream_text_tracker():
     # holder["raw"]       — rolling 16KB buffer of raw model bytes

@@ -16,7 +16,13 @@ from typing import Any, Callable, Literal, Mapping, Protocol, runtime_checkable
 
 from packages.capabilities.runtime import CapabilityDescriptor, ToolCapability
 from packages.contracts.runtime import ExecutionResult
-from packages.security import ApprovalClass, PolicyDecision, SecurityPolicy, SecurityRequest, evaluate_with_telemetry
+from packages.security import (
+    ApprovalClass,
+    PolicyDecision,
+    SecurityPolicy,
+    SecurityRequest,
+    evaluate_with_telemetry,
+)
 from .local_roots import default_local_allowed_roots
 
 
@@ -150,20 +156,16 @@ def build_tool_fallback_prompt(tools: tuple[ToolDefinition, ...]) -> str:
         "Prefer claim refs for correct/forget/dispute when the target is uncertain; restore must use an exact ref from status=all search. "
         "Use updated claims naturally without narrating storage mechanics unless asked."
         if has_personal_model_update
-        else
-        "Durable user understanding changes need Personal Model update tooling, but it is unavailable. State the "
+        else "Durable user understanding changes need Personal Model update tooling, but it is unavailable. State the "
         "intended durable update clearly without pretending it was stored."
     )
-    tool_lines = "; ".join(
-        f"{tool.display_name} ({tool.tool_id}): {tool.description}"
-        for tool in tools
-    )
+    tool_lines = "; ".join(f"{tool.display_name} ({tool.tool_id}): {tool.description}" for tool in tools)
     summaries = " ".join(tool.prompt_summary() for tool in tools)
     return (
         "available-tools: governed built-ins are available through the runtime; "
         f"{tool_lines}\n"
         "tool-call-protocol: call governed built-in tools directly when the active provider supports native "
-        "tool calling. Otherwise emit <tool_call><invoke name=\"tool.id\"><parameter name=\"arg\">value"
+        'tool calling. Otherwise emit <tool_call><invoke name="tool.id"><parameter name="arg">value'
         "</parameter></invoke></tool_call>; multiple invoke blocks are allowed, structured values may be "
         "encoded as JSON inside a parameter body, and the final answer must not include raw tool markup.\n"
         "tool-usage-discipline: use tools only when they materially advance the current request. "
@@ -356,11 +358,7 @@ class CallableApprovalGateway:
         return ToolApprovalResult(
             decision="approved" if approved else "denied",
             risk_class=definition.side_effects.risk_class,
-            reason=(
-                "approved by callable approval gateway"
-                if approved
-                else "blocked by callable approval gateway"
-            ),
+            reason=("approved by callable approval gateway" if approved else "blocked by callable approval gateway"),
         )
 
 
@@ -517,9 +515,7 @@ class ToolRuntime(ToolCapability):
             candidate = tool
             if existing is not None:
                 if _tool_identity(existing) != _tool_identity(tool):
-                    raise ValueError(
-                        f"tool is already registered with different metadata: {tool.tool_id}"
-                    )
+                    raise ValueError(f"tool is already registered with different metadata: {tool.tool_id}")
                 candidate = replace(tool, enabled=existing.enabled)
             bound = self._register_tool(candidate)
             if bound:
@@ -692,7 +688,11 @@ class ToolRuntime(ToolCapability):
         if result.side_effects:
             final = result
         else:
-            final = replace(result, side_effects=definition.side_effects.categories, episode_id=session_id)
+            final = replace(
+                result,
+                side_effects=definition.side_effects.categories,
+                episode_id=session_id,
+            )
         self._executions.append(
             ToolExecutionRecord(
                 execution_id=final.execution_id,
@@ -904,7 +904,9 @@ def _default_context(session_id: str, requester: ToolRequester | None) -> ToolRu
     )
 
 
-def _resolve_approval_class(side_effects: ToolSideEffectMetadata) -> ApprovalClass | None:
+def _resolve_approval_class(
+    side_effects: ToolSideEffectMetadata,
+) -> ApprovalClass | None:
     raw = side_effects.approval_class.strip().lower()
     if raw in {"", "none"}:
         return None

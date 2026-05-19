@@ -18,13 +18,14 @@ from packages.contracts.runtime import (
     ContextBundle,
     ExecutionResult,
     ExecutionToolCall,
-    RuntimeModelChoice,
     PromptMessage,
     PersonalModelRuntimeState,
-    GenerationModelProfile,
-    SupportModelProfile,
 )
-from packages.models.provider_runtime import ProviderRuntimeResolution, attach_session_header, provider_auth_headers
+from packages.models.provider_runtime import (
+    ProviderRuntimeResolution,
+    attach_session_header,
+    provider_auth_headers,
+)
 from packages.models.runtime import (
     CredentialSource,
     ModelAdapter,
@@ -43,7 +44,13 @@ from .http import JSONHTTPTransport, UrllibJSONHTTPTransport
 ANTHROPIC_API_VERSION = "2023-06-01"
 ANTHROPIC_ENDPOINT_PATH = "/v1/messages"
 ANTHROPIC_REQUEST_FAMILY = "messages"
-THINKING_BUDGET = {"max": 64000, "xhigh": 32000, "high": 16000, "medium": 8000, "low": 4000}
+THINKING_BUDGET = {
+    "max": 64000,
+    "xhigh": 32000,
+    "high": 16000,
+    "medium": 8000,
+    "low": 4000,
+}
 ADAPTIVE_EFFORT_MAP = {
     "max": "max",
     "xhigh": "xhigh",
@@ -144,7 +151,11 @@ class AnthropicMessagesRequest:
         if self.system:
             if self._supports_cache_control():
                 payload["system"] = [
-                    {"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}},
+                    {
+                        "type": "text",
+                        "text": self.system,
+                        "cache_control": {"type": "ephemeral"},
+                    },
                 ]
             else:
                 payload["system"] = self.system
@@ -155,7 +166,10 @@ class AnthropicMessagesRequest:
         if self.tools:
             tools_list = [dict(tool) for tool in self.tools]
             if tools_list and self._supports_cache_control():
-                tools_list[-1] = {**tools_list[-1], "cache_control": {"type": "ephemeral"}}
+                tools_list[-1] = {
+                    **tools_list[-1],
+                    "cache_control": {"type": "ephemeral"},
+                }
             payload["tools"] = tools_list
         if self.thinking:
             payload["thinking"] = dict(self.thinking)
@@ -372,11 +386,7 @@ class AnthropicMessagesModelAdapter(ModelAdapter):
                 AnthropicContentBlock(
                     type=block_type,
                     text=combined.content,
-                    metadata={
-                        key: str(value)
-                        for key, value in block.items()
-                        if key not in {"type", "text"}
-                    },
+                    metadata={key: str(value) for key, value in block.items() if key not in {"type", "text"}},
                 )
             )
         usage_payload = payload.get("usage", {})
@@ -387,8 +397,7 @@ class AnthropicMessagesModelAdapter(ModelAdapter):
             cached_prompt_tokens=int(usage_payload.get("cache_read_input_tokens", 0) or 0),
             cache_creation_prompt_tokens=int(usage_payload.get("cache_creation_input_tokens", 0) or 0),
             cache_usage_reported=(
-                "cache_read_input_tokens" in usage_payload
-                or "cache_creation_input_tokens" in usage_payload
+                "cache_read_input_tokens" in usage_payload or "cache_creation_input_tokens" in usage_payload
             ),
         )
         return AnthropicMessagesResponse(
@@ -578,7 +587,10 @@ class AnthropicMessagesModelAdapter(ModelAdapter):
         tool_name_map: Mapping[str, str],
     ) -> AnthropicContentBlock:
         call_id = str(call.get("id") or call.get("call_id") or "").strip() or "toolu_context"
-        name = self._provider_tool_name(str(call.get("name") or call.get("tool_name") or ""), tool_name_map=tool_name_map)
+        name = self._provider_tool_name(
+            str(call.get("name") or call.get("tool_name") or ""),
+            tool_name_map=tool_name_map,
+        )
         arguments = call.get("arguments")
         return AnthropicContentBlock(
             type="tool_use",

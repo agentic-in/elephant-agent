@@ -8,7 +8,7 @@ configured IM adapter from both gateway sessions and CLI/TUI sessions.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from packages.contracts.runtime import ExecutionResult
@@ -75,23 +75,16 @@ class GatewayMessageDeliverySurface:
             side_effects=("delivery",),
         )
 
-    def _resolve_route_from_identity(
-        self, *, target: str | None
-    ) -> tuple[str, str, str]:
+    def _resolve_route_from_identity(self, *, target: str | None) -> tuple[str, str, str]:
         """Resolve IM routing via identity store (CLI/TUI fallback path)."""
         if self.identity_store is None:
-            raise ValueError(
-                "Cannot send IM message: no gateway session context and no identity store configured."
-            )
+            raise ValueError("Cannot send IM message: no gateway session context and no identity store configured.")
         if self.default_elephant_id:
             records = self.identity_store.lookup_by_elephant_id(self.default_elephant_id)
         else:
             records = self.identity_store.list_records()
         if not records:
-            raise ValueError(
-                "Cannot send IM message: no IM identity records found. "
-                "Pair an IM account first."
-            )
+            raise ValueError("Cannot send IM message: no IM identity records found. Pair an IM account first.")
         # Filter by target hint if provided (e.g. "feishu", "weixin", "dingding")
         if target:
             hint = target.strip().lower()

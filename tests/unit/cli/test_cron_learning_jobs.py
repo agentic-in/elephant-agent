@@ -18,7 +18,10 @@ class CronLearningJobTest(unittest.TestCase):
         runtime = SimpleNamespace(schedule_learning_for_session=schedule_learning_for_session)
         cron_job = SimpleNamespace(
             name="Nightly dream",
-            payload={"trigger": "dream", "summary": "nightly Personal Model, question, skill, and diary maintenance"},
+            payload={
+                "trigger": "dream",
+                "summary": "nightly Personal Model, question, skill, and diary maintenance",
+            },
         )
 
         outcome, summary = CliRuntimeExtensionsMixin._execute_cron_learning_job(  # type: ignore[misc]
@@ -31,7 +34,10 @@ class CronLearningJobTest(unittest.TestCase):
         self.assertEqual(outcome, "success")
         self.assertIn("job:dream", summary)
         self.assertEqual(captured["trigger"], "dream")
-        self.assertEqual(captured["metadata"], {"target_date": yesterday, "diary_target_date": yesterday})
+        self.assertEqual(
+            captured["metadata"],
+            {"target_date": yesterday, "diary_target_date": yesterday},
+        )
 
 
 if __name__ == "__main__":

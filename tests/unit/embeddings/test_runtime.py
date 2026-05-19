@@ -52,20 +52,38 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         provider = SentenceTransformerEmbeddingProvider(model_root="/tmp/elephant-embed")
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=False),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=False),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=False,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=False,
+            ),
         ):
             self.assertEqual(provider.health().status, "pending")
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=False),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=False,
+            ),
         ):
             self.assertEqual(provider.health().status, "downloading")
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
         ):
             health = provider.health()
 
@@ -79,8 +97,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         provider._steady_thread = steadying_thread
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
         ):
             steadying = provider.health()
 
@@ -89,8 +113,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
 
         provider._model = object()
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
         ):
             loaded = provider.health()
 
@@ -102,8 +132,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         service = DefaultEmbeddingService(registry=InMemoryEmbeddingModelRegistry((provider,)))
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(provider, "_encode_texts", return_value=(_unit_vector(64),)),
         ):
             vector = service.embed_text(
@@ -150,8 +186,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         service = DefaultEmbeddingService(registry=registry)
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(
                 provider,
                 "_encode_texts",
@@ -214,8 +256,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         fake_module = types.SimpleNamespace(SentenceTransformer=sentence_transformer)
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.dict(sys.modules, {"sentence_transformers": fake_module}),
         ):
             provider._load_model()
@@ -226,7 +274,9 @@ class EmbeddingRuntimeTest(unittest.TestCase):
             processor_kwargs={"fix_mistral_regex": True},
         )
 
-    def test_local_embedding_loader_suppresses_known_tokenizer_regex_warning(self) -> None:
+    def test_local_embedding_loader_suppresses_known_tokenizer_regex_warning(
+        self,
+    ) -> None:
         class _CaptureHandler(logging.Handler):
             def emit(self, record: logging.LogRecord) -> None:
                 records.append(record)
@@ -272,16 +322,20 @@ class EmbeddingRuntimeTest(unittest.TestCase):
             EmbeddingPreloadEntry(cache_key="memory-1", text="release evidence summary"),
             EmbeddingPreloadEntry(cache_key="memory-2", text="release checklist"),
         )
-        backfill_entries = (
-            EmbeddingPreloadEntry(cache_key="projection-1", text="projection anchor summary"),
-        )
+        backfill_entries = (EmbeddingPreloadEntry(cache_key="projection-1", text="projection anchor summary"),)
 
         def _encode(texts: tuple[str, ...], *, dimensions: int) -> tuple[tuple[float, ...], ...]:
             return tuple(_unit_vector(dimensions, index=index) for index, _text in enumerate(texts))
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(provider, "_encode_texts", side_effect=_encode),
         ):
             preload_state = provider.preload(
@@ -313,7 +367,9 @@ class EmbeddingRuntimeTest(unittest.TestCase):
                     time.sleep(0.01)
             self.assertIsNotNone(projection_cached)
 
-    def test_queue_backfill_skips_cached_entries_when_a_higher_dimension_vector_exists(self) -> None:
+    def test_queue_backfill_skips_cached_entries_when_a_higher_dimension_vector_exists(
+        self,
+    ) -> None:
         provider = SentenceTransformerEmbeddingProvider()
         entry = EmbeddingPreloadEntry(cache_key="memory-1", text="release evidence summary")
 
@@ -321,8 +377,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
             return tuple(_unit_vector(dimensions, index=index) for index, _text in enumerate(texts))
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(provider, "_encode_texts", side_effect=_encode),
         ):
             provider.preload(
@@ -346,8 +408,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         entry = EmbeddingPreloadEntry(cache_key="memory-1", text="release evidence summary")
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(provider, "_spawn_backfill_worker") as spawn,
         ):
             state = provider.queue_backfill(
@@ -366,8 +434,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         entry = EmbeddingPreloadEntry(cache_key="memory-1", text="release evidence summary")
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(provider, "_encode_texts", side_effect=RuntimeError("boom")),
         ):
             provider.queue_backfill(
@@ -404,8 +478,14 @@ class EmbeddingRuntimeTest(unittest.TestCase):
             return object()
 
         with (
-            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
-            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch(
+                "packages.embeddings.runtime.sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
+            mock.patch(
+                "packages.embeddings.runtime.embedding_root_is_healthy",
+                return_value=True,
+            ),
             mock.patch.object(provider, "_load_model", side_effect=_load_model),
         ):
             self.assertTrue(provider.steady_async())

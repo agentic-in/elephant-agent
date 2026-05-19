@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .discord_support import *  # noqa: F401,F403
-from .discord_transport import DiscordPyDeliveryTransport
+
 
 @dataclass(slots=True)
 class DiscordGatewayService:
@@ -41,14 +41,8 @@ class DiscordGatewayService:
                 binding_store = self.cli_binding_store
                 if binding_store is None:
                     state_root = self.app.state_dir
-                    binding_path = (
-                        None
-                        if state_root is None
-                        else os.path.join(state_root, "discord-cli-bindings.json")
-                    )
-                    binding_store = GatewayCliBindingStore(
-                        path=None if binding_path is None else Path(binding_path)
-                    )
+                    binding_path = None if state_root is None else os.path.join(state_root, "discord-cli-bindings.json")
+                    binding_store = GatewayCliBindingStore(path=None if binding_path is None else Path(binding_path))
                 self.cli_control = GatewayCliControlService(
                     config=self._resolved_cli_control_config(config),
                     app=self.app,
@@ -80,7 +74,9 @@ class DiscordGatewayService:
         enabled_configs = self._enabled_account_configs()
         return enabled_configs if enabled_configs else self.account_configs
 
-    def _describe_accounts(self) -> tuple[tuple[dict[str, object], ...], dict[str, object]]:
+    def _describe_accounts(
+        self,
+    ) -> tuple[tuple[dict[str, object], ...], dict[str, object]]:
         accounts: list[dict[str, object]] = []
         configured_account_ids: list[str] = []
         enabled_account_ids: list[str] = []
@@ -403,14 +399,10 @@ class DiscordGatewayService:
         transport_configs = self._transport_account_configs()
         if not transport_configs:
             return "gateway"
-        transports = tuple(
-            dict.fromkeys(_normalize_transport(config.surface) for config in transport_configs)
-        )
+        transports = tuple(dict.fromkeys(_normalize_transport(config.surface) for config in transport_configs))
         if len(transports) == 1:
             return transports[0]
-        raise LookupError(
-            "configured Discord accounts use multiple transport surfaces; choose one explicitly"
-        )
+        raise LookupError("configured Discord accounts use multiple transport surfaces; choose one explicitly")
 
     def configured_runtime_target(self) -> str:
         return self.configured_transport()
@@ -521,12 +513,8 @@ class DiscordGatewayService:
             if account_id is not None:
                 raise LookupError(f"unknown or unrunnable Discord gateway account: {account_id}")
             if blocked_accounts:
-                blocked_summary = "; ".join(
-                    f"{account_label}: {error}" for account_label, error in blocked_accounts
-                )
-                raise LookupError(
-                    "no enabled Discord gateway accounts are runnable; " + blocked_summary
-                )
+                blocked_summary = "; ".join(f"{account_label}: {error}" for account_label, error in blocked_accounts)
+                raise LookupError("no enabled Discord gateway accounts are runnable; " + blocked_summary)
             raise LookupError("no enabled Discord gateway accounts are configured")
         for account_label, error in blocked_accounts:
             print(
@@ -680,9 +668,7 @@ class DiscordGatewayService:
             "id": str(getattr(message, "id", "")),
             "channel_id": str(getattr(channel, "id", "")),
             "guild_id": (
-                str(getattr(guild, "id", ""))
-                if guild is not None and getattr(guild, "id", None) is not None
-                else None
+                str(getattr(guild, "id", "")) if guild is not None and getattr(guild, "id", None) is not None else None
             ),
             "content": str(getattr(message, "content", "") or ""),
             "author": {
@@ -702,9 +688,7 @@ class DiscordGatewayService:
                 "message_id": str(getattr(reference, "message_id")),
                 "channel_id": str(getattr(reference, "channel_id", getattr(channel, "id", ""))),
                 "guild_id": (
-                    str(getattr(reference, "guild_id"))
-                    if getattr(reference, "guild_id", None) is not None
-                    else None
+                    str(getattr(reference, "guild_id")) if getattr(reference, "guild_id", None) is not None else None
                 ),
             }
         if parent is not None and getattr(parent, "id", None) is not None:
@@ -749,9 +733,7 @@ class DiscordGatewayService:
             raise LookupError("no enabled Discord gateway accounts are configured")
         if len(enabled_configs) == 1:
             return resolve_discord_account(enabled_configs[0], environ=self.environ)
-        raise LookupError(
-            "multiple enabled Discord gateway accounts are configured; pass account_id explicitly"
-        )
+        raise LookupError("multiple enabled Discord gateway accounts are configured; pass account_id explicitly")
 
     def _resolved_accounts_for_start(
         self,
@@ -815,7 +797,6 @@ class DiscordGatewayService:
         gateway process polls the queue and sends each row through the same REST send
         path a normal reply uses.
         """
-        from packages.cron import CronJob, CronJobExecution
 
         if getattr(job, "action_kind", "") == "learning":
             return
@@ -882,9 +863,7 @@ class DiscordGatewayService:
         try:
             account = self._match_account(account_id=row.account_id)
         except LookupError as error:
-            raise RuntimeError(
-                f"cannot resolve discord account for queued row: {row.account_id}"
-            ) from error
+            raise RuntimeError(f"cannot resolve discord account for queued row: {row.account_id}") from error
         _discord_rest_send_message(
             channel_id=row.conversation_id,
             content=row.body,

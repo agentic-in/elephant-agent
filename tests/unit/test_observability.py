@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 import unittest
 
-from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -56,11 +55,13 @@ class TraceContextTests(unittest.TestCase):
         self.assertEqual(ctx.trace_id, "t1")
 
     def test_filter_injects_fields(self) -> None:
-        set_context(TraceContext(
-            trace_id="trace123",
-            episode_id="ep456",
-            loop_id="loop789",
-        ))
+        set_context(
+            TraceContext(
+                trace_id="trace123",
+                episode_id="ep456",
+                loop_id="loop789",
+            )
+        )
         record = logging.LogRecord("test", logging.INFO, "", 0, "msg", (), None)
         f = TraceContextFilter()
         f.filter(record)
@@ -119,6 +120,7 @@ class JSONFormatterTests(unittest.TestCase):
 class ConfigureLoggingTests(unittest.TestCase):
     def test_log_file_created(self) -> None:
         import packages.observability.logger as logger_mod
+
         original = logger_mod._configured
         logger_mod._configured = False
         try:
@@ -147,6 +149,7 @@ class _InMemorySpanExporter:
     def export(self, spans):
         self.spans.extend(spans)
         from opentelemetry.sdk.trace.export import SpanExportResult
+
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
@@ -218,10 +221,26 @@ class MetricsTests(unittest.TestCase):
         meter = self.provider.get_meter("elephant-agent")
         self._patches = [
             mock.patch.object(metrics_mod, "_meter", meter),
-            mock.patch.object(metrics_mod, "token_usage", meter.create_histogram("gen_ai.client.token.usage", unit="{token}")),
-            mock.patch.object(metrics_mod, "operation_duration", meter.create_histogram("gen_ai.client.operation.duration", unit="s")),
-            mock.patch.object(metrics_mod, "tool_duration", meter.create_histogram("elephant.tool.duration", unit="s")),
-            mock.patch.object(metrics_mod, "kernel_turn_duration", meter.create_histogram("elephant.kernel.turn.duration", unit="s")),
+            mock.patch.object(
+                metrics_mod,
+                "token_usage",
+                meter.create_histogram("gen_ai.client.token.usage", unit="{token}"),
+            ),
+            mock.patch.object(
+                metrics_mod,
+                "operation_duration",
+                meter.create_histogram("gen_ai.client.operation.duration", unit="s"),
+            ),
+            mock.patch.object(
+                metrics_mod,
+                "tool_duration",
+                meter.create_histogram("elephant.tool.duration", unit="s"),
+            ),
+            mock.patch.object(
+                metrics_mod,
+                "kernel_turn_duration",
+                meter.create_histogram("elephant.kernel.turn.duration", unit="s"),
+            ),
         ]
         for p in self._patches:
             p.start()
@@ -235,7 +254,13 @@ class MetricsTests(unittest.TestCase):
         return [m.name for rm in data.resource_metrics for sm in rm.scope_metrics for m in sm.metrics]
 
     def test_record_model_metrics(self) -> None:
-        metrics_mod.record_model_metrics(provider_id="openai", model_id="gpt-5", input_tokens=100, output_tokens=50, duration_s=1.5)
+        metrics_mod.record_model_metrics(
+            provider_id="openai",
+            model_id="gpt-5",
+            input_tokens=100,
+            output_tokens=50,
+            duration_s=1.5,
+        )
         names = self._metric_names()
         self.assertIn("gen_ai.client.token.usage", names)
         self.assertIn("gen_ai.client.operation.duration", names)
@@ -258,10 +283,12 @@ class MetricsTests(unittest.TestCase):
 class SetupTests(unittest.TestCase):
     def test_setup_is_idempotent(self) -> None:
         import packages.observability.setup as setup_mod
+
         original = setup_mod._initialized
         setup_mod._initialized = False
         try:
             from packages.observability import setup_observability
+
             setup_observability(service_name="test-1")
             setup_observability(service_name="test-2")
         finally:
@@ -270,13 +297,14 @@ class SetupTests(unittest.TestCase):
 
 class InstrumentorTests(unittest.TestCase):
     def test_instrument_and_uninstrument(self) -> None:
-        from packages.observability.instrumentor import instrument, uninstrument, _instrumented, _originals
+        from packages.observability.instrumentor import instrument, uninstrument
         import packages.observability.instrumentor as inst_mod
 
         inst_mod._instrumented = False
         inst_mod._originals.clear()
         try:
             from packages.kernel.runtime_impl import KernelService
+
             original_run = KernelService.run
 
             instrument()
@@ -291,16 +319,19 @@ class InstrumentorTests(unittest.TestCase):
     def test_instrument_is_idempotent(self) -> None:
         from packages.observability.instrumentor import instrument, uninstrument
         import packages.observability.instrumentor as inst_mod
+
         inst_mod._instrumented = False
         inst_mod._originals.clear()
         try:
             from packages.kernel.runtime_impl import KernelService
+
             instrument()
             run_after_first = KernelService.run
             instrument()
             self.assertIs(KernelService.run, run_after_first)
         finally:
             from packages.observability.instrumentor import uninstrument
+
             uninstrument()
             inst_mod._instrumented = False
             inst_mod._originals.clear()

@@ -31,14 +31,16 @@ def _fixed_clock(start: datetime):
 
 
 def _http_error(status: int, *, headers: dict | None = None) -> urllib_error.HTTPError:
-    return urllib_error.HTTPError(
-        "http://provider", status, "err", headers or {}, BytesIO(b"")
-    )
+    return urllib_error.HTTPError("http://provider", status, "err", headers or {}, BytesIO(b""))
 
 
 class ClassifyErrorTest(unittest.TestCase):
     def test_network_errors_classify_as_network(self) -> None:
-        for exc in (ConnectionError("broken"), TimeoutError("slow"), urllib_error.URLError("dns")):
+        for exc in (
+            ConnectionError("broken"),
+            TimeoutError("slow"),
+            urllib_error.URLError("dns"),
+        ):
             self.assertEqual(classify_error(exc), "network", msg=str(exc))
 
     def test_http_429_separates_from_5xx(self) -> None:
@@ -223,7 +225,12 @@ class WithRetryTest(unittest.TestCase):
         with self.assertRaises(ConnectionError):
             with_retry(
                 always_bad,
-                policy=RetryPolicy(max_attempts=10, base_backoff_s=5.0, max_backoff_s=60.0, jitter_ratio=0),
+                policy=RetryPolicy(
+                    max_attempts=10,
+                    base_backoff_s=5.0,
+                    max_backoff_s=60.0,
+                    jitter_ratio=0,
+                ),
                 deadline=now + timedelta(seconds=3),
                 sleeper=sleeper,
                 clock=clock,

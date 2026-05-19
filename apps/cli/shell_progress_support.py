@@ -7,40 +7,16 @@ from dataclasses import dataclass
 from datetime import datetime
 import os
 import re
-import threading
-import time
 from typing import TYPE_CHECKING
 
 from packages.kernel.runtime import KernelOutcome
 from packages.tools import ToolLifecycleEvent
 
 from .shell_stack import (
-    Application,
-    Condition,
-    ConditionalContainer,
-    FormattedText,
-    FormattedTextControl,
-    Group,
-    Layout,
     Live,
-    Panel,
     RICH_AVAILABLE,
-    Text,
-    Window,
 )
 from .shell_ui import (
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_DARK,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    LIVE_DIFF_ADD_FG,
-    LIVE_DIFF_CONTEXT_FG,
-    LIVE_DIFF_FILE_FG,
-    LIVE_DIFF_HUNK_FG,
-    LIVE_DIFF_REMOVE_FG,
-    QUEUE_PREVIEW_INSET,
-    compact_line,
     strip_markdown_bold,
 )
 
@@ -83,6 +59,7 @@ class _ToolTraceDisplayParts:
     duration_gap: str
     duration: str
 
+
 @dataclass(frozen=True, slots=True)
 class _VisibleToolEvent:
     event: ToolLifecycleEvent
@@ -95,6 +72,7 @@ class _KernelStageView:
     stage: str
     detail: str
     recorded_at: datetime | None
+
 
 _TURN_TITLE_FRAMES: tuple[tuple[str, str], ...] = (
     ("🐘", "Elephant Agent is orienting"),
@@ -113,16 +91,19 @@ _CONTEXT_COMPACTION_MIN_VISIBLE_SECONDS = 1.5
 def animations_enabled() -> bool:
     return RICH_AVAILABLE and Live is not None and os.environ.get("ELEPHANT_NO_ANIMATION") != "1"
 
+
 def turn_title(tick: int) -> tuple[str, str]:
     # Slower title rotation — one frame every ~2.5s at 12.5 Hz caller.
     # Rapid title changes read as twitchy; a slow drift reads as calm
     # progress.
     return _TURN_TITLE_FRAMES[(tick // 32) % len(_TURN_TITLE_FRAMES)]
 
+
 def turn_marker(tick: int) -> str:
     # Marker ticks at ~2 Hz (every 6th caller frame at 12.5 Hz) — fast
     # enough to feel alive, slow enough not to distract.
     return _TURN_MARKER_FRAMES[(tick // 6) % len(_TURN_MARKER_FRAMES)]
+
 
 def turn_phase(tick: int) -> tuple[str, str, str]:
     phases = (
@@ -149,7 +130,9 @@ def _parse_kernel_stage_detail(detail: str) -> dict[str, str]:
     return parsed
 
 
-def _kernel_stage_views(kernel_stage_events: tuple[Mapping[str, object], ...]) -> tuple[_KernelStageView, ...]:
+def _kernel_stage_views(
+    kernel_stage_events: tuple[Mapping[str, object], ...],
+) -> tuple[_KernelStageView, ...]:
     views: list[_KernelStageView] = []
     for event in kernel_stage_events:
         payload = event.get("payload")
@@ -369,11 +352,13 @@ def outcome_state_focus_meta(outcome: KernelOutcome) -> str:
         return ""
     return f"routing · {' · '.join(parts)}"
 
+
 def summarize_progress_prompt(prompt: str) -> str:
     normalized = " ".join(prompt.split())
     if len(normalized) <= 72:
         return normalized
     return f"{normalized[:69]}..."
+
 
 def pending_tooltrace_lines(shell: ProductizedShell) -> tuple[str, ...]:
     pending = shell.transcript[shell._rendered_entries :]
@@ -391,6 +376,7 @@ def pending_tooltrace_lines(shell: ProductizedShell) -> tuple[str, ...]:
             lines.append(normalized)
     return tuple(lines)
 
+
 def pending_tool_output_lines(shell: ProductizedShell) -> tuple[str, ...]:
     pending = shell.transcript[shell._rendered_entries :]
     lines: list[str] = []
@@ -404,6 +390,7 @@ def pending_tool_output_lines(shell: ProductizedShell) -> tuple[str, ...]:
                 continue
             lines.append(normalized)
     return tuple(lines[-80:])
+
 
 def pending_tool_display_lines(shell: ProductizedShell, *, limit: int | None = None) -> tuple[str, ...]:
     pending = shell.transcript[shell._rendered_entries :]
@@ -423,6 +410,7 @@ def pending_tool_display_lines(shell: ProductizedShell, *, limit: int | None = N
         return tuple(lines)
     hidden = len(lines) - (limit - 1)
     return (f"… {hidden} earlier tool line(s) hidden", *lines[-(limit - 1) :])
+
 
 def live_tool_feed_lines(
     shell: ProductizedShell,
@@ -445,6 +433,7 @@ def live_tool_feed_lines(
         return tuple(lines)
     hidden = len(lines) - (limit - 1)
     return (f"… {hidden} earlier tool line(s) hidden", *lines[-(limit - 1) :])
+
 
 def turn_tool_progress_lines(
     shell: ProductizedShell,

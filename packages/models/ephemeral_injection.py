@@ -244,8 +244,7 @@ class TurnScopedPrefixCache:
             if cached is not None and cached[0] == cache_key:
                 return cached[1]
         blocks = tuple(
-            safe_call_block_builder(builder, profile, session, context, prompt, query)
-            for builder in builders
+            safe_call_block_builder(builder, profile, session, context, prompt, query) for builder in builders
         )
         if episode_id:
             self._entries[episode_id] = (cache_key, blocks)

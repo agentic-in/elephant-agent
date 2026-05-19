@@ -192,7 +192,10 @@ def _resolved_state_for_elephant(repository: Any, elephant_id: str):
             return direct
     if hasattr(repository, "list_states"):
         for state in repository.list_states():
-            if state.elephant_id == target or state.state_anchor in {target, f"elephant:{target}"}:
+            if state.elephant_id == target or state.state_anchor in {
+                target,
+                f"elephant:{target}",
+            }:
                 return state
     return None
 

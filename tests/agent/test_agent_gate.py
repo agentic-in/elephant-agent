@@ -31,15 +31,26 @@ class AgentGateTests(unittest.TestCase):
         self.assertTrue(MODULE.match_any("docs/README.md", ["docs/*.md"]))
 
     def test_parse_repo_name_from_remote_url(self) -> None:
-        self.assertEqual(MODULE.parse_repo_name_from_remote_url("git@github.com:agentic-in/elephant.git"), "elephant")
-        self.assertEqual(MODULE.parse_repo_name_from_remote_url("https://github.com/agentic-in/elephant.git"), "elephant")
+        self.assertEqual(
+            MODULE.parse_repo_name_from_remote_url("git@github.com:agentic-in/elephant.git"),
+            "elephant",
+        )
+        self.assertEqual(
+            MODULE.parse_repo_name_from_remote_url("https://github.com/agentic-in/elephant.git"),
+            "elephant",
+        )
 
     def test_resolve_repo_identity_name_uses_git_common_dir_name(self) -> None:
         completed = mock.Mock(returncode=0, stdout="/tmp/repos/elephant\n")
         with mock.patch.object(MODULE.subprocess, "run", return_value=completed):
-            self.assertEqual(MODULE.resolve_repo_identity_name(Path("/tmp/activitytrees/fnd-3")), "elephant")
+            self.assertEqual(
+                MODULE.resolve_repo_identity_name(Path("/tmp/activitytrees/fnd-3")),
+                "elephant",
+            )
 
-    def test_resolve_repo_identity_name_uses_origin_when_common_dir_is_plain_git_dir(self) -> None:
+    def test_resolve_repo_identity_name_uses_origin_when_common_dir_is_plain_git_dir(
+        self,
+    ) -> None:
         common_dir = mock.Mock(returncode=0, stdout=".git\n")
         remote = mock.Mock(returncode=0, stdout="git@github.com:agentic-in/elephant.git\n")
         with mock.patch.object(MODULE.subprocess, "run", side_effect=[common_dir, remote]):
@@ -49,7 +60,10 @@ class AgentGateTests(unittest.TestCase):
         common_dir = mock.Mock(returncode=1, stdout="")
         remote = mock.Mock(returncode=1, stdout="")
         with mock.patch.object(MODULE.subprocess, "run", side_effect=[common_dir, remote]):
-            self.assertEqual(MODULE.resolve_repo_identity_name(Path("/tmp/activitytrees/fnd-3")), "fnd-3")
+            self.assertEqual(
+                MODULE.resolve_repo_identity_name(Path("/tmp/activitytrees/fnd-3")),
+                "fnd-3",
+            )
 
     def test_validate_contract_accepts_checkout_alias_during_repo_rename(self) -> None:
         with mock.patch.object(MODULE, "resolve_repo_identity_name", return_value="a" + "egis"):
@@ -73,7 +87,12 @@ class AgentGateTests(unittest.TestCase):
             errors = MODULE.scan_reset_banned_terms(
                 root=root,
                 surfaces=("surface.txt",),
-                banned_terms=((removed_term, "speech-mode contract is removed from reset surfaces"),),
+                banned_terms=(
+                    (
+                        removed_term,
+                        "speech-mode contract is removed from reset surfaces",
+                    ),
+                ),
             )
 
         self.assertEqual(
@@ -94,7 +113,12 @@ class AgentGateTests(unittest.TestCase):
             errors = MODULE.scan_reset_banned_terms(
                 root=root,
                 surfaces=("surface.txt",),
-                banned_terms=((removed_term, "speech-mode contract is removed from reset surfaces"),),
+                banned_terms=(
+                    (
+                        removed_term,
+                        "speech-mode contract is removed from reset surfaces",
+                    ),
+                ),
             )
 
         self.assertEqual(errors, [])
@@ -109,7 +133,9 @@ class AgentGateTests(unittest.TestCase):
             ["tools/agent/context-map.yaml", ".github/workflows/agent-lint.yml"],
         )
 
-    def test_scan_reset_banned_terms_defaults_to_tracked_files_with_allowlist(self) -> None:
+    def test_scan_reset_banned_terms_defaults_to_tracked_files_with_allowlist(
+        self,
+    ) -> None:
         removed_term = " ".join(("goal", "graph"))
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -128,10 +154,7 @@ class AgentGateTests(unittest.TestCase):
 
         self.assertEqual(
             errors,
-            [
-                f"reset banned term in blocked.txt:1: {removed_term} "
-                "(current-work wording is required)"
-            ],
+            [f"reset banned term in blocked.txt:1: {removed_term} (current-work wording is required)"],
         )
 
     def test_resolve_rules_for_ci_workflow(self) -> None:
@@ -184,7 +207,10 @@ class AgentGateTests(unittest.TestCase):
         self.assertEqual(MODULE.audit_surface_coverage(["packages/growth/AGENTS.md"], pack), [])
 
     def test_audit_uses_also_matched_skill_surface_coverage(self) -> None:
-        changed_files = ["packages/semantic_index/AGENTS.md", "tools/agent/context-map.yaml"]
+        changed_files = [
+            "packages/semantic_index/AGENTS.md",
+            "tools/agent/context-map.yaml",
+        ]
         matches = MODULE.resolve_rule_matches(changed_files)
         pack = MODULE.build_context_pack(changed_files, matches)
 
@@ -275,15 +301,20 @@ class AgentGateTests(unittest.TestCase):
         self.assertEqual(files, ("apps/cli/runtime_cognition.py",))
 
     def test_frontend_typecheck_commands_select_dashboard_and_site(self) -> None:
-        commands = MODULE.frontend_typecheck_commands([
-            "apps/dashboard/src/routes/console/ConsolePages.tsx",
-            "apps/site/src/pages/index.tsx",
-            "packages/state/config.py",
-        ])
+        commands = MODULE.frontend_typecheck_commands(
+            [
+                "apps/dashboard/src/routes/console/ConsolePages.tsx",
+                "apps/site/src/pages/index.tsx",
+                "packages/state/config.py",
+            ]
+        )
         self.assertEqual(
             commands,
             (
-                ("dashboard", ("npm", "--prefix", "apps/dashboard", "run", "typecheck")),
+                (
+                    "dashboard",
+                    ("npm", "--prefix", "apps/dashboard", "run", "typecheck"),
+                ),
                 ("site", ("npm", "--prefix", "apps/site", "run", "typecheck")),
             ),
         )
@@ -320,7 +351,10 @@ class AgentGateTests(unittest.TestCase):
 
     def test_ci_lint_uses_commit_range_instead_of_full_repo_scan(self) -> None:
         workflow_text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn('make build-and-test AGENT_BASE_REF="origin/${{ github.base_ref }}"', workflow_text)
+        self.assertIn(
+            'make build-and-test AGENT_BASE_REF="origin/${{ github.base_ref }}"',
+            workflow_text,
+        )
         self.assertIn('BASE_REF="${{ github.event.before }}"', workflow_text)
         self.assertIn('make build-and-test AGENT_BASE_REF="$BASE_REF"', workflow_text)
 

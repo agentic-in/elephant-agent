@@ -9,7 +9,12 @@ from typing import Any
 from packages.security import SecurityPolicy
 
 from .builtins import register_builtin_tools
-from .runtime import ApprovalGateway, SecurityApprovalGateway, ToolContextResolver, ToolRuntime
+from .runtime import (
+    ApprovalGateway,
+    SecurityApprovalGateway,
+    ToolContextResolver,
+    ToolRuntime,
+)
 from .surfaces import BuiltinToolDependencies
 
 

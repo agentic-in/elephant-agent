@@ -60,10 +60,13 @@ def record_tool_metrics(
     duration_s: float,
     status: str = "success",
 ) -> None:
-    tool_duration.record(duration_s, attributes={
-        "gen_ai.tool.name": tool_name,
-        "elephant.tool.status": status,
-    })
+    tool_duration.record(
+        duration_s,
+        attributes={
+            "gen_ai.tool.name": tool_name,
+            "elephant.tool.status": status,
+        },
+    )
 
 
 def record_turn_metrics(

@@ -29,13 +29,16 @@ def add_worktree(name: str, branch: str, base: str, root: Path) -> int:
     if target.exists():
         raise SystemExit(f"worktree path already exists: {target}")
 
-    branch_exists = subprocess.run(
-        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    ).returncode == 0
+    branch_exists = (
+        subprocess.run(
+            ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
 
     if branch_exists:
         command = ["git", "worktree", "add", str(target), branch]

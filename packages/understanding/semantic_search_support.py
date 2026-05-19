@@ -21,11 +21,7 @@ def _topic_matches_filter(fact: Fact, topic_filter: str) -> bool:
 def claim_ref_from_match(match: Any) -> str:
     entry = getattr(match, "semantic_index_entry", None)
     metadata = dict(getattr(entry, "metadata", {}) or {})
-    return str(
-        metadata.get("claim_ref")
-        or getattr(entry, "source_id", "")
-        or ""
-    ).strip()
+    return str(metadata.get("claim_ref") or getattr(entry, "source_id", "") or "").strip()
 
 
 def rank_facts_by_semantic_queries(

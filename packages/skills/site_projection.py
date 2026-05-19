@@ -13,12 +13,8 @@ from .builtins import builtin_skill_catalog
 from .hub import SkillCatalogEntry
 from .provenance import public_skill_source_descriptor_from_metadata
 
-_CATALOG_HEADLINE = (
-    "Browse the skills that ship with Elephant Agent."
-)
-_CATALOG_SUMMARY = (
-    "Packaged Elephant Agent skills and the external source lanes the CLI can install from."
-)
+_CATALOG_HEADLINE = "Browse the skills that ship with Elephant Agent."
+_CATALOG_SUMMARY = "Packaged Elephant Agent skills and the external source lanes the CLI can install from."
 _BUILTIN_POSTURE = (
     "Bundled skills already ship with Elephant Agent. Use `elephant skills install "
     "<skill-id>` only when you want an explicit local materialization record "
@@ -117,7 +113,10 @@ def build_skillhub_site_catalog(*, root: Path | None = None) -> SkillHubSiteCata
     for section in builtin_catalog.sections:
         for entry in section.entries:
             if entry.visibility.include_in_site:
-                section_membership[entry.skill_id] = (section.section_id, section.display_name)
+                section_membership[entry.skill_id] = (
+                    section.section_id,
+                    section.display_name,
+                )
     entries = [
         _site_entry_for_catalog_entry(
             entry,
@@ -130,9 +129,7 @@ def build_skillhub_site_catalog(*, root: Path | None = None) -> SkillHubSiteCata
     sections: list[SkillHubSiteSection] = []
     for section in builtin_catalog.sections:
         section_entries = tuple(
-            entries_by_id[entry.skill_id]
-            for entry in section.entries
-            if entry.visibility.include_in_site
+            entries_by_id[entry.skill_id] for entry in section.entries if entry.visibility.include_in_site
         )
         if not section_entries:
             continue
@@ -304,10 +301,7 @@ def _external_install_lanes() -> tuple[SkillHubSiteExternalSource, ...]:
         SkillHubSiteExternalSource(
             source_id="github",
             display_name="GitHub",
-            summary=(
-                "Install a public skill directly from a repository path that contains "
-                "a `SKILL.md` package."
-            ),
+            summary=("Install a public skill directly from a repository path that contains a `SKILL.md` package."),
             trust_posture="Trusted or community, depending on repo provenance.",
             reference_pattern="github:<owner>/<repo>/<skill-path>",
             search_command="elephant skills search <query> --source github",
@@ -333,13 +327,10 @@ def _external_install_lanes() -> tuple[SkillHubSiteExternalSource, ...]:
                 "turning the site into a hosted registry."
             ),
             trust_posture="Community by default.",
-            reference_pattern=(
-                "well-known:https://example.com/.well-known/skills/index.json#skill-name"
-            ),
+            reference_pattern=("well-known:https://example.com/.well-known/skills/index.json#skill-name"),
             search_command="elephant skills search https://example.com --source well-known",
             install_command=(
-                "elephant skills install "
-                "well-known:https://example.com/.well-known/skills/index.json#skill-name"
+                "elephant skills install well-known:https://example.com/.well-known/skills/index.json#skill-name"
             ),
         ),
         SkillHubSiteExternalSource(
@@ -367,8 +358,7 @@ def _external_install_lanes() -> tuple[SkillHubSiteExternalSource, ...]:
             source_id="lobehub",
             display_name="LobeHub",
             summary=(
-                "Materialize a LobeHub agent template into a local skill package "
-                "through the explicit install surface."
+                "Materialize a LobeHub agent template into a local skill package through the explicit install surface."
             ),
             trust_posture="Community.",
             reference_pattern="lobehub:<agent-id>",

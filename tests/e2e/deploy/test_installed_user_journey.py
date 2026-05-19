@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
 import unittest
@@ -61,7 +60,10 @@ def _drive_dashboard_chat(dashboard_url: str) -> None:
 
 class InstalledUserJourneyE2ETest(unittest.TestCase):
     def test_editable_install_cli_daemon_dashboard_and_mock_chat(self) -> None:
-        self.assertTrue(DASHBOARD_INDEX.exists(), "dashboard assets are required; run make dashboard-build first")
+        self.assertTrue(
+            DASHBOARD_INDEX.exists(),
+            "dashboard assets are required; run make dashboard-build first",
+        )
 
         provider = MockOpenAICompatibleProvider().start()
         try:

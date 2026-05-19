@@ -8,7 +8,15 @@ from datetime import datetime, timedelta, timezone
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-_FUZZY_TIME_WINDOW_LABELS = frozenset({"last_night", "yesterday_evening", "this_morning", "today_afternoon", "today_evening"})
+_FUZZY_TIME_WINDOW_LABELS = frozenset(
+    {
+        "last_night",
+        "yesterday_evening",
+        "this_morning",
+        "today_afternoon",
+        "today_evening",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,12 +97,18 @@ def _with_local_time(day: datetime, tz: timezone | ZoneInfo, *, hour: int, minut
     return day.astimezone(tz).replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
-def _parse_relative_expr(expr: str, *, now: datetime, tz: timezone | ZoneInfo) -> tuple[datetime | None, datetime | None]:
+def _parse_relative_expr(
+    expr: str, *, now: datetime, tz: timezone | ZoneInfo
+) -> tuple[datetime | None, datetime | None]:
     match = re.fullmatch(r"last:(\d+)([hdw])", expr)
     if match:
         amount = max(1, int(match.group(1)))
         unit = match.group(2)
-        delta = {"h": timedelta(hours=amount), "d": timedelta(days=amount), "w": timedelta(weeks=amount)}[unit]
+        delta = {
+            "h": timedelta(hours=amount),
+            "d": timedelta(days=amount),
+            "w": timedelta(weeks=amount),
+        }[unit]
         return now - delta, now
     if expr in {"today", "this:day"}:
         return _local_day_bounds(now, tz)
@@ -116,7 +130,9 @@ def _parse_relative_expr(expr: str, *, now: datetime, tz: timezone | ZoneInfo) -
     return None, None
 
 
-def _parse_human_window_expr(expr: str, *, now: datetime, tz: timezone | ZoneInfo) -> tuple[datetime | None, datetime | None]:
+def _parse_human_window_expr(
+    expr: str, *, now: datetime, tz: timezone | ZoneInfo
+) -> tuple[datetime | None, datetime | None]:
     local_now = now.astimezone(tz)
     today = local_now
     yesterday = local_now - timedelta(days=1)

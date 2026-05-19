@@ -185,9 +185,7 @@ class SemanticIndexService:
             provider_id=provider_id,
             model_id=model_id,
         )
-        desired_by_id = {
-            _entry_id_for_document(document): document for document in desired_documents
-        }
+        desired_by_id = {_entry_id_for_document(document): document for document in desired_documents}
         current_by_id = {entry.semantic_index_entry_id: entry for entry in current}
         desired_source_ids = {document.source_id for document in desired_documents}
         reuse = tuple(sorted(set(current_by_id) & set(desired_by_id)))
@@ -196,8 +194,7 @@ class SemanticIndexService:
             sorted(
                 entry.semantic_index_entry_id
                 for entry in current
-                if entry.source_id in desired_source_ids
-                and entry.semantic_index_entry_id not in desired_by_id
+                if entry.source_id in desired_source_ids and entry.semantic_index_entry_id not in desired_by_id
             )
         )
         return SemanticIndexMetadataRebuildPlan(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Sequence
 import unittest
 
 from packages.contracts.layers import Step
@@ -14,7 +13,6 @@ from packages.contracts.runtime import (
     WaitCondition,
 )
 from packages.harness.supervisor import (
-    SupervisorDecision,
     scan_once,
 )
 
@@ -242,7 +240,10 @@ class SupervisorScanTest(unittest.TestCase):
                         sequence=0,
                         created_at=now,
                         outcome="ok",
-                        metadata={"tool_call_id": "call-A", "tool_name": "tool.shell.run"},
+                        metadata={
+                            "tool_call_id": "call-A",
+                            "tool_name": "tool.shell.run",
+                        },
                     )
                 ]
             },

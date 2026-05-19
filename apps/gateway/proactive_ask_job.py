@@ -25,6 +25,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True, slots=True)
 class ProactiveAskTickResult:
     """Result summary from a single proactive ask cron tick."""
+
     scanned: int = 0
     eligible: int = 0
     enqueued: int = 0
@@ -184,6 +185,7 @@ def run_proactive_ask_tick(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _personal_model_id(app: Any, record: Any) -> str | None:
     if record.state_id:

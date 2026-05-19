@@ -2,104 +2,12 @@
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
-from difflib import unified_diff
-import os
-from pathlib import Path
-import re
-import shlex
-import time
 
-from packages.contracts import ExperienceRecord
-from packages.kernel.runtime import KernelOutcome
-from packages.operator.runtime import (
-    RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
-    build_recall_evidence_operator_surface,
-    build_profile_operator_surface,
-    render_recall_evidence_lines,
-    render_profile_lines,
-)
 from packages.skills import skill_provenance_fields
-from packages.tools.handler_support import resolve_allowed_path
-from .provider_flow import provider_setup_defaults, run_provider_selection_wizard
-from .runtime import CliRuntime
-from .wizard import WIZARD_BACK
-from .shell_composer import (
-    build_command_palette as _build_shell_command_palette,
-    build_composer_body as _build_shell_composer_body,
-    build_divider_window as _build_shell_divider_window,
-    build_input_window as _build_shell_input_window,
-    build_key_bindings as _build_shell_key_bindings,
-    build_prompt_buffer as _build_shell_prompt_buffer,
-    build_queue_preview_window as _build_shell_queue_preview_window,
-    prompt_continuation as _shell_prompt_continuation,
-    prompt_label as _shell_prompt_label,
-    prompt_style as _shell_prompt_style,
-    prompt_style_map as _shell_prompt_style_map,
-    prompt_toolkit_composer_available as _shell_prompt_toolkit_composer_available,
-    read_command as _read_shell_command,
-    shell_history as _shell_history,
-)
-from .shell_boot import WAKE_DISPLAY_SECONDS, BootFrameContext, render_boot_frame
-from .shell_opening import (
-    ShellOpeningContext,
-    compose_shell_opening_instruction,
-    compose_shell_opener,
-)
-from .shell_progress import (
-    animations_enabled as _shell_animations_enabled,
-    render_queued_followup_fragments as _render_shell_queued_followup_fragments,
-    render_tool_frame as _render_shell_tool_frame,
-    tool_trace_line as _shell_tool_trace_line,
-    render_turn_frame as _render_shell_turn_frame,
-    render_turn_progress_fragments as _render_shell_turn_progress_fragments,
-    run_tool_with_progress as _run_shell_tool_with_progress,
-    run_turn_with_progress as _run_shell_turn_with_progress,
-    run_turn_with_queued_input as _run_shell_turn_with_queued_input,
-    summarize_progress_prompt as _summarize_shell_progress_prompt,
-    tool_event_lines as _shell_tool_event_lines,
-    tool_event_summary as _shell_tool_event_summary,
-    tool_event_tracker as _shell_tool_event_tracker,
-    tool_frame_phases as _shell_tool_frame_phases,
-    turn_phase as _shell_turn_phase,
-    _tool_trace_emoji as _shell_tool_trace_emoji,
-)
-from .shell_render import (
-    center_brand_block as _center_shell_brand_block,
-    displayable_experiences as _displayable_shell_experiences,
-    format_experience_status as _format_shell_experience_status,
-    growth_panel_lines as _shell_growth_panel_lines,
-    growth_progress_bar as _shell_growth_progress_bar,
-    growth_progress_counts as _shell_growth_progress_counts,
-    recent_activity_lines as _shell_recent_activity_lines,
-    recent_experience_lines as _shell_recent_experience_lines,
-    render_brand_column as _render_shell_brand_column,
-    render_chat_entry as _render_shell_chat_entry,
-    render_entry as _render_shell_entry,
-    render_elephant_brand_mark as _render_shell_elephant_mark,
-    render_growth_mark_for_stage as _render_shell_growth_mark,
-    render_pending_entries as _render_shell_pending_entries,
-    render_shell_frame as _render_shell_frame_view,
-    render_status_column as _render_shell_status_column,
-    should_display_experience as _should_display_shell_experience,
-    styled_growth_progress_bar as _styled_shell_growth_progress_bar,
-)
 from .shell_stack import (
-    Align,
-    Completion,
-    Completer,
     Console,
     Document,
-    FormattedText,
-    Group,
-    Live,
-    PROMPT_TOOLKIT_AVAILABLE,
-    Panel,
     RICH_AVAILABLE,
-    Table,
-    Text,
 )
 from .shell_ui import (
     BRAND_ACCENT,
@@ -115,20 +23,15 @@ from .shell_ui import (
     GROWTH_PROGRESS_WIDTH,
     HATCHLING_HEAD_ROWS,
     HATCHLING_STAGE_ROWS,
-    HATCHLING_STAGE_ROWS,
     QUEUE_PREVIEW_INSET,
     SCOUT_STAGE_ROWS,
     SEED_STAGE_ROWS,
     SHELL_WELCOME_HEADLINE,
     USER_HISTORY_BG,
     USER_HISTORY_FG,
-    WEB_URL_PATTERN,
-    compact_line as _compact_line,
     centered_elephant_rows as _centered_elephant_rows,
-    display_path as _display_path,
     display_width as _display_width,
     render_elephant_mark,
-    resolve_elephant_version as _resolve_elephant_version,
 )
 
 __all__ = [
@@ -165,20 +68,24 @@ __all__ = [
 ]
 
 
-
 from .shell_support_runtime import *  # noqa: F401,F403
+
 
 def recent_session_ids(self) -> tuple[str, ...]:
     return tuple(session.episode_id for session in self.runtime.recent_sessions(limit=8))
 
+
 def recent_elephant_ids(self) -> tuple[str, ...]:
     return tuple(elephant.elephant_id for elephant in self.runtime.list_herd(limit=8))
+
 
 def skill_slash_specs(self) -> tuple[SkillSlashSpec, ...]:
     return self._skill_slash_specs
 
+
 def _refresh_skill_slash_specs(self) -> None:
     self._skill_slash_specs = self._load_skill_slash_specs()
+
 
 def _load_skill_slash_specs(self) -> tuple[SkillSlashSpec, ...]:
     reserved = {spec.name.removeprefix("/").lower() for spec in self.command_specs}
@@ -202,12 +109,14 @@ def _load_skill_slash_specs(self) -> tuple[SkillSlashSpec, ...]:
         seen.add(slug)
     return tuple(specs)
 
+
 def _resolve_skill_slash_spec(self, command: str) -> SkillSlashSpec | None:
     normalized = command.strip().lower().replace("_", "-")
     for spec in self._skill_slash_specs:
         if spec.command == normalized:
             return spec
     return None
+
 
 def _resolve_explicit_skill_request(self, message: str) -> SkillSlashSpec | None:
     if not message.strip():
@@ -241,6 +150,7 @@ def _resolve_explicit_skill_request(self, message: str) -> SkillSlashSpec | None
         return None
     return top_spec
 
+
 def _resolve_contextual_skill_request(self, message: str) -> SkillSlashSpec | None:
     if not message.strip():
         return None
@@ -264,10 +174,12 @@ def _resolve_contextual_skill_request(self, message: str) -> SkillSlashSpec | No
         return None
     return top_spec
 
+
 def _resolved_skill_route(self, message: str) -> tuple[SkillSlashSpec, str] | None:
     del self
     del message
     return None
+
 
 def _dispatch_skill_slash_command(self, raw_command: str, command: str, args: list[str]) -> bool:
     spec = self._resolve_skill_slash_spec(command)
@@ -312,6 +224,7 @@ def _dispatch_skill_slash_command(self, raw_command: str, command: str, args: li
     self._append_growth_update_message(growth_update)
     self._append_latest_learning_result()
     return True
+
 
 def _compose_skill_turn_prompt(self, skill, *, user_instruction: str) -> str:
     return "\n".join(
@@ -440,7 +353,11 @@ def _append_skills(self, args: list[str]) -> None:
         return
     if command == "install":
         if len(args) < 2:
-            self._append_entry("recovery", "Skills", "Usage: /skills install <skill-id|/path/to/skill|/path/to/skills.json>")
+            self._append_entry(
+                "recovery",
+                "Skills",
+                "Usage: /skills install <skill-id|/path/to/skill|/path/to/skills.json>",
+            )
             return
         try:
             result = self.runtime.install_skill_source(args[1], session_id=self.session_id)
@@ -454,7 +371,11 @@ def _append_skills(self, args: list[str]) -> None:
         )
         self._refresh_skill_slash_specs()
         return
-    self._append_entry("recovery", "Skills", "Usage: /skills [list|active|search|view|enable|disable|install]")
+    self._append_entry(
+        "recovery",
+        "Skills",
+        "Usage: /skills [list|active|search|view|enable|disable|install]",
+    )
 
 
 def _skill_provenance_lines(metadata) -> list[str]:

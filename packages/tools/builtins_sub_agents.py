@@ -23,37 +23,74 @@ def sub_agents_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, 
                 properties={
                     "action": {
                         "type": "string",
-                        "enum": ["run", "start", "status", "check", "join", "wait", "list"],
+                        "enum": [
+                            "run",
+                            "start",
+                            "status",
+                            "check",
+                            "join",
+                            "wait",
+                            "list",
+                        ],
                         "description": "Whether to run synchronously, start in the background, inspect, wait for, or list sub-agent runs.",
                     },
-                    "run_id": {"type": "string", "description": "Background sub-agent run id returned by action=start."},
+                    "run_id": {
+                        "type": "string",
+                        "description": "Background sub-agent run id returned by action=start.",
+                    },
                     "sub_agent_run_id": {
                         "type": "string",
                         "description": "Alias for run_id when checking or joining a background sub-agent run.",
                     },
-                    "name": {"type": "string", "description": "Optional label for a single sub-agent task."},
-                    "task": {"type": "string", "description": "Single assignment. Mutually exclusive with tasks."},
-                    "prompt": {"type": "string", "description": "Alias for task. Mutually exclusive with tasks."},
+                    "name": {
+                        "type": "string",
+                        "description": "Optional label for a single sub-agent task.",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Single assignment. Mutually exclusive with tasks.",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Alias for task. Mutually exclusive with tasks.",
+                    },
                     "tasks": {
                         "type": "array",
                         "description": "Small parallel pool of assignments. Mutually exclusive with top-level task/prompt. Each child cannot call tool.sub_agents, tool.clarify, or tool.message.send.",
                         "items": _object_schema(
                             required=("task",),
                             properties={
-                                "name": {"type": "string", "description": "Optional label for this sub-agent task."},
-                                "task": {"type": "string", "description": "Assignment for this sub-agent task."},
-                                "prompt": {"type": "string", "description": "Alias for task in a task-list item."},
+                                "name": {
+                                    "type": "string",
+                                    "description": "Optional label for this sub-agent task.",
+                                },
+                                "task": {
+                                    "type": "string",
+                                    "description": "Assignment for this sub-agent task.",
+                                },
+                                "prompt": {
+                                    "type": "string",
+                                    "description": "Alias for task in a task-list item.",
+                                },
                                 "skills": {
                                     "oneOf": [
                                         {"type": "array", "items": {"type": "string"}},
                                         {"type": "string"},
-                                        {"type": "object", "additionalProperties": {"type": "boolean"}},
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {"type": "boolean"},
+                                        },
                                     ],
                                 },
                             },
                         ),
                     },
-                    "max_concurrency": {"type": "integer", "minimum": 1, "maximum": 3, "description": "Maximum parallel child tasks for tasks; default is 3."},
+                    "max_concurrency": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3,
+                        "description": "Maximum parallel child tasks for tasks; default is 3.",
+                    },
                     "timeout_seconds": {
                         "type": "integer",
                         "minimum": 0,
@@ -64,7 +101,10 @@ def sub_agents_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, 
                         "oneOf": [
                             {"type": "array", "items": {"type": "string"}},
                             {"type": "string"},
-                            {"type": "object", "additionalProperties": {"type": "boolean"}},
+                            {
+                                "type": "object",
+                                "additionalProperties": {"type": "boolean"},
+                            },
                         ],
                         "description": "Skill ids to load for a single top-level task.",
                     },

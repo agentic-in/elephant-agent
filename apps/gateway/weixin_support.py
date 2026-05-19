@@ -13,7 +13,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import os
 import secrets
 import struct
 import time
@@ -21,31 +20,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import quote, urlparse
 
-from apps.runtime_layout import default_cli_state_dir
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayExchange,
-    GatewayInboundMessage,
-    GatewayOutboundMessage,
 )
 
-from .cli_control import (
-    CliRuntimeFactory,
-    GatewayCliBindingStore,
-    GatewayCliControlService,
-    load_gateway_cli_control_config,
-)
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
-from .runtime import GatewayApp, build_gateway_app
-from .weixin_delivery import (
-    _normalize_markdown_blocks,
-    _pack_markdown_blocks_for_weixin,
-    _split_delivery_units_for_weixin,
-    _split_markdown_blocks,
-    _split_text_for_weixin_delivery,
-)
+from .runtime import GatewayApp
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +142,7 @@ def check_weixin_requirements() -> bool:
 # SSL connector helper
 # ---------------------------------------------------------------------------
 
+
 def _make_ssl_connector() -> Optional["aiohttp.TCPConnector"]:
     """Return a TCPConnector with a certifi CA bundle, or None."""
     try:
@@ -177,6 +159,7 @@ def _make_ssl_connector() -> Optional["aiohttp.TCPConnector"]:
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
+
 
 def _safe_id(value: Optional[str], keep: int = 8) -> str:
     raw = str(value or "").strip()
@@ -228,15 +211,13 @@ def _normalize_transport(value: str | None) -> str:
     normalized = str(value or "ilink").strip().lower().replace("_", "-")
     if normalized in {"ilink", "weixin-ilink", "wxhook", "weixin-wxhook"}:
         return "ilink"
-    raise ValueError(
-        "weixin transport must be one of "
-        f"{', '.join(SUPPORTED_WEIXIN_TRANSPORTS)}"
-    )
+    raise ValueError(f"weixin transport must be one of {', '.join(SUPPORTED_WEIXIN_TRANSPORTS)}")
 
 
 # ---------------------------------------------------------------------------
 # AES-128-ECB encryption / decryption
 # ---------------------------------------------------------------------------
+
 
 def _pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
     pad_len = block_size - (len(data) % block_size)
@@ -280,6 +261,7 @@ def _parse_aes_key(aes_key_b64: str) -> bytes:
 # iLink API helpers
 # ---------------------------------------------------------------------------
 
+
 def _random_wechat_uin() -> str:
     value = struct.unpack(">I", secrets.token_bytes(4))[0]
     return base64.b64encode(str(value).encode("utf-8")).decode("ascii")
@@ -312,8 +294,6 @@ async def _api_post(
     token: Optional[str],
     timeout_ms: int,
 ) -> dict[str, Any]:
-    import asyncio
-
     body = _json_dumps({**payload, "base_info": _base_info()})
     url = f"{base_url.rstrip('/')}/{endpoint}"
     timeout = aiohttp.ClientTimeout(total=timeout_ms / 1000)
@@ -447,6 +427,7 @@ async def _get_config(
 # Context token persistence
 # ---------------------------------------------------------------------------
 
+
 def _account_dir(state_dir: str) -> Path:
     path = Path(state_dir) / "weixin" / "accounts"
     path.mkdir(parents=True, exist_ok=True)
@@ -511,7 +492,11 @@ class ContextTokenStore:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            logger.warning("weixin: failed to restore context tokens for %s: %s", _safe_id(account_id), exc)
+            logger.warning(
+                "weixin: failed to restore context tokens for %s: %s",
+                _safe_id(account_id),
+                exc,
+            )
             return
         restored = 0
         for user_id, token in data.items():
@@ -519,7 +504,11 @@ class ContextTokenStore:
                 self._cache[self._key(account_id, user_id)] = token
                 restored += 1
         if restored:
-            logger.info("weixin: restored %d context token(s) for %s", restored, _safe_id(account_id))
+            logger.info(
+                "weixin: restored %d context token(s) for %s",
+                restored,
+                _safe_id(account_id),
+            )
 
     def get(self, account_id: str, user_id: str) -> Optional[str]:
         return self._cache.get(self._key(account_id, user_id))
@@ -530,17 +519,15 @@ class ContextTokenStore:
 
     def _persist(self, account_id: str) -> None:
         prefix = f"{account_id}:"
-        payload = {
-            key[len(prefix):]: value
-            for key, value in self._cache.items()
-            if key.startswith(prefix)
-        }
+        payload = {key[len(prefix) :]: value for key, value in self._cache.items() if key.startswith(prefix)}
         try:
-            self._path(account_id).write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            self._path(account_id).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as exc:
-            logger.warning("weixin: failed to persist context tokens for %s: %s", _safe_id(account_id), exc)
+            logger.warning(
+                "weixin: failed to persist context tokens for %s: %s",
+                _safe_id(account_id),
+                exc,
+            )
 
 
 class TypingTicketCache:
@@ -567,6 +554,7 @@ class TypingTicketCache:
 # Sync buffer persistence
 # ---------------------------------------------------------------------------
 
+
 def _sync_buf_path(state_dir: str, account_id: str) -> Path:
     return _account_dir(state_dir) / f"{account_id}.sync.json"
 
@@ -592,6 +580,7 @@ def _save_sync_buf(state_dir: str, account_id: str, sync_buf: str) -> None:
 # ---------------------------------------------------------------------------
 # QR login flow
 # ---------------------------------------------------------------------------
+
 
 async def qr_login(
     state_dir: str,
@@ -690,6 +679,7 @@ async def qr_login(
                         print(qrcode_url)
                     try:
                         import qrcode as _qrcode
+
                         qr = _qrcode.QRCode()
                         qr.add_data(qr_scan_data)
                         qr.make(fit=True)
@@ -730,6 +720,7 @@ async def qr_login(
 # ---------------------------------------------------------------------------
 # Message format helpers (inbound iLink → elephant)
 # ---------------------------------------------------------------------------
+
 
 def _extract_text(item_list: list[dict[str, Any]]) -> str:
     for item in item_list:
@@ -806,6 +797,7 @@ def _weixin_body(payload: Mapping[str, object]) -> str:
 # ---------------------------------------------------------------------------
 # Account configuration
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class WeixinGatewayAccountConfig:

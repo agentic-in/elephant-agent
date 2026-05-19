@@ -39,10 +39,24 @@ class WheelInstallSmokeTest(unittest.TestCase):
         return self.install_venv / "bin" / "elephant"
 
     def test_built_wheel_installs_cleanly(self) -> None:
-        subprocess.run([sys.executable, "-m", "venv", str(self.build_venv)], cwd=ROOT, check=True, text=True)
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(self.build_venv)],
+            cwd=ROOT,
+            check=True,
+            text=True,
+        )
         build_python = self._python_bin(self.build_venv)
         subprocess.run(
-            [str(build_python), "-m", "pip", "wheel", ".", "--no-deps", "-w", str(self.dist_dir)],
+            [
+                str(build_python),
+                "-m",
+                "pip",
+                "wheel",
+                ".",
+                "--no-deps",
+                "-w",
+                str(self.dist_dir),
+            ],
             cwd=ROOT,
             check=True,
             text=True,
@@ -54,7 +68,12 @@ class WheelInstallSmokeTest(unittest.TestCase):
         with zipfile.ZipFile(wheels[0]) as wheel:
             self.assertNotIn("packages/state/ELEPHANT.md", wheel.namelist())
 
-        subprocess.run([sys.executable, "-m", "venv", str(self.install_venv)], cwd=ROOT, check=True, text=True)
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(self.install_venv)],
+            cwd=ROOT,
+            check=True,
+            text=True,
+        )
         install_python = self._python_bin(self.install_venv)
         subprocess.run(
             [str(install_python), "-m", "pip", "install", str(wheels[0])],

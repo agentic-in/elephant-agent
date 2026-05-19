@@ -8,7 +8,6 @@ from typing import Any
 from packages.contracts.runtime import ExecutionResult
 from packages.cron import CronRuntime
 from .handler_support import (
-    coerce_int,
     optional_string,
     tool_summary,
 )
@@ -47,7 +46,11 @@ def run_todo_action(
             status=_normalize_todo_status(invocation.arguments.get("status")),
             notes=str(invocation.arguments.get("notes") or ""),
         )
-        return tool_summary(invocation, f"created: {_todo_line(item)}", side_effects=("todo", "scratchpad"))
+        return tool_summary(
+            invocation,
+            f"created: {_todo_line(item)}",
+            side_effects=("todo", "scratchpad"),
+        )
     if action == "clear":
         removed = store.clear(session_id)
         return tool_summary(invocation, f"cleared: {removed}", side_effects=("todo", "scratchpad"))
@@ -66,7 +69,10 @@ def run_todo_action(
         status = {
             "complete": "done",
             "reopen": "open",
-        }.get(action, _normalize_todo_status(invocation.arguments.get("status"), default=current.status))
+        }.get(
+            action,
+            _normalize_todo_status(invocation.arguments.get("status"), default=current.status),
+        )
         item = store.upsert_item(
             session_id,
             item_id=item_id,
@@ -75,10 +81,18 @@ def run_todo_action(
             notes=optional_string(invocation.arguments.get("notes")) or current.notes,
             work_item_id=current.work_item_id,
         )
-        return tool_summary(invocation, f"updated: {_todo_line(item)}", side_effects=("todo", "scratchpad"))
+        return tool_summary(
+            invocation,
+            f"updated: {_todo_line(item)}",
+            side_effects=("todo", "scratchpad"),
+        )
     if action in {"remove", "delete"}:
         removed = store.remove_item(session_id, item_id)
-        return tool_summary(invocation, f"removed: {_todo_line(removed)}", side_effects=("todo", "scratchpad"))
+        return tool_summary(
+            invocation,
+            f"removed: {_todo_line(removed)}",
+            side_effects=("todo", "scratchpad"),
+        )
     raise ValueError(f"tool.todo.manage does not support action={action!r}")
 
 
@@ -93,10 +107,12 @@ def run_cron_action(invocation: ToolInvocation, *, runtime: CronRuntime | None) 
             profile_id=optional_string(invocation.arguments.get("profile_id")),
             elephant_id=optional_string(invocation.arguments.get("elephant_id")),
         )
-        summary = "\n".join(
-            f"{job.job_id} | {job.status} | {job.name} | {job.schedule_text} | {job.action_kind}"
-            for job in jobs
-        ) or "<empty>"
+        summary = (
+            "\n".join(
+                f"{job.job_id} | {job.status} | {job.name} | {job.schedule_text} | {job.action_kind}" for job in jobs
+            )
+            or "<empty>"
+        )
         return ExecutionResult(
             execution_id=invocation.invocation_id,
             episode_id=invocation.session_id,
@@ -121,7 +137,9 @@ def run_cron_action(invocation: ToolInvocation, *, runtime: CronRuntime | None) 
             schedule_text=schedule,
             payload=payload,
             profile_id=optional_string(invocation.arguments.get("profile_id")),
-            elephant_id=optional_string(invocation.arguments.get("elephant_id")) or invocation.context.elephant_id or None,
+            elephant_id=optional_string(invocation.arguments.get("elephant_id"))
+            or invocation.context.elephant_id
+            or None,
         )
         return ExecutionResult(
             execution_id=invocation.invocation_id,

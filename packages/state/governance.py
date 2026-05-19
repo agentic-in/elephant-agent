@@ -156,9 +156,7 @@ USER_PROFILE_FIELDS = (
     ),
 )
 USER_PROFILE_BIOGRAPHY_FIELD_IDS = tuple(
-    field.field_id
-    for field in USER_PROFILE_FIELDS
-    if field.field_id not in {"preferred_name", "boundaries"}
+    field.field_id for field in USER_PROFILE_FIELDS if field.field_id not in {"preferred_name", "boundaries"}
 )
 _NON_BIOGRAPHY_USER_FIELD_IDS = frozenset({"preferred_name", "boundaries"})
 
@@ -292,7 +290,13 @@ def user_profile_updates(
         if field_id is None:
             continue
         value = _clean_user_field_value(str(raw_value or ""))
-        if not value or value.lower() in {"unknown", "n/a", "none", "<unknown>", "<unset>"}:
+        if not value or value.lower() in {
+            "unknown",
+            "n/a",
+            "none",
+            "<unknown>",
+            "<unset>",
+        }:
             continue
         values[field_id] = value
     return values
@@ -340,7 +344,9 @@ def render_user_profile_text(
     return "\n".join(lines)
 
 
-def missing_required_user_fields(profile: LoadedProfile) -> tuple[UserProfileField, ...]:
+def missing_required_user_fields(
+    profile: LoadedProfile,
+) -> tuple[UserProfileField, ...]:
     values = user_profile_fields(profile)
     return tuple(
         question
@@ -349,7 +355,9 @@ def missing_required_user_fields(profile: LoadedProfile) -> tuple[UserProfileFie
     )
 
 
-def missing_optional_user_fields(profile: LoadedProfile) -> tuple[UserProfileField, ...]:
+def missing_optional_user_fields(
+    profile: LoadedProfile,
+) -> tuple[UserProfileField, ...]:
     values = user_profile_fields(profile)
     return tuple(
         question
@@ -558,7 +566,9 @@ def build_companion_identity_state(profile: LoadedProfile) -> CompanionIdentityS
     )
 
 
-def build_companion_onboarding_state(profile: LoadedProfile) -> CompanionOnboardingState:
+def build_companion_onboarding_state(
+    profile: LoadedProfile,
+) -> CompanionOnboardingState:
     identity = build_companion_identity_state(profile)
     checkpoints = (
         OnboardingCheckpoint(
@@ -596,7 +606,9 @@ def build_companion_onboarding_state(profile: LoadedProfile) -> CompanionOnboard
     )
 
 
-def build_companion_governance_state(profile: LoadedProfile) -> CompanionGovernanceState:
+def build_companion_governance_state(
+    profile: LoadedProfile,
+) -> CompanionGovernanceState:
     return CompanionGovernanceState(
         identity=build_companion_identity_state(profile),
         onboarding=build_companion_onboarding_state(profile),

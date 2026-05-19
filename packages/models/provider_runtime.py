@@ -550,9 +550,7 @@ class ProviderRuntimeResolver:
     def _transport_for_manifest(self, manifest: ProviderManifest) -> ProviderTransportDefinition:
         transport = self.transport_registry.get(manifest.transport_id)
         if transport is None:
-            raise LookupError(
-                f"no transport registered for manifest transport id: {manifest.transport_id}"
-            )
+            raise LookupError(f"no transport registered for manifest transport id: {manifest.transport_id}")
         return transport
 
     def _transport_for_transport_id(self, transport_id: str) -> ProviderTransportDefinition:

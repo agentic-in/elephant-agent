@@ -16,6 +16,7 @@ logger = logging.getLogger("elephant.daemon")
 
 # ── Cron Scheduler ─────────────────────────────────────────────
 
+
 async def cron_scheduler_loop(
     *,
     cli_state_dir: Path,
@@ -27,7 +28,6 @@ async def cron_scheduler_loop(
     from apps.gateway.cron_service import (
         build_gateway_cron_delivery_callback,
         cron_execution_should_deliver,
-        run_cron_scheduler_loop,
     )
     from apps.cli.runtime import CliRuntime
 
@@ -62,7 +62,11 @@ async def cron_scheduler_loop(
                         try:
                             delivery_callback(execution.job, execution)
                         except Exception as exc:
-                            logger.error("cron delivery failed for %s: %s", execution.job.job_id, exc)
+                            logger.error(
+                                "cron delivery failed for %s: %s",
+                                execution.job.job_id,
+                                exc,
+                            )
             elif tick_count % 10 == 0:
                 logger.debug("cron tick #%d: no due jobs", tick_count)
         except Exception as exc:
@@ -73,6 +77,7 @@ async def cron_scheduler_loop(
         if now_ts - last_maintenance_at > 86400:
             try:
                 from packages.understanding.auto_retire import retire_stale_facts
+
                 retired = retire_stale_facts(runtime.repository)
                 if retired:
                     logger.info("cron auto-retire: %d stale fact(s) retired", retired)
@@ -121,12 +126,17 @@ def _run_proactive_ask_tick(cli_state_dir: Path, delivery_callback) -> None:
                 config=proactive_config,
             )
             if result.enqueued:
-                logger.info("cron proactive-ask %s: delivered %d question(s)", adapter_id, result.enqueued)
+                logger.info(
+                    "cron proactive-ask %s: delivered %d question(s)",
+                    adapter_id,
+                    result.enqueued,
+                )
         except Exception as exc:
             logger.error("cron proactive-ask %s failed: %s", adapter_id, exc)
 
 
 # ── Supervisor ──────────────────────────────────────────────────
+
 
 async def supervisor_loop(
     *,
@@ -166,6 +176,7 @@ async def supervisor_loop(
 
 # ── Learning Worker ─────────────────────────────────────────────
 
+
 async def learning_worker_loop(
     *,
     state_dir: Path,
@@ -200,16 +211,28 @@ async def learning_worker_loop(
             job = repository.claim_learning_job(worker_id=worker_id)
             if job is None:
                 if idle_seconds is not None and time.monotonic() - last_activity >= max(1.0, idle_seconds):
-                    logger.info("learning worker idle timeout (%gs, %d job(s) completed), exiting", idle_seconds, jobs_completed)
+                    logger.info(
+                        "learning worker idle timeout (%gs, %d job(s) completed), exiting",
+                        idle_seconds,
+                        jobs_completed,
+                    )
                     break
                 _write_learning_worker_record(
-                    state_dir, pid=os.getpid(), status="idle", started_at=started_at,
+                    state_dir,
+                    pid=os.getpid(),
+                    status="idle",
+                    started_at=started_at,
                 )
                 await asyncio.sleep(0.5)
                 continue
 
             last_activity = time.monotonic()
-            logger.info("learning job claimed: %s (stage=%s, attempt=%d)", job.job_id, job.progress_stage, job.attempt_count)
+            logger.info(
+                "learning job claimed: %s (stage=%s, attempt=%d)",
+                job.job_id,
+                job.progress_stage,
+                job.attempt_count,
+            )
             _write_learning_worker_record(
                 state_dir,
                 pid=os.getpid(),
@@ -233,7 +256,10 @@ async def learning_worker_loop(
                 )
             finally:
                 _write_learning_worker_record(
-                    state_dir, pid=os.getpid(), status="running", started_at=started_at,
+                    state_dir,
+                    pid=os.getpid(),
+                    status="running",
+                    started_at=started_at,
                 )
     finally:
         _write_learning_worker_record(
@@ -273,7 +299,9 @@ def _log_supervisor_tick(tick: object, tick_count: int) -> None:
     if decisions:
         logger.info(
             "supervisor tick #%d: scanned=%d decisions=%d",
-            tick_count, scanned_count, len(decisions),
+            tick_count,
+            scanned_count,
+            len(decisions),
         )
         for decision in decisions:
             action = getattr(decision, "action", "?")
@@ -284,10 +312,15 @@ def _log_supervisor_tick(tick: object, tick_count: int) -> None:
             pending = len(getattr(snapshot, "replay_plans", []) or []) if snapshot else 0
             logger.info(
                 "supervisor decision: %s %s wc=%s retry=%d pending=%d",
-                action, loop_id, wait_kind or "<none>", retry, pending,
+                action,
+                loop_id,
+                wait_kind or "<none>",
+                retry,
+                pending,
             )
     elif tick_count % 10 == 0:
         logger.debug(
             "supervisor tick #%d: scanned=%d, no decisions",
-            tick_count, scanned_count,
+            tick_count,
+            scanned_count,
         )

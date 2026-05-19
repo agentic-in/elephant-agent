@@ -1,71 +1,11 @@
 """Gateway setup wizard helpers."""
 
 from __future__ import annotations
-import asyncio
-from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-import getpass
-import apps.cli.wizard as cli_wizard
-import importlib.util
 import json
-import os
 from pathlib import Path
-import re
-import shlex
-import signal
-import subprocess
-import sys
-import time
-from wsgiref.simple_server import make_server
 
 from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
-    render_elephant_mark,
-)
-from apps.provider_runtime import load_runtime_local_secret_env
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID
 
-from . import (
-    DEFAULT_DINGDING_CLIENT_ID_ENV,
-    DEFAULT_DINGDING_CLIENT_SECRET_ENV,
-    DEFAULT_DINGDING_ROBOT_CODE_ENV,
-    DEFAULT_DISCORD_BOT_TOKEN_ENV,
-    DEFAULT_FEISHU_APP_ID_ENV,
-    DEFAULT_FEISHU_APP_SECRET_ENV,
-    DEFAULT_FEISHU_EVENT_PATH,
-    FEISHU_ADAPTER_ID,
-    GatewayHttpService,
-    GatewayManagedRuntime,
-    GatewayManagedService,
-    SUPPORTED_DINGDING_TRANSPORTS,
-    SUPPORTED_DISCORD_TRANSPORTS,
-    SUPPORTED_FEISHU_TRANSPORTS,
-    SUPPORTED_WECOM_TRANSPORTS,
-    SUPPORTED_WEIXIN_TRANSPORTS,
-    build_gateway_app,
-    build_gateway_plugin_registry,
-    create_gateway_web_app,
-)
-from .dingding import DINGTALK_STREAM_PIP_SPEC, DingdingGatewayService
-from .discord import DISCORD_PY_PIP_SPEC, DiscordGatewayService
-from .feishu import FEISHU_SDK_PIP_SPEC, FeishuGatewayService
-from .wecom import WecomGatewayService
-from .weixin import WeixinGatewayService
 
 try:
     from prompt_toolkit.application import Application
@@ -91,6 +31,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional wizard polish
 
 from .gateway_main_wizard_ui import *  # noqa: F401,F403
 
+
 def _load_gateway_control_runtime(
     *,
     profile_dir: Path | None,
@@ -103,8 +44,16 @@ def _load_gateway_control_runtime(
         return None
     try:
         return CliRuntime.create(state_dir=state_dir)
-    except (OSError, RuntimeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        json.JSONDecodeError,
+    ):
         return None
+
 
 def _gateway_elephant_choices(
     runtime: CliRuntime,
@@ -159,6 +108,7 @@ def _gateway_elephant_choices(
     )
     return tuple(choices)
 
+
 def _gateway_session_choices(
     runtime: CliRuntime,
     *,
@@ -209,6 +159,7 @@ def _gateway_session_choices(
             )
         )
     return tuple(choices)
+
 
 def _prompt_gateway_control_binding(
     *,
@@ -298,4 +249,9 @@ def _prompt_gateway_control_binding(
         return elephant_id, str(session_answer).strip()
 
 
-__all__ = ['_load_gateway_control_runtime', '_gateway_elephant_choices', '_gateway_session_choices', '_prompt_gateway_control_binding']
+__all__ = [
+    "_load_gateway_control_runtime",
+    "_gateway_elephant_choices",
+    "_gateway_session_choices",
+    "_prompt_gateway_control_binding",
+]

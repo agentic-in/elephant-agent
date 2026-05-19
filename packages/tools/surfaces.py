@@ -18,6 +18,7 @@ from packages.skills import SkillDefinition, SkillHubEntry, SkillManifestLoadRec
 from .local_roots import default_local_allowed_roots
 from .runtime import ToolInvocation
 
+
 class PersonalModelUnderstandingSurface(Protocol):
     def search_personal_model(
         self,
@@ -98,7 +99,6 @@ class PersonalModelUnderstandingSurface(Protocol):
         **kwargs: Any,
     ) -> Mapping[str, Any]:
         """Manage proactive questions bound to a Personal Model lens/topic."""
-
 
 
 class BrowserVisionAnalyzer(Protocol):

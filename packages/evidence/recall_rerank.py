@@ -84,7 +84,11 @@ def rerank_recall_hits(
 ) -> tuple[RecallRankedHit, ...]:
     ranked = sorted(
         (score_recall_hit(hit, plan=plan, now=now) for hit in hits),
-        key=lambda item: (-item.final_score, item.hit.title.casefold(), item.hit.content.casefold()),
+        key=lambda item: (
+            -item.final_score,
+            item.hit.title.casefold(),
+            item.hit.content.casefold(),
+        ),
     )
     if limit is not None:
         return tuple(ranked[: max(0, int(limit))])

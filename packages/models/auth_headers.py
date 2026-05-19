@@ -6,10 +6,7 @@ from dataclasses import dataclass, field
 from typing import Mapping, Protocol, runtime_checkable
 
 ANTHROPIC_OAUTH_BETA_HEADER = (
-    "interleaved-thinking-2025-05-14,"
-    "fine-grained-tool-streaming-2025-05-14,"
-    "claude-code-20250219,"
-    "oauth-2025-04-20"
+    "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14,claude-code-20250219,oauth-2025-04-20"
 )
 
 
@@ -76,10 +73,7 @@ class InMemoryAuthHeaderStrategyRegistry:
 
 
 def _is_anthropic_oauth_token(api_key: str) -> bool:
-    return (
-        (api_key.startswith("sk-ant-") and not api_key.startswith("sk-ant-api"))
-        or api_key.startswith("eyJ")
-    )
+    return (api_key.startswith("sk-ant-") and not api_key.startswith("sk-ant-api")) or api_key.startswith("eyJ")
 
 
 class _CopilotBearerStrategy:
@@ -105,8 +99,7 @@ class _AnthropicOauthBearerStrategy:
         api_key = str(context.api_key or "").strip()
         provider_id = context.provider_id.strip().lower()
         return bool(api_key) and (
-            provider_id == "claude-code"
-            or (provider_id == "anthropic" and _is_anthropic_oauth_token(api_key))
+            provider_id == "claude-code" or (provider_id == "anthropic" and _is_anthropic_oauth_token(api_key))
         )
 
     def build_headers(self, context: AuthHeaderContext) -> Mapping[str, str]:
@@ -131,9 +124,7 @@ class _AnthropicApiKeyStrategy:
         api_key = str(context.api_key or "").strip()
         provider_id = context.provider_id.strip().lower()
         request_family = context.request_family.strip().lower()
-        return bool(api_key) and (
-            request_family == "messages" or provider_id in {"anthropic", "minimax"}
-        )
+        return bool(api_key) and (request_family == "messages" or provider_id in {"anthropic", "minimax"})
 
     def build_headers(self, context: AuthHeaderContext) -> Mapping[str, str]:
         api_key = str(context.api_key or "").strip()

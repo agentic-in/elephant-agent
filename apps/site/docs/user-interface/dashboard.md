@@ -82,4 +82,3 @@ flowchart LR
 
 Use the CLI when you want to work. Use the dashboard when you want to inspect,
 correct, or understand what happened.
-

@@ -2,48 +2,17 @@
 
 from __future__ import annotations
 
-import argparse
-from dataclasses import dataclass
-import os
-import random
-import re
-import sys
-from collections.abc import Iterable, Mapping
-from pathlib import Path
+from collections.abc import Mapping
 
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity
 
 from .runtime import CliRuntime
 from .turn_metrics import cache_hit_metric_line
-from .provider_flow import (
-    ProviderSelectionState,
-    provider_choices as _shared_provider_choices,
-    provider_setup_defaults,
-    run_provider_selection_wizard,
-)
-from .shell import (
-    Align,
-    BRAND_ACCENT,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    ProductizedShell,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
-    render_elephant_mark,
-)
 from .wizard import (
     WIZARD_BACK,
     WizardChoice,
-    _WizardBackSignal,
     _interactive_shell_supported,
     _wizard_choice_prompt,
     _wizard_dialogs_supported,
-    _wizard_text_prompt,
 )
 
 DEFAULT_PROVIDER_ID = "openai-compatible"
@@ -82,7 +51,6 @@ CLI_THEME_TITLE_GLYPH = "🐘"
 CLI_THEME_BULLET = "•"
 CLI_THEME_WELCOME_GLYPH = "🤝"
 CLI_THEME_SUBTITLE = "shaped from you · alive between sessions."
-
 
 
 from .cli_main_support import *  # noqa: F401,F403
@@ -142,6 +110,7 @@ def _select_elephant(runtime: CliRuntime, elephant_id: str):
     runtime.repository.switch_state(elephant_state.state_id)
     return session
 
+
 def _print_doctor(runtime: CliRuntime, *, deep: bool = False) -> None:
     provider = runtime.provider_doctor(deep=deep)
     security = runtime.security_doctor()
@@ -158,16 +127,14 @@ def _print_doctor(runtime: CliRuntime, *, deep: bool = False) -> None:
         f"active_provider_embedding_ready · {_embedding_bootstrap_ready_label(active.get('embedding_bootstrap_status'))}",
     )
     provider_checks = tuple(
-        f"{check['check']} · {check['status']}{f' · {check['summary']}' if check.get('summary') else ''}"
+        f"{check['check']} · {check['status']}{f' · {check["summary"]}' if check.get('summary') else ''}"
         for check in provider["checks"]
     )
     security_checks = tuple(
-        f"{check['check']} · {check['status']}{f' · {check['summary']}' if check.get('summary') else ''}"
+        f"{check['check']} · {check['status']}{f' · {check["summary"]}' if check.get('summary') else ''}"
         for check in security["checks"]
     )
-    extra_lines = (
-        (f"probe_summary · {provider['probe_summary']}",) if provider["probe_summary"] else ()
-    )
+    extra_lines = (f"probe_summary · {provider['probe_summary']}",) if provider["probe_summary"] else ()
     sections = [CliCardSection("Readiness", status_lines)]
     embedding_status_lines = _embedding_bootstrap_status_lines(embedding)
     if embedding_status_lines:
@@ -192,6 +159,7 @@ def _print_doctor(runtime: CliRuntime, *, deep: bool = False) -> None:
         else ("elephant init",),
     )
 
+
 def _print_elephant_created(runtime: CliRuntime, session_id: str) -> None:
     session = runtime.inspect_session(session_id)
     elephant_id = runtime.elephant_id_for_session(session)
@@ -211,8 +179,13 @@ def _print_elephant_created(runtime: CliRuntime, session_id: str) -> None:
                 tuple(ready_lines),
             ),
         ),
-        next_commands=("elephant wake", f"elephant wake --elephant-id {elephant_id}", "elephant herd"),
+        next_commands=(
+            "elephant wake",
+            f"elephant wake --elephant-id {elephant_id}",
+            "elephant herd",
+        ),
     )
+
 
 def _print_elephant_paused() -> None:
     _print_cli_card(
@@ -220,6 +193,7 @@ def _print_elephant_paused() -> None:
         "No new elephant was created.",
         next_commands=("elephant herd new <name>", "elephant wake", "elephant herd"),
     )
+
 
 def _print_herd(runtime: CliRuntime) -> None:
     herd = runtime.list_herd(limit=24)
@@ -251,13 +225,18 @@ def _print_herd(runtime: CliRuntime) -> None:
         ),
     )
 
+
 def _print_current_elephant(runtime: CliRuntime) -> None:
     session = _current_elephant_session(runtime)
     if session is None:
         _print_cli_card(
             "Current elephant",
             "No current elephant has been selected yet.",
-            next_commands=("elephant herd", "elephant herd use <name>", "elephant wake"),
+            next_commands=(
+                "elephant herd",
+                "elephant herd use <name>",
+                "elephant wake",
+            ),
         )
         return
     elephant_id = runtime.elephant_id_for_session(session)
@@ -276,7 +255,11 @@ def _print_current_elephant(runtime: CliRuntime) -> None:
                 ),
             ),
         ),
-        next_commands=(f"elephant wake --elephant-id {elephant_id}", "elephant wake", "elephant herd"),
+        next_commands=(
+            f"elephant wake --elephant-id {elephant_id}",
+            "elephant wake",
+            "elephant herd",
+        ),
     )
 
 
@@ -302,6 +285,7 @@ def _print_elephant_selected(runtime: CliRuntime, elephant_id: str) -> None:
         next_commands=("elephant wake", "elephant herd current", "elephant herd"),
     )
 
+
 def _print_elephant_retired(elephant_id: str, deleted_sessions: int) -> None:
     _print_cli_card(
         "Elephant retired",
@@ -319,12 +303,14 @@ def _print_elephant_retired(elephant_id: str, deleted_sessions: int) -> None:
         next_commands=("elephant herd", "elephant herd new <name>", "elephant wake"),
     )
 
+
 def _print_elephant_retire_paused() -> None:
     _print_cli_card(
         "Elephant retire paused",
         "No elephant was cleared.",
         next_commands=("elephant herd", "elephant wake", "elephant herd new <name>"),
     )
+
 
 def _print_all_herd_retired(deleted_elephants: int, deleted_sessions: int) -> None:
     _print_cli_card(
@@ -342,6 +328,7 @@ def _print_all_herd_retired(deleted_elephants: int, deleted_sessions: int) -> No
         ),
         next_commands=("elephant herd new <name>", "elephant init", "elephant status"),
     )
+
 
 def _prompt_elephant_choice(
     runtime: CliRuntime,
@@ -407,6 +394,7 @@ def _prompt_elephant_choice(
                 return elephant
         print("  enter an elephant number or elephant id from the list above")
 
+
 def _open_growth_episode(
     runtime: CliRuntime,
     *,
@@ -453,14 +441,18 @@ def _open_growth_episode(
         return opened.episode_id, f"Opened elephant {selected.elephant_id}"
     if current is not None:
         opened = open_next(current)
-        return opened.episode_id, f"Opened elephant {runtime.elephant_id_for_session(current)}"
+        return (
+            opened.episode_id,
+            f"Opened elephant {runtime.elephant_id_for_session(current)}",
+        )
     raise ValueError("multiple herd are available; pass --elephant-id or enter wake from an interactive TTY")
+
 
 def _print_elephant_blocked(runtime: CliRuntime) -> None:
     report = runtime.provider_doctor()
     provider = report["provider"]
     checks = tuple(
-        f"{check['check']} · {check['status']}{f' · {check['summary']}' if check.get('summary') else ''}"
+        f"{check['check']} · {check['status']}{f' · {check["summary"]}' if check.get('summary') else ''}"
         for check in report["checks"]
     )
     sections = [
@@ -482,11 +474,12 @@ def _print_elephant_blocked(runtime: CliRuntime) -> None:
         next_commands=("elephant init", "elephant status"),
     )
 
+
 def _print_grow_blocked(runtime: CliRuntime) -> None:
     report = runtime.provider_doctor()
     provider = report["provider"]
     checks = tuple(
-        f"{check['check']} · {check['status']}{f' · {check['summary']}' if check.get('summary') else ''}"
+        f"{check['check']} · {check['status']}{f' · {check["summary"]}' if check.get('summary') else ''}"
         for check in report["checks"]
     )
     sections = [
@@ -508,19 +501,14 @@ def _print_grow_blocked(runtime: CliRuntime) -> None:
         next_commands=("elephant init", "elephant status"),
     )
 
+
 def _provider_session_ready(report: dict[str, object]) -> bool:
     raw_checks = tuple(report.get("checks", ()))
     if not raw_checks:
         return str(report.get("status", "")).strip().lower() == "ready"
-    checks = {
-        str(check.get("check")): str(check.get("status"))
-        for check in raw_checks
-        if isinstance(check, dict)
-    }
-    return (
-        checks.get("provider_profile") == "configured"
-        and checks.get("credentials") in {"available", "not-required"}
-    )
+    checks = {str(check.get("check")): str(check.get("status")) for check in raw_checks if isinstance(check, dict)}
+    return checks.get("provider_profile") == "configured" and checks.get("credentials") in {"available", "not-required"}
+
 
 def _print_no_elephants() -> None:
     _print_cli_card(
@@ -528,6 +516,7 @@ def _print_no_elephants() -> None:
         "Create an Elephant Agent elephant before entering the wake surface.",
         next_commands=("elephant herd new <name>", "elephant status"),
     )
+
 
 def _print_assistant_turn(runtime: CliRuntime, outcome, *, title: str = "Elephant Agent turn") -> None:
     provider = dict(runtime.provider_summary())
@@ -577,8 +566,13 @@ def _print_provider_turn_failed(
         title,
         "The provider failed before the Loop completed.",
         sections=(CliCardSection("Recovery state", tuple(lines)),),
-        next_commands=("elephant provider status", "elephant status", "elephant wake --message \"...\""),
+        next_commands=(
+            "elephant provider status",
+            "elephant status",
+            'elephant wake --message "..."',
+        ),
     )
+
 
 __all__ = [
     "DEFAULT_PROVIDER_ID",

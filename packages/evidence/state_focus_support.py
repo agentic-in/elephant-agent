@@ -118,16 +118,24 @@ def build_resume_packet(
         reasons.append(f"elephant focus resume signal={focus.continuity_signal}")
     if focus is not None:
         reasons.append(f"elephant focus scope={focus.focus_scope}")
-    opener = "Resume" if focus is None or focus.focus_family == "resume" or focus.continuity_signal != "none" else "Continue"
+    opener = (
+        "Resume" if focus is None or focus.focus_family == "resume" or focus.continuity_signal != "none" else "Continue"
+    )
     if top is not None:
         reasons.extend(reason.detail for reason in top.reasons[:3])
         if top.replay_summary:
             reasons.append(top.replay_summary)
-        focused_work_item_ids = tuple(work_item_id for work_item_id in focus_ids if work_item_id in top.evidence.work_item_ids)
+        focused_work_item_ids = tuple(
+            work_item_id for work_item_id in focus_ids if work_item_id in top.evidence.work_item_ids
+        )
         if focused_work_item_ids:
             focus_ids = focused_work_item_ids
         replay_clause = f" Replay: {top.replay_summary}." if top.replay_summary else ""
-        lead_phrase = "inherit the resolved focus and lead with" if focus is not None and focus.focus_work_item_ids else "lead with"
+        lead_phrase = (
+            "inherit the resolved focus and lead with"
+            if focus is not None and focus.focus_work_item_ids
+            else "lead with"
+        )
         summary = (
             f"{opener} {request.episode_id} around {', '.join(focus_ids[:2]) or 'the active thread'}; "
             f"{lead_phrase} {top.evidence_id} because {', '.join(reason.detail for reason in top.reasons[:2])}.{replay_clause}"

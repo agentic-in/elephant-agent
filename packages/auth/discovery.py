@@ -139,12 +139,7 @@ def _read_anthropic_token_from_payload(
     claude_code_oauth = payload.get("claudeAiOauth")
     if isinstance(claude_code_oauth, Mapping):
         payload = {str(key): value for key, value in claude_code_oauth.items()}
-    access_token = str(
-        payload.get("accessToken")
-        or payload.get("access_token")
-        or payload.get("token")
-        or ""
-    ).strip()
+    access_token = str(payload.get("accessToken") or payload.get("access_token") or payload.get("token") or "").strip()
     if not access_token:
         return None
     expires_at = payload.get("expiresAt") or payload.get("expires_at")
@@ -183,11 +178,7 @@ def _read_copilot_resolution() -> SecretValueResolution | None:
         value = str(os.environ.get(env_name) or "").strip()
         if value and not value.startswith("ghp_"):
             return SecretValueResolution(value=value, source=f"env:{env_name}")
-    clean_env = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in {"GH_TOKEN", "GITHUB_TOKEN"}
-    }
+    clean_env = {key: value for key, value in os.environ.items() if key not in {"GH_TOKEN", "GITHUB_TOKEN"}}
     try:
         completed = subprocess.run(
             ["gh", "auth", "token"],
@@ -315,7 +306,11 @@ class EnvironmentSecretStore(SecretStore):
         env = self.environ or os.environ
         candidates: list[str] = list(reference.env_var_candidates())
         seen = set(candidates)
-        for candidate in (reference.secret_name, reference.secret_key, reference.reference_id):
+        for candidate in (
+            reference.secret_name,
+            reference.secret_key,
+            reference.reference_id,
+        ):
             normalized = _normalize_env_name(candidate)
             if normalized and normalized not in seen:
                 seen.add(normalized)

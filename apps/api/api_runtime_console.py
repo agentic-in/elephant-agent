@@ -140,6 +140,7 @@ def _tools(app: Any, *, tool_overrides: Mapping[str, Any]) -> list[dict[str, Any
         )
     return rows
 
+
 def _cron_jobs(app: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for job in app.cron_runtime.list_jobs():
@@ -183,7 +184,13 @@ def _proactive_ask_system_job(app: Any) -> dict[str, Any] | None:
             "status": "scheduled" if enabled else "paused",
             "profileId": None,
             "eggId": None,
-            "payload": {"type": "proactive_ask", "enabled": enabled, "idle_threshold_minutes": idle, "daily_max": daily_max, "quiet_hours": [qs, qe]},
+            "payload": {
+                "type": "proactive_ask",
+                "enabled": enabled,
+                "idle_threshold_minutes": idle,
+                "daily_max": daily_max,
+                "quiet_hours": [qs, qe],
+            },
             "skills": [],
             "createdAt": None,
             "updatedAt": None,

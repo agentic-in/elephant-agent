@@ -18,7 +18,6 @@ from packages.contracts.runtime import (
     WaitCondition,
 )
 from packages.kernel.resume_support import (
-    PendingToolReplayPlan,
     apply_resume_snapshot,
     plan_pending_tool_replay,
     snapshot_resume,
