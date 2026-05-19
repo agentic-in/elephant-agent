@@ -173,7 +173,8 @@
       "packages/growth/**",
       "packages/understanding/**",
       "packages/experience/**",
-      "packages/continuity/**"
+      "packages/continuity/**",
+      "packages/reflect/**"
     ],
     "infra": [
       "packages/auth/**",

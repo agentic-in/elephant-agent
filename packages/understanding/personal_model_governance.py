@@ -278,6 +278,86 @@ def skill_affinity_index_id(topic: object) -> str:
     return ""
 
 
+def is_skill_optimization_topic(topic: object) -> bool:
+    resolved = valid_topic_key(topic)
+    return resolved.startswith("world.skills.optimization.") or resolved.startswith("skills.optimization.")
+
+
+def skill_optimization_scope(topic: object) -> str:
+    resolved = valid_topic_key(topic)
+    parts = resolved.split(".")
+    if len(parts) < 4:
+        return ""
+    if parts[0] not in {"world", "skills"} or parts[1] != "skills" or parts[2] != "optimization":
+        return ""
+    return parts[3]
+
+
+def skill_optimization_candidate_key(topic: object) -> str:
+    resolved = valid_topic_key(topic)
+    parts = resolved.split(".")
+    if len(parts) < 5:
+        return ""
+    if parts[0] not in {"world", "skills"}:
+        return ""
+    if parts[1] != "skills" or parts[2] != "optimization":
+        return ""
+    return parts[-1]
+
+
+_ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES = frozenset({"pending", "approved", "applied", "rejected"})
+_SKILL_OPTIMIZATION_REVIEW_STATUS_ALIASES = {"new": "pending"}
+
+
+def _string_metadata(metadata: Mapping[str, object] | None) -> dict[str, str]:
+    return {str(key): str(value) for key, value in dict(metadata or {}).items() if clean(value)}
+
+
+def canonical_skill_optimization_review_status(value: object, *, default: str = "pending") -> str:
+    resolved = clean(value).lower()
+    resolved = _SKILL_OPTIMIZATION_REVIEW_STATUS_ALIASES.get(resolved, resolved)
+    if resolved in _ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES:
+        return resolved
+    fallback = clean(default).lower()
+    fallback = _SKILL_OPTIMIZATION_REVIEW_STATUS_ALIASES.get(fallback, fallback)
+    return fallback if fallback in _ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES else "pending"
+
+
+def normalize_skill_optimization_candidate_metadata(
+    topic: object,
+    metadata: Mapping[str, object] | None = None,
+    *,
+    action: str = "",
+    current_metadata: Mapping[str, object] | None = None,
+) -> dict[str, str]:
+    resolved_topic = valid_topic_key(topic)
+    current = _string_metadata(current_metadata)
+    incoming = _string_metadata(metadata)
+    if not is_skill_optimization_topic(resolved_topic):
+        return {**current, **incoming}
+
+    merged = {**current, **incoming}
+    candidate_key = clean(merged.get("candidate_key")) or skill_optimization_candidate_key(resolved_topic)
+    scope = skill_optimization_scope(resolved_topic)
+    current_status = canonical_skill_optimization_review_status(current.get("review_status"), default="pending")
+    default_status = "pending" if clean(action).lower() == "remember" else current_status
+
+    merged["projection_policy"] = "skill_optimization_candidate"
+    merged["retention_lifecycle"] = "draft"
+    merged["review_status"] = canonical_skill_optimization_review_status(
+        merged.get("review_status"),
+        default=default_status,
+    )
+    if candidate_key:
+        merged["candidate_key"] = candidate_key
+        merged.setdefault("candidate_id", f"skillopt_{candidate_key}")
+    if scope and scope != "new":
+        merged.setdefault("index_id", scope)
+        merged.setdefault("target_scope", scope)
+
+    return {str(key): str(value) for key, value in merged.items() if clean(value)}
+
+
 def numeric_mentions(value: object) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(

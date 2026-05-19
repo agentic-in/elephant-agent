@@ -509,9 +509,9 @@ def builtin_tool_definitions(
                     "text": {"type": "string", "description": "Claim text. Required for action=remember or action=correct."},
                     "ref": {"type": "string", "description": "Exact claim ref from personal_model.search. Required for delete/restore; strongly preferred for correct/forget/dispute when topic is uncertain."},
                     "reason": {"type": "string", "description": "Why this update is warranted, preferably grounded in the user's words."},
-                    "source": {"type": "string", "enum": ["user_said", "user_corrected", "learned"], "description": "Where the update came from."},
-                    "recall_policy": {"type": "string", "enum": ["stable", "current", "temporary", "review"], "description": "Optional; use only when obvious: stable, current, temporary, or review."},
-                    "metadata": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Optional governance metadata. Skill affinity facts should include skill_id, index_id, and projection_policy when known."},
+                    "source": {"type": "string", "enum": ["user_said", "user_corrected", "learned"], "description": "Where the update came from. For world.skills.optimization.* candidates, use learned."},
+                    "recall_policy": {"type": "string", "enum": ["stable", "current", "temporary", "review"], "description": "Optional; use only when obvious: stable, current, temporary, or review. For world.skills.optimization.* candidates, use review."},
+                    "metadata": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Optional governance metadata. Skill affinity facts should include skill_id, index_id, and projection_policy when known. Skill optimization candidates should include candidate_key and review_status=pending on creation; runtime governance will normalize projection_policy, source, and retention metadata."},
                 },
             ),
             side_effects=ToolSideEffectMetadata(

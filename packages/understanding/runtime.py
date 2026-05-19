@@ -23,6 +23,8 @@ from .personal_model_governance import (
     inheritable_recall_metadata,
     is_protected_topic,
     is_single_active_topic,
+    is_skill_optimization_topic,
+    normalize_skill_optimization_candidate_metadata,
     personal_model_health_report,
     protected_topic_metadata,
     narrowing_suggestions,
@@ -899,6 +901,16 @@ class PersonalModelUnderstandingSurface:
             else {}
         )
         caller_metadata = {str(key): str(value) for key, value in dict(metadata or {}).items() if str(value).strip()}
+        if is_skill_optimization_topic(resolved_topic):
+            current_candidate_metadata = dict(targets[0].metadata or {}) if targets else {}
+            caller_metadata = normalize_skill_optimization_candidate_metadata(
+                resolved_topic,
+                caller_metadata,
+                action=resolved_action,
+                current_metadata=current_candidate_metadata,
+            )
+            resolved_source = "learned"
+            resolved_recall_policy = "review"
         protection_metadata = protected_topic_metadata(resolved_topic, caller_metadata)
         base_metadata = {
             **inherited_recall_metadata,

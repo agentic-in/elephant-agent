@@ -48,7 +48,7 @@ def _assemble_system_prompt(features: tuple[Feature, ...], *, conservatism: str)
     sections.extend(["", f"Approach: {conservatism_prompt}"])
 
     # Shared knowledge
-    if any(f.feature_id in ("pm", "questions", "skills", "dream") for f in features):
+    if any(f.feature_id in ("pm", "questions", "skills", "dream", "skill_optimization") for f in features):
         sections.extend(["", TOPIC_FORMAT])
 
     sections.extend(["", LANGUAGE_RULE, "", CLAIM_TEXT_RULE, "", BOUNDARIES])

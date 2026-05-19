@@ -172,7 +172,8 @@
         "packages/growth/**",
         "packages/understanding/**",
         "packages/experience/**",
-        "packages/continuity/**"
+        "packages/continuity/**",
+        "packages/reflect/**"
       ],
       "read_first": [
         "docs/system-design/system-layer-model.md"

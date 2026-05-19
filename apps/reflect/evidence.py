@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from packages.contracts.runtime import LearningJob
+from packages.reflect import aggregate_signals, extract_trajectory_signals
 
 from .features.types import Feature
 
@@ -44,6 +45,24 @@ def _internal_artifact_text(value: object) -> bool:
 def _fact_topic(fact: Any) -> str:
     metadata = getattr(fact, "metadata", {}) if isinstance(getattr(fact, "metadata", {}), Mapping) else {}
     return str(metadata.get("topic") or "").strip()
+
+
+def _skill_catalog(runtime: Any) -> tuple[Any, ...]:
+    list_skills = getattr(runtime, "list_skills", None)
+    if callable(list_skills):
+        try:
+            return tuple(list_skills())
+        except Exception:
+            return ()
+    skill_runtime = getattr(runtime, "skill_runtime", None)
+    if skill_runtime is not None:
+        list_skills = getattr(skill_runtime, "list_skills", None)
+        if callable(list_skills):
+            try:
+                return tuple(list_skills())
+            except Exception:
+                return ()
+    return ()
 
 
 def _basic_user_anchor_lines(facts: tuple[Any, ...]) -> tuple[str, ...]:
@@ -326,12 +345,35 @@ def build_evidence(
             f"user_timezone: {user_tz}",
         ])
 
+    if "skill_optimization" in feature_ids:
+        signals = extract_trajectory_signals(
+            runtime.repository,
+            personal_model_id=job.personal_model_id,
+        )
+        candidates = aggregate_signals(
+            signals,
+            runtime.repository,
+            personal_model_id=job.personal_model_id,
+            skills=_skill_catalog(runtime),
+        )
+        lines.extend([
+            "",
+            "## Trajectory Signals",
+            f"signals: {len(signals)}",
+            *(f"- [{signal.signal_type}] {signal.summary} (confidence={signal.confidence:.2f}, count={signal.occurrence_count})" for signal in signals[:15]),
+            "",
+            "## Optimization Candidates",
+            f"candidates: {len(candidates)}",
+            *(f"- [{candidate.optimization_type}] {candidate.suggested_action} (confidence={candidate.confidence:.2f})" for candidate in candidates[:5]),
+        ])
+
     # Episode evidence for features that learn from the supplied close packet.
     # Dream is a scheduled consolidation mode and intentionally receives no
     # episode-close packet, even when paired with question/skill maintenance.
     if (
         str(job.trigger or "").strip().lower() not in _INIT_TRIGGERS
         and "dream" not in feature_ids
+        and "skill_optimization" not in feature_ids
         and feature_ids & {"pm", "questions", "skills"}
     ):
         episode_summary = _compact(getattr(episode, "exit_summary", "") if episode is not None else "", limit=700)
