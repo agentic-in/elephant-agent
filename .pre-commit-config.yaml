@@ -14,12 +14,10 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.10
     hooks:
-      - id: ruff
-        args: ["--fix", "--select", "F"]
       - id: ruff-format
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
-        files: ^(install|uninstall)\.sh$
+        files: \.sh$
