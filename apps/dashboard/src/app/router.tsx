@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, createHashRouter } from "react-router-dom";
 
 import {
   CronPage,
@@ -20,15 +20,18 @@ import {
 } from "../routes/console/ConsolePages";
 import { PersonalModelMapPage } from "../routes/console/PersonalModelMapPage";
 import { ChatPage } from "../routes/chat/ChatPage";
+import { ProfileBuilderPage } from "../routes/profile/ProfileBuilderPage";
+import { SourcesPage } from "../routes/sources/SourcesPage";
 import { DashboardShell } from "../shell/DashboardShell";
+import { isDesktopRuntime } from "../lib/desktopBridge";
 
-export const router = createBrowserRouter(
-  [
-    {
-      path: "/",
+const dashboardRoutes = [
+  {
+    path: "/",
     element: <DashboardShell />,
     children: [
-      { index: true, element: <PersonalModelMapPage /> },
+      { index: true, element: isDesktopRuntime() ? <ProfileBuilderPage /> : <PersonalModelMapPage /> },
+      { path: "profile-builder", element: <ProfileBuilderPage /> },
       { path: "palace", element: <PersonalModelMapPage /> },
       { path: "you", element: <PersonalModelsPage /> },
       { path: "diary", element: <PersonalModelsPage /> },
@@ -36,7 +39,10 @@ export const router = createBrowserRouter(
       { path: "herd", element: <StatesPage /> },
       { path: "states", element: <StatesPage /> },
       { path: "runtime", element: <RuntimePage /> },
+      { path: "activity", element: <RuntimePage /> },
       { path: "chat", element: <ChatPage /> },
+      { path: "wake", element: <ChatPage /> },
+      { path: "sources", element: <SourcesPage /> },
       { path: "questions", element: <QuestionsPage /> },
       { path: "providers", element: <ProvidersPage /> },
       { path: "models", element: <ModelsPage /> },
@@ -51,6 +57,8 @@ export const router = createBrowserRouter(
       { path: "usage-logs", element: <UsageLogsPage /> },
     ],
   },
-  ],
-  { basename: "/dashboard" },
-);
+];
+
+export const router = isDesktopRuntime()
+  ? createHashRouter(dashboardRoutes)
+  : createBrowserRouter(dashboardRoutes, { basename: "/dashboard" });

@@ -290,6 +290,7 @@
         "scripts/**",
         "netlify.toml",
         "apps/*.py",
+        "apps/desktop/**",
         "apps/reflect/**",
         "apps/learning_agents/**"
       ],

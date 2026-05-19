@@ -1,0 +1,17 @@
+{
+  "name": "@elephant/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix ../dashboard run build && tauri dev",
+    "build": "npm --prefix ../dashboard run build && tauri build",
+    "check": "cargo check --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0"
+  }
+}

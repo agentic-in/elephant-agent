@@ -157,6 +157,8 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
             return _dispatch_elephants(self, method, parts[1:], body)
         if parts[0] == "episodes":
             return self._dispatch_episodes(method, parts[1:], body)
+        if parts[0] == "sources":
+            return self._dispatch_sources(method, parts[1:], body)
         if parts[0] == "states":
             return self._dispatch_states(method, parts[1:], body)
         return APIResponse(404, {"error": "not_found"})

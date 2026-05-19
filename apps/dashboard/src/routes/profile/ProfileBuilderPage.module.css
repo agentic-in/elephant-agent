@@ -1,0 +1,340 @@
+.page {
+  width: min(calc(100% - 32px), var(--dashboard-max-width));
+  margin: 0 auto;
+  padding: 1.35rem 0 3rem;
+}
+
+.hero,
+.setupGrid,
+.reviewGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero {
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.34fr);
+  align-items: stretch;
+  margin-bottom: 1rem;
+}
+
+.heroCopy,
+.presenceCard,
+.panel,
+.errorBanner {
+  border: 1px solid var(--dashboard-border);
+  border-radius: var(--dashboard-radius-card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
+    var(--dashboard-surface-panel);
+  box-shadow: var(--dashboard-shadow-soft);
+}
+
+.heroCopy {
+  display: grid;
+  gap: 0.55rem;
+  padding: clamp(1.2rem, 2vw, 1.55rem);
+  overflow: hidden;
+}
+
+.heroCopy span,
+.panel > span,
+.panelHeader span,
+.reviewItem span,
+.lensGrid span,
+.importStats span,
+.field span,
+.pathList span {
+  color: var(--dashboard-text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.heroCopy h1 {
+  color: var(--dashboard-text);
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  line-height: 1;
+}
+
+.heroCopy p,
+.panel p,
+.featureList,
+.errorBanner p {
+  color: var(--dashboard-text-secondary);
+  line-height: 1.55;
+}
+
+.presenceCard {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.presenceCard img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.presenceCard div,
+.field,
+.panel,
+.reviewItem,
+.reviewItem > div,
+.pathList,
+.errorBanner {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.presenceCard strong,
+.panel h2,
+.reviewItem strong {
+  color: var(--dashboard-text);
+  letter-spacing: -0.02em;
+}
+
+.presenceCard span {
+  color: var(--dashboard-text-muted);
+  font-size: 0.82rem;
+}
+
+.setupGrid,
+.reviewGrid {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.46fr);
+  align-items: start;
+}
+
+.panel {
+  min-width: 0;
+  padding: 1rem;
+}
+
+.panel h2 {
+  font-size: 1.18rem;
+}
+
+.panelHeader,
+.actionRow,
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--dashboard-text);
+  outline: none;
+}
+
+.field input {
+  min-height: 2.65rem;
+  padding: 0 0.82rem;
+}
+
+.field textarea {
+  min-height: 8rem;
+  padding: 0.78rem 0.82rem;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: var(--dashboard-border-strong);
+  box-shadow: 0 0 0 3px rgba(121, 175, 212, 0.16);
+}
+
+.featureList {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.pathList {
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px dashed var(--dashboard-border);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.pathList code {
+  color: var(--dashboard-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.errorBanner {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-color: rgba(184, 93, 87, 0.26);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.errorBanner strong {
+  color: #8a403b;
+}
+
+.reviewGrid {
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.48fr);
+}
+
+.lensGrid,
+.importStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.lensGrid div,
+.importStats div {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.72rem;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.lensGrid strong,
+.importStats strong {
+  color: var(--dashboard-text);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.reviewList {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.reviewItem {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 0.8rem;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0.68rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.reviewItem strong {
+  overflow-wrap: anywhere;
+  font-size: 0.93rem;
+}
+
+.buildingScreen {
+  min-height: calc(100vh - 96px);
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+
+.buildingCard {
+  display: grid;
+  justify-items: center;
+  gap: 1.2rem;
+  width: min(100%, 34rem);
+  min-height: 23rem;
+  padding: 4rem 2rem;
+  border: 1px solid rgba(54, 103, 135, 0.18);
+  border-radius: 0.88rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 28px 70px rgba(45, 92, 123, 0.14);
+}
+
+.orb {
+  display: grid;
+  place-items: center;
+  width: 5.4rem;
+  height: 5.4rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.86), transparent 42%),
+    linear-gradient(90deg, rgba(210, 215, 220, 0.8), rgba(232, 234, 237, 0.3));
+  animation: profileOrb 1.8s ease-in-out infinite;
+}
+
+.orb img {
+  width: 2.2rem;
+  height: 2.2rem;
+  object-fit: contain;
+  opacity: 0.58;
+}
+
+.buildingCard h1 {
+  color: #767b7c;
+  font-size: 1.4rem;
+  letter-spacing: -0.03em;
+}
+
+.buildingCard p {
+  color: #7b8286;
+}
+
+.skeletonStack {
+  display: grid;
+  gap: 0.75rem;
+  width: min(100%, 17rem);
+  margin-top: 0.8rem;
+}
+
+.skeletonStack span {
+  height: 0.78rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e9eaeb, #d6d8d9, #e9eaeb);
+  background-size: 220% 100%;
+  animation: skeletonSweep 1.4s ease-in-out infinite;
+}
+
+.skeletonStack span:nth-child(2) {
+  width: 76%;
+}
+
+.skeletonStack span:nth-child(3) {
+  width: 50%;
+}
+
+@keyframes profileOrb {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes skeletonSweep {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .setupGrid,
+  .reviewGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .lensGrid,
+  .importStats,
+  .reviewItem {
+    grid-template-columns: 1fr;
+  }
+}

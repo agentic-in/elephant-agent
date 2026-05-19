@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elephant Agent",
+  "version": "0.1.0",
+  "identifier": "ai.agentic.elephant.desktop",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../dashboard run build",
+    "beforeBuildCommand": "npm --prefix ../dashboard run build",
+    "frontendDist": "../../dashboard/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Elephant Agent",
+        "label": "main",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 680,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "Productivity"
+  }
+}

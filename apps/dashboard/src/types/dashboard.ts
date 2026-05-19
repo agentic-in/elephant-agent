@@ -101,3 +101,26 @@ export interface InternalDashboardSnapshot {
     models: DashboardRow;
   };
 }
+
+export interface DesktopCoreStatus {
+  apiUrl: string;
+  coreStatus: "starting" | "ready" | "stopped" | "error";
+  databasePath: string;
+  workerStatus: string;
+  version: string;
+  error?: string | null;
+}
+
+export interface SourceImportStatus {
+  import_id: string;
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  scanned_count: number;
+  admitted_count: number;
+  skipped_count: number;
+  skipped_reasons: Record<string, number>;
+  episode_id: string | null;
+  job_id: string | null;
+  error?: string | null;
+  paths?: string[];
+}

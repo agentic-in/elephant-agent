@@ -83,6 +83,7 @@ from . import api_runtime_provider_methods as _provider_methods
 from . import api_runtime_surface_methods as _surface_methods
 from . import api_runtime_recall_methods as _recall_methods
 from . import api_runtime_http_methods as _http_methods
+from . import api_runtime_source_methods as _source_methods
 from . import api_runtime_console as _console_methods
 from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
@@ -298,6 +299,7 @@ class ElephantAPIApp:
             )
         )
         self._loops: dict[str, list[APILoopRecord]] = {}
+        self._source_imports: dict[str, dict[str, Any]] = {}
 
 ElephantAPIApp.list_providers = _provider_methods.list_providers
 ElephantAPIApp.setup_provider = _provider_methods.setup_provider
@@ -355,6 +357,7 @@ ElephantAPIApp._dispatch_providers = _http_methods._dispatch_providers
 ElephantAPIApp._dispatch_internal = _http_methods._dispatch_internal
 ElephantAPIApp._dispatch_operator = _http_methods._dispatch_operator
 ElephantAPIApp._dispatch_episodes = _http_methods._dispatch_episodes
+ElephantAPIApp._dispatch_sources = _source_methods._dispatch_sources
 ElephantAPIApp._dispatch_states = _http_methods._dispatch_states
 ElephantAPIApp.run_cron_job_now = _http_methods.run_cron_job_now
 ElephantAPIApp.run_proactive_ask_now = _cron_methods.run_proactive_ask_now

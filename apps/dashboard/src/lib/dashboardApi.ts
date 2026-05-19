@@ -1,4 +1,10 @@
-import type { DashboardRow, DashboardSection, InternalDashboardSnapshot } from "../types/dashboard";
+import { desktopApiBaseUrl } from "./desktopBridge";
+import type {
+  DashboardRow,
+  DashboardSection,
+  InternalDashboardSnapshot,
+  SourceImportStatus,
+} from "../types/dashboard";
 
 const DEFAULT_DASHBOARD_LIVE_TIMEOUT_MS = 30_000;
 const DEFAULT_DASHBOARD_TURN_TIMEOUT_MS = 5 * 60_000;
@@ -222,16 +228,22 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function resolveApiCandidates(route: string): readonly string[] {
+async function resolveApiCandidates(route: string): Promise<readonly string[]> {
+  const desktopBase = await desktopApiBaseUrl();
   if (typeof window === "undefined") {
-    return dashboardApiBase ? [`${dashboardApiBase}${route}`] : [route];
+    return desktopBase ? [`${desktopBase}${route}`] : dashboardApiBase ? [`${dashboardApiBase}${route}`] : [route];
   }
 
   const candidates: string[] = [];
   const { hostname, origin, port } = window.location;
   const isLocalHost = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "0.0.0.0";
 
-  candidates.push(`${origin}${route}`);
+  if (desktopBase) {
+    candidates.push(`${desktopBase}${route}`);
+  }
+  if (origin.startsWith("http")) {
+    candidates.push(`${origin}${route}`);
+  }
   if (dashboardApiBase) {
     candidates.push(`${dashboardApiBase}${route}`);
   } else if (isLocalHost && port !== "8000") {
@@ -306,7 +318,7 @@ async function requestOperatorApiOnce<T>(
 ): Promise<T> {
   throwIfAborted(options.signal);
 
-  const endpoints = resolveApiCandidates(route);
+  const endpoints = await resolveApiCandidates(route);
   const requestController = new AbortController();
   let timedOut = false;
   let completed = false;
@@ -332,7 +344,7 @@ async function requestOperatorApiOnce<T>(
       throw new DashboardLoadAbortedError();
     }
     if (timedOut) {
-      throw new Error(timeoutMessage(DASHBOARD_LIVE_TIMEOUT_MS, endpoints));
+      throw new Error(timeoutMessage(timeoutMs, endpoints));
     }
     throw error;
   } finally {
@@ -349,7 +361,7 @@ async function requestOperatorApi<T>(
   init: RequestInit = {},
   options: OperatorApiRequestOptions = {},
 ): Promise<T> {
-  const endpoints = resolveApiCandidates(route);
+  const endpoints = await resolveApiCandidates(route);
   let lastError: unknown;
   // Initial attempt + configured retry delays. The Operator API typically
   // recovers within a few seconds of launch; retrying transparently keeps the
@@ -452,6 +464,31 @@ export function createDashboardEgg(
       method: "POST",
       body: JSON.stringify(payload),
     },
+    options,
+  );
+}
+
+export function importSourcePaths(
+  payload: { paths: string[]; elephant_id?: string; mode: "profile_builder" | "manual" },
+  options: OperatorApiRequestOptions = {},
+): Promise<SourceImportStatus> {
+  return requestOperatorApi<SourceImportStatus>(
+    "/v1/sources/import",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { ...options, timeoutMs: options.timeoutMs ?? DEFAULT_DASHBOARD_TURN_TIMEOUT_MS },
+  );
+}
+
+export function loadSourceImportStatus(
+  importId: string,
+  options: OperatorApiRequestOptions = {},
+): Promise<SourceImportStatus> {
+  return requestOperatorApi<SourceImportStatus>(
+    `/v1/sources/imports/${encodeURIComponent(importId)}`,
+    {},
     options,
   );
 }

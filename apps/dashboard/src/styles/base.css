@@ -49,11 +49,10 @@ body::after {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background:
-    linear-gradient(var(--dashboard-line-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--dashboard-line-grid) 1px, transparent 1px);
-  background-size: 100% 56px, 56px 100%;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.16), transparent 72%);
+  background-image: radial-gradient(circle, rgba(54, 103, 135, 0.2) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 78%);
+  opacity: 0.42;
 }
 
 a {

@@ -213,6 +213,7 @@
       "pyproject.toml",
       "scripts/**",
       "netlify.toml",
+      "apps/desktop/**",
       "apps/*.py"
     ]
   },
@@ -438,6 +439,10 @@
       }
     ],
     "app_scaffold": [
+      {
+        "path": "apps/desktop/AGENTS.md",
+        "reason": "Desktop shell changes must keep OS-specific lifecycle logic out of core product layers."
+      },
       {
         "path": "docs/agent/repo-map.md",
         "reason": "Scaffold files must still land in the documented repo structure."

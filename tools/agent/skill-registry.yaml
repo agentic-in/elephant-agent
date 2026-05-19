@@ -290,6 +290,7 @@
         "pyproject.toml",
         "scripts/**",
         "netlify.toml",
+        "apps/desktop/**",
         "apps/reflect/**",
         "apps/learning_agents/**"
       ],

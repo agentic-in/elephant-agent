@@ -9,6 +9,7 @@ import {
   resolveNavigationGroup,
 } from "../lib/dashboardNavigation";
 import { buildDashboardRouteTarget } from "../lib/dashboardRouting";
+import { isDesktopRuntime } from "../lib/desktopBridge";
 import { DitherBackground } from "./DitherBackground";
 import styles from "./DashboardShell.module.css";
 
@@ -16,6 +17,7 @@ export function DashboardShell(): React.JSX.Element {
   const location = useLocation();
   const currentItem = resolveNavigation(location.pathname);
   const currentGroup = resolveNavigationGroup(location.pathname);
+  const desktop = isDesktopRuntime();
 
   useEffect(() => {
     document.title = `${currentItem.label} | Elephant Agent Dashboard`;
@@ -31,7 +33,7 @@ export function DashboardShell(): React.JSX.Element {
               <img src={elephantLogo} alt="" />
               <div className={styles.brandCopy}>
                 <strong>Elephant Agent</strong>
-                <span>path in view · {currentItem.label.toLowerCase()}</span>
+                <span>{desktop ? "desktop" : "dashboard"} · {currentItem.label.toLowerCase()}</span>
               </div>
             </NavLink>
 

@@ -82,7 +82,7 @@ async function healthReady(apiBaseUrl) {
 
 async function dashboardReady(apiBaseUrl) {
   try {
-    const response = await fetch(`${apiBaseUrl}/v1/internal/dashboard`, {
+    const response = await fetch(`${apiBaseUrl}/v1/internal/dashboard/overview`, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(OPERATOR_CONSOLE_REQUEST_TIMEOUT_MS),
     });
