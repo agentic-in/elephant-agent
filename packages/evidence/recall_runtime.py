@@ -17,8 +17,8 @@ from packages.contracts.runtime import (
 from .runtime import (
     DefaultEvidenceRetriever,
     build_embedding_index_policy,
-    build_resume_packet,
 )
+from .state_focus_support import build_resume_packet
 from .unified_recall import UnifiedRecallRequest, unified_recall
 
 
