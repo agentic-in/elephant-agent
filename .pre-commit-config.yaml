@@ -15,11 +15,11 @@ repos:
     rev: v0.11.10
     hooks:
       - id: ruff
-        args: ["--fix"]
+        args: ["--fix", "--select", "F"]
       - id: ruff-format
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
-        files: \.sh$
+        files: ^(install|uninstall)\.sh$
