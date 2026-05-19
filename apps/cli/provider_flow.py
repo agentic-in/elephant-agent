@@ -325,10 +325,24 @@ def run_provider_selection_wizard(
                 step_index += 1
                 continue
             if has_resolved_secret:
-                # Key already stored — skip silently, no need to ask again.
-                state.api_key = None
-                step_index += 1
-                continue
+                answer = _wizard_choice_prompt(
+                    "Provider Key",
+                    "An API key is already stored for this provider.",
+                    (
+                        WizardChoice(value="keep", label="Keep existing key", detail="Skip re-entry"),
+                        WizardChoice(value="replace", label="Enter a new key", detail="Overwrite the stored key"),
+                    ),
+                    default="keep",
+                    allow_back=allow_back and step_index > 0,
+                )
+                if answer is WIZARD_BACK:
+                    if not _go_back():
+                        return WIZARD_BACK
+                    continue
+                if answer == "keep":
+                    state.api_key = None
+                    step_index += 1
+                    continue
             answer = _wizard_text_prompt(
                 "Store The Provider Key",
                 "Enter the provider key. Elephant Agent stores it encrypted and will not ask again next time.",
