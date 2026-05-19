@@ -217,9 +217,7 @@ def stop_runtime(runtime: ManagedRuntimeSnapshot, *, timeout_seconds: float, for
             return "sigterm"
         time.sleep(0.2)
     if not force:
-        raise RuntimeError(
-            f"{runtime.label} did not exit within {timeout_seconds:g}s; rerun with --force-stop"
-        )
+        raise RuntimeError(f"{runtime.label} did not exit within {timeout_seconds:g}s; rerun with --force-stop")
     try:
         os.kill(runtime.pid, signal.SIGKILL)
     except ProcessLookupError:
@@ -382,7 +380,16 @@ def run_upgrade(args: Namespace) -> int:
 
         print("\nUpgrading package")
         _run_checked(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "pip",
+                "setuptools",
+                "wheel",
+            ],
             env=env,
             dry_run=dry_run,
         )
@@ -430,17 +437,64 @@ def build_parser() -> ArgumentParser:
         prog="elephant upgrade",
         description="Gracefully upgrade Elephant Agent in place with backup, managed-runtime stop, storage bootstrap, and restart.",
     )
-    parser.add_argument("--state-dir", type=Path, default=default_cli_state_dir(), help="CLI state directory.")
-    parser.add_argument("--gateway-state-dir", type=Path, default=default_gateway_state_dir(), help="Gateway runtime state directory.")
-    parser.add_argument("--channel", choices=("dev", "stable"), default=os.environ.get("ELEPHANT_INSTALL_CHANNEL", "dev"), help="Package channel to install when --pip-spec is omitted.")
-    parser.add_argument("--pip-spec", default=os.environ.get("ELEPHANT_PIP_SPEC", "") or None, help="Explicit pip-installable package spec.")
-    parser.add_argument("--timeout", type=float, default=10.0, help="Seconds to wait for each runtime to stop before escalation.")
-    parser.add_argument("--force-stop", action="store_true", default=True, help="Send SIGKILL when a runtime ignores SIGTERM after --timeout.")
-    parser.add_argument("--no-force-stop", action="store_false", dest="force_stop", help="Fail instead of sending SIGKILL after --timeout.")
+    parser.add_argument(
+        "--state-dir",
+        type=Path,
+        default=default_cli_state_dir(),
+        help="CLI state directory.",
+    )
+    parser.add_argument(
+        "--gateway-state-dir",
+        type=Path,
+        default=default_gateway_state_dir(),
+        help="Gateway runtime state directory.",
+    )
+    parser.add_argument(
+        "--channel",
+        choices=("dev", "stable"),
+        default=os.environ.get("ELEPHANT_INSTALL_CHANNEL", "dev"),
+        help="Package channel to install when --pip-spec is omitted.",
+    )
+    parser.add_argument(
+        "--pip-spec",
+        default=os.environ.get("ELEPHANT_PIP_SPEC", "") or None,
+        help="Explicit pip-installable package spec.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="Seconds to wait for each runtime to stop before escalation.",
+    )
+    parser.add_argument(
+        "--force-stop",
+        action="store_true",
+        default=True,
+        help="Send SIGKILL when a runtime ignores SIGTERM after --timeout.",
+    )
+    parser.add_argument(
+        "--no-force-stop",
+        action="store_false",
+        dest="force_stop",
+        help="Fail instead of sending SIGKILL after --timeout.",
+    )
     parser.add_argument("--no-backup", action="store_true", help="Skip the pre-upgrade state backup.")
-    parser.add_argument("--skip-restart", action="store_true", help="Do not restart runtimes that were running before the upgrade.")
-    parser.add_argument("--skip-browser-install", action="store_true", default=os.environ.get("ELEPHANT_SKIP_BROWSER_INSTALL") == "1", help="Skip Playwright Chromium refresh.")
-    parser.add_argument("--dry-run", action="store_true", help="Print the planned upgrade without changing files or processes.")
+    parser.add_argument(
+        "--skip-restart",
+        action="store_true",
+        help="Do not restart runtimes that were running before the upgrade.",
+    )
+    parser.add_argument(
+        "--skip-browser-install",
+        action="store_true",
+        default=os.environ.get("ELEPHANT_SKIP_BROWSER_INSTALL") == "1",
+        help="Skip Playwright Chromium refresh.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the planned upgrade without changing files or processes.",
+    )
     return parser
 
 

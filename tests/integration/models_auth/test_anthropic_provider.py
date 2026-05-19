@@ -6,7 +6,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import threading
 import sys
-from types import SimpleNamespace
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -233,7 +232,11 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
                     role="assistant",
                     content="",
                     tool_calls=(
-                        {"id": "toolu-1", "name": "tool.web.search", "arguments": {"query": "elephant docs"}},
+                        {
+                            "id": "toolu-1",
+                            "name": "tool.web.search",
+                            "arguments": {"query": "elephant docs"},
+                        },
                     ),
                 ),
                 PromptMessage(
@@ -249,7 +252,10 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
                     "function": {
                         "name": "tool.web.search",
                         "description": "Search the web.",
-                        "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                        },
                     },
                 },
             ),
@@ -258,14 +264,19 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
         planned = self.adapter.build_request(request)
         payload = planned.as_mapping()
 
-        self.assertEqual([message["role"] for message in payload["messages"][-3:]], ["user", "assistant", "user"])
+        self.assertEqual(
+            [message["role"] for message in payload["messages"][-3:]],
+            ["user", "assistant", "user"],
+        )
         self.assertEqual(payload["messages"][-2]["content"][0]["type"], "tool_use")
         self.assertEqual(payload["messages"][-2]["content"][0]["name"], "tool_web_search")
         self.assertEqual(payload["messages"][-1]["content"][0]["type"], "tool_result")
         self.assertEqual(payload["messages"][-1]["content"][0]["tool_use_id"], "toolu-1")
         self.assertEqual(payload["messages"][-1]["content"][1]["text"], "Use that result.")
 
-    def test_native_request_uses_bearer_headers_for_anthropic_oauth_tokens(self) -> None:
+    def test_native_request_uses_bearer_headers_for_anthropic_oauth_tokens(
+        self,
+    ) -> None:
         request = self.adapter.build_request(self._request(), {"api_key": "sk-ant-oat-test-token"})
 
         self.assertEqual(request.headers["Authorization"], "Bearer sk-ant-oat-test-token")
@@ -329,7 +340,9 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
 
         adapter.generate(request, {"api_key": "ghu-copilot"})
 
-        request_headers = {str(key).lower(): str(value) for key, value in dict(self.server.requests[-1]["headers"]).items()}
+        request_headers = {
+            str(key).lower(): str(value) for key, value in dict(self.server.requests[-1]["headers"]).items()
+        }
         self.assertEqual(request_headers["authorization"], "Bearer ghu-copilot")
         self.assertEqual(request_headers["anthropic-version"], "2023-06-01")
         self.assertEqual(request_headers["openai-intent"], "conversation-edits")
@@ -350,11 +363,16 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
         self.assertEqual(request.headers["X-Session-Id"], "configured-session")
         self.assertNotIn("x-session-id", request.headers)
 
-    def test_generate_returns_native_result_without_leaking_secret_material(self) -> None:
+    def test_generate_returns_native_result_without_leaking_secret_material(
+        self,
+    ) -> None:
         result = self.adapter.generate(self._request(), self.auth_capability.resolve("anthropic"))
 
         self.assertEqual(result.task, "generate")
-        self.assertEqual(result.content, "live-anthropic:Explain the provider boundary without leaking secrets.")
+        self.assertEqual(
+            result.content,
+            "live-anthropic:Explain the provider boundary without leaking secrets.",
+        )
         self.assertNotIn("anthropic-secret", result.content)
         self.assertEqual(result.metadata["transport_id"], "anthropic_messages")
         self.assertEqual(result.metadata["credential_keys"], "api_key")
@@ -362,7 +380,9 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
         self.assertEqual(result.usage.cache_creation_prompt_tokens, 2)
         self.assertTrue(result.usage.cache_usage_reported)
         self.assertEqual(self.server.requests[0]["path"], "/v1/messages")
-        request_headers = {str(key).lower(): str(value) for key, value in dict(self.server.requests[0]["headers"]).items()}
+        request_headers = {
+            str(key).lower(): str(value) for key, value in dict(self.server.requests[0]["headers"]).items()
+        }
         self.assertEqual(request_headers["x-api-key"], "anthropic-secret")
         self.assertEqual(request_headers["x-session-id"], "session-1")
 
@@ -439,7 +459,10 @@ class AnthropicProviderAdapterTests(unittest.TestCase):
 
         self.assertEqual(result.session_id, session.episode_id)
         self.assertEqual(result.outcome, "ok")
-        self.assertEqual(result.summary, "live-anthropic:Explain the provider boundary without leaking secrets.")
+        self.assertEqual(
+            result.summary,
+            "live-anthropic:Explain the provider boundary without leaking secrets.",
+        )
         self.assertEqual(result.cached_prompt_tokens, 3)
         self.assertEqual(result.cache_creation_prompt_tokens, 2)
         self.assertTrue(result.cache_usage_reported)

@@ -13,9 +13,26 @@ from packages.embeddings import embedding_runtime_is_loaded, embedding_runtime_s
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import ExperienceRecord, ExecutionResult
 from packages.cron import CronJob, CronJobExecution
-from packages.runtime_config import global_config_path_for_state_dir, load_global_config, save_extensions_to_config, load_extensions_from_config
+from packages.runtime_config import (
+    global_config_path_for_state_dir,
+    load_global_config,
+    save_extensions_to_config,
+)
 from packages.growth import GrowthUpdate, ProgressionProjection, ProgressionTransition
-from packages.skills import PublicSkillSourceDescriptor, SkillDefinition, SkillHubEntry, SkillManifestLoadRecord, SkillPackageLoader, SkillSearchEntry, build_installed_skill_provenance, build_public_skill_source_descriptor, install_bucket_for_source_descriptor, load_skill_package_definition, materialize_skill_package, public_skill_source_descriptor_from_metadata
+from packages.skills import (
+    PublicSkillSourceDescriptor,
+    SkillDefinition,
+    SkillHubEntry,
+    SkillManifestLoadRecord,
+    SkillPackageLoader,
+    SkillSearchEntry,
+    build_installed_skill_provenance,
+    build_public_skill_source_descriptor,
+    install_bucket_for_source_descriptor,
+    load_skill_package_definition,
+    materialize_skill_package,
+    public_skill_source_descriptor_from_metadata,
+)
 from packages.skills.authoring import write_skill_package
 from packages.state import (
     PromptContract,
@@ -25,14 +42,40 @@ from packages.state import (
     personality_presets,
     profile_with_authored_elephant_identity,
 )
-from packages.tools import BuiltinToolDependencies, ToolAudience, ToolDefinition, ToolManifestLoadRecord, sync_custom_mcp_tools
+from packages.tools import (
+    BuiltinToolDependencies,
+    ToolAudience,
+    ToolDefinition,
+    ToolManifestLoadRecord,
+    sync_custom_mcp_tools,
+)
 from packages.tools.adapters import StructuredClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
 
-from .runtime_extensions import CliExtensionManifest, build_skill_runtime, build_tool_runtime, load_extension_manifest, sanitize_extension_manifest_payload, serialize_manifest_path
-from .runtime_extensions_skill_sources import install_record_detail as _install_record_detail, installed_skill_record as _installed_skill_record, matching_install_record as _matching_install_record, normalized_install_requester as _normalized_install_requester, record_install_reference as _record_install_reference, remote_skill_definition as _remote_skill_definition, source_descriptor_for_hub_entry as _source_descriptor_for_hub_entry, source_descriptor_for_path as _source_descriptor_for_path
+from .runtime_extensions import (
+    CliExtensionManifest,
+    build_skill_runtime,
+    build_tool_runtime,
+    load_extension_manifest,
+    sanitize_extension_manifest_payload,
+    serialize_manifest_path,
+)
+from .runtime_extensions_skill_sources import (
+    install_record_detail as _install_record_detail,
+    installed_skill_record as _installed_skill_record,
+    matching_install_record as _matching_install_record,
+    normalized_install_requester as _normalized_install_requester,
+    record_install_reference as _record_install_reference,
+    remote_skill_definition as _remote_skill_definition,
+    source_descriptor_for_hub_entry as _source_descriptor_for_hub_entry,
+    source_descriptor_for_path as _source_descriptor_for_path,
+)
 from .runtime_cron_sub_agents import compose_cron_prompt
-from .runtime_growth_surface import inspect_experiences as _inspect_experiences, inspect_growth as _inspect_growth, inspect_growth_transition as _inspect_growth_transition
+from .runtime_growth_surface import (
+    inspect_experiences as _inspect_experiences,
+    inspect_growth as _inspect_growth,
+    inspect_growth_transition as _inspect_growth_transition,
+)
 from .runtime_sub_agents import CliRuntimeSubAgentsMixin
 from .runtime_support import _path_is_within, _utc_now
 
@@ -227,7 +270,18 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         if job.personal_model_id != resolved_pm_id:
             raise PermissionError(f"learning job does not belong to this personal model: {job_id}")
         normalized_status = status if status in {"completed", "partial", "no_op", "failed"} else "partial"
-        normalized_mode = mode if mode in {"init_bootstrap", "episode_close", "im_idle", "context_compression", "manual"} else "manual"
+        normalized_mode = (
+            mode
+            if mode
+            in {
+                "init_bootstrap",
+                "episode_close",
+                "im_idle",
+                "context_compression",
+                "manual",
+            }
+            else "manual"
+        )
         payload = {
             "job_id": job_id,
             "mode": normalized_mode,
@@ -235,19 +289,44 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
             "summary": summary,
             "pm_facts": _normalize_result_section(
                 pm_facts,
-                defaults={"created_refs": [], "updated_refs": [], "retired_refs": [], "notes": ""},
+                defaults={
+                    "created_refs": [],
+                    "updated_refs": [],
+                    "retired_refs": [],
+                    "notes": "",
+                },
                 aliases={
                     "created_refs": ("created", "created_ids", "created_facts"),
                     "updated_refs": ("updated", "updated_ids", "updated_facts"),
-                    "retired_refs": ("retired", "retired_ids", "forgotten", "forgotten_refs"),
+                    "retired_refs": (
+                        "retired",
+                        "retired_ids",
+                        "forgotten",
+                        "forgotten_refs",
+                    ),
                 },
             ),
             "skill_affinities": _normalize_result_section(
                 skill_affinities,
-                defaults={"included_refs": [], "excluded_refs": [], "candidate_refs": [], "notes": ""},
+                defaults={
+                    "included_refs": [],
+                    "excluded_refs": [],
+                    "candidate_refs": [],
+                    "notes": "",
+                },
                 aliases={
-                    "included_refs": ("included", "included_ids", "created", "created_refs"),
-                    "excluded_refs": ("excluded", "excluded_ids", "retired", "retired_refs"),
+                    "included_refs": (
+                        "included",
+                        "included_ids",
+                        "created",
+                        "created_refs",
+                    ),
+                    "excluded_refs": (
+                        "excluded",
+                        "excluded_ids",
+                        "retired",
+                        "retired_refs",
+                    ),
                     "candidate_refs": ("candidates", "candidate_ids"),
                 },
             ),
@@ -265,7 +344,11 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
                     "settled_ids": ("settled", "answered", "answered_ids"),
                     "created_ids": ("created", "created_questions"),
                     "updated_ids": ("updated", "updated_questions"),
-                    "next_ask_candidate_ids": ("next_candidates", "next_ask_candidates", "candidates"),
+                    "next_ask_candidate_ids": (
+                        "next_candidates",
+                        "next_ask_candidates",
+                        "candidates",
+                    ),
                     "dismissed_ids": ("dismissed", "dismissed_questions", "stale_ids"),
                 },
             ),
@@ -285,7 +368,12 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
             worker_id=getattr(job, "worker_id", None) or "learning-result-tool",
             progress_detail=summary,
         )
-        return {"job_id": job_id, "status": normalized_status, "summary": summary, "learning_result": payload}
+        return {
+            "job_id": job_id,
+            "status": normalized_status,
+            "summary": summary,
+            "learning_result": payload,
+        }
 
     # --- DiarySurface implementation ---
 
@@ -300,6 +388,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
     ) -> Mapping[str, Any]:
         from uuid import uuid4
         from packages.contracts import DiaryEntry
+
         entry_id = f"diary:{uuid4().hex[:12]}"
         entry = DiaryEntry(
             entry_id=entry_id,
@@ -327,7 +416,11 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         )
         return {
             "entries": [
-                {"entry_id": e.entry_id, "entry_date": e.entry_date, "content": e.content}
+                {
+                    "entry_id": e.entry_id,
+                    "entry_date": e.entry_date,
+                    "content": e.content,
+                }
                 for e in entries
             ],
             "count": len(entries),
@@ -349,7 +442,10 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         queued = tuple(job for job in jobs if job.status == "queued")
         failed = tuple(job for job in jobs if job.status == "failed")
         completed = tuple(job for job in jobs if job.status == "completed")
-        from apps.learning_worker_runtime import load_learning_worker_record, learning_worker_is_running
+        from apps.learning_worker_runtime import (
+            load_learning_worker_record,
+            learning_worker_is_running,
+        )
 
         worker_record = load_learning_worker_record(self.paths.state_dir) or {}
         return {
@@ -383,7 +479,9 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
             ),
         }
 
-    def tool_catalog(self, *, session_id: str | None = None, audience: ToolAudience | None = None) -> tuple[ToolDefinition, ...]:
+    def tool_catalog(
+        self, *, session_id: str | None = None, audience: ToolAudience | None = None
+    ) -> tuple[ToolDefinition, ...]:
         if session_id is not None:
             self.prepare_session_surface(session_id, steady_embeddings=False)
         return self.tool_runtime.list_tools(audience=audience)
@@ -432,10 +530,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         existing_paths = list(load_extension_manifest(manifest, profile_dir=profile_dir).tool_manifest_paths)
         if resolved_path not in existing_paths:
             existing_paths.append(resolved_path)
-        manifest["tool_manifests"] = [
-            serialize_manifest_path(path, profile_dir=profile_dir)
-            for path in existing_paths
-        ]
+        manifest["tool_manifests"] = [serialize_manifest_path(path, profile_dir=profile_dir) for path in existing_paths]
         self._save_extensions_manifest(manifest)
         self._refresh_extensions(profile_id=resolved_profile_id)
         return self._tool_manifest_load_record(resolved_path)
@@ -542,7 +637,10 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         def executor(job: CronJob) -> tuple[str, str]:
             session = self._cron_session_for_job(job)
             if session is None:
-                return ("failed", f"{job.name} skipped because no matching session is available.")
+                return (
+                    "failed",
+                    f"{job.name} skipped because no matching session is available.",
+                )
             return self._execute_cron_job(job, session_id=session.episode_id)
 
         return self.cron_runtime.run_due(executor)
@@ -564,7 +662,10 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         started = self.cron_runtime.begin_execution(job_id, now=now)
         session = self._cron_session_for_job(started.job)
         if session is None:
-            outcome, summary = ("failed", f"{started.job.name} skipped because no matching session is available.")
+            outcome, summary = (
+                "failed",
+                f"{started.job.name} skipped because no matching session is available.",
+            )
         else:
             outcome, summary = self._execute_cron_job(started.job, session_id=session.episode_id)
         return self.cron_runtime.record_execution_result(
@@ -609,6 +710,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
     ) -> tuple[str, str]:
         """Execute a cron job that triggers a learning agent."""
         from datetime import date as date_type, timedelta
+
         trigger = str(job.payload.get("trigger") or "").strip()
         if not trigger:
             raise ValueError("cron learning jobs require a 'trigger' in payload")
@@ -647,12 +749,18 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
     def has_due_cron_jobs(self, *, session_id: str) -> bool:
         session = self._load_session(session_id)
         loaded = self._load_profile(session.personal_model_id)
-        return bool(self.cron_runtime.due_jobs(profile_id=loaded.state.profile_id, elephant_id=self.elephant_id_for_session(session)))
+        return bool(
+            self.cron_runtime.due_jobs(
+                profile_id=loaded.state.profile_id,
+                elephant_id=self.elephant_id_for_session(session),
+            )
+        )
 
     def skill_catalog(self, *, session_id: str | None = None) -> tuple[SkillDefinition, ...]:
         if session_id is not None:
             self.prepare_session_surface(session_id, steady_embeddings=False)
         return self.skill_runtime.catalog.list()
+
     def list_skill_hub(self, *, limit: int | None = None) -> tuple[SkillHubEntry, ...]:
         entries = self.skill_hub.list(self._current_skill_enabled_overrides())
         if limit is None or limit <= 0:
@@ -660,11 +768,32 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         return entries[:limit]
 
     def search_skill_hub(self, query: str, *, limit: int = 12) -> tuple[SkillHubEntry, ...]:
-        return self.skill_hub.search(query, limit=limit, enabled_overrides=self._current_skill_enabled_overrides())
-    def search_skill_sources(self, query: str, *, source: str | None = None, limit: int = 12) -> tuple[SkillSearchEntry, ...]:
+        return self.skill_hub.search(
+            query,
+            limit=limit,
+            enabled_overrides=self._current_skill_enabled_overrides(),
+        )
+
+    def search_skill_sources(
+        self, query: str, *, source: str | None = None, limit: int = 12
+    ) -> tuple[SkillSearchEntry, ...]:
         return self.skill_search_hub.search(query, source=source, limit=limit)
-    def inspect_experiences(self, *, session_id: str | None = None, profile_id: str | None = None, statuses: tuple[str, ...] = (), limit: int | None = None) -> tuple[ExperienceRecord, ...]:
-        return _inspect_experiences(self, session_id=session_id, profile_id=profile_id, statuses=statuses, limit=limit)
+
+    def inspect_experiences(
+        self,
+        *,
+        session_id: str | None = None,
+        profile_id: str | None = None,
+        statuses: tuple[str, ...] = (),
+        limit: int | None = None,
+    ) -> tuple[ExperienceRecord, ...]:
+        return _inspect_experiences(
+            self,
+            session_id=session_id,
+            profile_id=profile_id,
+            statuses=statuses,
+            limit=limit,
+        )
 
     def inspect_growth(
         self,
@@ -673,8 +802,10 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         profile_id: str | None = None,
     ) -> ProgressionProjection:
         return _inspect_growth(self, session_id=session_id, profile_id=profile_id)
+
     def consume_growth_update(self, *, session_id: str) -> GrowthUpdate | None:
         return self.growth_updates.pop(session_id, None)
+
     def inspect_growth_transition(self, update: GrowthUpdate, *, session_id: str) -> ProgressionTransition:
         return _inspect_growth_transition(self, update, session_id=session_id)
 
@@ -711,7 +842,8 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         return replace(skill, metadata=metadata)
 
     def inspect_skill_source(self, skill_id: str, *, session_id: str | None = None) -> SkillDefinition:
-        if session_id is not None: self.prepare_session_surface(session_id)
+        if session_id is not None:
+            self.prepare_session_surface(session_id)
         try:
             return self.inspect_skill(skill_id)
         except KeyError:
@@ -765,8 +897,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         if resolved_path not in existing_paths:
             existing_paths.append(resolved_path)
         manifest["skill_manifests"] = [
-            serialize_manifest_path(path, profile_dir=profile_dir)
-            for path in existing_paths
+            serialize_manifest_path(path, profile_dir=profile_dir) for path in existing_paths
         ]
         self._save_extensions_manifest(manifest)
         self._refresh_extensions(profile_id=resolved_profile_id)
@@ -1090,10 +1221,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
             retained_resolved.add(resolved_existing)
         if materialized_path not in retained_resolved:
             retained_paths.append(materialized_path)
-        manifest["skill_packages"] = [
-            serialize_manifest_path(path, profile_dir=profile_dir)
-            for path in retained_paths
-        ]
+        manifest["skill_packages"] = [serialize_manifest_path(path, profile_dir=profile_dir) for path in retained_paths]
         self._save_extensions_manifest(manifest)
         for stale_path in stale_paths:
             if not _path_is_within(stale_path, installed_root):
@@ -1128,9 +1256,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         manifest_payload, removed_manifest_keys = sanitize_extension_manifest_payload(dict(loaded.manifest))
         if removed_manifest_keys:
             self._save_extensions_manifest(manifest_payload)
-        self._apply_extension_manifest(
-            load_extension_manifest(manifest_payload, profile_dir=Path(loaded.profile_dir))
-        )
+        self._apply_extension_manifest(load_extension_manifest(manifest_payload, profile_dir=Path(loaded.profile_dir)))
 
     def _sync_global_custom_mcp_tools(self) -> None:
         config_path = global_config_path_for_state_dir(self.paths.state_dir)
@@ -1153,6 +1279,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
                 elephant_files.mkdir(parents=True, exist_ok=True)
                 return elephant_files
             return Path.cwd()
+
         embedding_service = self.recall_runtime.retriever.evidence_retriever.embedding_service
         semantic_summary_indexer = None
         if self.semantic_index_bundle is not None and embedding_service is not None:
@@ -1189,9 +1316,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
                         repository=self.repository,
                         semantic_summary_indexer=semantic_summary_indexer,
                         semantic_searcher=(
-                            self.semantic_index_bundle.searcher
-                            if self.semantic_index_bundle is not None
-                            else None
+                            self.semantic_index_bundle.searcher if self.semantic_index_bundle is not None else None
                         ),
                         embedding_service=embedding_service,
                     ),

@@ -46,10 +46,16 @@ class MissingJobRepository:
 
 
 class ReflectRunnerTest(unittest.TestCase):
-    def test_unpersisted_reflect_invocation_can_return_summary_without_learning_job_row(self) -> None:
+    def test_unpersisted_reflect_invocation_can_return_summary_without_learning_job_row(
+        self,
+    ) -> None:
         runtime = SimpleNamespace(
             repository=MissingJobRepository(),
-            run_sub_agent=lambda **_: {"summary": "Compressed summary", "status": "completed", "side_effects": ()},
+            run_sub_agent=lambda **_: {
+                "summary": "Compressed summary",
+                "status": "completed",
+                "side_effects": (),
+            },
         )
 
         result = run_reflect_agent(
@@ -65,11 +71,19 @@ class ReflectRunnerTest(unittest.TestCase):
     def test_missing_non_sync_job_still_raises(self) -> None:
         runtime = SimpleNamespace(
             repository=MissingJobRepository(),
-            run_sub_agent=lambda **_: {"summary": "Summary", "status": "completed", "side_effects": ()},
+            run_sub_agent=lambda **_: {
+                "summary": "Summary",
+                "status": "completed",
+                "side_effects": (),
+            },
         )
 
         with self.assertRaises(KeyError):
-            run_reflect_agent(runtime, _learning_job("learning-job:missing"), explicit_features=("compress",))
+            run_reflect_agent(
+                runtime,
+                _learning_job("learning-job:missing"),
+                explicit_features=("compress",),
+            )
 
 
 if __name__ == "__main__":

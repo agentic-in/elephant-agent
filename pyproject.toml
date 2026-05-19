@@ -48,6 +48,11 @@ Documentation = "https://elephant.agentic-in.ai/docs/"
 Repository = "https://github.com/agentic-in/elephant-agent"
 Issues = "https://github.com/agentic-in/elephant-agent/issues"
 
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+lint.ignore = ["E402"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "packages*"]

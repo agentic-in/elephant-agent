@@ -81,6 +81,7 @@
       "execution_plan_policy": "long_horizon",
       "paths": [
         ".github/workflows/**",
+        ".pre-commit-config.yaml",
         "install.sh",
         ".github/*.md",
         ".python-version",

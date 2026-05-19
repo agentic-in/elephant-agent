@@ -86,13 +86,21 @@ class BrowserBackendConfig:
 
     @classmethod
     def from_env(cls, *, headless: bool = True) -> "BrowserBackendConfig":
-        provider = _first_env("ELEPHANT_BROWSER_CLOUD_PROVIDER", "BROWSER_CLOUD_PROVIDER", "BROWSER_PROVIDER")
+        provider = _first_env(
+            "ELEPHANT_BROWSER_CLOUD_PROVIDER",
+            "BROWSER_CLOUD_PROVIDER",
+            "BROWSER_PROVIDER",
+        )
         return cls(
             headless=_env_bool("ELEPHANT_BROWSER_HEADLESS", default=headless),
             cdp_url=_first_env("ELEPHANT_BROWSER_CDP_URL", "BROWSER_CDP_URL"),
             cloud_provider=provider.strip().lower(),
             camofox_url=_first_env("ELEPHANT_BROWSER_CAMOFOX_URL", "CAMOFOX_URL").rstrip("/"),
-            allow_private_urls=_env_bool("ELEPHANT_BROWSER_ALLOW_PRIVATE_URLS", "BROWSER_ALLOW_PRIVATE_URLS", default=False),
+            allow_private_urls=_env_bool(
+                "ELEPHANT_BROWSER_ALLOW_PRIVATE_URLS",
+                "BROWSER_ALLOW_PRIVATE_URLS",
+                default=False,
+            ),
             screenshots_dir=Path(
                 _first_env("ELEPHANT_BROWSER_SCREENSHOTS_DIR")
                 or (Path.home() / ".elephant" / "cache" / "browser-screenshots")
@@ -163,11 +171,17 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         if action == "navigate":
             return self._navigate(session, invocation)
         if action == "snapshot":
-            return self._summary(invocation, self._snapshot_payload(session, full=_bool_arg(invocation, "full")))
+            return self._summary(
+                invocation,
+                self._snapshot_payload(session, full=_bool_arg(invocation, "full")),
+            )
         if action == "click":
             target = self._target_selector(session, invocation, require=True)
             session.page.locator(target).first.click(timeout=_DEFAULT_ACTION_TIMEOUT_MS)
-            return self._summary(invocation, {"success": True, "clicked": target, **self._page_identity(session)})
+            return self._summary(
+                invocation,
+                {"success": True, "clicked": target, **self._page_identity(session)},
+            )
         if action == "type":
             target = self._target_selector(session, invocation, require=True)
             if "text" not in invocation.arguments:
@@ -185,7 +199,14 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             elif direction == "down":
                 amount = abs(amount)
             session.page.mouse.wheel(0, amount)
-            return self._summary(invocation, {"success": True, "scrolled_px": amount, **self._page_identity(session)})
+            return self._summary(
+                invocation,
+                {
+                    "success": True,
+                    "scrolled_px": amount,
+                    **self._page_identity(session),
+                },
+            )
         if action == "back":
             session.page.go_back(wait_until="domcontentloaded", timeout=_DEFAULT_NAVIGATION_TIMEOUT_MS)
             return self._summary(invocation, {"success": True, **self._page_identity(session)})
@@ -194,10 +215,16 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             if not key:
                 raise ValueError("tool.browser.press requires a 'key' argument")
             session.page.keyboard.press(key)
-            return self._summary(invocation, {"success": True, "pressed": key, **self._page_identity(session)})
+            return self._summary(
+                invocation,
+                {"success": True, "pressed": key, **self._page_identity(session)},
+            )
         if action == "images":
             records = session.page.evaluate(IMAGES_JS, {"maxImages": _MAX_IMAGES})
-            return self._summary(invocation, {"success": True, "images": records or [], "count": len(records or [])})
+            return self._summary(
+                invocation,
+                {"success": True, "images": records or [], "count": len(records or [])},
+            )
         if action == "vision":
             return self._vision(session, invocation, vision_analyzer=vision_analyzer)
         if action == "console":
@@ -232,7 +259,9 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         worker_queue.put((future, work))
         return future.result()
 
-    def _ensure_worker(self) -> queue.Queue[tuple[Future[Any], Callable[[], Any]] | None]:
+    def _ensure_worker(
+        self,
+    ) -> queue.Queue[tuple[Future[Any], Callable[[], Any]] | None]:
         with self._worker_lock:
             if self._closed:
                 raise RuntimeError("browser backend is closed")
@@ -414,15 +443,18 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         return self._summary(invocation, payload)
 
     def _snapshot_payload(self, session: BrowserSession, *, full: bool) -> dict[str, Any]:
-        data = session.page.evaluate(
-            SNAPSHOT_JS,
-            {
-                "full": full,
-                "compactLimit": _SNAPSHOT_COMPACT_LIMIT,
-                "fullLimit": _SNAPSHOT_FULL_LIMIT,
-                "maxElements": _MAX_REF_ELEMENTS,
-            },
-        ) or {}
+        data = (
+            session.page.evaluate(
+                SNAPSHOT_JS,
+                {
+                    "full": full,
+                    "compactLimit": _SNAPSHOT_COMPACT_LIMIT,
+                    "fullLimit": _SNAPSHOT_FULL_LIMIT,
+                    "maxElements": _MAX_REF_ELEMENTS,
+                },
+            )
+            or {}
+        )
         elements = tuple(data.get("elements") or ())
         session.refs = {
             str(element.get("ref")): _ref_selector(str(element.get("ref")))
@@ -458,7 +490,7 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
                 disabled = " disabled" if element.get("disabled") else ""
                 href = str(element.get("href") or "").strip()
                 suffix = f" href={href}" if href else ""
-                lines.append(f"- [{ref}] {role}{disabled} \"{label}\"{suffix}")
+                lines.append(f'- [{ref}] {role}{disabled} "{label}"{suffix}')
         text = str(data.get("text") or "").strip()
         if text:
             lines.append("page text:")
@@ -533,7 +565,11 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         expression = invocation.arguments.get("expression")
         if expression is not None and str(expression).strip():
             result = session.page.evaluate(str(expression))
-            payload = {"success": True, "result": result, "result_type": type(result).__name__}
+            payload = {
+                "success": True,
+                "result": result,
+                "result_type": type(result).__name__,
+            }
             return self._summary(invocation, payload)
         payload = {
             "success": True,
@@ -551,7 +587,9 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         if _SECRET_RE.search(url):
             raise ValueError("blocked browser navigation: URL appears to contain an API key or token")
         if not self.config.allow_private_urls and not self._is_local_backend() and _is_private_url(url):
-            raise ValueError("blocked browser navigation: private/internal URLs are disabled for remote browser backends")
+            raise ValueError(
+                "blocked browser navigation: private/internal URLs are disabled for remote browser backends"
+            )
 
     def _is_local_backend(self) -> bool:
         return not self.config.cdp_url and self._configured_cloud_provider() is None
@@ -628,7 +666,10 @@ class CamofoxBrowserBackend(BrowserToolBackend):
             return self._summary(invocation, self._snapshot_payload(session))
         if action == "click":
             ref = _ref_arg(invocation)
-            payload = self._post(f"/tabs/{session['tab_id']}/click", {"userId": session["user_id"], "ref": ref.lstrip("@")})
+            payload = self._post(
+                f"/tabs/{session['tab_id']}/click",
+                {"userId": session["user_id"], "ref": ref.lstrip("@")},
+            )
             return self._summary(invocation, {"success": True, "clicked": ref, **payload})
         if action == "type":
             ref = _ref_arg(invocation)
@@ -652,7 +693,10 @@ class CamofoxBrowserBackend(BrowserToolBackend):
             key = str(invocation.arguments.get("key") or "").strip()
             if not key:
                 raise ValueError("tool.browser.press requires a 'key' argument")
-            payload = self._post(f"/tabs/{session['tab_id']}/press", {"userId": session["user_id"], "key": key})
+            payload = self._post(
+                f"/tabs/{session['tab_id']}/press",
+                {"userId": session["user_id"], "key": key},
+            )
             return self._summary(invocation, {"success": True, "pressed": key, **payload})
         if action == "images":
             snapshot = self._snapshot_payload(session).get("snapshot", "")
@@ -690,7 +734,11 @@ class CamofoxBrowserBackend(BrowserToolBackend):
             raise ValueError("blocked browser navigation: URL appears to contain an API key or token")
         session = self._session_for(invocation.session_id, url=url)
         if session.get("navigated"):
-            payload = self._post(f"/tabs/{session['tab_id']}/navigate", {"userId": session["user_id"], "url": url}, timeout=60)
+            payload = self._post(
+                f"/tabs/{session['tab_id']}/navigate",
+                {"userId": session["user_id"], "url": url},
+                timeout=60,
+            )
         else:
             payload = {"url": url}
             session["navigated"] = True
@@ -713,8 +761,16 @@ class CamofoxBrowserBackend(BrowserToolBackend):
             if existing is not None:
                 return existing
             user_id = f"elephant_{uuid4().hex[:12]}"
-            created = self._post("/tabs", {"userId": user_id, "sessionKey": session_key[:48], "url": url}, timeout=60)
-            session = {"session_key": session_key, "user_id": user_id, "tab_id": created.get("tabId")}
+            created = self._post(
+                "/tabs",
+                {"userId": user_id, "sessionKey": session_key[:48], "url": url},
+                timeout=60,
+            )
+            session = {
+                "session_key": session_key,
+                "user_id": user_id,
+                "tab_id": created.get("tabId"),
+            }
             if not session["tab_id"]:
                 raise RuntimeError("Camofox did not return a tabId")
             self._sessions[session_key] = session
@@ -730,8 +786,14 @@ class CamofoxBrowserBackend(BrowserToolBackend):
         data = self._get(f"/tabs/{session['tab_id']}/snapshot", params={"userId": session["user_id"]})
         snapshot = str(data.get("snapshot") or "")
         if len(snapshot) > _SNAPSHOT_FULL_LIMIT:
-            snapshot = snapshot[:_SNAPSHOT_FULL_LIMIT] + f"\n[... {len(snapshot) - _SNAPSHOT_FULL_LIMIT} chars truncated]"
-        return {"success": True, "snapshot": snapshot, "element_count": int(data.get("refsCount") or 0)}
+            snapshot = (
+                snapshot[:_SNAPSHOT_FULL_LIMIT] + f"\n[... {len(snapshot) - _SNAPSHOT_FULL_LIMIT} chars truncated]"
+            )
+        return {
+            "success": True,
+            "snapshot": snapshot,
+            "element_count": int(data.get("refsCount") or 0),
+        }
 
     def _vision(
         self,
@@ -740,7 +802,10 @@ class CamofoxBrowserBackend(BrowserToolBackend):
         *,
         vision_analyzer: BrowserVisionAnalyzer | None = None,
     ) -> Mapping[str, Any]:
-        response = self._get_bytes(f"/tabs/{session['tab_id']}/screenshot", params={"userId": session["user_id"]})
+        response = self._get_bytes(
+            f"/tabs/{session['tab_id']}/screenshot",
+            params={"userId": session["user_id"]},
+        )
         self.config.screenshots_dir.mkdir(parents=True, exist_ok=True)
         screenshot_path = self.config.screenshots_dir / f"browser_screenshot_{uuid4().hex}.png"
         screenshot_path.write_bytes(response)
@@ -935,7 +1000,9 @@ def _apply_vision_analysis(
 ) -> None:
     if analyzer is None:
         payload["vision_analyzer_configured"] = False
-        payload["vision_setup_hint"] = "Configure a browser vision analyzer before using tool.browser.vision for visual analysis."
+        payload["vision_setup_hint"] = (
+            "Configure a browser vision analyzer before using tool.browser.vision for visual analysis."
+        )
         return
     result = analyzer.analyze_browser_screenshot(
         session_id=session_id,

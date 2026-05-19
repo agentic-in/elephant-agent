@@ -8,7 +8,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from packages.contracts.layers import Episode
-from packages.contracts.runtime import ContextBundle, EventEnvelope, ExecutionResult, PromptEnvelope, PromptMessage
+from packages.contracts.runtime import (
+    ContextBundle,
+    EventEnvelope,
+    ExecutionResult,
+    PromptEnvelope,
+    PromptMessage,
+)
 from packages.context.projection import (
     estimate_projection_tokens,
     projection_result_with_estimated_tokens,
@@ -104,19 +110,27 @@ def prompt_messages_tuple(value: object) -> tuple[PromptMessage, ...]:
                 tool_call_id=str(item.get("tool_call_id") or ""),
                 tool_name=str(item.get("tool_name") or ""),
                 tool_calls=tool_calls,
-                metadata={str(k): str(v) for k, v in dict(metadata_raw).items()} if isinstance(metadata_raw, Mapping) else {},
+                metadata={str(k): str(v) for k, v in dict(metadata_raw).items()}
+                if isinstance(metadata_raw, Mapping)
+                else {},
             )
         )
     return tuple(message for message in messages if message.role)
 
 
-def restore_session_context_epoch(payload: Mapping[str, Any] | None, *, session_id: str | None = None) -> SessionContextEpoch | None:
+def restore_session_context_epoch(
+    payload: Mapping[str, Any] | None, *, session_id: str | None = None
+) -> SessionContextEpoch | None:
     if not isinstance(payload, Mapping):
         return None
     if "session_context_epoch" in payload:
         if session_id is not None:
             session = payload.get("session")
-            resolved = str(session.get("episode_id") or session.get("session_id") or "").strip() if isinstance(session, Mapping) else ""
+            resolved = (
+                str(session.get("episode_id") or session.get("session_id") or "").strip()
+                if isinstance(session, Mapping)
+                else ""
+            )
             if resolved and resolved != session_id:
                 return None
         payload = payload.get("session_context_epoch")  # type: ignore[assignment]
@@ -191,14 +205,19 @@ def next_session_context_epoch(
     fallback_history_messages: tuple[PromptMessage, ...] = (),
     now: datetime | None = None,
 ) -> SessionContextEpoch:
-    epoch = existing if existing is not None and existing.session_id == session.episode_id else SessionContextEpoch(session_id=session.episode_id)
+    epoch = (
+        existing
+        if existing is not None and existing.session_id == session.episode_id
+        else SessionContextEpoch(session_id=session.episode_id)
+    )
     is_user_turn = event is not None and _event_is_user_turn(event)
-    episode_open_refresh = epoch.frozen and context is not None and event is None and execution is None and not epoch.history_messages
+    episode_open_refresh = (
+        epoch.frozen and context is not None and event is None and execution is None and not epoch.history_messages
+    )
     if context is not None:
         envelope = context.prompt_envelope
         refresh_frozen = (
-            not epoch.frozen
-            or episode_open_refresh
+            not epoch.frozen or episode_open_refresh
             # No longer detecting prefix changes per-turn and refreshing; the caller refreshes explicitly during compress
         )
         if refresh_frozen:
@@ -225,8 +244,7 @@ def next_session_context_epoch(
     now_value = now or _utc_now()
     raw_history_messages = tuple(message for message in turn_messages if message.content.strip() or message.tool_calls)
     history_messages = _annotate_history_messages(
-        _with_fallback_user_anchor(raw_history_messages, fallback_history_messages)
-        or fallback_history_messages,
+        _with_fallback_user_anchor(raw_history_messages, fallback_history_messages) or fallback_history_messages,
         event=event,
         now=now_value,
     )
@@ -397,16 +415,13 @@ def _with_fallback_user_anchor(
     if any(message.role == "user" and message.content.strip() for message in messages):
         return messages
     user_anchor = next(
-        (
-            message
-            for message in fallback_messages
-            if message.role == "user" and message.content.strip()
-        ),
+        (message for message in fallback_messages if message.role == "user" and message.content.strip()),
         None,
     )
     if user_anchor is None:
         return messages
     return (user_anchor, *messages)
+
 
 def _event_is_user_turn(event: EventEnvelope) -> bool:
     event_type = str(event.event_type or "").strip().lower()
@@ -415,7 +430,11 @@ def _event_is_user_turn(event: EventEnvelope) -> bool:
         return False
     if source.startswith("cli.startup"):
         return False
-    return event_type in {"turn.received", "loop.received", "im.message.receive_v1"} or event_type.endswith(".received")
+    return event_type in {
+        "turn.received",
+        "loop.received",
+        "im.message.receive_v1",
+    } or event_type.endswith(".received")
 
 
 def _event_is_im(event: EventEnvelope | None) -> bool:
@@ -451,10 +470,7 @@ def _annotate_history_messages(
         "event_id": event_id,
         "projection_surface": projection_surface,
     }
-    return tuple(
-        replace(message, metadata={**metadata, **dict(message.metadata or {})})
-        for message in messages
-    )
+    return tuple(replace(message, metadata={**metadata, **dict(message.metadata or {})}) for message in messages)
 
 
 def _history_idle_gap_exceeded(

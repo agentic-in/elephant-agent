@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
 
 from apps.episode_runtime import install_app_episode_runtime
@@ -99,7 +98,9 @@ class _Telemetry:
 
 
 class KernelTurnLifecycleResetTest(unittest.TestCase):
-    def test_replaying_same_checkpoint_step_updates_in_place_without_duplicate_sequence_failure(self) -> None:
+    def test_replaying_same_checkpoint_step_updates_in_place_without_duplicate_sequence_failure(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
             repository.bootstrap()

@@ -133,9 +133,7 @@ def _score_candidate(
     if query_ngrams:
         body_ngrams = _char_ngrams(_alnum_compact(candidate.body))
         if body_ngrams:
-            jaccard = len(query_ngrams & body_ngrams) / float(
-                len(query_ngrams | body_ngrams)
-            )
+            jaccard = len(query_ngrams & body_ngrams) / float(len(query_ngrams | body_ngrams))
             signal += 0.25 * jaccard
     if signal <= 0.0:
         return 0.0

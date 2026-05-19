@@ -13,7 +13,10 @@ from .profile_from_claims import TOPIC_TO_FIELD, derive_profile_from_claims
 from .projection import render_user_profile_projection_text
 from .user_updates import apply_user_profile_update
 from packages.contracts import ElephantIdentityRecord, Fact
-from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
+from packages.state.rendered_views import (
+    RenderedRelationshipView,
+    RenderedUserProfileView,
+)
 from packages.evidence.recall_runtime import RecallRuntime
 from packages.storage import RuntimeStorageRepository
 
@@ -77,7 +80,9 @@ def _active_pm_facts(repository: RuntimeStorageRepository, profile_id: str) -> t
     return tuple(list_facts(personal_model_id=profile_id, status=("active",)))
 
 
-def _render_user_profile_from_facts(repository: RuntimeStorageRepository, profile_id: str) -> RenderedUserProfileView | None:
+def _render_user_profile_from_facts(
+    repository: RuntimeStorageRepository, profile_id: str
+) -> RenderedUserProfileView | None:
     facts = _active_pm_facts(repository, profile_id)
     ids = canonical_profile_ids(profile_id)
     view = RenderedUserProfileView(
@@ -114,11 +119,7 @@ def _render_relationship_from_facts(
     elephant_id = str(getattr(identity, "elephant_id", "") or ids.elephant_id)
     interaction_preferences = _tuple_unique(str(item) for item in getattr(identity, "governance_flags", ()) or ())
     expectations = _tuple_unique(
-        (
-            f"initiative:{value}"
-            for value in (str(getattr(identity, "initiative", "") or "").strip(),)
-            if value
-        ),
+        (f"initiative:{value}" for value in (str(getattr(identity, "initiative", "") or "").strip(),) if value),
         (
             f"relational_stance:{value}"
             for value in (str(getattr(identity, "relational_stance", "") or "").strip(),)
@@ -151,7 +152,16 @@ def _render_relationship_from_facts(
         repair_history.extend(parsed["repair_history"])
         local_corrections.extend(parsed["local_corrections"])
         notes.extend(parsed["continuity_notes"])
-    if identity is None and not any((interaction_preferences, expectations, trust_markers, repair_history, local_corrections, notes)):
+    if identity is None and not any(
+        (
+            interaction_preferences,
+            expectations,
+            trust_markers,
+            repair_history,
+            local_corrections,
+            notes,
+        )
+    ):
         return None
     return RenderedRelationshipView(
         relationship_id=ids.relationship_id,
@@ -252,24 +262,32 @@ def resolve_runtime_state(
             current = None
         if current is not None and resolved_anchor is not None and current.state_anchor != resolved_anchor:
             current = None
-        if current is not None and resolved_elephant_id is not None and current.elephant_id != resolved_elephant_id and current.state_anchor not in {resolved_elephant_id, f"elephant:{resolved_elephant_id}"}:
+        if (
+            current is not None
+            and resolved_elephant_id is not None
+            and current.elephant_id != resolved_elephant_id
+            and current.state_anchor not in {resolved_elephant_id, f"elephant:{resolved_elephant_id}"}
+        ):
             current = None
         if current is not None:
             return current
     if resolved_profile_id is not None and len(states) == 1:
         return states[0]
     if required:
-        targets = ", ".join(
-            candidate
-            for candidate in (
-                explicit_state_id,
-                explicit_episode_id,
-                resolved_anchor,
-                resolved_elephant_id,
-                resolved_profile_id or "",
+        targets = (
+            ", ".join(
+                candidate
+                for candidate in (
+                    explicit_state_id,
+                    explicit_episode_id,
+                    resolved_anchor,
+                    resolved_elephant_id,
+                    resolved_profile_id or "",
+                )
+                if candidate
             )
-            if candidate
-        ) or "runtime-state"
+            or "runtime-state"
+        )
         raise KeyError(f"runtime state not found for {targets}")
     return None
 
@@ -403,7 +421,16 @@ def _capture_canonical_profile_updates(
             "medium",
         ),
     )
-    for component, prior_record, current_record, component_kind, lens, topic, content, sensitivity in component_specs:
+    for (
+        component,
+        prior_record,
+        current_record,
+        component_kind,
+        lens,
+        topic,
+        content,
+        sensitivity,
+    ) in component_specs:
         if not _record_changed(prior_record, current_record):
             continue
         if not content.strip():
@@ -472,7 +499,11 @@ def _user_profile_capture_content(record: RenderedUserProfileView) -> str:
     if rendered is not None and rendered.strip():
         return rendered
     parts = [
-        *((f"Preferred name: {record.preferred_name.strip()}",) if record.preferred_name and record.preferred_name.strip() else ()),
+        *(
+            (f"Preferred name: {record.preferred_name.strip()}",)
+            if record.preferred_name and record.preferred_name.strip()
+            else ()
+        ),
         *(f"Biography: {item}" for item in record.biography_fragments if item.strip()),
         *(f"Boundary: {item}" for item in record.boundaries if item.strip()),
         *(f"Remember: {item}" for item in record.durable_notes if item.strip()),
@@ -506,10 +537,7 @@ def _relationship_capture_content(record: RenderedRelationshipView) -> str:
         item.strip()
         for item in record.expectations
         if item.strip()
-        and not any(
-            item.strip().startswith(prefix)
-            for prefix in _SYSTEM_RELATIONSHIP_EXPECTATION_PREFIXES
-        )
+        and not any(item.strip().startswith(prefix) for prefix in _SYSTEM_RELATIONSHIP_EXPECTATION_PREFIXES)
     )
     parts = [
         *(f"Interaction preference: {item}" for item in user_preferences),

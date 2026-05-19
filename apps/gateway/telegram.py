@@ -6,7 +6,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 import json
 import os
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -14,7 +13,12 @@ from urllib.request import Request, urlopen
 from packages.gateway_core import GatewayExchange, GatewayOutboundMessage
 
 from .plugins import GatewayPluginRegistry
-from .runtime import DEFAULT_GATEWAY_ACCOUNT_ID, GatewayApp, TelegramMessagingAdapter, build_gateway_app
+from .runtime import (
+    DEFAULT_GATEWAY_ACCOUNT_ID,
+    GatewayApp,
+    TelegramMessagingAdapter,
+    build_gateway_app,
+)
 
 DEFAULT_TELEGRAM_BOT_TOKEN_ENV = "ELEPHANT_TELEGRAM_BOT_TOKEN"
 LEGACY_TELEGRAM_BOT_TOKEN_ENV = "TELEGRAM_BOT_TOKEN"
@@ -38,10 +42,7 @@ def _normalize_transport(value: str | None) -> str:
     normalized = str(value or "webhook").strip().lower().replace("_", "-")
     if normalized in {"callback", "http", "webhook"}:
         return "webhook"
-    raise ValueError(
-        "telegram transport must be one of "
-        f"{', '.join(SUPPORTED_TELEGRAM_TRANSPORTS)}"
-    )
+    raise ValueError(f"telegram transport must be one of {', '.join(SUPPORTED_TELEGRAM_TRANSPORTS)}")
 
 
 def _json_bytes(payload: Mapping[str, object]) -> bytes:
@@ -70,9 +71,7 @@ def _default_json_request(
             raw = response.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8")
-        raise RuntimeError(
-            f"telegram request failed with HTTP {exc.code}: {detail or exc.reason}"
-        ) from exc
+        raise RuntimeError(f"telegram request failed with HTTP {exc.code}: {detail or exc.reason}") from exc
     except URLError as exc:
         raise RuntimeError(f"telegram request failed: {exc.reason}") from exc
     try:
@@ -113,7 +112,9 @@ class TelegramGatewayEventResult:
     delivery_response: Mapping[str, object] | None = None
 
 
-def load_telegram_gateway_accounts(app: GatewayApp) -> tuple[TelegramGatewayAccountConfig, ...]:
+def load_telegram_gateway_accounts(
+    app: GatewayApp,
+) -> tuple[TelegramGatewayAccountConfig, ...]:
     manifest = app.loaded_profile.manifest if app.loaded_profile is not None else {}
     gateway_payload = _mapping(manifest.get("gateway")) or {}
     adapters_payload = _mapping(gateway_payload.get("adapters")) or {}
@@ -135,9 +136,7 @@ def load_telegram_gateway_accounts(app: GatewayApp) -> tuple[TelegramGatewayAcco
             resolved.append(
                 TelegramGatewayAccountConfig(
                     account_id=str(account_mapping.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID),
-                    bot_token_env_var=str(
-                        env_payload.get("bot_token") or DEFAULT_TELEGRAM_BOT_TOKEN_ENV
-                    ),
+                    bot_token_env_var=str(env_payload.get("bot_token") or DEFAULT_TELEGRAM_BOT_TOKEN_ENV),
                     surface=str(account_mapping.get("surface") or default_surface),
                     event_path=_normalize_path(account_mapping.get("event_path") or default_event_path),
                     base_url=str(account_mapping.get("base_url") or default_base_url),
@@ -165,9 +164,7 @@ def resolve_telegram_account(
     if not bot_token and config.bot_token_env_var == DEFAULT_TELEGRAM_BOT_TOKEN_ENV:
         bot_token = str(env.get(LEGACY_TELEGRAM_BOT_TOKEN_ENV) or "")
     if not bot_token:
-        raise LookupError(
-            f"telegram account '{config.account_id}' requires {config.bot_token_env_var}"
-        )
+        raise LookupError(f"telegram account '{config.account_id}' requires {config.bot_token_env_var}")
     return TelegramResolvedAccount(
         account_id=config.account_id,
         bot_token=bot_token,
@@ -237,9 +234,7 @@ class TelegramGatewayService:
     def configured_transport(self) -> str:
         if not self.account_configs:
             return "webhook"
-        transports = tuple(
-            dict.fromkeys(_normalize_transport(config.surface) for config in self.account_configs)
-        )
+        transports = tuple(dict.fromkeys(_normalize_transport(config.surface) for config in self.account_configs))
         if len(transports) == 1:
             return transports[0]
         raise LookupError(
@@ -383,7 +378,9 @@ class TelegramGatewayService:
         """No-op for webhook-only service."""
 
 
-def register_telegram_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_telegram_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     registry.register_service(
         "telegram",
         factory=lambda app, **kwargs: TelegramGatewayService(app=app, **kwargs),

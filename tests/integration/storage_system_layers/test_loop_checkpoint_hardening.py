@@ -155,7 +155,9 @@ class LoopCheckpointHardeningTest(unittest.TestCase):
             finally:
                 type(repository).upsert_loop = original_upsert_loop
 
-    def test_list_loop_checkpoints_round_trips_wait_condition_and_pending_tool_calls(self) -> None:
+    def test_list_loop_checkpoints_round_trips_wait_condition_and_pending_tool_calls(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
             repository.bootstrap()

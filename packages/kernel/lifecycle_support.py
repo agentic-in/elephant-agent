@@ -32,7 +32,13 @@ class KernelLoopLifecycle:
 
 
 class KernelStepRecorder:
-    def __init__(self, storage: KernelStoragePort, loop: Loop, *, semantic_summary_indexer: object | None = None) -> None:
+    def __init__(
+        self,
+        storage: KernelStoragePort,
+        loop: Loop,
+        *,
+        semantic_summary_indexer: object | None = None,
+    ) -> None:
         self._storage = storage
         self._loop = loop
         self._semantic_summary_indexer = semantic_summary_indexer
@@ -126,9 +132,7 @@ def resolve_runtime_identity(
         storage.switch_state(state.state_id, selected_at=current)
         return KernelRuntimeIdentity(personal_model=personal_model, state=state)
 
-    personal_model = storage.ensure_default_personal_model(
-        personal_model_id=request.personal_model_id or "you"
-    )
+    personal_model = storage.ensure_default_personal_model(personal_model_id=request.personal_model_id or "you")
     state = storage.current_state()
     if state is None or state.personal_model_id != personal_model.personal_model_id:
         state = storage.create_state(
@@ -252,7 +256,11 @@ def open_episode_lifecycle(
         if not is_new and episode.started_at is not None and episode.updated_at is not None:
             is_new = episode.started_at == episode.updated_at
         storage.upsert_episode(episode)
-        return KernelEpisodeLifecycle(episode=episode, close_on_completion=policy == "single_turn", is_new_episode=is_new)
+        return KernelEpisodeLifecycle(
+            episode=episode,
+            close_on_completion=policy == "single_turn",
+            is_new_episode=is_new,
+        )
 
     idle_closed: list[Episode] = []
     if policy == "gateway_idle_reuse":
@@ -267,7 +275,10 @@ def open_episode_lifecycle(
                 refreshed = replace(
                     episode,
                     updated_at=current,
-                    metadata={**dict(episode.metadata), "last_activity_at": current.isoformat()},
+                    metadata={
+                        **dict(episode.metadata),
+                        "last_activity_at": current.isoformat(),
+                    },
                 )
                 storage.upsert_episode(refreshed)
                 return KernelEpisodeLifecycle(episode=refreshed, close_on_completion=False)
@@ -351,7 +362,10 @@ def close_episode_lifecycle(
         refreshed = replace(
             lifecycle.episode,
             updated_at=current,
-            metadata={**dict(lifecycle.episode.metadata), "last_activity_at": current.isoformat()},
+            metadata={
+                **dict(lifecycle.episode.metadata),
+                "last_activity_at": current.isoformat(),
+            },
         )
         storage.upsert_episode(refreshed)
         return refreshed
@@ -361,7 +375,10 @@ def close_episode_lifecycle(
         ended_at=current,
         updated_at=current,
         exit_summary=summary,
-        metadata={**dict(lifecycle.episode.metadata), "closed_reason": "final_response"},
+        metadata={
+            **dict(lifecycle.episode.metadata),
+            "closed_reason": "final_response",
+        },
     )
     storage.upsert_episode(closed)
     # Push the exit summary into the semantic index so future episodes can

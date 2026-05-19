@@ -30,29 +30,16 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
             with sqlite3.connect(database_path) as connection:
                 table_names = {
                     str(row[0])
-                    for row in connection.execute(
-                        "SELECT name FROM sqlite_master WHERE type = 'table'"
-                    ).fetchall()
+                    for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
                 }
-                state_columns = {
-                    str(row[1])
-                    for row in connection.execute("PRAGMA table_info(states)").fetchall()
-                }
-                episode_columns = {
-                    str(row[1])
-                    for row in connection.execute("PRAGMA table_info(episodes)").fetchall()
-                }
-                job_columns = {
-                    str(row[1])
-                    for row in connection.execute("PRAGMA table_info(learning_jobs)").fetchall()
-                }
+                state_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(states)").fetchall()}
+                episode_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(episodes)").fetchall()}
+                job_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(learning_jobs)").fetchall()}
                 fact_columns = {
-                    str(row[1])
-                    for row in connection.execute("PRAGMA table_info(personal_model_facts)").fetchall()
+                    str(row[1]) for row in connection.execute("PRAGMA table_info(personal_model_facts)").fetchall()
                 }
                 semantic_columns = {
-                    str(row[1])
-                    for row in connection.execute("PRAGMA table_info(semantic_index_entries)").fetchall()
+                    str(row[1]) for row in connection.execute("PRAGMA table_info(semantic_index_entries)").fetchall()
                 }
 
         self.assertTrue(
@@ -108,7 +95,9 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
         self.assertEqual(semantic_fks["states"], "CASCADE")
         self.assertNotIn("records", semantic_fks)
 
-    def test_bootstrap_rejects_existing_database_without_clean_schema_marker(self) -> None:
+    def test_bootstrap_rejects_existing_database_without_clean_schema_marker(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             database_path = Path(tmpdir) / "state" / "elephant.sqlite3"
             database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,8 +150,7 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
 
             with sqlite3.connect(database_path) as connection:
                 semantic_columns = {
-                    str(row[1])
-                    for row in connection.execute("PRAGMA table_info(semantic_index_entries)").fetchall()
+                    str(row[1]) for row in connection.execute("PRAGMA table_info(semantic_index_entries)").fetchall()
                 }
                 rows = connection.execute("SELECT semantic_index_entry_id FROM semantic_index_entries").fetchall()
 

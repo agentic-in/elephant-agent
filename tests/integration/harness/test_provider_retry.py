@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any
 import unittest
 from unittest import mock
 from urllib import error, request as urllib_request
@@ -30,7 +29,14 @@ def _http_error(
 class _FakeResponse:
     """Minimal fill-in for urllib's response so _post_json_once parses OK."""
 
-    def __init__(self, *, status: int, body: bytes, headers: dict | None = None, lines: list[bytes] | None = None):
+    def __init__(
+        self,
+        *,
+        status: int,
+        body: bytes,
+        headers: dict | None = None,
+        lines: list[bytes] | None = None,
+    ):
         self.status = status
         self._body = body
         self._lines = lines or []
@@ -62,10 +68,15 @@ class ProviderRetryTest(unittest.TestCase):
             timeouts.append(timeout)
             if len(attempts) < 3:
                 raise _http_error(429, headers={"Retry-After": "2"})
-            return _FakeResponse(status=200, body=b'{"ok": true}', headers={"content-type": "application/json"})
+            return _FakeResponse(
+                status=200,
+                body=b'{"ok": true}',
+                headers={"content-type": "application/json"},
+            )
 
-        with mock.patch("time.sleep", side_effect=sleeps.append), mock.patch.object(
-            urllib_request, "urlopen", side_effect=fake_urlopen
+        with (
+            mock.patch("time.sleep", side_effect=sleeps.append),
+            mock.patch.object(urllib_request, "urlopen", side_effect=fake_urlopen),
         ):
             response = transport.post_json(
                 url="http://provider/v1/messages",
@@ -89,8 +100,9 @@ class ProviderRetryTest(unittest.TestCase):
             attempts.append(1)
             raise _http_error(403, headers={}, body=b'{"error": "nope"}')
 
-        with mock.patch("time.sleep"), mock.patch.object(
-            urllib_request, "urlopen", side_effect=fake_urlopen
+        with (
+            mock.patch("time.sleep"),
+            mock.patch.object(urllib_request, "urlopen", side_effect=fake_urlopen),
         ):
             with self.assertRaises(ProviderHTTPError) as ctx:
                 transport.post_json(
@@ -125,8 +137,9 @@ class ProviderRetryTest(unittest.TestCase):
             return _FakeResponse(status=200, body=b"", lines=stream_lines)
 
         chunks: list[JSONHTTPStreamChunk] = []
-        with mock.patch("time.sleep"), mock.patch.object(
-            urllib_request, "urlopen", side_effect=fake_urlopen
+        with (
+            mock.patch("time.sleep"),
+            mock.patch.object(urllib_request, "urlopen", side_effect=fake_urlopen),
         ):
             for chunk in transport.post_json_stream(
                 url="http://provider/v1/messages/stream",
@@ -157,8 +170,9 @@ class ProviderRetryTest(unittest.TestCase):
             return flaky
 
         chunks: list[JSONHTTPStreamChunk] = []
-        with mock.patch("time.sleep"), mock.patch.object(
-            urllib_request, "urlopen", side_effect=fake_urlopen
+        with (
+            mock.patch("time.sleep"),
+            mock.patch.object(urllib_request, "urlopen", side_effect=fake_urlopen),
         ):
             with self.assertRaises(ProviderSSEIncompleteError) as ctx:
                 for chunk in transport.post_json_stream(

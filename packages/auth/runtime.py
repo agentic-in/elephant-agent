@@ -583,7 +583,17 @@ def profile_from_input(
     extra_headers: Mapping[str, str] | None = None,
 ) -> AuthProfile:
     factory = ProviderProfileFactory(catalog=catalog)
-    if any(value is not None for value in (base_url, default_model, transport_id, auth_method, provider_kind, extra_headers)):
+    if any(
+        value is not None
+        for value in (
+            base_url,
+            default_model,
+            transport_id,
+            auth_method,
+            provider_kind,
+            extra_headers,
+        )
+    ):
         return factory.from_compatible_endpoint(
             profile_id=profile_input.profile_id,
             provider_id=profile_input.provider_id,

@@ -10,7 +10,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ALLOWED_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "test")
+ALLOWED_TYPES = (
+    "build",
+    "chore",
+    "ci",
+    "docs",
+    "feat",
+    "fix",
+    "perf",
+    "refactor",
+    "revert",
+    "test",
+)
 COMMIT_RE = re.compile(
     r"^(?P<type>build|chore|ci|docs|feat|fix|perf|refactor|revert|test)"
     r"\((?P<scope>[a-z0-9][a-z0-9/-]*)\)"

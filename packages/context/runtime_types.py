@@ -1,15 +1,11 @@
 """Context runtime data contracts."""
 
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-import re
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Mapping
 
-from packages.capabilities.runtime import CapabilityDescriptor, ContextCapability
-from packages.contracts.runtime import ContextBundle, RecallEvidence, StructuredTurnSlot
+from packages.contracts.runtime import ContextBundle
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +18,7 @@ class ContextLayerBudget:
     omitted: bool = False
     source_refs: tuple[str, ...] = ()
 
+
 @dataclass(frozen=True, slots=True)
 class ContextBudgetRequest:
     layer_name: str
@@ -30,6 +27,7 @@ class ContextBudgetRequest:
     required: bool = False
     priority: int = 0
     source_refs: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True, slots=True)
 class ContextBudgetPlan:
@@ -48,6 +46,7 @@ class ContextBudgetPlan:
                 return allocation
         return None
 
+
 @dataclass(frozen=True, slots=True)
 class ContextSummaryRequest:
     layer_name: str
@@ -55,6 +54,7 @@ class ContextSummaryRequest:
     token_budget: int
     reason: str
     required: bool = False
+
 
 @dataclass(frozen=True, slots=True)
 class ContextRetrievalRequest:
@@ -71,6 +71,7 @@ class ContextRetrievalRequest:
     max_compression: str = "episode_summary"
     replay_mode: str = "off"
 
+
 @dataclass(frozen=True, slots=True)
 class ContextLayerSnapshot:
     layer_name: str
@@ -79,11 +80,13 @@ class ContextLayerSnapshot:
     token_budget: int
     summary: str | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class EpisodeFrozenContext:
     source_refs: tuple[str, ...]
     content: tuple[str, ...]
     token_budget: int
+
 
 @dataclass(frozen=True, slots=True)
 class StateSnapshot:
@@ -95,6 +98,7 @@ class StateSnapshot:
     token_budget: int
     summary: str | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class EpisodeReplay:
     source_refs: tuple[str, ...]
@@ -103,17 +107,20 @@ class EpisodeReplay:
     token_budget: int
     summary: str | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class LoopContext:
     source_refs: tuple[str, ...]
     content: tuple[str, ...]
     token_budget: int
 
+
 @dataclass(frozen=True, slots=True)
 class RequestAttachments:
     source_refs: tuple[str, ...]
     content: tuple[str, ...]
     token_budget: int
+
 
 @dataclass(frozen=True, slots=True)
 class EpisodeFrame:
@@ -173,6 +180,7 @@ class EpisodeFrame:
             )
         return tuple(layers)
 
+
 @dataclass(frozen=True, slots=True)
 class ContextSourceTrace:
     layer_name: str
@@ -184,6 +192,7 @@ class ContextSourceTrace:
         selected = ", ".join(self.selected_refs) if self.selected_refs else "none"
         omitted = f" | omitted: {', '.join(self.omitted_refs)}" if self.omitted_refs else ""
         return f"- {self.layer_name}: {self.reason} | selected: {selected}{omitted}"
+
 
 @dataclass(frozen=True, slots=True)
 class ContextAssemblyPlan:
@@ -197,6 +206,7 @@ class ContextAssemblyPlan:
     frame: EpisodeFrame | None = None
     rationale: str = ""
     source_trace: tuple[ContextSourceTrace, ...] = ()
+
 
 @dataclass(frozen=True, slots=True)
 class ContextAssemblyResult:

@@ -25,9 +25,9 @@ from .runtime import (
     DefaultEvidenceRetriever,
     build_embedding_index_policy,
     build_embedding_index_rebuild_plan,
-    build_resume_packet,
     parse_step_replay_record,
 )
+from .state_focus_support import build_resume_packet
 from .semantic_index_factory import (
     SemanticIndexBundle,
     build_semantic_index_bundle,

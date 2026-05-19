@@ -363,7 +363,10 @@ def build_growth_snapshot(state: PersonalModelGrowthState) -> GrowthSnapshot:
     progress_percent = int(round(progress_ratio * 100))
     lifetime_days = 0
     if state.first_dialogue_at is not None and state.last_dialogue_at is not None:
-        lifetime_days = max(1, (_local_day(state.last_dialogue_at) - _local_day(state.first_dialogue_at)).days + 1)
+        lifetime_days = max(
+            1,
+            (_local_day(state.last_dialogue_at) - _local_day(state.first_dialogue_at)).days + 1,
+        )
     return GrowthSnapshot(
         state=state,
         level=level,
@@ -501,7 +504,9 @@ def _personal_model_lens_count_map(signals: GrowthTurnSignals) -> dict[str, int]
     return counts
 
 
-def _understanding_coverage_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | None:
+def _understanding_coverage_reason(
+    signals: GrowthTurnSignals,
+) -> GrowthRewardReason | None:
     counts = _personal_model_lens_count_map(signals)
     covered_lenses = tuple(lens for lens in _PERSONAL_MODEL_LENSES if counts[lens] > 0)
     fact_count = max(0, signals.personal_model_fact_count)
@@ -524,7 +529,9 @@ def _understanding_coverage_reason(signals: GrowthTurnSignals) -> GrowthRewardRe
     )
 
 
-def _understanding_richness_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | None:
+def _understanding_richness_reason(
+    signals: GrowthTurnSignals,
+) -> GrowthRewardReason | None:
     topic_count = max(0, signals.personal_model_topic_count)
     if topic_count <= 0:
         return None
@@ -550,7 +557,9 @@ def _understanding_richness_reason(signals: GrowthTurnSignals) -> GrowthRewardRe
     )
 
 
-def _understanding_freshness_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | None:
+def _understanding_freshness_reason(
+    signals: GrowthTurnSignals,
+) -> GrowthRewardReason | None:
     new_facts = max(0, signals.personal_model_new_fact_count)
     updated_facts = max(0, signals.personal_model_updated_fact_count)
     score = min(30, (new_facts * 10) + (updated_facts * 6))
@@ -566,7 +575,9 @@ def _understanding_freshness_reason(signals: GrowthTurnSignals) -> GrowthRewardR
     )
 
 
-def _understanding_grounding_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | None:
+def _understanding_grounding_reason(
+    signals: GrowthTurnSignals,
+) -> GrowthRewardReason | None:
     supported_facts = max(0, signals.personal_model_supported_fact_count)
     evidence_refs = max(0, signals.personal_model_evidence_ref_count)
     if supported_facts <= 0 and evidence_refs <= 0:
@@ -587,7 +598,9 @@ def _understanding_grounding_reason(signals: GrowthTurnSignals) -> GrowthRewardR
     )
 
 
-def _interaction_activity_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | None:
+def _interaction_activity_reason(
+    signals: GrowthTurnSignals,
+) -> GrowthRewardReason | None:
     score = 0
     facts: list[str] = []
     if signals.tool_call_count:
@@ -725,7 +738,9 @@ def _learning_yield_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | N
     )
 
 
-def _capability_leverage_reason(signals: GrowthTurnSignals) -> GrowthRewardReason | None:
+def _capability_leverage_reason(
+    signals: GrowthTurnSignals,
+) -> GrowthRewardReason | None:
     score = 0
     facts: list[str] = []
     if signals.tool_call_count:

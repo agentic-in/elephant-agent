@@ -19,7 +19,9 @@ from packages.contracts import Fact
 
 
 class LearningResultWriteTests(unittest.TestCase):
-    def test_learning_context_packet_uses_basic_anchors_and_tool_directives(self) -> None:
+    def test_learning_context_packet_uses_basic_anchors_and_tool_directives(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             state_dir = Path(tempdir) / "state"
             state_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +64,9 @@ class LearningResultWriteTests(unittest.TestCase):
                     metadata={"topic": "world.project.private.detail"},
                 )
             )
-            job = runtime.schedule_learning_for_session(session_id=session.episode_id, trigger="manual", start_worker=False)
+            job = runtime.schedule_learning_for_session(
+                session_id=session.episode_id, trigger="manual", start_worker=False
+            )
 
             packet = build_evidence(runtime, job, resolve_features("manual"))
 
@@ -81,7 +85,13 @@ class LearningResultWriteTests(unittest.TestCase):
             state_dir = root / "state"
             state_dir.mkdir(parents=True, exist_ok=True)
             (root / "profile.json").write_text(
-                json.dumps({"profile_id": "profile-companion", "display_name": "Elephant Agent", "mode": "companion"}),
+                json.dumps(
+                    {
+                        "profile_id": "profile-companion",
+                        "display_name": "Elephant Agent",
+                        "mode": "companion",
+                    }
+                ),
                 encoding="utf-8",
             )
             runtime = CliRuntime.create(state_dir=state_dir)

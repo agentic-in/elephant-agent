@@ -72,7 +72,9 @@ class RuntimeConfigTest(unittest.TestCase):
             self.assertNotIn("state_focus_mode", loaded["models"])
             self.assertEqual(loaded["skills"]["external_dirs"], ["~/.agents/skills"])
 
-    def test_default_global_config_from_gateway_state_uses_shared_install_root(self) -> None:
+    def test_default_global_config_from_gateway_state_uses_shared_install_root(
+        self,
+    ) -> None:
         """Gateway and CLI share the same state_dir.
 
         Passing ``.../gateway`` as an explicit override is honoured — the
@@ -84,7 +86,10 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(defaults["gateway"]["state_dir"], "/tmp/elephant/gateway")
 
     def test_parse_json_or_simple_yaml_object(self) -> None:
-        self.assertEqual(parse_global_config_text('{"dashboard": {"port": 9999}}')["dashboard"]["port"], 9999)
+        self.assertEqual(
+            parse_global_config_text('{"dashboard": {"port": 9999}}')["dashboard"]["port"],
+            9999,
+        )
         parsed = parse_global_config_text("dashboard:\n  host: 127.0.0.1\n  port: 4174\n")
         self.assertEqual(parsed["dashboard"]["host"], "127.0.0.1")
         self.assertEqual(parsed["dashboard"]["port"], 4174)
@@ -124,16 +129,18 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_load_provider_from_config(self) -> None:
         self.assertIsNone(load_provider_from_config({}))
         self.assertIsNone(load_provider_from_config({"models": {}}))
-        provider = load_provider_from_config({
-            "models": {
-                "provider": {
-                    "profile_id": "provider-openai-compatible",
-                    "provider_id": "openai-compatible",
-                    "base_url": "https://api.example.com/v1",
-                    "default_model": "gpt-4",
+        provider = load_provider_from_config(
+            {
+                "models": {
+                    "provider": {
+                        "profile_id": "provider-openai-compatible",
+                        "provider_id": "openai-compatible",
+                        "base_url": "https://api.example.com/v1",
+                        "default_model": "gpt-4",
+                    }
                 }
             }
-        })
+        )
         self.assertIsNotNone(provider)
         self.assertEqual(provider["profile_id"], "provider-openai-compatible")
 

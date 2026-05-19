@@ -158,7 +158,9 @@ def _interaction_preferences(companion) -> tuple[str, ...]:
     return _governance_flags(companion)
 
 
-def _split_profile_preferences(values: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _split_profile_preferences(
+    values: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     communication: list[str] = []
     shared: list[str] = []
     for value in values:

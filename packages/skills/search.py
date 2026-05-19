@@ -45,6 +45,7 @@ from .search_support import (
     _trust_rank,
 )
 
+
 class SkillSearchHub:
     """Aggregate public skill search sources and materialize bundles on demand."""
 
@@ -161,7 +162,12 @@ class GitHubSkillSearchSource:
     source_id = "github"
     label = "GitHub"
 
-    def __init__(self, *, taps: Sequence[Mapping[str, str]] | None = None, token: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        taps: Sequence[Mapping[str, str]] | None = None,
+        token: str | None = None,
+    ) -> None:
         self._taps = tuple(taps or _configured_github_taps())
         self._token = (token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
         self._contents_cache: dict[str, Any] = {}
@@ -399,7 +405,9 @@ class SkillsShSkillSearchSource:
                 canonical = f"{repo}/{skill_path}"
             if canonical.count("/") < 2:
                 continue
-            display_name = str(item.get("name") or PurePosixPath(canonical).name).strip() or PurePosixPath(canonical).name
+            display_name = (
+                str(item.get("name") or PurePosixPath(canonical).name).strip() or PurePosixPath(canonical).name
+            )
             installs = item.get("installs")
             install_note = f" · {int(installs):,} installs" if isinstance(installs, int) else ""
             repo_slug = "/".join(canonical.split("/", 2)[:2])
@@ -788,7 +796,9 @@ class ClaudeMarketplaceSkillSearchSource:
         return tuple(_dedupe_search_entries([item[1] for item in entries])[:limit])
 
     def fetch(self, reference: str) -> RawSkillBundle | None:
-        identifier = reference[len("claude-marketplace:") :] if reference.startswith("claude-marketplace:") else reference
+        identifier = (
+            reference[len("claude-marketplace:") :] if reference.startswith("claude-marketplace:") else reference
+        )
         bundle = self._github.fetch(f"github:{identifier}")
         if bundle is None:
             return None
@@ -940,6 +950,7 @@ def default_skill_search_sources() -> tuple[SkillSearchSource, ...]:
         ClaudeMarketplaceSkillSearchSource(github),
         LobeHubSkillSearchSource(),
     )
+
 
 __all__ = [
     "FetchedSkillBundle",

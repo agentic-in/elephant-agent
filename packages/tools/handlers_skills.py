@@ -174,9 +174,7 @@ def run_skill_manage(
                 side_effects=("skill", "delete"),
             )
         )
-    raise ValueError(
-        "tool.skill.manage requires action=install|enable|disable|create|update|delete"
-    )
+    raise ValueError("tool.skill.manage requires action=install|enable|disable|create|update|delete")
 
 
 def _required_field(invocation: ToolInvocation, name: str) -> str:

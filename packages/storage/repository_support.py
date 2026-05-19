@@ -200,7 +200,9 @@ def _semantic_index_entry_from_row(row: sqlite3.Row) -> SemanticIndexEntry:
         model_id=str(row["model_id"]),
         dimensions=int(row["dimensions"]),
         content_hash=str(row["content_hash"]),
-        personal_model_id=canonical_personal_model_ref(str(row["personal_model_id"]) if row["personal_model_id"] is not None else None),
+        personal_model_id=canonical_personal_model_ref(
+            str(row["personal_model_id"]) if row["personal_model_id"] is not None else None
+        ),
         state_id=str(row["state_id"]) if row["state_id"] is not None else None,
         backend=str(row["backend"]),
         vector_ref=str(row["vector_ref"]),

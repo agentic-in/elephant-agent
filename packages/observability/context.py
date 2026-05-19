@@ -16,7 +16,8 @@ class TraceContext:
 
 
 _current_context: ContextVar[TraceContext | None] = ContextVar(
-    "elephant_trace_context", default=None,
+    "elephant_trace_context",
+    default=None,
 )
 
 

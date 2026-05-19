@@ -4,6 +4,7 @@ understanding system.  The model-facing contract is intentionally small:
 active four-lens claims, evidence summaries, and question rows. Free-form
 notes are evidence, not a Personal Model write surface.
 """
+
 from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
@@ -12,10 +13,25 @@ import hashlib
 import unicodedata
 from typing import Any
 from packages.contracts import ALLOWED_LENSES, Fact
-from packages.evidence import UnifiedRecallRequest, conversation_scopes_for_view, infer_recall_lifecycle_metadata, recall_time_range_from_payload, recall_timeline, render_recall_hit, unified_recall
+from packages.evidence import (
+    UnifiedRecallRequest,
+    conversation_scopes_for_view,
+    infer_recall_lifecycle_metadata,
+    recall_time_range_from_payload,
+    recall_timeline,
+    render_recall_hit,
+    unified_recall,
+)
 from packages.curiosity.question_tool_surface import CuriosityQuestionManagementSurface
-from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID, canonical_personal_model_id
-from .semantic_search_support import fallback_pm_search, keyword_boost, rank_facts_by_semantic_queries
+from packages.storage.repository_support import (
+    DEFAULT_PERSONAL_MODEL_ID,
+    canonical_personal_model_id,
+)
+from .semantic_search_support import (
+    fallback_pm_search,
+    keyword_boost,
+    rank_facts_by_semantic_queries,
+)
 from .temporal_policy import freshness_score
 from .personal_model_governance import (
     claim_payload,
@@ -32,13 +48,20 @@ from .personal_model_governance import (
     topic_rows,
     topic_tree,
 )
+
 _ALLOWED_ACTIONS = frozenset({"remember", "correct", "forget", "dispute", "restore"})
 _ALLOWED_SOURCES = frozenset({"user_said", "user_corrected", "learned"})
 _ALLOWED_SEARCH_STATUSES = frozenset({"active", "retired", "disputed", "all"})
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
 def _clean(value: object) -> str:
     return str(value or "").strip()
+
+
 def _rerank_by_freshness(facts: list[Fact], *, now: datetime) -> list[Fact]:
     """Apply volatility freshness as a small penalty without overriding relevance rank."""
     scored: list[tuple[float, int, Fact]] = []
@@ -58,35 +81,47 @@ def _rerank_by_freshness(facts: list[Fact], *, now: datetime) -> list[Fact]:
         scored.append((float(rank) + freshness_offset, rank, fact))
     scored.sort(key=lambda item: (item[0], item[1]))
     return [fact for _, _, fact in scored]
+
+
 def _normalized_lens(value: object) -> str:
     lens = _clean(value).lower()
     if lens not in ALLOWED_LENSES:
         raise ValueError(f"lens must be one of {sorted(ALLOWED_LENSES)}")
     return lens
+
+
 def _normalized_action(value: object) -> str:
     action = _clean(value).lower()
     if action not in _ALLOWED_ACTIONS:
         raise ValueError(f"action must be one of {sorted(_ALLOWED_ACTIONS)}")
     return action
+
+
 def _normalized_source(value: object) -> str:
     source = _clean(value).lower() or "user_said"
     if source not in _ALLOWED_SOURCES:
         raise ValueError(f"source must be one of {sorted(_ALLOWED_SOURCES)}")
     return source
+
+
 def _normalized_search_status(value: object) -> str:
     status = _clean(value).lower() or "active"
     if status not in _ALLOWED_SEARCH_STATUSES:
         raise ValueError(f"status must be one of {sorted(_ALLOWED_SEARCH_STATUSES)}")
     return status
+
+
 def _status_filter(status: str) -> str | tuple[str, ...]:
     if status == "all":
         return ("active", "retired", "disputed")
     return status
+
+
 def _fact_ref(personal_model_id: str, lens: str, topic: str, text: str) -> str:
-    digest = hashlib.sha256(
-        f"{personal_model_id}|{lens}|{topic}|{text}".encode("utf-8")
-    ).hexdigest()[:18]
+    digest = hashlib.sha256(f"{personal_model_id}|{lens}|{topic}|{text}".encode("utf-8")).hexdigest()[:18]
     return f"claim:{digest}"
+
+
 def _topic_matches(fact: Fact, *, topic: str, ref: str = "") -> bool:
     if ref and fact.fact_id == ref:
         return True
@@ -102,10 +137,14 @@ def _topic_matches_filter(fact: Fact, topic_filter: str) -> bool:
 
 
 _QUERY_ALIASES: Mapping[str, tuple[str, ...]] = {}
+
+
 def _normalized_text(value: object) -> str:
     normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
     decomposed = unicodedata.normalize("NFKD", normalized)
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
 def _search_tokens(value: object) -> tuple[str, ...]:
     normalized = _normalized_text(value)
     tokens: list[str] = []
@@ -124,6 +163,8 @@ def _search_tokens(value: object) -> tuple[str, ...]:
         expanded.append(token)
         expanded.extend(_normalized_text(alias) for alias in _QUERY_ALIASES.get(token, ()))
     return tuple(token for token in dict.fromkeys(expanded) if token)
+
+
 def _token_variants(token: str) -> tuple[str, ...]:
     if not token:
         return ()
@@ -131,6 +172,8 @@ def _token_variants(token: str) -> tuple[str, ...]:
     if _has_cjk(token):
         variants.extend(_char_ngrams(token, widths=(1, 2)))
     return tuple(variants)
+
+
 def _has_cjk(text: str) -> bool:
     return any(
         "CJK" in unicodedata.name(ch, "")
@@ -138,9 +181,13 @@ def _has_cjk(text: str) -> bool:
         or "KATAKANA" in unicodedata.name(ch, "")
         for ch in text
     )
+
+
 def _compact_search_text(value: object) -> str:
     normalized = _normalized_text(value)
     return "".join(ch for ch in normalized if unicodedata.category(ch)[0] in {"L", "N"})
+
+
 def _char_ngrams(value: object, *, widths: tuple[int, ...] = (2, 3)) -> set[str]:
     text = _compact_search_text(value)
     if not text:
@@ -152,6 +199,8 @@ def _char_ngrams(value: object, *, widths: tuple[int, ...] = (2, 3)) -> set[str]
         else:
             grams.update(text[index : index + width] for index in range(0, len(text) - width + 1))
     return grams
+
+
 def _safe_query_variants(values: object) -> tuple[str, ...]:
     if values is None:
         return ()
@@ -170,6 +219,8 @@ def _safe_query_variants(values: object) -> tuple[str, ...]:
         if len(cleaned) >= 5:
             break
     return tuple(dict.fromkeys(cleaned))
+
+
 def _low_information_query(query: str) -> bool:
     normalized = _normalized_text(query).strip()
     if not normalized:
@@ -185,6 +236,8 @@ def _low_information_query(query: str) -> bool:
     if len(ascii_tokens) >= 4 and all(len(token) <= 1 for token in ascii_tokens):
         return True
     return False
+
+
 def _question_topic(lens: str, sub_lens: str) -> str:
     def segment(value: str, fallback: str) -> str:
         normalized = _normalized_text(value).replace(".", "_").replace("-", "_").replace("/", "_").replace(":", "_")
@@ -195,14 +248,18 @@ def _question_topic(lens: str, sub_lens: str) -> str:
         if not resolved[0].isalpha():
             resolved = f"{fallback}_{resolved}"
         return resolved
+
     resolved_lens = _normalized_lens(lens)
     raw = _clean(sub_lens) or "answer"
     try:
         return ensure_valid_topic_key(raw)
     except ValueError:
         return f"{resolved_lens}.question.{segment(raw, 'answer')}"
+
+
 class PersonalModelUnderstandingSurface:
     """Small four-lens Personal Model surface used by foreground tools."""
+
     def __init__(
         self,
         *,
@@ -220,6 +277,7 @@ class PersonalModelUnderstandingSurface:
             None,
         )
         self._questions = CuriosityQuestionManagementSurface(repository=repository)
+
     def _personal_model_id(self, session_id: str, explicit: str = "") -> str:
         pm_id = _clean(explicit)
         if not pm_id:
@@ -231,10 +289,12 @@ class PersonalModelUnderstandingSurface:
         if callable(ensure):
             ensure(personal_model_id=pm_id)
         return pm_id
+
     def _episode_id(self, session_id: str) -> str:
         load_episode = getattr(self.repository, "load_episode_state", None)
         episode = load_episode(session_id) if callable(load_episode) else None
         return _clean(getattr(episode, "episode_id", "")) or session_id
+
     def _index_claim(self, fact: Fact) -> None:
         index_claim = getattr(self.semantic_summary_indexer, "index_personal_model_claim", None)
         if callable(index_claim):
@@ -242,6 +302,7 @@ class PersonalModelUnderstandingSurface:
                 index_claim(fact)
             except Exception:
                 return
+
     def _deactivate_claim_index(
         self,
         *,
@@ -279,6 +340,7 @@ class PersonalModelUnderstandingSurface:
                 )
             except Exception:
                 continue
+
     def _indexed_query_dimensions(
         self,
         *,
@@ -328,6 +390,7 @@ class PersonalModelUnderstandingSurface:
         if not values or dimensions is None:
             return (), None
         return values, dimensions
+
     def search_personal_model(
         self,
         session_id: str,
@@ -383,10 +446,7 @@ class PersonalModelUnderstandingSurface:
             match_status = "strong_match" if selected else "no_match"
         elif resolved_topic and not search_queries:
             # Topic-only filter: return all facts matching this topic (exact or prefix)
-            selected = tuple(
-                fact for fact in facts
-                if _topic_matches_filter(fact, resolved_topic)
-            )[:capped]
+            selected = tuple(fact for fact in facts if _topic_matches_filter(fact, resolved_topic))[:capped]
             match_status = "strong_match" if selected else "no_match"
         elif not search_queries:
             selected = ()
@@ -397,7 +457,11 @@ class PersonalModelUnderstandingSurface:
         else:
             # --- Main search path: HybridSemanticSearcher ---
             selected, match_status = self._hybrid_pm_search(
-                search_queries, pm_id=pm_id, facts=facts, topic=resolved_topic, limit=capped,
+                search_queries,
+                pm_id=pm_id,
+                facts=facts,
+                topic=resolved_topic,
+                limit=capped,
             )
 
         claims = []
@@ -449,7 +513,8 @@ class PersonalModelUnderstandingSurface:
         # Topic pre-filter: if a topic is specified, narrow candidates first
         if topic:
             topic_matched = tuple(
-                fact for fact in facts
+                fact
+                for fact in facts
                 if _clean((fact.metadata or {}).get("topic")) == topic
                 or _clean((fact.metadata or {}).get("topic")).startswith(f"{topic}.")
             )
@@ -561,7 +626,12 @@ class PersonalModelUnderstandingSurface:
                 preview=preview,
                 limit=capped,
             )
-            return {"personal_model_id": pm_id, "scope": "conversation", "mode": resolved_mode, **dict(result)}
+            return {
+                "personal_model_id": pm_id,
+                "scope": "conversation",
+                "mode": resolved_mode,
+                **dict(result),
+            }
         ranked = unified_recall(
             request,
             repository=self.repository,
@@ -616,6 +686,7 @@ class PersonalModelUnderstandingSurface:
             limit=limit,
             personal_model_id=personal_model_id,
         )
+
     def inspect_personal_model(
         self,
         session_id: str,
@@ -636,7 +707,8 @@ class PersonalModelUnderstandingSurface:
             )
         )
         selected = tuple(
-            fact for fact in facts
+            fact
+            for fact in facts
             if (resolved_ref and fact.fact_id == resolved_ref)
             or (resolved_topic and _clean((fact.metadata or {}).get("topic")) == resolved_topic)
         )
@@ -649,17 +721,14 @@ class PersonalModelUnderstandingSurface:
                 supersedes_refs.append(fact.supersedes_fact_id)
             metadata = dict(fact.metadata or {})
             supersedes_refs.extend(
-                item.strip()
-                for item in str(metadata.get("supersedes_fact_ids") or "").split(",")
-                if item.strip()
+                item.strip() for item in str(metadata.get("supersedes_fact_ids") or "").split(",") if item.strip()
             )
         chain = tuple(
-            claim_payload(fact)
-            for ref_id in dict.fromkeys(supersedes_refs)
-            for fact in facts
-            if fact.fact_id == ref_id
+            claim_payload(fact) for ref_id in dict.fromkeys(supersedes_refs) for fact in facts if fact.fact_id == ref_id
         )
-        recall_query = _clean(query) or _clean((claim or {}).get("text") if isinstance(claim, Mapping) else "") or resolved_topic
+        recall_query = (
+            _clean(query) or _clean((claim or {}).get("text") if isinstance(claim, Mapping) else "") or resolved_topic
+        )
         history = ()
         if recall_query:
             history_result = self.recall_personal_model(
@@ -678,6 +747,7 @@ class PersonalModelUnderstandingSurface:
             "history": history,
             "supersedes_chain": chain,
         }
+
     def audit_personal_model(
         self,
         session_id: str,
@@ -706,13 +776,17 @@ class PersonalModelUnderstandingSurface:
         if resolved_action in {"health", "topics"}:
             result["topic_tree"] = topic_tree(tuple(fact for fact in facts if fact.status == "active"))
         if resolved_action == "topics":
-            result["topics"] = topic_rows(tuple(fact for fact in facts if fact.status == "active"), limit=max(1, min(int(limit or 30), 100)))
+            result["topics"] = topic_rows(
+                tuple(fact for fact in facts if fact.status == "active"),
+                limit=max(1, min(int(limit or 30), 100)),
+            )
         if resolved_action == "conflicts":
             result["conflicts"] = tuple(health.get("conflicting_claim_candidates") or ())
         if resolved_action == "stale":
             result["review_claims_overdue"] = tuple(health.get("review_claims_overdue") or ())
             result["current_claims_stale"] = tuple(health.get("current_claims_stale") or ())
         return result
+
     def update_personal_model(
         self,
         session_id: str,
@@ -736,7 +810,13 @@ class PersonalModelUnderstandingSurface:
         resolved_topic = ensure_valid_topic_key(resolved_topic)
         resolved_source = _normalized_source(source)
         resolved_recall_policy = _clean(recall_policy).lower()
-        if resolved_recall_policy not in {"", "stable", "current", "temporary", "review"}:
+        if resolved_recall_policy not in {
+            "",
+            "stable",
+            "current",
+            "temporary",
+            "review",
+        }:
             raise ValueError("recall_policy must be one of stable, current, temporary, review when provided")
         pm_id = self._personal_model_id(session_id, personal_model_id)
         now = _utc_now()
@@ -748,9 +828,7 @@ class PersonalModelUnderstandingSurface:
             )
         )
         resolved_ref = _clean(ref)
-        targets = tuple(
-            fact for fact in active if _topic_matches(fact, topic=resolved_topic, ref=resolved_ref)
-        )
+        targets = tuple(fact for fact in active if _topic_matches(fact, topic=resolved_topic, ref=resolved_ref))
         if resolved_action == "remember" and not resolved_ref and is_single_active_topic(resolved_topic):
             targets = tuple(fact for fact in active if _topic_matches(fact, topic=resolved_topic))
         if resolved_action == "restore":
@@ -771,7 +849,14 @@ class PersonalModelUnderstandingSurface:
                     status=("active", "retired", "disputed"),
                 )
             )
-            target = next((fact for fact in all_facts if fact.fact_id == resolved_ref and _topic_matches(fact, topic=resolved_topic, ref=resolved_ref)), None)
+            target = next(
+                (
+                    fact
+                    for fact in all_facts
+                    if fact.fact_id == resolved_ref and _topic_matches(fact, topic=resolved_topic, ref=resolved_ref)
+                ),
+                None,
+            )
             if target is None:
                 return {
                     "action": resolved_action,
@@ -829,7 +914,9 @@ class PersonalModelUnderstandingSurface:
             text=_clean(text),
             exclude_refs=tuple(fact.fact_id for fact in targets),
         )
-        protected_targets = tuple(fact for fact in targets if is_protected_topic(resolved_topic, dict(fact.metadata or {})))
+        protected_targets = tuple(
+            fact for fact in targets if is_protected_topic(resolved_topic, dict(fact.metadata or {}))
+        )
         if resolved_action == "forget" and protected_targets:
             return {
                 "action": resolved_action,
@@ -841,7 +928,11 @@ class PersonalModelUnderstandingSurface:
                 "no_match_hint": "protected core topic cannot be forgotten by agent tools; correct the content or unprotect it in the dashboard first",
                 "protected_refs": tuple(fact.fact_id for fact in protected_targets),
             }
-        if resolved_action in {"forget", "dispute"} and not resolved_ref and (len(targets) > 1 or (not targets and related_candidates)):
+        if (
+            resolved_action in {"forget", "dispute"}
+            and not resolved_ref
+            and (len(targets) > 1 or (not targets and related_candidates))
+        ):
             return {
                 "action": resolved_action,
                 "personal_model_id": pm_id,
@@ -894,9 +985,7 @@ class PersonalModelUnderstandingSurface:
             raise ValueError("text is required for remember/correct")
         fact_source = "pm_agent_promote" if resolved_source == "learned" else "user_explicit"
         inherited_recall_metadata = (
-            inheritable_recall_metadata(targets)
-            if resolved_action == "correct" and not resolved_recall_policy
-            else {}
+            inheritable_recall_metadata(targets) if resolved_action == "correct" and not resolved_recall_policy else {}
         )
         caller_metadata = {str(key): str(value) for key, value in dict(metadata or {}).items() if str(value).strip()}
         protection_metadata = protected_topic_metadata(resolved_topic, caller_metadata)
@@ -954,6 +1043,7 @@ class PersonalModelUnderstandingSurface:
             "status": "active",
             **({"no_match_hint": no_match_hint} if no_match_hint else {}),
         }
+
     def manage_personal_model_questions(self, session_id: str, **kwargs: Any) -> Mapping[str, Any]:
         payload = dict(kwargs)
         answer_text = _clean(payload.pop("answer", ""))
@@ -961,7 +1051,10 @@ class PersonalModelUnderstandingSurface:
         if _clean(payload.get("action")).lower() == "answer" and answer_text:
             question = result.get("question") if isinstance(result, Mapping) else None
             lens = _clean((question or {}).get("lens")) or _clean(payload.get("lens")) or "knowledge"
-            topic = _question_topic(lens, _clean((question or {}).get("sub_lens")) or _clean(payload.get("sub_lens")) or "answer")
+            topic = _question_topic(
+                lens,
+                _clean((question or {}).get("sub_lens")) or _clean(payload.get("sub_lens")) or "answer",
+            )
             update = self.update_personal_model(
                 session_id,
                 action="correct",

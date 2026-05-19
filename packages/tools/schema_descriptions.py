@@ -138,8 +138,7 @@ def _enrich_schema(tool_id: str, schema: Mapping[str, Any], path: tuple[str, ...
     properties = enriched.get("properties")
     if isinstance(properties, Mapping):
         enriched["properties"] = {
-            str(name): _enrich_property(tool_id, str(name), payload, path)
-            for name, payload in properties.items()
+            str(name): _enrich_property(tool_id, str(name), payload, path) for name, payload in properties.items()
         }
     return enriched
 

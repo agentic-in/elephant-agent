@@ -29,22 +29,33 @@ import hashlib
 import sys
 
 EVIDENCE_TYPES = [
-    "git",           # Local git repository data (commits, reflog, fsck)
-    "gh_api",        # GitHub REST API responses
-    "gh_archive",    # GitHub Archive / BigQuery query results
-    "web_archive",   # Wayback Machine snapshots
-    "ioc",           # Indicator of Compromise (SHA, domain, IP, package name, etc.)
-    "analysis",      # Derived analysis / cross-source correlation result
-    "manual",        # Manually noted observation
-    "vendor_report", # External security vendor report excerpt
+    "git",  # Local git repository data (commits, reflog, fsck)
+    "gh_api",  # GitHub REST API responses
+    "gh_archive",  # GitHub Archive / BigQuery query results
+    "web_archive",  # Wayback Machine snapshots
+    "ioc",  # Indicator of Compromise (SHA, domain, IP, package name, etc.)
+    "analysis",  # Derived analysis / cross-source correlation result
+    "manual",  # Manually noted observation
+    "vendor_report",  # External security vendor report excerpt
 ]
 
 VERIFICATION_STATES = ["unverified", "single_source", "multi_source_verified"]
 
 IOC_TYPES = [
-    "COMMIT_SHA", "FILE_PATH", "API_KEY", "SECRET", "IP_ADDRESS",
-    "DOMAIN", "PACKAGE_NAME", "ACTOR_USERNAME", "MALICIOUS_URL",
-    "WORKFLOW_FILE", "BRANCH_NAME", "TAG_NAME", "RELEASE_NAME", "OTHER",
+    "COMMIT_SHA",
+    "FILE_PATH",
+    "API_KEY",
+    "SECRET",
+    "IP_ADDRESS",
+    "DOMAIN",
+    "PACKAGE_NAME",
+    "ACTOR_USERNAME",
+    "MALICIOUS_URL",
+    "WORKFLOW_FILE",
+    "BRANCH_NAME",
+    "TAG_NAME",
+    "RELEASE_NAME",
+    "OTHER",
 ]
 
 
@@ -76,7 +87,10 @@ class EvidenceStore:
                     self.data = json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Error loading evidence store '{filepath}': {e}", file=sys.stderr)
-                print("Hint: The file might be corrupted. Check for manual edits or syntax errors.", file=sys.stderr)
+                print(
+                    "Hint: The file might be corrupted. Check for manual edits or syntax errors.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
 
     def _save(self):
@@ -115,12 +129,14 @@ class EvidenceStore:
             "notes": notes,
         }
         self.data["evidence"].append(entry)
-        self.data["chain_of_custody"].append({
-            "action": "add",
-            "evidence_id": evidence_id,
-            "timestamp": _now_iso(),
-            "source": source,
-        })
+        self.data["chain_of_custody"].append(
+            {
+                "action": "add",
+                "evidence_id": evidence_id,
+                "timestamp": _now_iso(),
+                "source": source,
+            }
+        )
         self._save()
         return evidence_id
 
@@ -139,18 +155,21 @@ class EvidenceStore:
             expected = _sha256(entry["content"])
             stored = entry.get("content_sha256", "")
             if expected != stored:
-                issues.append({
-                    "id": entry["id"],
-                    "stored_sha256": stored,
-                    "computed_sha256": expected,
-                })
+                issues.append(
+                    {
+                        "id": entry["id"],
+                        "stored_sha256": stored,
+                        "computed_sha256": expected,
+                    }
+                )
         return issues
 
     def query(self, keyword: str):
         """Search for keyword in content, source, actor, or url."""
         keyword_lower = keyword.lower()
         return [
-            e for e in self.data["evidence"]
+            e
+            for e in self.data["evidence"]
             if keyword_lower in (e.get("content", "") or "").lower()
             or keyword_lower in (e.get("source", "") or "").lower()
             or keyword_lower in (e.get("actor", "") or "").lower()
@@ -172,8 +191,8 @@ class EvidenceStore:
             url = e.get("url") or ""
             url_display = f"[link]({url})" if url else ""
             lines.append(
-                f"| {e['id']} | {e.get('type','')} | {e.get('source','')} "
-                f"| {e.get('actor') or ''} | {e.get('verification','')} "
+                f"| {e['id']} | {e.get('type', '')} | {e.get('source', '')} "
+                f"| {e.get('actor') or ''} | {e.get('verification', '')} "
                 f"| {e.get('event_timestamp') or ''} | {url_display} |"
             )
         lines.append("")
@@ -183,8 +202,8 @@ class EvidenceStore:
         lines.append("|-------------|--------|-----------|--------|")
         for c in self.data["chain_of_custody"]:
             lines.append(
-                f"| {c.get('evidence_id','')} | {c.get('action','')} "
-                f"| {c.get('timestamp','')} | {c.get('source','')} |"
+                f"| {c.get('evidence_id', '')} | {c.get('action', '')} "
+                f"| {c.get('timestamp', '')} | {c.get('source', '')} |"
             )
         return "\n".join(lines)
 
@@ -212,15 +231,33 @@ def main():
         description="OSS Forensics Evidence Store Manager v2.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--store", default="evidence.json", help="Path to evidence JSON file (default: evidence.json)")
+    parser.add_argument(
+        "--store",
+        default="evidence.json",
+        help="Path to evidence JSON file (default: evidence.json)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     # --- add ---
     add_p = subparsers.add_parser("add", help="Add a new evidence entry")
-    add_p.add_argument("--source", required=True, help="Where this evidence came from (e.g. 'git fsck', 'GH API /commits')")
-    add_p.add_argument("--content", required=True, help="The evidence content (commit SHA, API response excerpt, etc.)")
-    add_p.add_argument("--type", required=True, choices=EVIDENCE_TYPES, dest="evidence_type", help="Evidence type")
+    add_p.add_argument(
+        "--source",
+        required=True,
+        help="Where this evidence came from (e.g. 'git fsck', 'GH API /commits')",
+    )
+    add_p.add_argument(
+        "--content",
+        required=True,
+        help="The evidence content (commit SHA, API response excerpt, etc.)",
+    )
+    add_p.add_argument(
+        "--type",
+        required=True,
+        choices=EVIDENCE_TYPES,
+        dest="evidence_type",
+        help="Evidence type",
+    )
     add_p.add_argument("--actor", help="GitHub handle or email of associated actor")
     add_p.add_argument("--url", help="URL to original source")
     add_p.add_argument("--timestamp", help="When the event occurred (ISO 8601)")

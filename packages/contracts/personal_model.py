@@ -22,9 +22,7 @@ from typing import Mapping
 ALLOWED_LENSES = frozenset({"identity", "world", "pulse", "journey"})
 ALLOWED_FACT_STATUSES = frozenset({"active", "retired", "disputed", "deleted"})
 ALLOWED_FACT_SOURCES = frozenset({"user_explicit", "pm_agent_promote"})
-ALLOWED_QUESTION_STATUSES = frozenset(
-    {"open", "asked", "answered", "dismissed", "stale"}
-)
+ALLOWED_QUESTION_STATUSES = frozenset({"open", "asked", "answered", "dismissed", "stale"})
 ALLOWED_QUESTION_SOURCES = frozenset({"coverage_gap", "ambiguity", "contextual"})
 ALLOWED_SENSITIVITIES = frozenset({"low", "medium", "high"})
 ALLOWED_LEARNING_INTENSITIES = frozenset({"low", "medium", "high"})
@@ -46,9 +44,7 @@ def _ensure_lens(value: str | None, *, name: str, allow_none: bool = False) -> N
             return
         raise ValueError(f"{name} lens must be provided")
     if value not in ALLOWED_LENSES:
-        raise ValueError(
-            f"{name} lens must be one of {sorted(ALLOWED_LENSES)}: {value}"
-        )
+        raise ValueError(f"{name} lens must be one of {sorted(ALLOWED_LENSES)}: {value}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,13 +72,9 @@ class Fact:
         _ensure_lens(self.lens, name="fact")
         _ensure_confidence(self.confidence, name="fact")
         if self.source not in ALLOWED_FACT_SOURCES:
-            raise ValueError(
-                f"fact source must be one of {sorted(ALLOWED_FACT_SOURCES)}: {self.source}"
-            )
+            raise ValueError(f"fact source must be one of {sorted(ALLOWED_FACT_SOURCES)}: {self.source}")
         if self.status not in ALLOWED_FACT_STATUSES:
-            raise ValueError(
-                f"fact status must be one of {sorted(ALLOWED_FACT_STATUSES)}: {self.status}"
-            )
+            raise ValueError(f"fact status must be one of {sorted(ALLOWED_FACT_STATUSES)}: {self.status}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,9 +107,7 @@ class OpenQuestion:
 
     def __post_init__(self) -> None:
         _ensure_non_empty_text(self.question_id, name="open question id")
-        _ensure_non_empty_text(
-            self.personal_model_id, name="open question personal model id"
-        )
+        _ensure_non_empty_text(self.personal_model_id, name="open question personal model id")
         _ensure_lens(self.lens, name="open question")
         _ensure_non_empty_text(self.sub_lens, name="open question sub_lens")
         _ensure_non_empty_text(self.text, name="open question text")
@@ -126,19 +116,12 @@ class OpenQuestion:
             raise ValueError("open question priority must stay between 0.0 and 1.0")
         if self.sensitivity not in ALLOWED_SENSITIVITIES:
             raise ValueError(
-                f"open question sensitivity must be one of {sorted(ALLOWED_SENSITIVITIES)}: "
-                f"{self.sensitivity}"
+                f"open question sensitivity must be one of {sorted(ALLOWED_SENSITIVITIES)}: {self.sensitivity}"
             )
         if self.source not in ALLOWED_QUESTION_SOURCES:
-            raise ValueError(
-                f"open question source must be one of {sorted(ALLOWED_QUESTION_SOURCES)}: "
-                f"{self.source}"
-            )
+            raise ValueError(f"open question source must be one of {sorted(ALLOWED_QUESTION_SOURCES)}: {self.source}")
         if self.status not in ALLOWED_QUESTION_STATUSES:
-            raise ValueError(
-                f"open question status must be one of {sorted(ALLOWED_QUESTION_STATUSES)}: "
-                f"{self.status}"
-            )
+            raise ValueError(f"open question status must be one of {sorted(ALLOWED_QUESTION_STATUSES)}: {self.status}")
         if self.asked_count < 0:
             raise ValueError("open question asked_count must be >= 0")
 

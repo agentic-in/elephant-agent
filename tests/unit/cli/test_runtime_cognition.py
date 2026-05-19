@@ -16,7 +16,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from apps.cli.runtime import CliRuntime, _CliContextCapability, _DurableRecallCapability
-from apps.cli.runtime_snapshot import load_snapshot_session_context_epoch, restore_snapshot_state_focus
+from apps.cli.runtime_snapshot import (
+    load_snapshot_session_context_epoch,
+    restore_snapshot_state_focus,
+)
 from packages.contracts import (
     ContextBundle,
     Episode,
@@ -44,8 +47,6 @@ from packages.state.persistence import load_persisted_canonical_state
 from packages.skills import (
     FetchedSkillBundle,
     SkillSearchEntry,
-    builtin_site_skill_catalog_entries,
-    operator_prompt_skill_catalog_entries,
 )
 
 
@@ -138,7 +139,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
             )
         return runtime
 
-    def test_cli_context_capability_recovers_recent_loop_context_from_snapshot(self) -> None:
+    def test_cli_context_capability_recovers_recent_loop_context_from_snapshot(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         runtime.snapshot_path.write_text(
@@ -188,7 +191,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(indexed[0].status, "closed")
         self.assertEqual(indexed[0].exit_summary, "/clear requested a fresh Episode")
 
-    def test_cli_context_capability_ignores_internal_startup_loops_in_recent_loop_context(self) -> None:
+    def test_cli_context_capability_ignores_internal_startup_loops_in_recent_loop_context(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         runtime.snapshot_path.write_text(
@@ -217,7 +222,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("startup opening", bundle.rendered_prompt)
         self.assertNotIn("steady welcome", bundle.rendered_prompt)
 
-    def test_cli_context_does_not_duplicate_active_personal_model_behavior_contract(self) -> None:
+    def test_cli_context_does_not_duplicate_active_personal_model_behavior_contract(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         capability = _CliContextCapability(
@@ -251,7 +258,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(second_child.parent_episode_id, parent.episode_id)
         self.assertNotEqual(first_child.episode_id, second_child.episode_id)
 
-    def test_frozen_session_context_epoch_reuses_stable_sections_without_turn_bodies(self) -> None:
+    def test_frozen_session_context_epoch_reuses_stable_sections_without_turn_bodies(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         profile = runtime._load_profile(session.personal_model_id)
@@ -474,7 +483,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("ascii-art", frozen_epoch.frozen_skill_ids)
         self.assertEqual(frozen_epoch.frozen_skill_ids, ())
 
-    def test_frozen_session_history_compacts_explicitly_without_rewriting_epoch_truth(self) -> None:
+    def test_frozen_session_history_compacts_explicitly_without_rewriting_epoch_truth(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         profile = runtime._load_profile(session.personal_model_id)
@@ -525,8 +536,7 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         )
         snapshot = json.loads(runtime.snapshot_path.read_text(encoding="utf-8"))
         snapshot["session_context_epoch"]["history_messages"] = [
-            {"role": message.role, "content": message.content}
-            for message in long_history
+            {"role": message.role, "content": message.content} for message in long_history
         ]
         runtime.snapshot_path.write_text(json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8")
 
@@ -579,9 +589,14 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertEqual(result, "compacted")
         self.assertIs(captured["embedding_service"], embedding_service)
-        self.assertEqual(captured["compact_kwargs"], {"session_id": session.episode_id, "reason": "usage", "force": True})
+        self.assertEqual(
+            captured["compact_kwargs"],
+            {"session_id": session.episode_id, "reason": "usage", "force": True},
+        )
 
-    def test_projection_relevance_scorer_was_removed_from_context_public_contract(self) -> None:
+    def test_projection_relevance_scorer_was_removed_from_context_public_contract(
+        self,
+    ) -> None:
         runtime = self._runtime()
         capability = _CliContextCapability(
             profile_loader=runtime.profile_loader,
@@ -593,7 +608,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertFalse(hasattr(capability, "_projection_relevance_scorer"))
 
-    def test_snapshot_history_messages_use_actual_turn_transcript_without_legacy_lines(self) -> None:
+    def test_snapshot_history_messages_use_actual_turn_transcript_without_legacy_lines(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         profile = runtime._load_profile(session.personal_model_id)
@@ -655,12 +672,17 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("history_lines", epoch_payload)
         roles = [message["role"] for message in epoch_payload["history_messages"]]
         self.assertEqual(roles, ["user", "assistant", "tool", "assistant"])
-        self.assertEqual(epoch_payload["history_messages"][1]["tool_calls"][0]["name"], "tool.web.search")
+        self.assertEqual(
+            epoch_payload["history_messages"][1]["tool_calls"][0]["name"],
+            "tool.web.search",
+        )
         self.assertEqual(epoch_payload["history_messages"][2]["tool_name"], "tool.web.search")
         self.assertEqual(epoch_payload["history_messages"][2]["tool_call_id"], "call-real-1")
         self.assertIn("summary: search result", epoch_payload["history_messages"][2]["content"])
 
-    def test_high_usage_turn_compacts_snapshot_after_current_transcript_is_appended(self) -> None:
+    def test_high_usage_turn_compacts_snapshot_after_current_transcript_is_appended(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         observed_events: list[dict[str, object]] = []
@@ -715,12 +737,17 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(frozen_epoch.compaction_count, 1)
         self.assertIn("Reference summary:", frozen_epoch.frozen_prefix)
         self.assertIn("oversized completed request", frozen_epoch.compacted_history_summary)
-        self.assertIn("oversized completed request", captured_compress_metadata["compressed_messages"])
+        self.assertIn(
+            "oversized completed request",
+            captured_compress_metadata["compressed_messages"],
+        )
         history = tuple(message.content for message in frozen_epoch.history_messages)
         self.assertIn("completed answer", history)
         self.assertNotIn(huge_prompt, history)
 
-    def test_frozen_session_context_epoch_tracks_latest_skill_disclosure_reason(self) -> None:
+    def test_frozen_session_context_epoch_tracks_latest_skill_disclosure_reason(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         profile = runtime._load_profile(session.personal_model_id)
@@ -774,7 +801,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
             frozen_epoch.latest_skill_disclosures[0].reason,
         )
 
-    def test_snapshot_state_focus_restore_rejects_legacy_skill_candidate_scores(self) -> None:
+    def test_snapshot_state_focus_restore_rejects_legacy_skill_candidate_scores(
+        self,
+    ) -> None:
         snapshot = {
             "state_focus": {
                 "state_focus": "execution",
@@ -793,7 +822,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             restore_snapshot_state_focus(snapshot)
 
-    def test_durable_recall_capability_prefers_work_item_aware_continuity_retrieval(self) -> None:
+    def test_durable_recall_capability_prefers_work_item_aware_continuity_retrieval(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         runtime.repository.upsert_loop(
@@ -885,7 +916,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("Publish the release artifacts.", continuity.reengagement_prompt)
         self.assertIn("initiative=gentle", continuity.continuity_summary)
 
-    def test_planning_recall_evidence_recovery_falls_back_to_episode_scoped_steps(self) -> None:
+    def test_planning_recall_evidence_recovery_falls_back_to_episode_scoped_steps(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         runtime.repository.upsert_loop(
@@ -940,7 +973,10 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         with mock.patch.object(runtime.recall_runtime, "retrieve_evidence", return_value=empty_retrieval):
             recovery = runtime._planning_recall_evidence_recovery(session)
 
-        self.assertEqual(tuple(evidence.evidence_id for evidence in recovery.recall_items), ("step:evidence-fallback",))
+        self.assertEqual(
+            tuple(evidence.evidence_id for evidence in recovery.recall_items),
+            ("step:evidence-fallback",),
+        )
         self.assertEqual(recovery.scope_episode_ids, (session.episode_id,))
 
     def test_prepare_session_surface_kicks_off_embedding_steadyup(self) -> None:
@@ -953,7 +989,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         steady_async.assert_called_once_with()
 
-    def test_skill_catalog_does_not_kick_off_embedding_steadyup_for_passive_ui_reads(self) -> None:
+    def test_skill_catalog_does_not_kick_off_embedding_steadyup_for_passive_ui_reads(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         embedding_service = runtime.recall_runtime.retriever.evidence_retriever.embedding_service
@@ -963,7 +1001,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         steady_async.assert_not_called()
 
-    def test_cli_context_capability_surfaces_enabled_tools_and_scoped_skills(self) -> None:
+    def test_cli_context_capability_surfaces_enabled_tools_and_scoped_skills(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         now = datetime.now(timezone.utc)
@@ -1069,10 +1109,18 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertIn("runtime-paths:", bundle.rendered_prompt)
         self.assertIn("### Runtime paths", bundle.prompt_envelope.system_prompt())
         self.assertNotIn("runtime-paths:", bundle.prompt_envelope.user_prelude())
-        self.assertIn(f"elephant_workspace={runtime.paths.elephant_file_path('miles').resolve()}", bundle.rendered_prompt)
-        self.assertIn(f"elephant_workspace={runtime.paths.elephant_file_path('miles').resolve()}", bundle.prompt_envelope.system_prompt())
+        self.assertIn(
+            f"elephant_workspace={runtime.paths.elephant_file_path('miles').resolve()}",
+            bundle.rendered_prompt,
+        )
+        self.assertIn(
+            f"elephant_workspace={runtime.paths.elephant_file_path('miles').resolve()}",
+            bundle.prompt_envelope.system_prompt(),
+        )
 
-    def test_cli_context_only_lists_launch_directory_rule_files_for_on_demand_reading(self) -> None:
+    def test_cli_context_only_lists_launch_directory_rule_files_for_on_demand_reading(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="miles")
 
@@ -1098,20 +1146,46 @@ class CliRuntimeCognitionTest(unittest.TestCase):
             bundle = capability.assemble(session, (), ())
 
         self.assertNotIn("### Launch Directory Context", bundle.prompt_envelope.frozen_prefix)
-        self.assertNotIn(f"Current absolute path: `{startup_dir.resolve()}`", bundle.prompt_envelope.frozen_prefix)
-        self.assertNotIn("Launch-directory rule files are available for on-demand reading:", bundle.prompt_envelope.frozen_prefix)
+        self.assertNotIn(
+            f"Current absolute path: `{startup_dir.resolve()}`",
+            bundle.prompt_envelope.frozen_prefix,
+        )
+        self.assertNotIn(
+            "Launch-directory rule files are available for on-demand reading:",
+            bundle.prompt_envelope.frozen_prefix,
+        )
         self.assertNotIn(f"- `{startup_dir / 'AGENTS.md'}`", bundle.prompt_envelope.frozen_prefix)
         self.assertNotIn(".elephant.md", bundle.prompt_envelope.frozen_prefix)
-        self.assertNotIn("Loaded launch-directory project context files:", bundle.prompt_envelope.frozen_prefix)
-        self.assertNotIn("Always treat the current repo as the primary analysis target.", bundle.prompt_envelope.frozen_prefix)
-        self.assertNotIn("Use launch-directory docs before generic fallbacks.", bundle.prompt_envelope.frozen_prefix)
+        self.assertNotIn(
+            "Loaded launch-directory project context files:",
+            bundle.prompt_envelope.frozen_prefix,
+        )
+        self.assertNotIn(
+            "Always treat the current repo as the primary analysis target.",
+            bundle.prompt_envelope.frozen_prefix,
+        )
+        self.assertNotIn(
+            "Use launch-directory docs before generic fallbacks.",
+            bundle.prompt_envelope.frozen_prefix,
+        )
         self.assertIn(f"startup_cwd={startup_dir.resolve()}", bundle.rendered_prompt)
-        self.assertNotIn(f"startup_cwd={startup_dir.resolve()}", bundle.prompt_envelope.system_prompt())
+        self.assertNotIn(
+            f"startup_cwd={startup_dir.resolve()}",
+            bundle.prompt_envelope.system_prompt(),
+        )
         self.assertIn("startup_cwd=", bundle.prompt_envelope.system_prompt())
-        self.assertNotIn(f"startup_cwd={startup_dir.resolve()}", bundle.prompt_envelope.user_prelude())
-        self.assertIn(f"elephant_workspace={runtime.paths.elephant_file_path('miles').resolve()}", bundle.rendered_prompt)
+        self.assertNotIn(
+            f"startup_cwd={startup_dir.resolve()}",
+            bundle.prompt_envelope.user_prelude(),
+        )
+        self.assertIn(
+            f"elephant_workspace={runtime.paths.elephant_file_path('miles').resolve()}",
+            bundle.rendered_prompt,
+        )
 
-    def test_installing_skill_package_does_not_eagerly_expand_generation_context(self) -> None:
+    def test_installing_skill_package_does_not_eagerly_expand_generation_context(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
         skill_dir = Path(runtime.paths.state_dir) / "test-skill"
@@ -1137,7 +1211,10 @@ class CliRuntimeCognitionTest(unittest.TestCase):
             runtime.install_skill_source("custom-1:test-skill", session_id=session.episode_id)
 
         installed_entry = runtime.inspect_skill("test-skill", session_id=session.episode_id)
-        self.assertEqual(Path(installed_entry.entry_path), runtime.paths.installed_skills_dir / "custom-1" / "test-skill" / "SKILL.md")
+        self.assertEqual(
+            Path(installed_entry.entry_path),
+            runtime.paths.installed_skills_dir / "custom-1" / "test-skill" / "SKILL.md",
+        )
         self.assertTrue(Path(installed_entry.entry_path).exists())
         self.assertEqual(installed_entry.metadata.get("source_reference"), "custom-1:test-skill")
         self.assertEqual(installed_entry.metadata.get("install_action"), "install")
@@ -1157,7 +1234,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotIn("Search Skill", bundle.prompt_envelope.frozen_prefix)
         self.assertNotIn("Always search before editing", bundle.prompt_envelope.frozen_prefix)
 
-    def test_enabled_shelf_skill_enters_prompt_index_without_runtime_install(self) -> None:
+    def test_enabled_shelf_skill_enters_prompt_index_without_runtime_install(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
         skill_dir = runtime.paths.installed_skills_dir / "manual" / "shelf-skill"
@@ -1188,11 +1267,17 @@ class CliRuntimeCognitionTest(unittest.TestCase):
             install_root=runtime.paths.home_dir,
         )
 
-        with mock.patch("apps.cli.runtime_cognition.build_launch_directory_context", return_value=(), create=True):
+        with mock.patch(
+            "apps.cli.runtime_cognition.build_launch_directory_context",
+            return_value=(),
+            create=True,
+        ):
             bundle = capability.assemble(session, (), ())
 
             self.assertNotIn("Shelf Skill", bundle.rendered_prompt)
-            self.assertFalse(any(skill.skill_id == "shelf-skill" for skill in runtime.skill_catalog(session_id=session.episode_id)))
+            self.assertFalse(
+                any(skill.skill_id == "shelf-skill" for skill in runtime.skill_catalog(session_id=session.episode_id))
+            )
 
             loaded = runtime._load_profile(session.personal_model_id)
             manifest = dict(loaded.manifest)
@@ -1219,7 +1304,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertIn("enabled: False", viewed.summary)
         self.assertIn("installed: True", viewed.summary)
 
-    def test_explain_next_step_persists_assistant_outcome_as_decision_memory(self) -> None:
+    def test_explain_next_step_persists_assistant_outcome_as_decision_memory(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
 
@@ -1234,14 +1321,19 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         # context stays visible without mixing in per-turn State summaries.
         self.assertNotIn("### Where things stand", outcome.context.rendered_prompt)
         self.assertNotIn("### Carrying context forward", outcome.context.rendered_prompt)
-        self.assertNotIn("recovered-evidence-summary: no durable recall_items", outcome.context.rendered_prompt)
+        self.assertNotIn(
+            "recovered-evidence-summary: no durable recall_items",
+            outcome.context.rendered_prompt,
+        )
         self.assertFalse(any(evidence.kind == "decision" for evidence in recall_items))
         steps = runtime.repository.list_steps()
         self.assertTrue(any(step.episode_id == session.episode_id for step in steps))
         self.assertTrue(any(outcome.execution.summary in step.summary for step in steps))
         self.assertEqual(runtime.inspect_experiences(session_id=session.episode_id), ())
 
-    def test_explain_next_step_updates_personal_model_growth_from_level_zero_to_level_one(self) -> None:
+    def test_explain_next_step_updates_personal_model_growth_from_level_zero_to_level_one(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
 
@@ -1284,7 +1376,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertIsNone(outcome)
 
-    def test_generate_opening_reply_uses_internal_turn_without_growth_side_effects(self) -> None:
+    def test_generate_opening_reply_uses_internal_turn_without_growth_side_effects(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
 
@@ -1304,7 +1398,10 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertFalse(kwargs["record_outcome_event"])
         self.assertFalse(kwargs["capture_experience"])
         self.assertFalse(kwargs["apply_growth"])
-        self.assertEqual(kwargs["event_payload"]["summary"], "startup opening (Opened elephant atlas)")
+        self.assertEqual(
+            kwargs["event_payload"]["summary"],
+            "startup opening (Opened elephant atlas)",
+        )
         self.assertEqual(kwargs["event_payload"]["allow_embeddings"], "false")
 
     def test_generate_opening_reply_keeps_wake_episode_open(self) -> None:
@@ -1341,7 +1438,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertNotEqual(stored.status, "closed")
         self.assertEqual(runtime.repository.list_learning_jobs(episode_id=session.episode_id), ())
 
-    def test_cli_turn_continues_from_next_episode_without_reopening_closed_parent(self) -> None:
+    def test_cli_turn_continues_from_next_episode_without_reopening_closed_parent(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.start()
         episode = runtime.repository.load_episode(session.episode_id)
@@ -1358,7 +1457,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         )
 
         transition = runtime.open_next_episode(session.episode_id, reason="wake_boundary")
-        outcome = runtime.explain_next_step(session_id=transition.episode.episode_id, prompt="continue this wake thread")
+        outcome = runtime.explain_next_step(
+            session_id=transition.episode.episode_id, prompt="continue this wake thread"
+        )
 
         stored_parent = runtime.repository.load_episode(session.episode_id)
         self.assertIsNotNone(stored_parent)
@@ -1371,7 +1472,10 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(stored_child.parent_episode_id, session.episode_id)
         self.assertEqual(stored_child.metadata.get("opening_resume_snapshot"), "final parent summary")
         self.assertEqual(runtime.repository.list_learning_jobs(episode_id=session.episode_id), ())
-        self.assertEqual(runtime.repository.list_learning_jobs(episode_id=transition.episode.episode_id), ())
+        self.assertEqual(
+            runtime.repository.list_learning_jobs(episode_id=transition.episode.episode_id),
+            (),
+        )
 
     def test_state_focus_runtime_status_surfaces_loaded_runtime_state(self) -> None:
         runtime = self._runtime()
@@ -1391,9 +1495,15 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(status["runtime_state"], "loaded")
         self.assertTrue(status["embedding_ready"])
 
-    def test_shared_elephant_authored_skill_shelf_supports_cross_profile_reuse(self) -> None:
+    def test_shared_elephant_authored_skill_shelf_supports_cross_profile_reuse(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as authored_dir:
-            with mock.patch.dict("os.environ", {"ELEPHANT_AUTHORED_SKILLS_DIR": authored_dir}, clear=False):
+            with mock.patch.dict(
+                "os.environ",
+                {"ELEPHANT_AUTHORED_SKILLS_DIR": authored_dir},
+                clear=False,
+            ):
                 runtime_a = self._runtime()
                 session_a = runtime_a.create_elephant(elephant_id="atlas")
                 runtime_a.create_experience_skill(
@@ -1419,7 +1529,11 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
     def test_create_experience_skill_surfaces_in_skill_hub_listing(self) -> None:
         with tempfile.TemporaryDirectory() as authored_dir:
-            with mock.patch.dict("os.environ", {"ELEPHANT_AUTHORED_SKILLS_DIR": authored_dir}, clear=False):
+            with mock.patch.dict(
+                "os.environ",
+                {"ELEPHANT_AUTHORED_SKILLS_DIR": authored_dir},
+                clear=False,
+            ):
                 runtime = self._runtime()
                 session = runtime.create_elephant(elephant_id="atlas")
                 runtime.create_experience_skill(
@@ -1462,7 +1576,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(searched[0].reference, "github:openai/skills/bounded-retrieval")
         self.assertEqual(searched[0].trust_level, "trusted")
 
-    def test_inspect_skill_source_can_inspect_remote_search_reference_without_installing(self) -> None:
+    def test_inspect_skill_source_can_inspect_remote_search_reference_without_installing(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
         remote_dir = Path(runtime.paths.state_dir) / "remote-skill"
@@ -1508,12 +1624,20 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertEqual(inspected.display_name, "Remote Notes")
         self.assertEqual(inspected.metadata.get("hub_reference"), "github:openai/skills/remote-notes")
-        self.assertEqual(inspected.metadata.get("source_reference"), "github:openai/skills/remote-notes")
-        self.assertEqual(inspected.metadata.get("install_reference"), "github:openai/skills/remote-notes")
+        self.assertEqual(
+            inspected.metadata.get("source_reference"),
+            "github:openai/skills/remote-notes",
+        )
+        self.assertEqual(
+            inspected.metadata.get("install_reference"),
+            "github:openai/skills/remote-notes",
+        )
         self.assertEqual(inspected.metadata.get("trust_level"), "trusted")
         self.assertIn("AppleScript", inspected.instruction_text)
 
-    def test_inspect_skill_can_read_builtin_skill_package_without_installing(self) -> None:
+    def test_inspect_skill_can_read_builtin_skill_package_without_installing(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
 
@@ -1529,7 +1653,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertIn("memo notes --help", inspected.instruction_text)
         self.assertIn("open -a Notes", inspected.instruction_text)
 
-    def test_operator_profile_surface_can_inspect_and_update_profile_surface(self) -> None:
+    def test_operator_profile_surface_can_inspect_and_update_profile_surface(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
 
@@ -1555,8 +1681,14 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(updated_profile.identity.personality_preset, "operator")
         self.assertEqual(updated_profile.identity.initiative, "proactive")
         self.assertEqual(updated_profile.user.preferred_name, "xunzhuo")
-        self.assertIn("Prefers direct updates and wants long-horizon context preserved.", updated_profile.user.durable_notes)
-        self.assertIn("Keep responses concise and grounded.", updated_profile.relationship.continuity_notes)
+        self.assertIn(
+            "Prefers direct updates and wants long-horizon context preserved.",
+            updated_profile.user.durable_notes,
+        )
+        self.assertIn(
+            "Keep responses concise and grounded.",
+            updated_profile.relationship.continuity_notes,
+        )
         user = runtime.inspect_user(session_id=session.episode_id)
         self.assertIn("current_work:Software engineer", user.biography_fragments)
         self.assertEqual(
@@ -1586,7 +1718,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertIn("current_work:Software engineer", user.biography_fragments)
         self.assertEqual(user.durable_notes, ("Prefers direct progress updates.",))
 
-    def test_operator_profile_surface_persists_structured_biography_fields_in_profile_summary(self) -> None:
+    def test_operator_profile_surface_persists_structured_biography_fields_in_profile_summary(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
 
@@ -1648,7 +1782,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(identity.personality_preset, "operator")
         self.assertEqual(identity.initiative, "proactive")
 
-    def test_personal_model_update_tool_runtime_uses_refreshed_canonical_state_surface(self) -> None:
+    def test_personal_model_update_tool_runtime_uses_refreshed_canonical_state_surface(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
 
@@ -1673,7 +1809,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         )
         self.assertTrue(any("Software engineer" in fact.text for fact in facts))
 
-    def test_profile_persistence_syncs_canonical_owner_records_and_ledgers(self) -> None:
+    def test_profile_persistence_syncs_canonical_owner_records_and_ledgers(
+        self,
+    ) -> None:
         runtime = self._runtime(
             profile_payload={
                 "profile_id": "profile-companion",
@@ -1704,7 +1842,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(elephant_identity.elephant_identity_text, "Stay calm, durable, and exact.")
         self.assertIsNotNone(runtime.repository.load_elephant_identity_for_profile(profile_id))
         facts = runtime.repository.list_personal_model_facts(personal_model_id=profile_id, status="active")
-        self.assertFalse(any(fact.metadata.get("canonical_component") in {"user-profile", "relationship"} for fact in facts))
+        self.assertFalse(
+            any(fact.metadata.get("canonical_component") in {"user-profile", "relationship"} for fact in facts)
+        )
 
         runtime.update_user_state(
             profile_id=profile_id,
@@ -1785,9 +1925,14 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertIn("active-loop-checkpoint:", bundle.rendered_prompt)
         self.assertIn("Audit the long-horizon loop design", bundle.rendered_prompt)
-        self.assertIn("Collected Elephant Agent and OpenClaw reference points", bundle.rendered_prompt)
+        self.assertIn(
+            "Collected Elephant Agent and OpenClaw reference points",
+            bundle.rendered_prompt,
+        )
 
-    def test_delete_elephant_clears_sessions_and_memories_for_that_elephant(self) -> None:
+    def test_delete_elephant_clears_sessions_and_memories_for_that_elephant(
+        self,
+    ) -> None:
         runtime = self._runtime()
         session = runtime.create_elephant(elephant_id="atlas")
 
@@ -1795,12 +1940,17 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertEqual(deleted_sessions, 1)
         self.assertIsNone(runtime.repository.load_episode_state(session.episode_id))
-        self.assertEqual(runtime.recall_runtime.store.list(session.episode_id, include_inactive=True), ())
+        self.assertEqual(
+            runtime.recall_runtime.store.list(session.episode_id, include_inactive=True),
+            (),
+        )
         self.assertIsNotNone(runtime.repository.load_personal_model(session.personal_model_id))
         self.assertIsNone(runtime.repository.load_state("state:atlas"))
         self.assertEqual(runtime.list_herd(), ())
 
-    def test_delete_all_elephants_clears_state_rows_and_preserves_personal_model(self) -> None:
+    def test_delete_all_elephants_clears_state_rows_and_preserves_personal_model(
+        self,
+    ) -> None:
         runtime = self._runtime()
         alpha = runtime.create_elephant(elephant_id="alpha")
         beta = runtime.create_elephant(elephant_id="beta")
@@ -1823,7 +1973,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
 
         self.assertEqual([tuple(row) for row in profile_rows], [("you",)])
 
-    def test_create_elephant_reuses_personal_model_without_clearing_growth(self) -> None:
+    def test_create_elephant_reuses_personal_model_without_clearing_growth(
+        self,
+    ) -> None:
         runtime = self._runtime()
         original = runtime.create_elephant(elephant_id="atlas")
         runtime.repository.upsert_personal_model_growth(
@@ -1856,7 +2008,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         assert elephant_state is not None
         self.assertEqual(elephant_state.elephant_name, "Atlas")
 
-    def test_elephants_get_isolated_elephant_identity_under_one_personal_model(self) -> None:
+    def test_elephants_get_isolated_elephant_identity_under_one_personal_model(
+        self,
+    ) -> None:
         runtime = self._runtime()
         alpha = runtime.create_elephant(elephant_id="alpha")
         beta = runtime.create_elephant(elephant_id="beta")
@@ -1894,7 +2048,9 @@ class CliRuntimeCognitionTest(unittest.TestCase):
         self.assertEqual(continuity.profile.state.display_name, "you")
         self.assertFalse((runtime.paths.home_dir / "profiles" / "elephant%3Anova" / "profile.json").exists())
 
-    def test_explain_next_step_does_not_mutate_profile_without_management_tools(self) -> None:
+    def test_explain_next_step_does_not_mutate_profile_without_management_tools(
+        self,
+    ) -> None:
         runtime = self._runtime(
             profile_payload={
                 "profile_id": "profile-companion",

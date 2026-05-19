@@ -93,7 +93,10 @@ def _openai_chat_tool_call_payload(
     call_id = str(call.get("id") or call.get("call_id") or "").strip() or "call_context"
     if len(call_id) > 64:
         call_id = call_id[:64]
-    name = _provider_tool_alias_for_message(str(call.get("name") or call.get("tool_name") or ""), tool_name_map=tool_name_map)
+    name = _provider_tool_alias_for_message(
+        str(call.get("name") or call.get("tool_name") or ""),
+        tool_name_map=tool_name_map,
+    )
     arguments = _tool_call_arguments(call.get("arguments"))
     return {
         "id": call_id,
@@ -113,7 +116,10 @@ def _openai_responses_function_call_payload(
     call_id = str(call.get("id") or call.get("call_id") or "").strip() or "call_context"
     if len(call_id) > 64:
         call_id = call_id[:64]
-    name = _provider_tool_alias_for_message(str(call.get("name") or call.get("tool_name") or ""), tool_name_map=tool_name_map)
+    name = _provider_tool_alias_for_message(
+        str(call.get("name") or call.get("tool_name") or ""),
+        tool_name_map=tool_name_map,
+    )
     return {
         "type": "function_call",
         "call_id": call_id,

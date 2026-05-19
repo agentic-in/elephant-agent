@@ -28,7 +28,10 @@ def _headers_for(path: Path, *, content_length: int) -> list[tuple[str, str]]:
     return [
         ("Content-Type", content_type),
         ("Content-Length", str(content_length)),
-        ("Cache-Control", "no-cache" if path.name == "index.html" else "public, max-age=31536000, immutable"),
+        (
+            "Cache-Control",
+            "no-cache" if path.name == "index.html" else "public, max-age=31536000, immutable",
+        ),
     ]
 
 

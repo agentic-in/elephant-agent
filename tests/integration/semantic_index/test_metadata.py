@@ -53,7 +53,10 @@ class SemanticIndexMetadataTest(unittest.TestCase):
         self.assertEqual(loaded.model_id, "elephant-embed")
         self.assertEqual(loaded.dimensions, 4)
         self.assertEqual(loaded.owner_scope, "state")
-        self.assertEqual(loaded.content_hash, semantic_content_hash("release checklist and package verification"))
+        self.assertEqual(
+            loaded.content_hash,
+            semantic_content_hash("release checklist and package verification"),
+        )
         self.assertEqual(loaded.status, "indexed")
         self.assertTrue(loaded.vector_ref.startswith("sqlite-vec:4:semantic-index:"))
         self.assertEqual(loaded.metadata["backend_version"], "0.1.9")
@@ -119,7 +122,9 @@ class SemanticIndexMetadataTest(unittest.TestCase):
         self.assertIsNone(loaded)
         self.assertEqual(matches, ())
 
-    def test_rebuild_plan_tracks_provider_model_dimension_and_content_changes(self) -> None:
+    def test_rebuild_plan_tracks_provider_model_dimension_and_content_changes(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             repository = RuntimeStorageRepository(root / "state" / "elephant.sqlite3")
@@ -170,6 +175,7 @@ class SemanticIndexMetadataTest(unittest.TestCase):
         self.assertEqual(len(rebuild.rebuild_entry_ids), 1)
         self.assertEqual(len(rebuild.delete_entry_ids), 1)
         self.assertEqual(rebuild.rebuild_documents, (changed_dimensions,))
+
 
 class _DegradedBackend:
     backend_id = "sqlite-vec"

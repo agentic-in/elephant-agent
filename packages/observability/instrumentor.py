@@ -65,6 +65,7 @@ def _resolve_module_attr(dotted: str) -> object | None:
     parts = dotted.split(".")
     try:
         import importlib
+
         mod = importlib.import_module(parts[0])
         for part in parts[1:]:
             mod = getattr(mod, part)
@@ -101,11 +102,13 @@ def _patch_kernel_service_run() -> None:
                 loop_id = getattr(loop, "loop_id", "") or ""
                 span.set_attribute("elephant.episode_id", episode_id)
                 span.set_attribute("elephant.loop_id", loop_id)
-                set_context(TraceContext(
-                    episode_id=episode_id,
-                    loop_id=loop_id,
-                    request_id=request_id,
-                ))
+                set_context(
+                    TraceContext(
+                        episode_id=episode_id,
+                        loop_id=loop_id,
+                        request_id=request_id,
+                    )
+                )
         except Exception:
             duration = timer.elapsed()
             logger.error("kernel turn failed: duration=%.2fs", duration)
@@ -116,7 +119,9 @@ def _patch_kernel_service_run() -> None:
         record_turn_metrics(episode_id=episode_id, duration_s=duration, trigger_type=trigger)
         logger.info(
             "kernel turn completed: episode=%s loop=%s duration=%.2fs",
-            episode_id, loop_id, duration,
+            episode_id,
+            loop_id,
+            duration,
         )
         return result
 
@@ -133,7 +138,16 @@ def _patch_generate_with_steps() -> None:
     logger = get_logger("kernel.execution")
 
     @wraps(original)
-    def wrapped(service, profile, session, context, prompt, *, step_recorder=None, planned_summary=""):
+    def wrapped(
+        service,
+        profile,
+        session,
+        context,
+        prompt,
+        *,
+        step_recorder=None,
+        planned_summary="",
+    ):
         mp = getattr(getattr(service, "dependencies", None), "model_provider", None)
         provider_id = getattr(mp, "active_provider_id", "") or ""
         model_id = ""
@@ -150,7 +164,15 @@ def _patch_generate_with_steps() -> None:
 
         timer = DurationTimer()
         with trace_model_call(provider_id=provider_id, model_id=model_id, episode_id=episode_id) as span:
-            response = original(service, profile, session, context, prompt, step_recorder=step_recorder, planned_summary=planned_summary)
+            response = original(
+                service,
+                profile,
+                session,
+                context,
+                prompt,
+                step_recorder=step_recorder,
+                planned_summary=planned_summary,
+            )
             record_token_usage(
                 span,
                 input_tokens=getattr(response, "prompt_tokens", 0) or 0,
@@ -172,10 +194,14 @@ def _patch_generate_with_steps() -> None:
         cache_pct = f"{cache_read / input_tokens * 100:.0f}%" if input_tokens > 0 else "n/a"
         logger.info(
             "model call completed: provider=%s model=%s tokens=%d/%d cache_read=%d cache_create=%d cache_hit=%s duration=%.2fs",
-            provider_id, model_id,
+            provider_id,
+            model_id,
             input_tokens,
             getattr(response, "completion_tokens", 0) or 0,
-            cache_read, cache_creation, cache_pct, elapsed,
+            cache_read,
+            cache_creation,
+            cache_pct,
+            elapsed,
         )
         return response
 
@@ -211,8 +237,14 @@ def _patch_http_transport_post_json() -> None:
         return
     original_post = UrllibJSONHTTPTransport.post_json
     original_stream = UrllibJSONHTTPTransport.post_json_stream
-    _save_original("packages.models.providers.http.UrllibJSONHTTPTransport.post_json", original_post)
-    _save_original("packages.models.providers.http.UrllibJSONHTTPTransport.post_json_stream", original_stream)
+    _save_original(
+        "packages.models.providers.http.UrllibJSONHTTPTransport.post_json",
+        original_post,
+    )
+    _save_original(
+        "packages.models.providers.http.UrllibJSONHTTPTransport.post_json_stream",
+        original_stream,
+    )
     logger = get_logger("provider.http")
 
     @wraps(original_post)
@@ -221,11 +253,17 @@ def _patch_http_transport_post_json() -> None:
         try:
             result = original_post(self, url=url, headers=headers, payload=payload)
         except Exception:
-            logger.warning("provider HTTP request failed: url=%s duration=%.2fs", url, time.monotonic() - start)
+            logger.warning(
+                "provider HTTP request failed: url=%s duration=%.2fs",
+                url,
+                time.monotonic() - start,
+            )
             raise
         logger.debug(
             "provider HTTP request: url=%s status=%d duration=%.2fs",
-            url, getattr(result, "status_code", 0), time.monotonic() - start,
+            url,
+            getattr(result, "status_code", 0),
+            time.monotonic() - start,
         )
         return result
 
@@ -238,12 +276,14 @@ def _patch_http_transport_post_json() -> None:
         except Exception:
             logger.warning(
                 "provider HTTP stream failed: url=%s duration=%.2fs",
-                url, time.monotonic() - start,
+                url,
+                time.monotonic() - start,
             )
             raise
         logger.debug(
             "provider HTTP stream completed: url=%s duration=%.2fs",
-            url, time.monotonic() - start,
+            url,
+            time.monotonic() - start,
         )
 
     UrllibJSONHTTPTransport.post_json = wrapped_post
@@ -274,6 +314,12 @@ def _patch_cron_run_due() -> None:
             logger.info("cron job completed: job_id=%s outcome=%s", job.job_id, outcome)
             return outcome, summary
 
-        return original(self, instrumented_executor, profile_id=profile_id, elephant_id=elephant_id, now=now)
+        return original(
+            self,
+            instrumented_executor,
+            profile_id=profile_id,
+            elephant_id=elephant_id,
+            now=now,
+        )
 
     CronRuntime.run_due = wrapped

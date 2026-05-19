@@ -123,7 +123,10 @@ class FileGatewayPairingStore:
             if not _request_expired(payload, now)
         )
         if len(active) != len(pending):
-            self._write_mapping(self._pending_path(platform_key), {item.code: _request_payload(item) for item in active})
+            self._write_mapping(
+                self._pending_path(platform_key),
+                {item.code: _request_payload(item) for item in active},
+            )
         return active
 
     def _pending_path(self, platform: str) -> Path:

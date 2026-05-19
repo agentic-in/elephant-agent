@@ -10,17 +10,14 @@ from .api_runtime_support import _optional_str
 def _elephant_id_from_name(name: str) -> str:
     """Convert elephant display name to elephant ID format."""
     import re
+
     return re.sub(r"[^a-zA-Z0-9_-]", "", name.lower().replace(" ", "-"))
 
 
 def _cron_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Extract validated cron job payload."""
     job_payload = {
-        key: value
-        for key, value in (
-            ("prompt", _optional_str(payload.get("prompt"))),
-        )
-        if value is not None
+        key: value for key, value in (("prompt", _optional_str(payload.get("prompt"))),) if value is not None
     }
     skills = _cron_skill_ids(payload.get("skills"))
     if skills:

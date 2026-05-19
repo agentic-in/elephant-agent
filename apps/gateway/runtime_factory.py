@@ -1,19 +1,13 @@
 """Gateway runtime adapter registration and app factory."""
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
-from datetime import datetime, timezone
-import hashlib
-import json
+from dataclasses import replace
 from pathlib import Path
-import re
 import sys
 import tempfile
 from typing import Any
-from uuid import uuid4
 
 from apps.provider_runtime import (
     load_provider_profile,
@@ -21,8 +15,15 @@ from apps.provider_runtime import (
 )
 from apps.runtime_layout import default_cli_state_dir
 from packages.cron import CronRuntime
-from packages.runtime_config import configured_external_skill_dirs, global_config_path_for_state_dir, load_extensions_from_config, load_global_config
-from packages.runtime_layout import default_cron_dir, elephant_file_path, infer_install_root_from_state_dir
+from packages.runtime_config import (
+    configured_external_skill_dirs,
+    load_extensions_from_config,
+)
+from packages.runtime_layout import (
+    default_cron_dir,
+    elephant_file_path,
+    infer_install_root_from_state_dir,
+)
 from packages.auth import (
     AuthProfile,
     EncryptedRepositorySecretStore,
@@ -34,45 +35,24 @@ from packages.auth import (
     SecretStore,
     SecretValueResolution,
 )
-from packages.capabilities.runtime import (
-    CapabilityDescriptor,
-    ContextCapability,
-    RecallCapability,
-    ModelProviderCapability,
-    TelemetrySinkCapability,
-)
-from packages.context import ContextRuntime
 from packages.context.epoch_store import FileEpochStore
-from packages.contracts.runtime import (
-    ContextBundle,
-    EventEnvelope,
-    ExecutionResult,
-    RecallEvidence,
-    PersonalModelRuntimeState,
-)
 from packages.gateway_core import (
-    DEFAULT_GATEWAY_ACCOUNT_ID,
     FileGatewayIdentityStore,
     FileGatewaySessionStore,
-    GatewayAccountRef,
-    GatewayAttachmentRef,
-    GatewayConversationRef,
     GatewayCoreDependencies,
     GatewayCoreService,
-    GatewayExchange,
-    GatewayIdentityRecord,
-    GatewayInboundMessage,
     GatewayMessageDeliverySurface,
-    GatewayOutboundMessage,
     GatewayOutboundQueue,
-    GatewayPolicyHint,
-    GatewaySenderRef,
     InMemoryGatewayIdentityStore,
     InMemoryGatewaySessionStore,
     default_outbound_queue_path,
 )
-from packages.kernel import KernelDependencies, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
-from packages.evidence import RecallRuntime, SemanticSummaryIndexer, build_semantic_index_bundle
+from packages.kernel import KernelDependencies, KernelService
+from packages.evidence import (
+    RecallRuntime,
+    SemanticSummaryIndexer,
+    build_semantic_index_bundle,
+)
 from packages.skills import (
     RuntimeSkillManagementSurface,
     SkillHub,
@@ -83,7 +63,7 @@ from packages.skills import (
     load_skill_extension_manifest,
     sync_builtin_skill_shelf,
 )
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, LoadedProfile, ProfileLoader, build_prompt_contract
+from packages.state import LoadedProfile, ProfileLoader
 from packages.security.runtime import SecurityPolicy
 from packages.storage import RuntimeStorageRepository
 from packages.tools import (
@@ -111,10 +91,14 @@ from .runtime_capabilities import (
 )
 from .runtime_support import *  # noqa: F401,F403
 
-def register_builtin_gateway_adapters(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+
+def register_builtin_gateway_adapters(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     for platform in BUILTIN_GATEWAY_PLATFORMS:
         registry.register_platform(platform)
     return registry
+
 
 def _builtin_gateway_plugin_registry() -> GatewayPluginRegistry:
     registry = GatewayPluginRegistry()
@@ -190,6 +174,7 @@ def _gateway_provider_credential_resolver(
         stores.append(EnvironmentSecretStore(runtime_environ))
     return ProfileCredentialResolver(_GatewayFallbackSecretStore(tuple(stores)))
 
+
 def build_gateway_app(
     *,
     profile_id: str = "you",
@@ -207,9 +192,17 @@ def build_gateway_app(
     resolved_state_dir = Path(state_dir) if state_dir is not None else None
 
     if resolved_state_dir is not None:
-        from packages.runtime_config import load_global_config, global_config_path_for_state_dir
-        _gw_cfg = load_global_config(global_config_path_for_state_dir(resolved_state_dir), state_dir=resolved_state_dir)
+        from packages.runtime_config import (
+            load_global_config,
+            global_config_path_for_state_dir,
+        )
+
+        _gw_cfg = load_global_config(
+            global_config_path_for_state_dir(resolved_state_dir),
+            state_dir=resolved_state_dir,
+        )
         from packages.observability import setup_from_config
+
         setup_from_config(_gw_cfg, state_dir=str(resolved_state_dir))
 
     # The extension-manifest loader surfaces skill / tool overrides (profile.json
@@ -228,12 +221,8 @@ def build_gateway_app(
         identity_store = InMemoryGatewayIdentityStore()
         session_store = InMemoryGatewaySessionStore()
     else:
-        identity_store = FileGatewayIdentityStore(
-            resolved_state_dir / "gateway-identities.json"
-        )
-        session_store = FileGatewaySessionStore(
-            resolved_state_dir / "gateway-sessions.json"
-        )
+        identity_store = FileGatewayIdentityStore(resolved_state_dir / "gateway-identities.json")
+        session_store = FileGatewaySessionStore(resolved_state_dir / "gateway-sessions.json")
 
     telemetry = GatewayTelemetrySink()
     core = GatewayCoreService(
@@ -265,9 +254,7 @@ def build_gateway_app(
     auth_store = PersistentAuthProfileStore(runtime_repository)
     runtime_state_dir = runtime_repository.database_path.parent
     install_root = (
-        ephemeral_home
-        if ephemeral_home is not None
-        else infer_install_root_from_state_dir(runtime_state_dir)
+        ephemeral_home if ephemeral_home is not None else infer_install_root_from_state_dir(runtime_state_dir)
     )
     profile_loader = profile_loader or ProfileLoader(install_root)
     sync_builtin_skill_shelf(destination_root=install_root / "skills" / "builtin")
@@ -347,6 +334,7 @@ def build_gateway_app(
         install_root=install_root,
         surface_kind="gateway",
     )
+
     def _resolve_elephant_state(elephant_id: str):
         resolved_elephant_id = elephant_id.strip()
         if resolved_elephant_id:
@@ -499,6 +487,7 @@ def build_gateway_app(
     if start_learning_worker and resolved_state_dir is not None:
         try:
             from apps.learning_worker_runtime import ensure_learning_worker_running
+
             ensure_learning_worker_running(
                 state_dir=resolved_state_dir,
             )

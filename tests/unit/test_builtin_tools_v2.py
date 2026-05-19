@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timezone
 from email.message import Message
 import json
 import os
@@ -19,7 +18,10 @@ from apps.cli.runtime import CliRuntime
 from packages.cron import CronRuntime
 from packages.tools import handlers_code_execution
 from packages.tools.builtins import builtin_tool_definitions
-from packages.tools.adapters import DeliveryMessageSurfaceAdapter, StructuredClarifySurface
+from packages.tools.adapters import (
+    DeliveryMessageSurfaceAdapter,
+    StructuredClarifySurface,
+)
 from packages.tools import (
     BuiltinToolDependencies,
     CallableApprovalGateway,
@@ -87,7 +89,12 @@ class _SubAgentsStub:
         name: str | None = None,
         skills: tuple[str, ...] = (),
     ):
-        self.single = {"session_id": session_id, "task": task, "name": name, "skills": skills}
+        self.single = {
+            "session_id": session_id,
+            "task": task,
+            "name": name,
+            "skills": skills,
+        }
         if task == "fail":
             return {"summary": "sub-agent failed", "status": "failed"}
         return {"summary": "single sub-agent finished"}
@@ -99,7 +106,11 @@ class _SubAgentsStub:
         tasks,
         max_concurrency: int = 3,
     ):
-        self.batch = {"session_id": session_id, "tasks": tasks, "max_concurrency": max_concurrency}
+        self.batch = {
+            "session_id": session_id,
+            "tasks": tasks,
+            "max_concurrency": max_concurrency,
+        }
         return {"summary": "sub-agent pool finished"}
 
     def start_sub_agents(
@@ -109,7 +120,11 @@ class _SubAgentsStub:
         tasks,
         max_concurrency: int = 3,
     ):
-        self.started = {"session_id": session_id, "tasks": tasks, "max_concurrency": max_concurrency}
+        self.started = {
+            "session_id": session_id,
+            "tasks": tasks,
+            "max_concurrency": max_concurrency,
+        }
         return {
             "summary": "sub_agent_run_id: subrun-test\nstatus: running",
             "run_id": "subrun-test",
@@ -175,7 +190,10 @@ class _DiaryStub:
         return {"entry_date": kwargs["entry_date"]}
 
     def list_diary_entries(self, **kwargs):  # type: ignore[no-untyped-def]
-        return {"entries": ({"entry_date": "2026-05-14", "content": "Today note"},), "count": 1}
+        return {
+            "entries": ({"entry_date": "2026-05-14", "content": "Today note"},),
+            "count": 1,
+        }
 
 
 class BuiltinToolsV2Test(unittest.TestCase):
@@ -239,7 +257,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
             handler=lambda invocation: {"summary": invocation.tool_id},
         )
 
-        model_visible = {tool.tool_id for tool in runtime.list_tools(audience="model", enabled_only=True, available_only=True)}
+        model_visible = {
+            tool.tool_id for tool in runtime.list_tools(audience="model", enabled_only=True, available_only=True)
+        }
         operator_visible = {tool.tool_id for tool in runtime.list_tools(audience="operator", enabled_only=True)}
 
         self.assertIn("tool.file.read", model_visible)
@@ -443,7 +463,10 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertIn("personal-journal | Personal Journal | source=agents", listed.summary)
         self.assertIn("reference=agents:personal-journal", listed.summary)
         self.assertIn("skill_id: personal-journal", viewed.summary)
-        self.assertIn("Use this skill when the user asks to review personal journal notes.", viewed.summary)
+        self.assertIn(
+            "Use this skill when the user asks to review personal journal notes.",
+            viewed.summary,
+        )
 
     def test_model_visible_action_tools_expose_constrained_action_enums(self) -> None:
         definitions = {
@@ -456,7 +479,10 @@ class BuiltinToolsV2Test(unittest.TestCase):
         todo_action = definitions["tool.todo.manage"].schema["properties"]["action"]["enum"]
         todo_properties = definitions["tool.todo.manage"].schema["properties"]
 
-        self.assertEqual(tuple(process_action), ("list", "ls", "poll", "inspect", "wait", "write", "kill"))
+        self.assertEqual(
+            tuple(process_action),
+            ("list", "ls", "poll", "inspect", "wait", "write", "kill"),
+        )
         self.assertEqual(
             tuple(cron_action),
             ("list", "ls", "create", "inspect", "pause", "resume", "remove", "delete"),
@@ -467,7 +493,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertNotIn("noop", tuple(cron_action))
         self.assertNotIn("noop", tuple(todo_action))
 
-    def test_builtin_model_schema_carries_cron_description_and_action_guidance(self) -> None:
+    def test_builtin_model_schema_carries_cron_description_and_action_guidance(
+        self,
+    ) -> None:
         definitions = {
             definition.tool_id: definition
             for definition in builtin_tool_definitions({}, dependencies=BuiltinToolDependencies(cwd=Path("/tmp")))
@@ -486,9 +514,18 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertIn("inspect|pause|resume|remove|delete", action["description"])
         self.assertNotIn("job_kind", parameters["properties"])
         self.assertIn("5-field cron", parameters["properties"]["schedule"]["description"])
-        self.assertEqual(parameters["properties"]["prompt"]["description"], "Prompt payload for the scheduled prompt job when action=create.")
-        self.assertEqual(parameters["properties"]["profile_id"]["description"], "Optional profile scope filter for listing or creating jobs.")
-        self.assertEqual(parameters["properties"]["elephant_id"]["description"], "Optional elephant scope filter for listing or creating jobs.")
+        self.assertEqual(
+            parameters["properties"]["prompt"]["description"],
+            "Prompt payload for the scheduled prompt job when action=create.",
+        )
+        self.assertEqual(
+            parameters["properties"]["profile_id"]["description"],
+            "Optional profile scope filter for listing or creating jobs.",
+        )
+        self.assertEqual(
+            parameters["properties"]["elephant_id"]["description"],
+            "Optional elephant scope filter for listing or creating jobs.",
+        )
         self.assertNotIn("message", parameters["properties"])
         self.assertNotIn("query", parameters["properties"])
 
@@ -538,15 +575,24 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertNotIn("tool.personal_model.verify", definitions)
         self.assertNotIn("tool.personal_model.audit", definitions)
         self.assertNotIn("tool.personal_model.inspect", definitions)
-        self.assertEqual(search_properties["status"]["enum"], ["active", "retired", "disputed", "all"])
+        self.assertEqual(
+            search_properties["status"]["enum"],
+            ["active", "retired", "disputed", "all"],
+        )
         self.assertIn("ref", search_properties)
-        self.assertIn("remember", update_properties["action"]["description"].lower() + " " + update["description"].lower())
+        self.assertIn(
+            "remember",
+            update_properties["action"]["description"].lower() + " " + update["description"].lower(),
+        )
         self.assertIn("restore", update_properties["action"]["enum"])
         self.assertIn("delete", update_properties["action"]["enum"])
         self.assertIn("identity={anchor", update_properties["topic"]["description"])
         self.assertIn("Required for delete/restore", update_properties["ref"]["description"])
         self.assertIn("recall_policy", update_properties)
-        self.assertEqual(update_properties["recall_policy"]["enum"], ["stable", "current", "temporary", "review"])
+        self.assertEqual(
+            update_properties["recall_policy"]["enum"],
+            ["stable", "current", "temporary", "review"],
+        )
         self.assertIn("text", question_properties)
         self.assertNotIn("question", question_properties)
         self.assertIn("copy", code_properties["code"]["description"])
@@ -561,7 +607,10 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertIn("One concise question", clarify_properties["question"]["description"])
         self.assertIn("mode=choice", clarify_properties["choices"]["description"])
         self.assertIn("buffered stdout/stderr", process_properties["action"]["description"])
-        self.assertIn("background tool.terminal.exec", process_properties["process_id"]["description"])
+        self.assertIn(
+            "background tool.terminal.exec",
+            process_properties["process_id"]["description"],
+        )
         self.assertIn("public-web information", web_search_properties["query"]["description"])
         self.assertIn("query_variants", web_search_properties)
         self.assertIn("search results to summarize", web_search_properties["limit"]["description"])
@@ -573,7 +622,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertNotIn("tool.procedure.inspect", definitions)
         self.assertNotIn("tool.procedure.manage", definitions)
 
-    def test_tool_fallback_prompt_routes_durable_personal_facts_to_personal_model_update(self) -> None:
+    def test_tool_fallback_prompt_routes_durable_personal_facts_to_personal_model_update(
+        self,
+    ) -> None:
         definitions = tuple(
             definition
             for definition in builtin_tool_definitions({}, dependencies=BuiltinToolDependencies(cwd=Path("/tmp")))
@@ -687,7 +738,10 @@ class BuiltinToolsV2Test(unittest.TestCase):
                     {
                         "name": "core",
                         "task": "inspect core architecture",
-                        "skills": {"codebase-inspection": True, "disabled-skill": False},
+                        "skills": {
+                            "codebase-inspection": True,
+                            "disabled-skill": False,
+                        },
                     }
                 ],
                 "max_concurrency": 1,
@@ -809,14 +863,20 @@ class BuiltinToolsV2Test(unittest.TestCase):
             self.assertIn("1|tmp ok", read.summary)
 
     def test_default_local_allowed_roots_include_posix_tmp(self) -> None:
-        with mock.patch("packages.tools.local_roots.tempfile.gettempdir", return_value="/var/folders/example/T"):
+        with mock.patch(
+            "packages.tools.local_roots.tempfile.gettempdir",
+            return_value="/var/folders/example/T",
+        ):
             roots = default_local_allowed_roots()
 
         self.assertIn(Path("/tmp").resolve(), roots)
         self.assertIn(Path("/var/folders/example/T").resolve(), roots)
 
     def test_file_tools_can_access_configured_roots_outside_primary_root(self) -> None:
-        with tempfile.TemporaryDirectory() as local_tmpdir, tempfile.TemporaryDirectory() as external_tmpdir:
+        with (
+            tempfile.TemporaryDirectory() as local_tmpdir,
+            tempfile.TemporaryDirectory() as external_tmpdir,
+        ):
             local_root = Path(local_tmpdir)
             external = Path(external_tmpdir)
             shared = external / "shared.txt"
@@ -874,7 +934,10 @@ class BuiltinToolsV2Test(unittest.TestCase):
             self.assertIn(str(external), terminal.summary)
 
     def test_file_and_terminal_tools_default_to_session_cwd(self) -> None:
-        with tempfile.TemporaryDirectory() as root_tmpdir, tempfile.TemporaryDirectory() as fallback_tmpdir:
+        with (
+            tempfile.TemporaryDirectory() as root_tmpdir,
+            tempfile.TemporaryDirectory() as fallback_tmpdir,
+        ):
             root = Path(root_tmpdir)
             fallback = Path(fallback_tmpdir)
             roots = {
@@ -992,7 +1055,10 @@ class BuiltinToolsV2Test(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "sensitive credential directory"):
                 runtime.invoke(
                     "tool.file.write",
-                    {"path": str(Path.home() / ".ssh" / "config"), "content": "Host *\n"},
+                    {
+                        "path": str(Path.home() / ".ssh" / "config"),
+                        "content": "Host *\n",
+                    },
                     session_id="session-sensitive-write",
                 )
             with self.assertRaisesRegex(ValueError, "VCS metadata"):
@@ -1145,7 +1211,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
             self.assertIn("TestmemoryRecall", result.summary)
             self.assertNotIn("TestmemoryRecallIgnored", result.summary)
 
-    def test_file_search_allows_glob_only_file_listing_and_blocks_vcs_metadata(self) -> None:
+    def test_file_search_allows_glob_only_file_listing_and_blocks_vcs_metadata(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cwd = Path(tmpdir)
             (cwd / "notes.md").write_text("hello\n", encoding="utf-8")
@@ -1182,7 +1250,7 @@ class BuiltinToolsV2Test(unittest.TestCase):
             started = runtime.invoke(
                 "tool.terminal.exec",
                 {
-                    "command": 'python3 -c "import time; print(\'bg-finished\'); time.sleep(0.1)"',
+                    "command": "python3 -c \"import time; print('bg-finished'); time.sleep(0.1)\"",
                     "background": True,
                 },
                 session_id="session-process",
@@ -1246,7 +1314,7 @@ class BuiltinToolsV2Test(unittest.TestCase):
                 "tool.terminal.exec",
                 {
                     "command": (
-                        "python3 -c \"import os; "
+                        'python3 -c "import os; '
                         "print(os.environ.get('ELEPHANT_TEST_ENV')); "
                         "print(bool(os.environ.get('PATH')))\""
                     ),
@@ -1321,7 +1389,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
             self.assertEqual(result.outcome, "success")
             self.assertIn('"a": 3', result.summary)
 
-    def test_code_execute_documents_and_allows_copy_pow_and_safe_dunder_name(self) -> None:
+    def test_code_execute_documents_and_allows_copy_pow_and_safe_dunder_name(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             runtime = self._make_builtin_runtime(cwd=Path(tmpdir))
 
@@ -1357,7 +1427,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
             self.assertIn(blocked, description)
         self.assertIn("blocked", description)
 
-    def test_code_execute_runs_with_project_cwd_and_venv_python_by_default(self) -> None:
+    def test_code_execute_runs_with_project_cwd_and_venv_python_by_default(
+        self,
+    ) -> None:
         from packages.tools import handlers_code_execution
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1390,10 +1462,18 @@ class BuiltinToolsV2Test(unittest.TestCase):
                         {str(python_path), sys.executable},
                     )
                 else:
-                    self.assertEqual(handlers_code_execution._code_child_python(mode="project"), str(python_path))
-            self.assertEqual(handlers_code_execution._code_child_python(mode="strict"), sys.executable)
+                    self.assertEqual(
+                        handlers_code_execution._code_child_python(mode="project"),
+                        str(python_path),
+                    )
+            self.assertEqual(
+                handlers_code_execution._code_child_python(mode="strict"),
+                sys.executable,
+            )
 
-    def test_code_execute_can_call_terminal_but_rejects_background_arguments(self) -> None:
+    def test_code_execute_can_call_terminal_but_rejects_background_arguments(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             runtime = self._make_builtin_runtime(cwd=Path(tmpdir))
 
@@ -1414,8 +1494,7 @@ class BuiltinToolsV2Test(unittest.TestCase):
                     "tool.code.execute",
                     {
                         "code": (
-                            "result = tool('tool.terminal.exec', "
-                            "{'command': 'printf blocked', 'background': True})"
+                            "result = tool('tool.terminal.exec', {'command': 'printf blocked', 'background': True})"
                         ),
                     },
                     session_id="session-code-terminal-blocked",
@@ -1468,10 +1547,15 @@ class BuiltinToolsV2Test(unittest.TestCase):
                 )
 
             self.assertEqual(result.outcome, "success")
-            self.assertEqual((cwd / 'notes' / 'out.txt').read_text(encoding='utf-8'), "patched by code\n")
+            self.assertEqual(
+                (cwd / "notes" / "out.txt").read_text(encoding="utf-8"),
+                "patched by code\n",
+            )
             self.assertIn("Alpha Doc", result.summary)
 
-    def test_code_execute_rejects_unsafe_imports_and_non_allowlisted_tool_rpc(self) -> None:
+    def test_code_execute_rejects_unsafe_imports_and_non_allowlisted_tool_rpc(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             runtime = self._make_builtin_runtime(cwd=Path(tmpdir))
 

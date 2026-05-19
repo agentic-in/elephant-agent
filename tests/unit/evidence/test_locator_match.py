@@ -153,11 +153,7 @@ class _EmbeddingFallbackTest(unittest.TestCase):
 
         entries = (FakeEntry("alpha"),)
         # No lexical match, broken embedding → None, not exception.
-        self.assertIsNone(
-            find_entry_by_locator(
-                entries, "completely different", embedding_service=_BrokenEmbedding()
-            )
-        )
+        self.assertIsNone(find_entry_by_locator(entries, "completely different", embedding_service=_BrokenEmbedding()))
 
 
 if __name__ == "__main__":

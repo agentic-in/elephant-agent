@@ -81,7 +81,11 @@ def sync_builtin_skill_shelf(
         staging = parent / f".{resolved_destination.name}.{uuid4().hex}.tmp"
         backup = parent / f".{resolved_destination.name}.{uuid4().hex}.bak"
         try:
-            shutil.copytree(resolved_source, staging, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            shutil.copytree(
+                resolved_source,
+                staging,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
             _write_manifest(staging / MANIFEST_FILENAME, manifest)
             if resolved_destination.exists():
                 resolved_destination.replace(backup)

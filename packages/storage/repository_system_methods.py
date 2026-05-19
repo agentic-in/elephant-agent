@@ -29,12 +29,10 @@ from .repository_support import (
     _json_text,
     _learning_job_from_row,
     _loop_from_row,
-    _mapping_object,
     _personal_model_from_row,
     _state_from_row,
     _step_from_row,
     canonical_personal_model_id,
-    canonical_personal_model_ref,
 )
 
 
@@ -316,9 +314,7 @@ def list_states(
     where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
     with self.connection() as connection:
         rows: Sequence[object] = connection.execute(
-            "SELECT * FROM states"
-            + (" " + where_sql if where_sql else "")
-            + " ORDER BY created_at ASC, state_id ASC",
+            "SELECT * FROM states" + (" " + where_sql if where_sql else "") + " ORDER BY created_at ASC, state_id ASC",
             tuple(parameters),
         ).fetchall()
     return tuple(_state_from_row(row) for row in rows)
@@ -697,6 +693,7 @@ def refresh_episode_state(
     if episode is None:
         raise KeyError(episode_id)
     from dataclasses import replace
+
     updated = replace(
         episode,
         status=status,
@@ -790,11 +787,7 @@ def delete_orphaned_profiles(
     profile_ids: tuple[str, ...],
 ) -> int:
     resolved_profile_ids = tuple(
-        dict.fromkeys(
-            canonical_personal_model_id(profile_id)
-            for profile_id in profile_ids
-            if str(profile_id).strip()
-        )
+        dict.fromkeys(canonical_personal_model_id(profile_id) for profile_id in profile_ids if str(profile_id).strip())
     )
     if not resolved_profile_ids:
         return 0
@@ -1004,7 +997,6 @@ def load_learning_job(self, job_id: str) -> LearningJob | None:
     return _learning_job_from_row(row)
 
 
-
 def load_learning_job_for_episode(self, *, job_type: str, episode_id: str) -> LearningJob | None:
     with self.connection() as connection:
         row = connection.execute(
@@ -1020,7 +1012,6 @@ def load_learning_job_for_episode(self, *, job_type: str, episode_id: str) -> Le
     if row is None:
         return None
     return _learning_job_from_row(row)
-
 
 
 def list_learning_jobs(
@@ -1056,11 +1047,11 @@ def list_learning_jobs(
         rows: Sequence[object] = connection.execute(
             "SELECT * FROM learning_jobs"
             + (" " + where_sql if where_sql else "")
-            + " ORDER BY created_at DESC, job_id DESC" + limit_sql,
+            + " ORDER BY created_at DESC, job_id DESC"
+            + limit_sql,
             tuple(parameters),
         ).fetchall()
     return tuple(_learning_job_from_row(row) for row in rows)
-
 
 
 def claim_learning_job(self, *, worker_id: str, now: datetime | None = None) -> LearningJob | None:
@@ -1100,7 +1091,6 @@ def claim_learning_job(self, *, worker_id: str, now: datetime | None = None) -> 
     return self.load_learning_job(str(row["job_id"]))
 
 
-
 def update_learning_job_progress(
     self,
     job_id: str,
@@ -1125,7 +1115,6 @@ def update_learning_job_progress(
     if loaded is None:
         raise KeyError(job_id)
     return loaded
-
 
 
 def write_learning_job_result(
@@ -1162,7 +1151,6 @@ def write_learning_job_result(
     return loaded
 
 
-
 def complete_learning_job(
     self,
     job_id: str,
@@ -1192,7 +1180,6 @@ def complete_learning_job(
     return loaded
 
 
-
 def fail_learning_job(
     self,
     job_id: str,
@@ -1210,7 +1197,11 @@ def fail_learning_job(
     next_status = "queued" if will_retry else "failed"
     next_stage = "retrying" if will_retry else "failed"
     next_detail = "retry scheduled" if will_retry else "background learning failed"
-    available_at = failed_at if retry_delay_seconds <= 0 else failed_at.replace(microsecond=0) + timedelta(seconds=retry_delay_seconds)
+    available_at = (
+        failed_at
+        if retry_delay_seconds <= 0
+        else failed_at.replace(microsecond=0) + timedelta(seconds=retry_delay_seconds)
+    )
     with self.connection() as connection:
         connection.execute(
             """
@@ -1242,11 +1233,12 @@ def fail_learning_job(
     return loaded
 
 
-
 _LOOP_STATE_SCHEMA_VERSION = 2
 
 
-def _wait_condition_to_mapping(condition: WaitCondition | None) -> Mapping[str, object] | None:
+def _wait_condition_to_mapping(
+    condition: WaitCondition | None,
+) -> Mapping[str, object] | None:
     if condition is None:
         return None
     payload = dict(condition.payload or {})
@@ -1333,7 +1325,9 @@ def _pending_tool_call_to_mapping(call: PendingToolCall) -> Mapping[str, object]
     }
 
 
-def _pending_tool_calls_to_list(calls: tuple[PendingToolCall, ...]) -> list[Mapping[str, object]]:
+def _pending_tool_calls_to_list(
+    calls: tuple[PendingToolCall, ...],
+) -> list[Mapping[str, object]]:
     return [_pending_tool_call_to_mapping(call) for call in calls]
 
 
@@ -1495,19 +1489,13 @@ def _loop_state_from_loop(loop: Loop) -> LoopState:
         created_at=loop.started_at,
         updated_at=loop.ended_at or loop.started_at,
         waiting_reason=(str(metadata.get("waiting_reason")) if metadata.get("waiting_reason") else None),
-        continuation_prompt=(
-            str(metadata.get("continuation_prompt")) if metadata.get("continuation_prompt") else None
-        ),
+        continuation_prompt=(str(metadata.get("continuation_prompt")) if metadata.get("continuation_prompt") else None),
         last_summary=(str(metadata.get("last_summary")) if metadata.get("last_summary") else None),
         schema_version=int(metadata.get("schema_version") or _LOOP_STATE_SCHEMA_VERSION),
         wait_condition=_wait_condition_from_mapping(metadata.get("wait_condition")),
         pending_tool_calls=_pending_tool_calls_from_value(metadata.get("pending_tool_calls")),
-        partial_assistant=(
-            str(metadata.get("partial_assistant")) if metadata.get("partial_assistant") else None
-        ),
-        context_bundle_id=(
-            str(metadata.get("context_bundle_id")) if metadata.get("context_bundle_id") else None
-        ),
+        partial_assistant=(str(metadata.get("partial_assistant")) if metadata.get("partial_assistant") else None),
+        context_bundle_id=(str(metadata.get("context_bundle_id")) if metadata.get("context_bundle_id") else None),
         active_evidence_refs=_active_evidence_refs_from_value(metadata.get("active_evidence_refs")),
         retry_state=_retry_state_from_mapping(metadata.get("retry_state")),
         heartbeat_at=_parse_optional_datetime(metadata.get("heartbeat_at")),
@@ -1546,9 +1534,7 @@ def upsert_loop_checkpoint(self, run: LoopState, *, verify: bool = True) -> None
     if verify:
         reloaded = _verify_loop_checkpoint_roundtrip(self, run)
         if reloaded is None:
-            raise RuntimeError(
-                f"loop checkpoint verify failed: run {run.run_id} did not round-trip"
-            )
+            raise RuntimeError(f"loop checkpoint verify failed: run {run.run_id} did not round-trip")
 
 
 def _verify_loop_checkpoint_roundtrip(self, run: LoopState) -> LoopState | None:
@@ -1617,9 +1603,7 @@ def list_loop_checkpoints(
         if state_id is not None and loop.state_id != state_id:
             continue
         if personal_model_id is not None:
-            if canonical_personal_model_id(loop.personal_model_id) != canonical_personal_model_id(
-                personal_model_id
-            ):
+            if canonical_personal_model_id(loop.personal_model_id) != canonical_personal_model_id(personal_model_id):
                 continue
         run = _loop_state_from_loop(loop)
         if heartbeat_before is not None:
@@ -1655,7 +1639,11 @@ def load_latest_open_loop_checkpoint(
         return None
     latest = sorted(
         candidates,
-        key=lambda loop: ((loop.ended_at or loop.started_at).isoformat(), loop.started_at.isoformat(), loop.loop_id),
+        key=lambda loop: (
+            (loop.ended_at or loop.started_at).isoformat(),
+            loop.started_at.isoformat(),
+            loop.loop_id,
+        ),
         reverse=True,
     )[0]
     return _loop_state_from_loop(latest)

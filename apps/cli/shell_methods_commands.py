@@ -2,108 +2,21 @@
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from difflib import unified_diff
-import os
-from pathlib import Path
-import re
-import shlex
 import subprocess
 import sys
-import time
 
-from packages.contracts import ExperienceRecord
 from packages.kernel.runtime import KernelOutcome
 from packages.operator.runtime import (
     RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
     build_recall_evidence_operator_surface,
-    build_profile_operator_surface,
     render_recall_evidence_lines,
-    render_profile_lines,
 )
 from packages.state import parse_user_profile_text
-from packages.tools.handler_support import resolve_allowed_path
-from .provider_flow import provider_setup_defaults, run_provider_selection_wizard
-from .runtime import CliRuntime
 from .shell_progress_support import outcome_state_focus_meta
-from .wizard import WIZARD_BACK
-from .shell_composer import (
-    build_command_palette as _build_shell_command_palette,
-    build_composer_body as _build_shell_composer_body,
-    build_divider_window as _build_shell_divider_window,
-    build_input_window as _build_shell_input_window,
-    build_key_bindings as _build_shell_key_bindings,
-    build_prompt_buffer as _build_shell_prompt_buffer,
-    build_queue_preview_window as _build_shell_queue_preview_window,
-    prompt_continuation as _shell_prompt_continuation,
-    prompt_label as _shell_prompt_label,
-    prompt_style as _shell_prompt_style,
-    prompt_style_map as _shell_prompt_style_map,
-    prompt_toolkit_composer_available as _shell_prompt_toolkit_composer_available,
-    read_command as _read_shell_command,
-    shell_history as _shell_history,
-)
-from .shell_boot import WAKE_DISPLAY_SECONDS, BootFrameContext, render_boot_frame
-from .shell_opening import (
-    ShellOpeningContext,
-    compose_shell_opening_instruction,
-    compose_shell_opener,
-)
-from .shell_progress import (
-    animations_enabled as _shell_animations_enabled,
-    render_queued_followup_fragments as _render_shell_queued_followup_fragments,
-    render_tool_frame as _render_shell_tool_frame,
-    tool_trace_line as _shell_tool_trace_line,
-    render_turn_frame as _render_shell_turn_frame,
-    render_turn_progress_fragments as _render_shell_turn_progress_fragments,
-    run_tool_with_progress as _run_shell_tool_with_progress,
-    run_turn_with_progress as _run_shell_turn_with_progress,
-    run_turn_with_queued_input as _run_shell_turn_with_queued_input,
-    summarize_progress_prompt as _summarize_shell_progress_prompt,
-    tool_event_lines as _shell_tool_event_lines,
-    tool_event_summary as _shell_tool_event_summary,
-    tool_event_tracker as _shell_tool_event_tracker,
-    tool_frame_phases as _shell_tool_frame_phases,
-    turn_phase as _shell_turn_phase,
-    _tool_trace_emoji as _shell_tool_trace_emoji,
-)
-from .shell_render import (
-    center_brand_block as _center_shell_brand_block,
-    displayable_experiences as _displayable_shell_experiences,
-    format_experience_status as _format_shell_experience_status,
-    growth_panel_lines as _shell_growth_panel_lines,
-    growth_progress_bar as _shell_growth_progress_bar,
-    growth_progress_counts as _shell_growth_progress_counts,
-    recent_activity_lines as _shell_recent_activity_lines,
-    recent_experience_lines as _shell_recent_experience_lines,
-    render_brand_column as _render_shell_brand_column,
-    render_chat_entry as _render_shell_chat_entry,
-    render_entry as _render_shell_entry,
-    render_elephant_brand_mark as _render_shell_elephant_mark,
-    render_growth_mark_for_stage as _render_shell_growth_mark,
-    render_pending_entries as _render_shell_pending_entries,
-    render_shell_frame as _render_shell_frame_view,
-    render_status_column as _render_shell_status_column,
-    should_display_experience as _should_display_shell_experience,
-    styled_growth_progress_bar as _styled_shell_growth_progress_bar,
-)
 from .shell_stack import (
-    Align,
-    Completion,
-    Completer,
     Console,
     Document,
-    FormattedText,
-    Group,
-    Live,
-    PROMPT_TOOLKIT_AVAILABLE,
-    Panel,
     RICH_AVAILABLE,
-    Table,
-    Text,
 )
 from .shell_ui import (
     BRAND_ACCENT,
@@ -119,7 +32,6 @@ from .shell_ui import (
     GROWTH_PROGRESS_WIDTH,
     HATCHLING_HEAD_ROWS,
     HATCHLING_STAGE_ROWS,
-    HATCHLING_STAGE_ROWS,
     QUEUE_PREVIEW_INSET,
     SCOUT_STAGE_ROWS,
     SEED_STAGE_ROWS,
@@ -127,12 +39,9 @@ from .shell_ui import (
     USER_HISTORY_BG,
     USER_HISTORY_FG,
     WEB_URL_PATTERN,
-    compact_line as _compact_line,
     centered_elephant_rows as _centered_elephant_rows,
-    display_path as _display_path,
     display_width as _display_width,
     render_elephant_mark,
-    resolve_elephant_version as _resolve_elephant_version,
 )
 
 __all__ = [
@@ -169,8 +78,8 @@ __all__ = [
 ]
 
 
-
 from .shell_support_runtime import *  # noqa: F401,F403
+
 
 def _append_help(self) -> None:
     lines = [
@@ -202,7 +111,10 @@ def _append_help(self) -> None:
 def _append_personal_model(self, args: list[str]) -> None:
     action = (args[0] if args else "summary").strip().lower()
     session = self.runtime.inspect_session(self.session_id)
-    state = self.runtime.state_for_elephant(self.runtime.elephant_id_for_session(session)) or self.runtime.current_elephant_state()
+    state = (
+        self.runtime.state_for_elephant(self.runtime.elephant_id_for_session(session))
+        or self.runtime.current_elephant_state()
+    )
     if state is None:
         self._append_entry("recovery", "About you", "No active elephant is available yet.")
         return
@@ -252,12 +164,24 @@ def _append_personal_model(self, args: list[str]) -> None:
         self._append_entry("notice", "About you to confirm", "\n".join(rows))
         return
     if action in {"procedural", "skills"}:
-        self._append_entry("notice", "How I help", "Procedural patterns are tracked outside Personal Model support rows.")
+        self._append_entry(
+            "notice",
+            "How I help",
+            "Procedural patterns are tracked outside Personal Model support rows.",
+        )
         return
     if action in {"learned", "diff", "recent"}:
-        self._append_entry("notice", "What I learned recently", "Use Personal Model facts and History for recent learning provenance.")
+        self._append_entry(
+            "notice",
+            "What I learned recently",
+            "Use Personal Model facts and History for recent learning provenance.",
+        )
         return
-    self._append_entry("recovery", "About you", "Usage: [summary|evidence|uncertain|procedural|learned]")
+    self._append_entry(
+        "recovery",
+        "About you",
+        "Usage: [summary|evidence|uncertain|procedural|learned]",
+    )
 
 
 def _append_gateway(self, args: list[str]) -> None:
@@ -306,10 +230,10 @@ def _append_tools(self, args: list[str]) -> None:
                 'run search: /tools run tool.file.search query="elephant"',
                 'run web: /tools run tool.web.search query="agentic intelligence"',
                 'read page: /tools run tool.web.read url="https://example.com"',
-                'run todos: /tools run tool.todo.manage action=list',
+                "run todos: /tools run tool.todo.manage action=list",
                 'search understanding: /tools run tool.personal_model.search query="review style"',
                 'update understanding: /tools run tool.personal_model.update action=remember lens=identity topic=identity.style.review.feedback text="prefers direct review" reason="user said this preference"',
-                'manage cron: /tools run tool.cron.manage action=list',
+                "manage cron: /tools run tool.cron.manage action=list",
             ]
         )
         self._append_entry("notice", "Tools", "\n".join(lines))
@@ -397,6 +321,7 @@ def _append_tools(self, args: list[str]) -> None:
         return
     self._append_entry("recovery", "Tools", "Usage: /tools [inspect|enable|disable|install|run]")
 
+
 def _append_learn(self, args: list[str]) -> None:
     wait_for_worker = "--wait" in args
     filtered_args = [item for item in args if item != "--wait"]
@@ -410,7 +335,9 @@ def _append_learn(self, args: list[str]) -> None:
         ]
         for job in jobs:
             if isinstance(job, dict):
-                lines.append(f"- {job.get('status', '')} {job.get('job_type', '')} {job.get('trigger', '')} {job.get('job_id', '')}")
+                lines.append(
+                    f"- {job.get('status', '')} {job.get('job_type', '')} {job.get('trigger', '')} {job.get('job_id', '')}"
+                )
         if len(lines) == 2:
             lines.append("<no learning jobs>")
         self._append_entry("notice", "Learning", "\n".join(lines))
@@ -419,11 +346,18 @@ def _append_learn(self, args: list[str]) -> None:
         try:
             from apps.learning_worker_runtime import stop_learning_worker
 
-            result = stop_learning_worker(state_dir=self.runtime.paths.state_dir, reason="operator requested /learn kill")
+            result = stop_learning_worker(
+                state_dir=self.runtime.paths.state_dir,
+                reason="operator requested /learn kill",
+            )
         except Exception as error:
             self._append_entry("recovery", "Learning", str(error))
             return
-        self._append_entry("notice", "Learning", f"worker stopped · pid={result.get('stopped_pid') or '<none>'}")
+        self._append_entry(
+            "notice",
+            "Learning",
+            f"worker stopped · pid={result.get('stopped_pid') or '<none>'}",
+        )
         return
     if command not in {"queue", "run", "start"}:
         self._append_entry("recovery", "Learning", "Usage: /learn [list|run [--wait]|kill]")
@@ -442,7 +376,14 @@ def _append_learn(self, args: list[str]) -> None:
     detail = f"queued · {job.job_id} · background worker requested"
     if wait_for_worker:
         completed = subprocess.run(
-            (sys.executable, "-m", "apps.learning_worker_command", "--state-dir", str(self.runtime.paths.state_dir), "--once"),
+            (
+                sys.executable,
+                "-m",
+                "apps.learning_worker_command",
+                "--state-dir",
+                str(self.runtime.paths.state_dir),
+                "--once",
+            ),
             check=False,
         )
         exit_code = int(completed.returncode or 0)
@@ -571,7 +512,11 @@ def _append_skills(self, args: list[str]) -> None:
         return
     if command == "install":
         if len(args) < 2:
-            self._append_entry("recovery", "Skills", "Usage: /skills install <skill-id|/path/to/skill|/path/to/skills.json>")
+            self._append_entry(
+                "recovery",
+                "Skills",
+                "Usage: /skills install <skill-id|/path/to/skill|/path/to/skills.json>",
+            )
             return
         try:
             result = self.runtime.install_skill_source(args[1], session_id=self.session_id)
@@ -591,7 +536,11 @@ def _append_skills(self, args: list[str]) -> None:
         )
         self._refresh_skill_slash_specs()
         return
-    self._append_entry("recovery", "Skills", "Usage: /skills [list|active|search|view|enable|disable|install]")
+    self._append_entry(
+        "recovery",
+        "Skills",
+        "Usage: /skills [list|active|search|view|enable|disable|install]",
+    )
 
 
 def _display_skill_reference(entry) -> str:
@@ -599,13 +548,13 @@ def _display_skill_reference(entry) -> str:
         return str(getattr(entry, "skill_id", "")).strip() or str(getattr(entry, "reference", ""))
     return str(getattr(entry, "reference", "")).strip()
 
+
 def _append_cron(self, args: list[str]) -> None:
     command = args[0] if args else "list"
     if command in {"list", "ls"}:
         jobs = self.runtime.cron_jobs(session_id=self.session_id)
         lines = [
-            f"{job.job_id} | {job.status} | {job.name} | {job.schedule_text} | {job.action_kind}"
-            for job in jobs
+            f"{job.job_id} | {job.status} | {job.name} | {job.schedule_text} | {job.action_kind}" for job in jobs
         ] or ["<empty>"]
         lines.extend(
             [
@@ -712,6 +661,7 @@ def _append_cron(self, args: list[str]) -> None:
         return
     self._append_entry("recovery", "Cron jobs", "Usage: /cron [create|inspect|pause|resume|remove]")
 
+
 def _parse_named_arguments(self, args: list[str]) -> dict[str, str]:
     payload: dict[str, str] = {}
     for item in args:
@@ -723,6 +673,7 @@ def _parse_named_arguments(self, args: list[str]) -> dict[str, str]:
             raise ValueError("tool argument keys must not be empty")
         payload[key] = self._strip_wrapping_quotes(value.strip())
     return payload
+
 
 def _requested_webpage_url(self, message: str) -> str | None:
     lowered = message.strip().lower()
@@ -747,10 +698,12 @@ def _requested_webpage_url(self, message: str) -> str | None:
         return None
     return match.group(1).rstrip(").,!?\"'")
 
+
 def _strip_wrapping_quotes(self, value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
         return value[1:-1].strip()
     return value
+
 
 def _append_status(self) -> None:
     session = self.runtime.inspect_session(self.session_id)
@@ -841,6 +794,7 @@ def _append_status(self) -> None:
         lines.append("next: keep talking")
     self._append_entry("status", "Elephant status", "\n".join(lines))
 
+
 def _append_recall(self, args: list[str]) -> None:
     action = args[0] if args else "inspect"
     if action in {"inspect", "show", "list", "ls"} and len(args) <= 1:
@@ -871,7 +825,11 @@ def _append_recall(self, args: list[str]) -> None:
             evidence_items=(detail,),
             index_policy=self.runtime.recall_runtime.index_policy(),
         )
-        self._append_entry("notice", "Understanding detail", "\n".join(render_recall_evidence_lines(surface)))
+        self._append_entry(
+            "notice",
+            "Understanding detail",
+            "\n".join(render_recall_evidence_lines(surface)),
+        )
         return
     if action == "search":
         query = " ".join(args[1:]).strip()
@@ -879,7 +837,11 @@ def _append_recall(self, args: list[str]) -> None:
             self._append_entry("recovery", "Understanding", "Usage: /recall search <query>")
             return
         surface = self.runtime.search_recall_evidence_surface(self.session_id, query=query)
-        self._append_entry("notice", "Understanding search", "\n".join(render_recall_evidence_lines(surface)))
+        self._append_entry(
+            "notice",
+            "Understanding search",
+            "\n".join(render_recall_evidence_lines(surface)),
+        )
         return
     if action == "lineage":
         if len(args) < 2:
@@ -900,6 +862,7 @@ def _append_recall(self, args: list[str]) -> None:
         return
     self._append_entry("recovery", "Understanding", "Usage: /recall [list|inspect|search|lineage]")
 
+
 def _append_outcome(self, outcome: KernelOutcome) -> None:
     self._last_prompt_tokens = outcome.execution.prompt_tokens
     self._last_completion_tokens = outcome.execution.completion_tokens
@@ -910,7 +873,9 @@ def _append_outcome(self, outcome: KernelOutcome) -> None:
             for stage in outcome.stages
         ]
         self._append_entry("status", "Runtime stages", "\n".join(stage_lines))
-    assistant_name = self.runtime.inspect_profile(self.runtime.inspect_session(self.session_id).personal_model_id).state.display_name
+    assistant_name = self.runtime.inspect_profile(
+        self.runtime.inspect_session(self.session_id).personal_model_id
+    ).state.display_name
     assistant_lines = [outcome.execution.summary]
     if self.debug and outcome.plan is not None:
         assistant_lines.append(f"plan: {outcome.plan.rationale}")
@@ -922,7 +887,13 @@ def _append_outcome(self, outcome: KernelOutcome) -> None:
                 f"recall_hits: {len(outcome.recall_items)}",
             ]
         )
-    self._append_entry("assistant", assistant_name, "\n".join(assistant_lines), meta=outcome_state_focus_meta(outcome))
+    self._append_entry(
+        "assistant",
+        assistant_name,
+        "\n".join(assistant_lines),
+        meta=outcome_state_focus_meta(outcome),
+    )
+
 
 def _append_growth_update_message(self, update) -> None:
     if update is None:
@@ -932,12 +903,13 @@ def _append_growth_update_message(self, update) -> None:
     after = update.after
     after_checkpoint = getattr(after, "level", 0)
     after_growth = getattr(after, "cycle_label", "Evidence I")
-    after_identity = getattr(after, "identity_line", getattr(getattr(after, "stage", None), "title", "Elephant Agent"))
+    after_identity = getattr(
+        after,
+        "identity_line",
+        getattr(getattr(after, "stage", None), "title", "Elephant Agent"),
+    )
     if update.stage_changed:
-        body = (
-            f"The path is clearer now: {after_identity}. "
-            "I'll carry this understanding forward."
-        )
+        body = f"The path is clearer now: {after_identity}. I'll carry this understanding forward."
         meta = "understanding · clearer path"
     else:
         body = (

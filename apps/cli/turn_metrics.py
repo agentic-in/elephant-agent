@@ -130,10 +130,10 @@ def _format_compaction_notice(frame: dict) -> str:
         parts: list[str] = []
         for segment in detail.split():
             if segment.startswith("messages="):
-                value = segment[len("messages="):]
+                value = segment[len("messages=") :]
                 parts.append(f"messages {value.replace('->', ' → ')}")
             elif segment.startswith("compressing="):
-                parts.append(f"compressed {segment[len('compressing='):]}")
+                parts.append(f"compressed {segment[len('compressing=') :]}")
         return " · ".join(parts) if parts else "compacted"
     return ""
 
@@ -148,7 +148,9 @@ def _append_outcome(self, outcome: KernelOutcome) -> None:
             for stage in outcome.stages
         ]
         self._append_entry("status", "Runtime stages", "\n".join(stage_lines))
-    assistant_name = self.runtime.inspect_profile(self.runtime.inspect_session(self.session_id).personal_model_id).state.display_name
+    assistant_name = self.runtime.inspect_profile(
+        self.runtime.inspect_session(self.session_id).personal_model_id
+    ).state.display_name
     assistant_body = _compose_reasoning_display(
         getattr(outcome.execution, "reasoning", ""),
         outcome.execution.summary,

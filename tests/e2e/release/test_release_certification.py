@@ -59,9 +59,7 @@ DASHBOARD_UI_PROOF_PATHS = (
     "apps/dashboard/src/components/primitives/Primitives.module.css",
 )
 
-DASHBOARD_BRAND_ASSET_PATHS = (
-    "apps/dashboard/src/assets/brand/elephant-logo.png",
-)
+DASHBOARD_BRAND_ASSET_PATHS = ("apps/dashboard/src/assets/brand/elephant-logo.png",)
 
 PUBLIC_SURFACE_PROOF_PATHS = (
     "apps/site/docs/reference/cli.md",
@@ -102,7 +100,9 @@ class ReleaseCertificationContractsTest(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertTrue(_target_path(target).exists(), target)
 
-    def test_release_matrix_no_longer_tracks_deleted_voice_or_planning_modules(self) -> None:
+    def test_release_matrix_no_longer_tracks_deleted_voice_or_planning_modules(
+        self,
+    ) -> None:
         makefile_text = MAKEFILE_PATH.read_text(encoding="utf-8")
 
         self.assertNotIn("tests.e2e.voice.test_voice_preview", makefile_text)
@@ -115,7 +115,9 @@ class ReleaseCertificationContractsTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(path.exists(), path)
 
-    def test_release_contract_rejects_session_era_goal_or_procedure_routes(self) -> None:
+    def test_release_contract_rejects_session_era_goal_or_procedure_routes(
+        self,
+    ) -> None:
         for path in (ROOT / "apps" / "api").rglob("*.py"):
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path):
@@ -159,7 +161,7 @@ class ReleaseCertificationContractsTest(unittest.TestCase):
         self.assertIn("ELEPHANT_LIVE_PROVIDER_API_KEY", text)
         self.assertIn("Build dashboard assets for installed smoke", text)
         self.assertIn("make test-live-provider-smoke", text)
-        self.assertIn("make release AGENT_BASE_REF=\"$BASE_REF\"", text)
+        self.assertIn('make release AGENT_BASE_REF="$BASE_REF"', text)
         self.assertIn("Run canonical system-layer reset release contract", text)
 
         makefile_text = MAKEFILE_PATH.read_text(encoding="utf-8")
@@ -191,12 +193,8 @@ class DashboardRefactorCertificationContractsTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue((ROOT / path).exists(), path)
 
-        dashboard_api = (ROOT / "apps" / "dashboard" / "src" / "lib" / "dashboardApi.ts").read_text(
-            encoding="utf-8"
-        )
-        cli_doc = (ROOT / "apps" / "site" / "docs" / "reference" / "cli.md").read_text(
-            encoding="utf-8"
-        )
+        dashboard_api = (ROOT / "apps" / "dashboard" / "src" / "lib" / "dashboardApi.ts").read_text(encoding="utf-8")
+        cli_doc = (ROOT / "apps" / "site" / "docs" / "reference" / "cli.md").read_text(encoding="utf-8")
         self.assertIn("/v1/internal/dashboard", dashboard_api)
         self.assertIn("/v1/internal/dashboard", cli_doc)
 
@@ -212,7 +210,9 @@ class DashboardRefactorCertificationContractsTest(unittest.TestCase):
         self.assertNotIn("capture:refactor-screenshots", package["scripts"])
         self.assertNotIn("preview", package["scripts"])
 
-    def test_release_plan_no_longer_depends_on_deleted_dashboard_design_doc(self) -> None:
+    def test_release_plan_no_longer_depends_on_deleted_dashboard_design_doc(
+        self,
+    ) -> None:
         self.assertFalse((ROOT / "docs" / "system-design" / "operator-dashboard-surface.md").exists())
 
     def test_makefile_pins_reset_package_verification_contract(self) -> None:

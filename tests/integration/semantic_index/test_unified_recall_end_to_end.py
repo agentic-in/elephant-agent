@@ -150,7 +150,10 @@ class UnifiedRecallEndToEndTest(unittest.TestCase):
                 committed_at=_NOW,
                 source="user_explicit",
                 status="active",
-                metadata={"topic": "assistant.review.style", "reason": "user corrected the assistant"},
+                metadata={
+                    "topic": "assistant.review.style",
+                    "reason": "user corrected the assistant",
+                },
             )
             repository.upsert_personal_model_fact(fact)
             self.assertIsNotNone(indexer.index_personal_model_claim(fact))
@@ -172,7 +175,9 @@ class UnifiedRecallEndToEndTest(unittest.TestCase):
         self.assertTrue(claims)
         self.assertEqual(claims[0]["ref"], fact.fact_id)
 
-    def test_personal_model_search_merges_fielded_unicode_fuzzy_and_alias_signals(self) -> None:
+    def test_personal_model_search_merges_fielded_unicode_fuzzy_and_alias_signals(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             state_dir = root / "state"
@@ -304,9 +309,15 @@ class UnifiedRecallEndToEndTest(unittest.TestCase):
             self.assertEqual(top_ref("安净角落"), "claim:quiet-corner")
             self.assertEqual(top_ref("", topic="test.topic.t1"), "claim:topic-only")
             self.assertEqual(top_ref("music", query_variants=("音乐",)), "claim:music-cn")
-            self.assertEqual(top_ref("solitude is pure", query_variants=("孤独是干净的",)), "claim:solitude-clean")
+            self.assertEqual(
+                top_ref("solitude is pure", query_variants=("孤独是干净的",)),
+                "claim:solitude-clean",
+            )
             self.assertEqual(top_ref("保留选择权"), "claim:choice")
-            self.assertIn(top_ref("喜欢热闹 聚会 大声说话"), {"claim:social-positive", "claim:social-negative"})
+            self.assertIn(
+                top_ref("喜欢热闹 聚会 大声说话"),
+                {"claim:social-positive", "claim:social-negative"},
+            )
             self.assertEqual(top_ref("不喜欢大声说话的聚会"), "claim:social-negative")
 
             no_match = surface.search_personal_model(
@@ -400,7 +411,10 @@ class UnifiedRecallEndToEndTest(unittest.TestCase):
                 sequence=1,
                 created_at=_NOW,
                 summary="tool result says family power structure",
-                metadata={"tool_name": "tool.conversation.search", "tool_result": "family power tool report"},
+                metadata={
+                    "tool_name": "tool.conversation.search",
+                    "tool_result": "family power tool report",
+                },
             )
             user_step = Step(
                 step_id="step:user",
@@ -414,7 +428,10 @@ class UnifiedRecallEndToEndTest(unittest.TestCase):
                 sequence=2,
                 created_at=_NOW,
                 summary="source item ingested",
-                metadata={"event_type": "turn.received", "user_query": "We discussed family power structure."},
+                metadata={
+                    "event_type": "turn.received",
+                    "user_query": "We discussed family power structure.",
+                },
             )
             repository.upsert_episode(
                 Episode(

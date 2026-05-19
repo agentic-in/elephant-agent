@@ -15,7 +15,6 @@ if str(ROOT) not in sys.path:
 
 from packages.evidence.crystallization_runtime_impl import (
     _b64_encode,
-    _extract_asset_from_step,
     _materialize_assets_from_steps,
 )
 
@@ -64,7 +63,13 @@ class MaterializeAssetsTests(unittest.TestCase):
         self.assertIn("error", report)
 
     def test_missing_source_step_is_reported(self) -> None:
-        hints = [{"path": "scripts/run.sh", "source_step_id": "nope", "content_kind": "script"}]
+        hints = [
+            {
+                "path": "scripts/run.sh",
+                "source_step_id": "nope",
+                "content_kind": "script",
+            }
+        ]
         materialized, report = _materialize_assets_from_steps(
             repository=_FakeRepo(),
             steps=(),
@@ -74,14 +79,22 @@ class MaterializeAssetsTests(unittest.TestCase):
         self.assertEqual(report["missing"][0]["reason"], "no_source_step")
 
     def test_extracts_from_tool_call_arguments(self) -> None:
-        record = _FakeRecord(payload={
-            "tool_calls": [
-                {"arguments": {"content": "#!/bin/bash\necho hi\n"}},
-            ],
-        })
+        record = _FakeRecord(
+            payload={
+                "tool_calls": [
+                    {"arguments": {"content": "#!/bin/bash\necho hi\n"}},
+                ],
+            }
+        )
         step = _FakeStep(step_id="step:1", payload_refs=("ref:1",))
         repo = _FakeRepo({"ref:1": record})
-        hints = [{"path": "scripts/run.sh", "source_step_id": "step:1", "content_kind": "script"}]
+        hints = [
+            {
+                "path": "scripts/run.sh",
+                "source_step_id": "step:1",
+                "content_kind": "script",
+            }
+        ]
         materialized, report = _materialize_assets_from_steps(
             repository=repo,
             steps=(step,),
@@ -94,7 +107,13 @@ class MaterializeAssetsTests(unittest.TestCase):
         record = _FakeRecord(payload={"stdout": "generated config content\n"})
         step = _FakeStep(step_id="step:2", payload_refs=("ref:2",))
         repo = _FakeRepo({"ref:2": record})
-        hints = [{"path": "config/x.yaml", "source_step_id": "step:2", "content_kind": "config"}]
+        hints = [
+            {
+                "path": "config/x.yaml",
+                "source_step_id": "step:2",
+                "content_kind": "config",
+            }
+        ]
         materialized, report = _materialize_assets_from_steps(
             repository=repo,
             steps=(step,),
@@ -104,7 +123,13 @@ class MaterializeAssetsTests(unittest.TestCase):
 
     def test_fallback_to_step_outcome(self) -> None:
         step = _FakeStep(step_id="step:3", outcome="raw outcome text")
-        hints = [{"path": "notes.txt", "source_step_id": "step:3", "content_kind": "reference"}]
+        hints = [
+            {
+                "path": "notes.txt",
+                "source_step_id": "step:3",
+                "content_kind": "reference",
+            }
+        ]
         materialized, _ = _materialize_assets_from_steps(
             repository=_FakeRepo(),
             steps=(step,),
@@ -117,7 +142,13 @@ class MaterializeAssetsTests(unittest.TestCase):
         record = _FakeRecord(payload={"stdout": huge_content})
         step = _FakeStep(step_id="step:4", payload_refs=("ref:4",))
         repo = _FakeRepo({"ref:4": record})
-        hints = [{"path": "huge.bin", "source_step_id": "step:4", "content_kind": "reference"}]
+        hints = [
+            {
+                "path": "huge.bin",
+                "source_step_id": "step:4",
+                "content_kind": "reference",
+            }
+        ]
         materialized, report = _materialize_assets_from_steps(
             repository=repo,
             steps=(step,),

@@ -6,11 +6,17 @@ from dataclasses import dataclass
 from typing import Mapping, Protocol, runtime_checkable
 
 from packages.auth.runtime import AuthProfile
-from packages.models.provider_runtime import ProviderRuntimeResolution, ProviderRuntimeResolver
+from packages.models.provider_runtime import (
+    ProviderRuntimeResolution,
+    ProviderRuntimeResolver,
+)
 from packages.models.runtime import CredentialSource, ModelAdapter
 
 from .anthropic import AnthropicMessagesModelAdapter
-from .openai_compatible import OpenAICompatibleProviderAdapter, OpenAICompatibleProviderConfig
+from .openai_compatible import (
+    OpenAICompatibleProviderAdapter,
+    OpenAICompatibleProviderConfig,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +73,12 @@ class InMemoryModelAdapterBuilderRegistry:
 
     @classmethod
     def default(cls) -> "InMemoryModelAdapterBuilderRegistry":
-        return cls((_OpenAICompatibleModelAdapterBuilder(), _AnthropicMessagesModelAdapterBuilder()))
+        return cls(
+            (
+                _OpenAICompatibleModelAdapterBuilder(),
+                _AnthropicMessagesModelAdapterBuilder(),
+            )
+        )
 
 
 class _OpenAICompatibleModelAdapterBuilder:

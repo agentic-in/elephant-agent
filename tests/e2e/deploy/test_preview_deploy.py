@@ -33,19 +33,8 @@ class PreviewDeploySmokeTest(unittest.TestCase):
         subprocess.run(["make", "site-build"], cwd=ROOT, check=True, text=True)
         dist_index = ROOT / "apps" / "site" / "dist" / "index.html"
         dist_docs = ROOT / "apps" / "site" / "dist" / "docs" / "index.html"
-        dist_docs_system_model = (
-            ROOT / "apps" / "site" / "dist" / "docs" / "philosophy" / "system-model" / "index.html"
-        )
-        dist_docs_tools = (
-            ROOT
-            / "apps"
-            / "site"
-            / "dist"
-            / "docs"
-            / "capacities"
-            / "tools"
-            / "index.html"
-        )
+        dist_docs_system_model = ROOT / "apps" / "site" / "dist" / "docs" / "philosophy" / "system-model" / "index.html"
+        dist_docs_tools = ROOT / "apps" / "site" / "dist" / "docs" / "capacities" / "tools" / "index.html"
         dist_install_script = ROOT / "apps" / "site" / "dist" / "install.sh"
         dist_robots = ROOT / "apps" / "site" / "dist" / "robots.txt"
         dist_sitemap = ROOT / "apps" / "site" / "dist" / "sitemap.xml"

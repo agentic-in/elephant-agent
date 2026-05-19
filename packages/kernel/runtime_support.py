@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import hashlib
 from html import unescape as html_unescape
 import json
@@ -33,19 +33,11 @@ from packages.security import SecurityPolicy
 from packages.contracts.layers import Episode, Loop, PersonalModel, State, Step
 from packages.contracts.runtime import (
     LoopState,
-    LoopStep,
     ContextBundle,
-    EvidenceRetrievalRequest,
     EventEnvelope,
     ExecutionResult,
-    PendingToolCall,
-    RetryState,
-    StateFocusDecision,
     RecallEvidence,
-    PlanDraft,
     PromptMessage,
-    PersonalModelRuntimeState,
-    WaitCondition,
 )
 from packages.tools.tool_result_storage import (
     ToolResultBudgetConfig,
@@ -251,6 +243,7 @@ class KernelSourceRequest:
     def event(self) -> EventEnvelope:
         return self.to_event()
 
+
 @dataclass(frozen=True, slots=True)
 class KernelStageRecord:
     stage: str
@@ -283,11 +276,7 @@ class KernelOutcome:
         return tuple(step.step_id for step in self.steps)
 
     def step_action_count(self, action: str, *, status: str | None = None) -> int:
-        return sum(
-            1
-            for step in self.steps
-            if step.action == action and (status is None or step.status == status)
-        )
+        return sum(1 for step in self.steps if step.action == action and (status is None or step.status == status))
 
     @property
     def tool_call_count(self) -> int:
@@ -394,9 +383,7 @@ def _parse_execution_tool_calls(result: ExecutionResult) -> _ParsedToolCalls:
     return _parse_text_tool_calls(result.summary)
 
 
-_JSON_LITERAL_PATTERN = re.compile(
-    r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$"
-)
+_JSON_LITERAL_PATTERN = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
 _ARTIFACT_PATH_PATTERNS = (
     re.compile(
         r"""(?ix)
@@ -421,11 +408,7 @@ def _decode_text_tool_argument(raw_value: str) -> object:
     candidate = html_unescape(raw_value).strip()
     if not candidate:
         return ""
-    if (
-        candidate[0] in "[{\""
-        or candidate in {"true", "false", "null"}
-        or _JSON_LITERAL_PATTERN.match(candidate)
-    ):
+    if candidate[0] in '[{"' or candidate in {"true", "false", "null"} or _JSON_LITERAL_PATTERN.match(candidate):
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
@@ -569,7 +552,9 @@ def _tool_call_signature(call: _TextToolCall) -> str:
     return f"{call.tool_name}:{payload}"
 
 
-def _deduplicate_tool_calls(calls: Iterable[_TextToolCall]) -> tuple[_TextToolCall, ...]:
+def _deduplicate_tool_calls(
+    calls: Iterable[_TextToolCall],
+) -> tuple[_TextToolCall, ...]:
     unique: list[_TextToolCall] = []
     seen: set[str] = set()
     for call in calls:
@@ -593,10 +578,7 @@ def _should_parallelize_tool_batch(calls: tuple[_TextToolCall, ...]) -> bool:
             continue
         if call.tool_name not in _PARALLEL_SAFE_TOOLS:
             return False
-        if (
-            call.tool_name == "tool.file.read"
-            and _normalized_tool_path(call.arguments.get("path")) is None
-        ):
+        if call.tool_name == "tool.file.read" and _normalized_tool_path(call.arguments.get("path")) is None:
             return False
     return True
 
@@ -636,7 +618,9 @@ def _model_turn_summary(result: ExecutionResult, *, parsed: _ParsedToolCalls) ->
     return result.summary.strip()
 
 
-def _resolve_clock_timezone(timezone_name: str | None) -> tuple[timezone | ZoneInfo, str]:
+def _resolve_clock_timezone(
+    timezone_name: str | None,
+) -> tuple[timezone | ZoneInfo, str]:
     candidate = str(timezone_name or os.environ.get("ELEPHANT_TIMEZONE") or os.environ.get("TZ") or "").strip()
     if candidate:
         try:
@@ -766,7 +750,9 @@ def _apply_execution_guidance(prompt: str) -> str:
     lines = ["Execution guidance for this turn:"]
     if multi_source:
         lines.append("- Use more than one tool step and at least two distinct sources before concluding.")
-        lines.append("- Preferred flow: tool.web.search first, then tool.web.extract or multiple tool.web.read calls, then synthesize.")
+        lines.append(
+            "- Preferred flow: tool.web.search first, then tool.web.extract or multiple tool.web.read calls, then synthesize."
+        )
     if compare_request:
         lines.append("- Compare approaches explicitly instead of returning a single-source note.")
     if artifact_request is not None:
@@ -790,7 +776,13 @@ def _looks_like_multi_source_research_request(normalized_prompt: str) -> bool:
         "survey",
         "investigate",
     )
-    synthesis_markers = ("summary", "summarize", "write a summary", "report", "overview")
+    synthesis_markers = (
+        "summary",
+        "summarize",
+        "write a summary",
+        "report",
+        "overview",
+    )
     return any(marker in normalized_prompt for marker in research_markers) and (
         any(marker in normalized_prompt for marker in synthesis_markers)
         or any(marker in normalized_prompt for marker in ("compare", "comparison", "latest"))

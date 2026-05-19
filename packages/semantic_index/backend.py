@@ -164,8 +164,7 @@ class SQLiteVecSemanticIndex:
                 (vector.semantic_index_entry_id,),
             )
             connection.execute(
-                "INSERT INTO " + table_name + "(rowid, semantic_index_entry_id, embedding)"
-                " VALUES (?, ?, ?)",
+                "INSERT INTO " + table_name + "(rowid, semantic_index_entry_id, embedding) VALUES (?, ?, ?)",
                 (rowid, vector.semantic_index_entry_id, _vector_json(vector.values)),
             )
             connection.commit()
@@ -185,7 +184,8 @@ class SQLiteVecSemanticIndex:
                 return ()
             rows = connection.execute(
                 "SELECT semantic_index_entry_id, distance"
-                + " FROM " + table_name
+                + " FROM "
+                + table_name
                 + " WHERE embedding MATCH ? AND k = ?"
                 + " ORDER BY distance ASC",
                 (_vector_json(query.values), query.limit),
@@ -262,15 +262,20 @@ class SQLiteVecSemanticIndex:
             connection.close()
 
     @contextmanager
-    def _loaded_connection(self) -> Iterator[tuple[sqlite3.Connection, SQLiteVecLoadState]]:
+    def _loaded_connection(
+        self,
+    ) -> Iterator[tuple[sqlite3.Connection, SQLiteVecLoadState]]:
         with self._connect() as connection:
             yield connection, load_sqlite_vec_extension(connection)
 
 
 def _ensure_vector_table(connection: sqlite3.Connection, table_name: str, dimensions: int) -> None:
     connection.execute(
-        "CREATE VIRTUAL TABLE IF NOT EXISTS " + table_name
-        + " USING vec0(+semantic_index_entry_id TEXT, embedding FLOAT[" + str(dimensions) + "])"
+        "CREATE VIRTUAL TABLE IF NOT EXISTS "
+        + table_name
+        + " USING vec0(+semantic_index_entry_id TEXT, embedding FLOAT["
+        + str(dimensions)
+        + "])"
     )
 
 

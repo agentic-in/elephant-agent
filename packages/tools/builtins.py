@@ -37,7 +37,13 @@ from .handlers_filesystem import (
     run_process_action,
     run_terminal_exec,
 )
-from .runtime import ToolAudience, ToolAvailability, ToolDefinition, ToolRuntime, ToolSideEffectMetadata
+from .runtime import (
+    ToolAudience,
+    ToolAvailability,
+    ToolDefinition,
+    ToolRuntime,
+    ToolSideEffectMetadata,
+)
 from .schema_descriptions import enrich_builtin_tool_schema
 from .surfaces import BuiltinToolDependencies
 
@@ -116,7 +122,11 @@ def builtin_tool_definitions(
                 properties={
                     "command": {"type": "string"},
                     "cwd": {"type": "string"},
-                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 120,
+                    },
                     "background": {"type": "boolean"},
                     "env": {"type": "object"},
                 },
@@ -145,12 +155,31 @@ def builtin_tool_definitions(
                 properties={
                     "action": {
                         "type": "string",
-                        "enum": ["list", "ls", "poll", "inspect", "wait", "write", "kill"],
+                        "enum": [
+                            "list",
+                            "ls",
+                            "poll",
+                            "inspect",
+                            "wait",
+                            "write",
+                            "kill",
+                        ],
                         "description": "Use list|ls to enumerate managed processes; use poll/inspect for current status and buffered stdout/stderr, wait to block for completion, write for stdin, kill to stop. Use non-buffered commands (for example python -u) for interactive echo.",
                     },
-                    "process_id": {"type": "string", "description": "Managed process id returned by a background tool.terminal.exec call."},
-                    "input": {"type": "string", "description": "Text to write to stdin for action=write; include a newline when the process expects line input."},
-                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120, "description": "Maximum seconds for action=wait."},
+                    "process_id": {
+                        "type": "string",
+                        "description": "Managed process id returned by a background tool.terminal.exec call.",
+                    },
+                    "input": {
+                        "type": "string",
+                        "description": "Text to write to stdin for action=write; include a newline when the process expects line input.",
+                    },
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 120,
+                        "description": "Maximum seconds for action=wait.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -171,9 +200,21 @@ def builtin_tool_definitions(
             schema=_object_schema(
                 required=("path",),
                 properties={
-                    "path": {"type": "string", "description": "Root-relative or absolute file path to read."},
-                    "offset": {"type": "integer", "minimum": 1, "description": "1-indexed first line to read."},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 2000, "description": "Maximum number of lines to read."},
+                    "path": {
+                        "type": "string",
+                        "description": "Root-relative or absolute file path to read.",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "1-indexed first line to read.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2000,
+                        "description": "Maximum number of lines to read.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -193,8 +234,14 @@ def builtin_tool_definitions(
             schema=_object_schema(
                 required=("path", "content"),
                 properties={
-                    "path": {"type": "string", "description": "Root-relative or absolute file path to write. Must stay inside an allowed root; sensitive env, credential, and VCS metadata paths are refused."},
-                    "content": {"type": "string", "description": "Complete text content to write to the file."},
+                    "path": {
+                        "type": "string",
+                        "description": "Root-relative or absolute file path to write. Must stay inside an allowed root; sensitive env, credential, and VCS metadata paths are refused.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Complete text content to write to the file.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -225,10 +272,22 @@ def builtin_tool_definitions(
                             "bookkeeping."
                         ),
                     },
-                    "path": {"type": "string", "description": "Root-relative or absolute file path for replace mode."},
-                    "old_string": {"type": "string", "description": "Exact text to locate; must be unique unless replace_all=true."},
-                    "new_string": {"type": "string", "description": "Replacement text for the matched content."},
-                    "replace_all": {"type": "boolean", "description": "Replace every match instead of requiring uniqueness."},
+                    "path": {
+                        "type": "string",
+                        "description": "Root-relative or absolute file path for replace mode.",
+                    },
+                    "old_string": {
+                        "type": "string",
+                        "description": "Exact text to locate; must be unique unless replace_all=true.",
+                    },
+                    "new_string": {
+                        "type": "string",
+                        "description": "Replacement text for the matched content.",
+                    },
+                    "replace_all": {
+                        "type": "boolean",
+                        "description": "Replace every match instead of requiring uniqueness.",
+                    },
                     "patch": {
                         "type": "string",
                         "description": (
@@ -260,15 +319,48 @@ def builtin_tool_definitions(
             schema=_object_schema(
                 required=(),
                 properties={
-                    "query": {"type": "string", "description": "Text or regex-like pattern to search for. Required for target=content; optional for target=files, where it is treated as a glob when glob is omitted."},
-                    "pattern": {"type": "string", "description": "Backward-compatible alias for query. Use query for new calls."},
-                    "target": {"type": "string", "enum": ["content", "files"], "description": "Search file contents or file paths."},
-                    "path": {"type": "string", "description": "Optional file or directory path to search within; must be inside the active root or another configured allowed root and cannot be a sensitive credential/VCS metadata path."},
-                    "glob": {"type": "string", "description": "Optional file glob filter such as '*.py'. For target=files, omit both query and glob to list files."},
-                    "include": {"type": "string", "description": "Backward-compatible alias for glob. Use glob for new calls."},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Maximum number of matches to return."},
-                    "offset": {"type": "integer", "minimum": 0, "description": "Number of matches to skip for pagination."},
-                    "context": {"type": "integer", "minimum": 0, "maximum": 5, "description": "Context lines around content matches."},
+                    "query": {
+                        "type": "string",
+                        "description": "Text or regex-like pattern to search for. Required for target=content; optional for target=files, where it is treated as a glob when glob is omitted.",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Backward-compatible alias for query. Use query for new calls.",
+                    },
+                    "target": {
+                        "type": "string",
+                        "enum": ["content", "files"],
+                        "description": "Search file contents or file paths.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Optional file or directory path to search within; must be inside the active root or another configured allowed root and cannot be a sensitive credential/VCS metadata path.",
+                    },
+                    "glob": {
+                        "type": "string",
+                        "description": "Optional file glob filter such as '*.py'. For target=files, omit both query and glob to list files.",
+                    },
+                    "include": {
+                        "type": "string",
+                        "description": "Backward-compatible alias for glob. Use glob for new calls.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Maximum number of matches to return.",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Number of matches to skip for pagination.",
+                    },
+                    "context": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 5,
+                        "description": "Context lines around content matches.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -400,15 +492,39 @@ def builtin_tool_definitions(
                 properties={
                     "action": {
                         "type": "string",
-                        "enum": ["list", "ls", "create", "inspect", "pause", "resume", "remove", "delete"],
+                        "enum": [
+                            "list",
+                            "ls",
+                            "create",
+                            "inspect",
+                            "pause",
+                            "resume",
+                            "remove",
+                            "delete",
+                        ],
                         "description": "Use list|ls without job_id; use create with schedule and prompt; use inspect|pause|resume|remove|delete with job_id.",
                     },
-                    "job_id": {"type": "string", "description": "Cron job id such as cron:9f0e36022b."},
-                    "name": {"type": "string", "description": "Human-readable job name when action=create."},
-                    "schedule": {"type": "string", "description": "Schedule when action=create. Accepted examples: ISO timestamp '2026-05-13T09:00:00+08:00', interval '1h'/'30m'/'PT1H', or standard 5-field cron '0 2 * * *'."},
-                    "prompt": {"type": "string", "description": "Prompt payload for the scheduled prompt job when action=create."},
+                    "job_id": {
+                        "type": "string",
+                        "description": "Cron job id such as cron:9f0e36022b.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Human-readable job name when action=create.",
+                    },
+                    "schedule": {
+                        "type": "string",
+                        "description": "Schedule when action=create. Accepted examples: ISO timestamp '2026-05-13T09:00:00+08:00', interval '1h'/'30m'/'PT1H', or standard 5-field cron '0 2 * * *'.",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Prompt payload for the scheduled prompt job when action=create.",
+                    },
                     "skills": {
-                        "oneOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}],
+                        "oneOf": [
+                            {"type": "array", "items": {"type": "string"}},
+                            {"type": "string"},
+                        ],
                         "description": "Skill ids to load as operating instructions when a prompt job runs.",
                     },
                     "profile_id": {"type": "string"},
@@ -436,15 +552,48 @@ def builtin_tool_definitions(
             ),
             schema=_object_schema(
                 properties={
-                    "query": {"type": "string", "description": "Natural-language claim lookup."},
-                    "query_variants": {"type": "array", "items": {"type": "string"}, "description": "Optional translated or paraphrased query variants for cross-lingual or metaphorical lookup; at most 5 are used."},
-                    "mode": {"type": "string", "enum": ["auto", "inventory"], "description": "Search mode. Use inventory to get lens→topic list with claim counts (no content). Defaults to auto."},
-                    "lens": {"type": "string", "enum": ["identity", "world", "pulse", "journey"], "description": "Optional four-lens filter."},
-                    "topic": {"type": "string", "description": "Optional lens-prefixed topic key: <lens>.<domain>.<entity>[.<qualifier>], e.g. knowledge.projects.aegis.status."},
-                    "status": {"type": "string", "enum": ["active", "retired", "disputed", "all"], "description": "Claim status filter. Defaults to active; use retired/all to audit old corrected claims."},
-                    "ref": {"type": "string", "description": "Optional exact claim ref lookup, independent of semantic score."},
-                    "include_diagnostics": {"type": "boolean", "description": "Return match status, no-match reason, and per-claim scoring signals for debugging."},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Maximum claims to return."},
+                    "query": {
+                        "type": "string",
+                        "description": "Natural-language claim lookup.",
+                    },
+                    "query_variants": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional translated or paraphrased query variants for cross-lingual or metaphorical lookup; at most 5 are used.",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["auto", "inventory"],
+                        "description": "Search mode. Use inventory to get lens→topic list with claim counts (no content). Defaults to auto.",
+                    },
+                    "lens": {
+                        "type": "string",
+                        "enum": ["identity", "world", "pulse", "journey"],
+                        "description": "Optional four-lens filter.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional lens-prefixed topic key: <lens>.<domain>.<entity>[.<qualifier>], e.g. knowledge.projects.aegis.status.",
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "retired", "disputed", "all"],
+                        "description": "Claim status filter. Defaults to active; use retired/all to audit old corrected claims.",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Optional exact claim ref lookup, independent of semantic score.",
+                    },
+                    "include_diagnostics": {
+                        "type": "boolean",
+                        "description": "Return match status, no-match reason, and per-claim scoring signals for debugging.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 30,
+                        "description": "Maximum claims to return.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -469,16 +618,52 @@ def builtin_tool_definitions(
             ),
             schema=_object_schema(
                 properties={
-                    "query": {"type": "string", "description": "Content query for prior conversation search. Leave empty only to list a narrow time window."},
-                    "mode": {"type": "string", "enum": ["discover", "recall"], "description": "Use discover to find relevant ranges; use recall to return conversation details. Defaults to recall. Discover should include expr or explicit start_at/end_at and returns recall_args lines that can be copied into a recall call."},
-                    "expr": {"type": "string", "description": "Stable time expression: today, yesterday, last:24h, last:3d, this:week, previous:week, last_night, yesterday_evening, this_morning, today_afternoon, today_evening, an ISO date like 2026-05-13, or an ISO interval like 2026-05-08T18:00:00+08:00/PT12H."},
-                    "start_at": {"type": "string", "description": "Optional RFC3339 start datetime for explicit intervals."},
-                    "end_at": {"type": "string", "description": "Optional RFC3339 end datetime for explicit intervals. End is exclusive."},
-                    "timezone": {"type": "string", "description": "Optional IANA timezone such as Asia/Shanghai; defaults to runtime timezone."},
-                    "bucket": {"type": "string", "enum": ["auto", "hour", "day"], "description": "Discover bucket size. Defaults to auto."},
-                    "preview": {"type": "string", "enum": ["none", "anchors"], "description": "Discover preview style. Defaults to anchors."},
-                    "view": {"type": "string", "enum": ["conversation", "debug"], "description": "Use conversation by default; debug includes internal source/tool material for diagnostics only."},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Maximum ranges or hits to return."},
+                    "query": {
+                        "type": "string",
+                        "description": "Content query for prior conversation search. Leave empty only to list a narrow time window.",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["discover", "recall"],
+                        "description": "Use discover to find relevant ranges; use recall to return conversation details. Defaults to recall. Discover should include expr or explicit start_at/end_at and returns recall_args lines that can be copied into a recall call.",
+                    },
+                    "expr": {
+                        "type": "string",
+                        "description": "Stable time expression: today, yesterday, last:24h, last:3d, this:week, previous:week, last_night, yesterday_evening, this_morning, today_afternoon, today_evening, an ISO date like 2026-05-13, or an ISO interval like 2026-05-08T18:00:00+08:00/PT12H.",
+                    },
+                    "start_at": {
+                        "type": "string",
+                        "description": "Optional RFC3339 start datetime for explicit intervals.",
+                    },
+                    "end_at": {
+                        "type": "string",
+                        "description": "Optional RFC3339 end datetime for explicit intervals. End is exclusive.",
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Optional IANA timezone such as Asia/Shanghai; defaults to runtime timezone.",
+                    },
+                    "bucket": {
+                        "type": "string",
+                        "enum": ["auto", "hour", "day"],
+                        "description": "Discover bucket size. Defaults to auto.",
+                    },
+                    "preview": {
+                        "type": "string",
+                        "enum": ["none", "anchors"],
+                        "description": "Discover preview style. Defaults to anchors.",
+                    },
+                    "view": {
+                        "type": "string",
+                        "enum": ["conversation", "debug"],
+                        "description": "Use conversation by default; debug includes internal source/tool material for diagnostics only.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 30,
+                        "description": "Maximum ranges or hits to return.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -503,15 +688,54 @@ def builtin_tool_definitions(
             schema=_object_schema(
                 required=("action", "lens", "topic", "reason"),
                 properties={
-                    "action": {"type": "string", "enum": ["remember", "correct", "forget", "dispute", "restore", "delete"], "description": "How to change the claim. Use restore with ref to reactivate a retired or disputed claim; use delete with ref only for non-protected accidental/synthetic/duplicate invalid claims that should leave the visible model entirely."},
-                    "lens": {"type": "string", "enum": ["identity", "world", "pulse", "journey"], "description": "Which Personal Model lens owns the claim."},
-                    "topic": {"type": "string", "description": "Lens-prefixed topic key: <lens>.<facet>.<entity>[.<qualifier>]. First segment must match lens. Facets: identity={anchor,character,values,style,body}; world={people,projects,tools,places,assets,skills}; pulse={chapter,focus,mood,blockers,intent}; journey={lessons,patterns,decisions,milestones}. Examples: identity.anchor.name.preferred, world.people.zhang_san.role, pulse.chapter.work.role, journey.lessons.collaboration.scope_creep."},
-                    "text": {"type": "string", "description": "Claim text. Required for action=remember or action=correct."},
-                    "ref": {"type": "string", "description": "Exact claim ref from personal_model.search. Required for delete/restore; strongly preferred for correct/forget/dispute when topic is uncertain."},
-                    "reason": {"type": "string", "description": "Why this update is warranted, preferably grounded in the user's words."},
-                    "source": {"type": "string", "enum": ["user_said", "user_corrected", "learned"], "description": "Where the update came from."},
-                    "recall_policy": {"type": "string", "enum": ["stable", "current", "temporary", "review"], "description": "Optional; use only when obvious: stable, current, temporary, or review."},
-                    "metadata": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Optional governance metadata. Skill affinity facts should include skill_id, index_id, and projection_policy when known."},
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "remember",
+                            "correct",
+                            "forget",
+                            "dispute",
+                            "restore",
+                            "delete",
+                        ],
+                        "description": "How to change the claim. Use restore with ref to reactivate a retired or disputed claim; use delete with ref only for non-protected accidental/synthetic/duplicate invalid claims that should leave the visible model entirely.",
+                    },
+                    "lens": {
+                        "type": "string",
+                        "enum": ["identity", "world", "pulse", "journey"],
+                        "description": "Which Personal Model lens owns the claim.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Lens-prefixed topic key: <lens>.<facet>.<entity>[.<qualifier>]. First segment must match lens. Facets: identity={anchor,character,values,style,body}; world={people,projects,tools,places,assets,skills}; pulse={chapter,focus,mood,blockers,intent}; journey={lessons,patterns,decisions,milestones}. Examples: identity.anchor.name.preferred, world.people.zhang_san.role, pulse.chapter.work.role, journey.lessons.collaboration.scope_creep.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Claim text. Required for action=remember or action=correct.",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Exact claim ref from personal_model.search. Required for delete/restore; strongly preferred for correct/forget/dispute when topic is uncertain.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why this update is warranted, preferably grounded in the user's words.",
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["user_said", "user_corrected", "learned"],
+                        "description": "Where the update came from.",
+                    },
+                    "recall_policy": {
+                        "type": "string",
+                        "enum": ["stable", "current", "temporary", "review"],
+                        "description": "Optional; use only when obvious: stable, current, temporary, or review.",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string"},
+                        "description": "Optional governance metadata. Skill affinity facts should include skill_id, index_id, and projection_policy when known.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -536,17 +760,69 @@ def builtin_tool_definitions(
             schema=_object_schema(
                 required=("action",),
                 properties={
-                    "action": {"type": "string", "enum": ["list", "inspect", "bank", "create", "update", "ask", "answer", "dismiss", "reopen", "stale", "delete"], "description": "Question lifecycle action."},
-                    "question_id": {"type": "string", "description": "Question ref for inspect/update/ask/answer/dismiss/delete."},
-                    "status": {"type": "string", "description": "Filter for list: open, asked, answered, dismissed, stale."},
-                    "lens": {"type": "string", "enum": ["identity", "world", "pulse", "journey"], "description": "Four-lens owner."},
-                    "topic": {"type": "string", "description": "Question topic or sub-lens."},
-                    "text": {"type": "string", "description": "Question text for create/update."},
-                    "answer": {"type": "string", "description": "User's answer; answer also creates a Personal Model claim."},
-                    "reason": {"type": "string", "description": "Why this question exists or changed."},
-                    "priority": {"type": "number", "minimum": 0, "maximum": 1, "description": "Priority from 0.0 to 1.0 for ordering open questions."},
-                    "sensitivity": {"type": "string", "enum": ["low", "medium", "high"], "description": "How sensitive the question is for the user."},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 20, "description": "Maximum question rows to return."},
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "list",
+                            "inspect",
+                            "bank",
+                            "create",
+                            "update",
+                            "ask",
+                            "answer",
+                            "dismiss",
+                            "reopen",
+                            "stale",
+                            "delete",
+                        ],
+                        "description": "Question lifecycle action.",
+                    },
+                    "question_id": {
+                        "type": "string",
+                        "description": "Question ref for inspect/update/ask/answer/dismiss/delete.",
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Filter for list: open, asked, answered, dismissed, stale.",
+                    },
+                    "lens": {
+                        "type": "string",
+                        "enum": ["identity", "world", "pulse", "journey"],
+                        "description": "Four-lens owner.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Question topic or sub-lens.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Question text for create/update.",
+                    },
+                    "answer": {
+                        "type": "string",
+                        "description": "User's answer; answer also creates a Personal Model claim.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why this question exists or changed.",
+                    },
+                    "priority": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Priority from 0.0 to 1.0 for ordering open questions.",
+                    },
+                    "sensitivity": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high"],
+                        "description": "How sensitive the question is for the user.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20,
+                        "description": "Maximum question rows to return.",
+                    },
                 },
             ),
             side_effects=ToolSideEffectMetadata(
@@ -566,12 +842,32 @@ def builtin_tool_definitions(
             backend="runtime",
             description="Write or update a diary entry for a specific date. Content should be reflective markdown prose in the user's first language.",
             audience="both",
-            schema=_object_schema(required=("entry_date", "content"), properties={
-                "entry_date": {"type": "string", "description": "YYYY-MM-DD date for the entry."},
-                "content": {"type": "string", "description": "Markdown diary content (2-4 paragraphs)."},
-                "source_episode_ids": {"type": "array", "items": {"type": "string"}, "description": "Source episode IDs."},
-            }),
-            side_effects=ToolSideEffectMetadata(risk_class="low", approval_class="none", writes_state=True, reads_state=False, categories=("diary", "write"), notes="Upserts one entry per date."),
+            schema=_object_schema(
+                required=("entry_date", "content"),
+                properties={
+                    "entry_date": {
+                        "type": "string",
+                        "description": "YYYY-MM-DD date for the entry.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Markdown diary content (2-4 paragraphs).",
+                    },
+                    "source_episode_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Source episode IDs.",
+                    },
+                },
+            ),
+            side_effects=ToolSideEffectMetadata(
+                risk_class="low",
+                approval_class="none",
+                writes_state=True,
+                reads_state=False,
+                categories=("diary", "write"),
+                notes="Upserts one entry per date.",
+            ),
             availability=_availability(diary_reason is None, diary_reason),
         ),
         _builtin_tool(
@@ -581,11 +877,29 @@ def builtin_tool_definitions(
             backend="runtime",
             description="List recent diary entries. Use to check if an entry already exists for a date.",
             audience="both",
-            schema=_object_schema(required=(), properties={
-                "limit": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Max entries (default 10)."},
-                "before_date": {"type": "string", "description": "Return entries before this YYYY-MM-DD date."},
-            }),
-            side_effects=ToolSideEffectMetadata(risk_class="none", approval_class="none", writes_state=False, reads_state=True, categories=("diary", "read"), notes="Read-only listing."),
+            schema=_object_schema(
+                required=(),
+                properties={
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 30,
+                        "description": "Max entries (default 10).",
+                    },
+                    "before_date": {
+                        "type": "string",
+                        "description": "Return entries before this YYYY-MM-DD date.",
+                    },
+                },
+            ),
+            side_effects=ToolSideEffectMetadata(
+                risk_class="none",
+                approval_class="none",
+                writes_state=False,
+                reads_state=True,
+                categories=("diary", "read"),
+                notes="Read-only listing.",
+            ),
             availability=_availability(diary_reason is None, diary_reason),
         ),
         *sub_agents_tool_definitions(reason=sub_agents_reason),
@@ -602,7 +916,12 @@ def builtin_tool_definitions(
                         "type": "string",
                         "description": f"Restricted Python snippet; safe imports include {', '.join(sorted(SAFE_CODE_IMPORTS))}. Safe builtins include pow. May call tool('tool.id', {{...}}) for allowed file/web/terminal tools. Direct open(), os, sys, random, and subprocess access are blocked.",
                     },
-                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Maximum runtime in seconds."},
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 30,
+                        "description": "Maximum runtime in seconds.",
+                    },
                     "mode": {
                         "type": "string",
                         "enum": ["project", "strict"],
@@ -659,7 +978,19 @@ def builtin_tool_definitions(
                 properties={
                     "action": {
                         "type": "string",
-                        "enum": ["list", "ls", "add", "create", "inspect", "update", "complete", "reopen", "remove", "delete", "clear"],
+                        "enum": [
+                            "list",
+                            "ls",
+                            "add",
+                            "create",
+                            "inspect",
+                            "update",
+                            "complete",
+                            "reopen",
+                            "remove",
+                            "delete",
+                            "clear",
+                        ],
                         "description": "Use add|create|list|clear for scratchpad setup; other actions require an item_id.",
                     },
                     "item_id": {"type": "string"},
@@ -680,7 +1011,12 @@ def builtin_tool_definitions(
         *skill_tool_definitions(reason=skill_reason),
     )
     return tuple(
-        enrich_builtin_tool_schema(replace(definition, enabled=enabled_overrides.get(definition.tool_id, definition.enabled)))
+        enrich_builtin_tool_schema(
+            replace(
+                definition,
+                enabled=enabled_overrides.get(definition.tool_id, definition.enabled),
+            )
+        )
         for definition in definitions
     )
 
@@ -729,7 +1065,13 @@ def _browser_tool_definitions(*, reason: str | None, vision_reason: str | None) 
                 risk_class="medium",
                 approval_class="standard",
                 reads_state=True,
-                writes_state=tool_id not in {"tool.browser.snapshot", "tool.browser.images", "tool.browser.vision", "tool.browser.console"},
+                writes_state=tool_id
+                not in {
+                    "tool.browser.snapshot",
+                    "tool.browser.images",
+                    "tool.browser.vision",
+                    "tool.browser.console",
+                },
                 touches_network=True,
                 categories=("browser", action),
                 notes="Backed by the configured browser bridge when available.",
@@ -758,8 +1100,14 @@ def _browser_tool_definitions(*, reason: str | None, vision_reason: str | None) 
                 "Click an element in the active browser page by snapshot ref, with selector fallback.",
                 _object_schema(
                     properties={
-                        "ref": {"type": "string", "description": "Snapshot element ref such as @e3."},
-                        "selector": {"type": "string", "description": "CSS selector fallback when no ref exists."},
+                        "ref": {
+                            "type": "string",
+                            "description": "Snapshot element ref such as @e3.",
+                        },
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector fallback when no ref exists.",
+                        },
                     }
                 ),
             ),
@@ -771,8 +1119,14 @@ def _browser_tool_definitions(*, reason: str | None, vision_reason: str | None) 
                 _object_schema(
                     required=("text",),
                     properties={
-                        "ref": {"type": "string", "description": "Snapshot element ref such as @e3."},
-                        "selector": {"type": "string", "description": "CSS selector fallback when no ref exists."},
+                        "ref": {
+                            "type": "string",
+                            "description": "Snapshot element ref such as @e3.",
+                        },
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector fallback when no ref exists.",
+                        },
                         "text": {"type": "string"},
                     },
                 ),
@@ -852,6 +1206,7 @@ def _docs_builtin_tool_definitions() -> tuple[ToolDefinition, ...]:
         ),
     )
 
+
 def _builtin_tool(
     *,
     tool_id: str,
@@ -897,7 +1252,9 @@ def _object_schema(
     return schema
 
 
-def _group_builtin_tools(definitions: tuple[ToolDefinition, ...]) -> dict[str, tuple[ToolDefinition, ...]]:
+def _group_builtin_tools(
+    definitions: tuple[ToolDefinition, ...],
+) -> dict[str, tuple[ToolDefinition, ...]]:
     grouped: dict[str, list[ToolDefinition]] = {}
     for definition in definitions:
         grouped.setdefault(definition.family, []).append(definition)
@@ -919,25 +1276,41 @@ def _handler_for_tool(
         return lambda invocation: run_file_read(
             invocation,
             cwd=dependencies.resolve_cwd(invocation.session_id),
-            allowed_roots=(dependencies.cwd, *invocation.context.allowed_roots, *dependencies.additional_allowed_roots),
+            allowed_roots=(
+                dependencies.cwd,
+                *invocation.context.allowed_roots,
+                *dependencies.additional_allowed_roots,
+            ),
         )
     if tool_id == "tool.file.write":
         return lambda invocation: run_file_write(
             invocation,
             cwd=dependencies.resolve_cwd(invocation.session_id),
-            allowed_roots=(dependencies.cwd, *invocation.context.allowed_roots, *dependencies.additional_allowed_roots),
+            allowed_roots=(
+                dependencies.cwd,
+                *invocation.context.allowed_roots,
+                *dependencies.additional_allowed_roots,
+            ),
         )
     if tool_id == "tool.file.patch":
         return lambda invocation: run_file_patch(
             invocation,
             cwd=dependencies.resolve_cwd(invocation.session_id),
-            allowed_roots=(dependencies.cwd, *invocation.context.allowed_roots, *dependencies.additional_allowed_roots),
+            allowed_roots=(
+                dependencies.cwd,
+                *invocation.context.allowed_roots,
+                *dependencies.additional_allowed_roots,
+            ),
         )
     if tool_id == "tool.file.search":
         return lambda invocation: run_file_search(
             invocation,
             cwd=dependencies.resolve_cwd(invocation.session_id),
-            allowed_roots=(dependencies.cwd, *invocation.context.allowed_roots, *dependencies.additional_allowed_roots),
+            allowed_roots=(
+                dependencies.cwd,
+                *invocation.context.allowed_roots,
+                *dependencies.additional_allowed_roots,
+            ),
         )
     if tool_id == "tool.web.search":
         return lambda invocation: run_web_search(invocation, user_agent=dependencies.web_user_agent)
@@ -946,19 +1319,29 @@ def _handler_for_tool(
     if tool_id == "tool.web.extract":
         return lambda invocation: run_web_extract(invocation, user_agent=dependencies.web_user_agent)
     if tool_id.startswith("tool.browser."):
-        return lambda invocation: run_browser_action(invocation, backend=dependencies.browser_backend, vision_analyzer=dependencies.browser_vision_analyzer)
+        return lambda invocation: run_browser_action(
+            invocation,
+            backend=dependencies.browser_backend,
+            vision_analyzer=dependencies.browser_vision_analyzer,
+        )
     if tool_id == "tool.clarify":
         return lambda invocation: run_clarify(invocation, surface=dependencies.clarify_surface)
     if tool_id == "tool.cron.manage":
         return lambda invocation: run_cron_action(invocation, runtime=dependencies.cron_runtime)
     if tool_id == "tool.personal_model.search":
-        return lambda invocation: run_personal_model_search(invocation, surface=dependencies.personal_model_understanding)
+        return lambda invocation: run_personal_model_search(
+            invocation, surface=dependencies.personal_model_understanding
+        )
     if tool_id == "tool.conversation.search":
         return lambda invocation: run_conversation_search(invocation, surface=dependencies.personal_model_understanding)
     if tool_id == "tool.personal_model.update":
-        return lambda invocation: run_personal_model_update(invocation, surface=dependencies.personal_model_understanding)
+        return lambda invocation: run_personal_model_update(
+            invocation, surface=dependencies.personal_model_understanding
+        )
     if tool_id == "tool.personal_model.questions":
-        return lambda invocation: run_personal_model_questions(invocation, surface=dependencies.personal_model_understanding)
+        return lambda invocation: run_personal_model_questions(
+            invocation, surface=dependencies.personal_model_understanding
+        )
     if tool_id == "tool.code.execute":
         return lambda invocation: run_code_execute(
             invocation,
@@ -982,4 +1365,11 @@ def _handler_for_tool(
         return lambda invocation: run_todo_action(invocation, store=dependencies.todo_store)
     return None
 
-__all__ = ["BuiltinToolDependencies", "builtin_tool_definitions", "register_builtin_tools", "render_builtin_tool_reference_markdown", "render_builtin_tool_summary_markdown"]
+
+__all__ = [
+    "BuiltinToolDependencies",
+    "builtin_tool_definitions",
+    "register_builtin_tools",
+    "render_builtin_tool_reference_markdown",
+    "render_builtin_tool_summary_markdown",
+]

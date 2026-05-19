@@ -58,7 +58,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -329,9 +329,7 @@ def _row_from_payload(payload: Mapping[str, Any]) -> GatewayOutboundRow:
         attempts=int(payload.get("attempts") or 0),
         created_at=created_at,
         available_at=available_at,
-        last_error=(
-            str(payload["last_error"]) if payload.get("last_error") not in (None, "") else None
-        ),
+        last_error=(str(payload["last_error"]) if payload.get("last_error") not in (None, "") else None),
     )
 
 

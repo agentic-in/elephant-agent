@@ -28,7 +28,11 @@ class ShipTests(unittest.TestCase):
         ]
         self.assertEqual(
             MODULE.parse_status_paths(lines),
-            ["README.md", "docs/new.md", "docs/system-design/provisional-foundation.md"],
+            [
+                "README.md",
+                "docs/new.md",
+                "docs/system-design/provisional-foundation.md",
+            ],
         )
 
     def test_ensure_branch_uses_override(self) -> None:

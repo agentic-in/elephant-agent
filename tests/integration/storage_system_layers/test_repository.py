@@ -57,7 +57,7 @@ class StorageSystemLayerRepositoryTest(unittest.TestCase):
             "load_" + "agent_run",
             "upsert_evidence_record_bundle",
             "load_evidence_record_bundle",
-                "append_" + "memory_ledger",
+            "append_" + "memory_ledger",
         ):
             self.assertFalse(hasattr(repository, method_name), method_name)
 
@@ -96,7 +96,9 @@ class StorageSystemLayerRepositoryTest(unittest.TestCase):
         self.assertEqual(loaded.metadata, {"source": "test"})
         self.assertEqual(tuple(model.personal_model_id for model in listed), ("pm-alpha",))
 
-    def test_elephant_state_create_switch_list_and_delete_preserves_personal_model(self) -> None:
+    def test_elephant_state_create_switch_list_and_delete_preserves_personal_model(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
             repository.bootstrap()

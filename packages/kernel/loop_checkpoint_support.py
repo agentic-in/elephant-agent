@@ -384,16 +384,22 @@ class LoopCheckpointService:
             "keep digging",
         )
         return any(
-            normalized == phrase
-            or normalized.startswith(f"{phrase} ")
-            or normalized.endswith(f" {phrase}")
+            normalized == phrase or normalized.startswith(f"{phrase} ") or normalized.endswith(f" {phrase}")
             for phrase in explicit_phrases
         )
 
     def resume_prompt_for_request(self, run: LoopState, prompt: str) -> str:
         base = run.continuation_prompt or self.build_continuation_prompt(run, recent_steps=())
         normalized = " ".join(prompt.casefold().split())
-        if normalized in {"continue", "resume", "keep going", "go on", "carry on", "finish this", "finish it"}:
+        if normalized in {
+            "continue",
+            "resume",
+            "keep going",
+            "go on",
+            "carry on",
+            "finish this",
+            "finish it",
+        }:
             return base
         return f"{base}\n\nLatest user nudge:\n{prompt.strip()}"
 

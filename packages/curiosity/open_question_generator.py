@@ -58,7 +58,9 @@ def generate_contextual_questions(
                 status="open",
                 metadata={
                     "seed_text": text,
-                    "question_intent": str(seed.get("intent") or seed.get("rationale") or "follow up while context is steady").strip(),
+                    "question_intent": str(
+                        seed.get("intent") or seed.get("rationale") or "follow up while context is steady"
+                    ).strip(),
                 },
             )
         )

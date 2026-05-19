@@ -55,4 +55,3 @@ flowchart TD
 - `wake` can surface a question when the cadence allows.
 - Answered questions can become Personal Model claims with provenance.
 - Dismissed or ignored questions should not escalate into nagging.
-

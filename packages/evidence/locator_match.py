@@ -111,11 +111,7 @@ def find_entry_by_locator(
         return None
 
     # Tier 1: exact normalised equality.
-    exact = [
-        entry
-        for entry in materialised
-        if normalize_locator(_entry_content(entry)) == needle
-    ]
+    exact = [entry for entry in materialised if normalize_locator(_entry_content(entry)) == needle]
     if len(exact) == 1:
         return exact[0]
     if exact:
@@ -124,11 +120,7 @@ def find_entry_by_locator(
         return _pick_most_recent(exact)
 
     # Tier 2 + 3: substring.
-    substring = [
-        entry
-        for entry in materialised
-        if needle in normalize_locator(_entry_content(entry))
-    ]
+    substring = [entry for entry in materialised if needle in normalize_locator(_entry_content(entry))]
     if len(substring) == 1:
         return substring[0]
     if substring:
@@ -233,4 +225,4 @@ def _cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float | None:
         nb += y * y
     if na <= 0.0 or nb <= 0.0:
         return None
-    return dot / ((na ** 0.5) * (nb ** 0.5))
+    return dot / ((na**0.5) * (nb**0.5))

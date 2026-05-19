@@ -256,13 +256,19 @@ def build_typer_app(
             raise typer.Exit(0)
 
     @app.command("list")
-    def list_command(ctx: typer.Context, limit: int = typer.Option(24, "--limit", help="Maximum visible entries to show.")) -> None:
+    def list_command(
+        ctx: typer.Context,
+        limit: int = typer.Option(24, "--limit", help="Maximum visible entries to show."),
+    ) -> None:
         runtime = _runtime(state_dir=ctx.obj["state_dir"])
         _print_skill_list(runtime, limit=limit)
         raise typer.Exit(0)
 
     @app.command("active")
-    def active_command(ctx: typer.Context, limit: int = typer.Option(24, "--limit", help="Maximum enabled skills to show.")) -> None:
+    def active_command(
+        ctx: typer.Context,
+        limit: int = typer.Option(24, "--limit", help="Maximum enabled skills to show."),
+    ) -> None:
         runtime = _runtime(state_dir=ctx.obj["state_dir"])
         _print_active_skills(runtime, limit=limit)
         raise typer.Exit(0)
@@ -279,25 +285,37 @@ def build_typer_app(
         raise typer.Exit(0)
 
     @app.command("view")
-    def view_command(ctx: typer.Context, reference: str = typer.Argument(..., help="Skill id or source reference to inspect.")) -> None:
+    def view_command(
+        ctx: typer.Context,
+        reference: str = typer.Argument(..., help="Skill id or source reference to inspect."),
+    ) -> None:
         runtime = _runtime(state_dir=ctx.obj["state_dir"])
         _print_skill_detail(runtime, reference)
         raise typer.Exit(0)
 
     @app.command("enable")
-    def enable_command(ctx: typer.Context, skill_id: str = typer.Argument(..., help="Installed skill id to enable.")) -> None:
+    def enable_command(
+        ctx: typer.Context,
+        skill_id: str = typer.Argument(..., help="Installed skill id to enable."),
+    ) -> None:
         runtime = _runtime(state_dir=ctx.obj["state_dir"])
         _print_skill_toggle(runtime, skill_id=skill_id, enabled=True)
         raise typer.Exit(0)
 
     @app.command("disable")
-    def disable_command(ctx: typer.Context, skill_id: str = typer.Argument(..., help="Installed skill id to disable.")) -> None:
+    def disable_command(
+        ctx: typer.Context,
+        skill_id: str = typer.Argument(..., help="Installed skill id to disable."),
+    ) -> None:
         runtime = _runtime(state_dir=ctx.obj["state_dir"])
         _print_skill_toggle(runtime, skill_id=skill_id, enabled=False)
         raise typer.Exit(0)
 
     @app.command("install")
-    def install_command(ctx: typer.Context, reference: str = typer.Argument(..., help="Hub id, public reference, local path, or manifest path.")) -> None:
+    def install_command(
+        ctx: typer.Context,
+        reference: str = typer.Argument(..., help="Hub id, public reference, local path, or manifest path."),
+    ) -> None:
         runtime = _runtime(state_dir=ctx.obj["state_dir"])
         _print_skill_install(runtime, reference)
         raise typer.Exit(0)

@@ -224,6 +224,10 @@ def _default_trust_level(source_id: str, metadata: Mapping[str, Any]) -> str:
         return explicit
     if source_id == "builtin":
         return "builtin"
-    if source_id in {"path", "elephant-installed", "elephant-authored"} or source_id.startswith("custom-"):
+    if source_id in {
+        "path",
+        "elephant-installed",
+        "elephant-authored",
+    } or source_id.startswith("custom-"):
         return "trusted"
     return "community"

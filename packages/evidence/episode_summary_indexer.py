@@ -131,7 +131,10 @@ def build_step_recall_text(step: Step) -> str:
     elif normalized_action == "emit_response":
         parts = [str(metadata.get("final_response") or metadata.get("assistant_response") or step.summary).strip()]
     elif normalized_action == "reply":
-        parts = [str(step.summary or "").strip(), str(metadata.get("final_response") or metadata.get("assistant_response") or "").strip()]
+        parts = [
+            str(step.summary or "").strip(),
+            str(metadata.get("final_response") or metadata.get("assistant_response") or "").strip(),
+        ]
     else:
         parts = [
             str(step.summary or "").strip(),

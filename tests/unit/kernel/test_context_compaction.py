@@ -62,12 +62,17 @@ class ContextCompactionKernelTest(unittest.TestCase):
         self.assertEqual(metadata["protected_ranges"], "head:0-1, tail:77-79")
         self.assertEqual(metadata["selected_raw_ids"], "group:abc123, group:def456")
         self.assertEqual(metadata["summary_hash"], "deadbeefcafefeed")
-        self.assertIn("latest user query: continue the database migration", metadata["compaction_query"])
+        self.assertIn(
+            "latest user query: continue the database migration",
+            metadata["compaction_query"],
+        )
         self.assertIn("protected_ranges=head:0-1|tail:77-79", detail)
         self.assertIn("selected_raw=2", detail)
         self.assertIn("summary_hash=deadbeefcafefeed", detail)
 
-    def test_retry_context_after_provider_overflow_returns_continuity_outcome(self) -> None:
+    def test_retry_context_after_provider_overflow_returns_continuity_outcome(
+        self,
+    ) -> None:
         result = ContextProjectionCompactionResult(
             compacted=True,
             reason="provider-overflow",

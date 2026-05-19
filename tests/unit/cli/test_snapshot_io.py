@@ -25,7 +25,10 @@ class SnapshotIOTest(unittest.TestCase):
 
             write_snapshot_payload(path, {"session": {"session_id": "two"}})
 
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"session": {"session_id": "two"}})
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8")),
+                {"session": {"session_id": "two"}},
+            )
 
 
 if __name__ == "__main__":

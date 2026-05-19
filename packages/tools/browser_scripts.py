@@ -123,6 +123,8 @@ ANNOTATE_JS = r"""
 }
 """
 
-CLEAR_ANNOTATIONS_JS = "() => document.querySelectorAll('[data-elephant-browser-annotation]').forEach((node) => node.remove())"
+CLEAR_ANNOTATIONS_JS = (
+    "() => document.querySelectorAll('[data-elephant-browser-annotation]').forEach((node) => node.remove())"
+)
 
 __all__ = ["ANNOTATE_JS", "CLEAR_ANNOTATIONS_JS", "IMAGES_JS", "SNAPSHOT_JS"]

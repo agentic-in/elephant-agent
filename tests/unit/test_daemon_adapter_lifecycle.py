@@ -7,9 +7,8 @@ logic in start_adapter(), stop_adapter(), and DaemonServiceStatus.
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 # ── has_credentials() tests ──────────────────────────────────────
@@ -174,9 +173,7 @@ class TestWeixinHasCredentials:
         from apps.gateway.weixin_support import WeixinGatewayAccountConfig
 
         service = WeixinGatewayService.__new__(WeixinGatewayService)
-        service.account_configs = (
-            WeixinGatewayAccountConfig(account_id="wx_real_account", token="some_token"),
-        )
+        service.account_configs = (WeixinGatewayAccountConfig(account_id="wx_real_account", token="some_token"),)
         service.runtime_state_dir = Path("/tmp")
         assert service.has_credentials() is True
 
@@ -185,9 +182,7 @@ class TestWeixinHasCredentials:
         from apps.gateway.weixin_support import WeixinGatewayAccountConfig
 
         service = WeixinGatewayService.__new__(WeixinGatewayService)
-        service.account_configs = (
-            WeixinGatewayAccountConfig(account_id="wx_account", token=""),
-        )
+        service.account_configs = (WeixinGatewayAccountConfig(account_id="wx_account", token=""),)
         service.runtime_state_dir = Path("/tmp")
         with patch(
             "apps.gateway.weixin_service.load_weixin_account",
@@ -273,9 +268,7 @@ class TestDaemonStartAdapter:
                 state_dir=Path("/tmp/test-daemon"),
                 cli_state_dir=Path("/tmp/test-cli"),
             )
-            daemon._service_statuses["discord"] = DaemonServiceStatus(
-                name="discord", status="running"
-            )
+            daemon._service_statuses["discord"] = DaemonServiceStatus(name="discord", status="running")
             result = await daemon.start_adapter("discord")
             assert result["status"] == "already_running"
 
@@ -306,9 +299,7 @@ class TestDaemonStopAdapter:
                 state_dir=Path("/tmp/test-daemon"),
                 cli_state_dir=Path("/tmp/test-cli"),
             )
-            daemon._service_statuses["discord"] = DaemonServiceStatus(
-                name="discord", status="skipped"
-            )
+            daemon._service_statuses["discord"] = DaemonServiceStatus(name="discord", status="skipped")
             result = await daemon.stop_adapter("discord")
             assert result["status"] == "not_running"
 

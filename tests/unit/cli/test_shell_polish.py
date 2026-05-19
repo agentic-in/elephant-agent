@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 from types import SimpleNamespace
 import unittest
-from unittest import mock
 
 from apps.cli import shell_render, shell_ui, turn_metrics
 
@@ -30,20 +29,24 @@ class CondenseToolSummaryTests(unittest.TestCase):
         )
 
     def test_repeated_tool_collapses_to_count(self) -> None:
-        result = turn_metrics.condense_tool_summary([
-            ("tool.file.read", True, 1),
-            ("tool.file.read", True, 2),
-            ("tool.file.read", True, 3),
-        ])
+        result = turn_metrics.condense_tool_summary(
+            [
+                ("tool.file.read", True, 1),
+                ("tool.file.read", True, 2),
+                ("tool.file.read", True, 3),
+            ]
+        )
         self.assertEqual(result, "read × 3")
 
     def test_mixed_tools_join_with_middle_dot(self) -> None:
-        result = turn_metrics.condense_tool_summary([
-            ("tool.file.read", True, 1),
-            ("tool.file.read", True, 2),
-            ("tool.file.patch", True, 3),
-            ("tool.file.search", True, 4),
-        ])
+        result = turn_metrics.condense_tool_summary(
+            [
+                ("tool.file.read", True, 1),
+                ("tool.file.read", True, 2),
+                ("tool.file.patch", True, 3),
+                ("tool.file.search", True, 4),
+            ]
+        )
         # Order follows Counter.most_common — read (2) first, then two ties.
         self.assertIn("read × 2", result)
         self.assertIn("edited", result)
@@ -54,22 +57,29 @@ class CondenseToolSummaryTests(unittest.TestCase):
         self.assertIn("searched", parts)
 
     def test_single_failure_surfaces_with_failed_suffix(self) -> None:
-        result = turn_metrics.condense_tool_summary([
-            ("tool.file.read", True, 1),
-            ("tool.terminal.exec", False, 2),
-        ])
+        result = turn_metrics.condense_tool_summary(
+            [
+                ("tool.file.read", True, 1),
+                ("tool.terminal.exec", False, 2),
+            ]
+        )
         self.assertEqual(result, "read · ran failed")
 
     def test_multiple_failures_collapse_to_count(self) -> None:
-        result = turn_metrics.condense_tool_summary([
-            ("tool.terminal.exec", False, 1),
-            ("tool.file.read", False, 2),
-            ("tool.file.patch", False, 3),
-        ])
+        result = turn_metrics.condense_tool_summary(
+            [
+                ("tool.terminal.exec", False, 1),
+                ("tool.file.read", False, 2),
+                ("tool.file.patch", False, 3),
+            ]
+        )
         self.assertIn("3 failures", result)
 
     def test_unknown_tool_falls_back_to_last_segment(self) -> None:
-        self.assertEqual(turn_metrics.condense_tool_summary([("tool.novel.widget", True, 1)]), "widget")
+        self.assertEqual(
+            turn_metrics.condense_tool_summary([("tool.novel.widget", True, 1)]),
+            "widget",
+        )
 
     def test_tool_id_with_underscores_gets_spaces(self) -> None:
         # "tool.foo.my_cool_thing" -> "my cool thing"
@@ -146,8 +156,7 @@ class WrapFileHyperlinkTests(unittest.TestCase):
     def setUp(self) -> None:
         # Snapshot relevant env vars so tests don't leak into each other.
         self._env_snapshot = {
-            key: os.environ.get(key)
-            for key in ("TERM_PROGRAM", "TERM", "NO_COLOR", "ELEPHANT_NO_HYPERLINKS")
+            key: os.environ.get(key) for key in ("TERM_PROGRAM", "TERM", "NO_COLOR", "ELEPHANT_NO_HYPERLINKS")
         }
         for key in self._env_snapshot:
             os.environ.pop(key, None)

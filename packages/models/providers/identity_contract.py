@@ -84,9 +84,7 @@ def build_provider_messages(request: ModelRequest) -> tuple[PromptMessage, ...]:
     """Return the role-preserved message projection for a provider request."""
 
     normalized_messages = _normalized_messages(request.messages)
-    messages: list[PromptMessage] = [
-        PromptMessage(role="system", content=build_provider_system_prompt(request))
-    ]
+    messages: list[PromptMessage] = [PromptMessage(role="system", content=build_provider_system_prompt(request))]
     messages.extend(message for message in normalized_messages if message.role != "system")
     prompt = build_provider_user_prompt(request)
     if prompt:
@@ -94,7 +92,9 @@ def build_provider_messages(request: ModelRequest) -> tuple[PromptMessage, ...]:
     return tuple(message for message in messages if message.content.strip() or message.tool_calls)
 
 
-def _normalized_messages(messages: Iterable[PromptMessage]) -> tuple[PromptMessage, ...]:
+def _normalized_messages(
+    messages: Iterable[PromptMessage],
+) -> tuple[PromptMessage, ...]:
     normalized: list[PromptMessage] = []
     for message in messages:
         role = str(message.role or "").strip().lower()

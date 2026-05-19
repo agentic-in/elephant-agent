@@ -123,12 +123,16 @@ def _bland_api_key() -> str:
 
 
 def _ai_provider(default: str = DEFAULT_AI_PROVIDER) -> str:
-    return _env_or_config(
-        "PHONE_PROVIDER",
-        ("telephony", "provider"),
-        ("phone", "provider"),
-        default=default,
-    ).lower().strip()
+    return (
+        _env_or_config(
+            "PHONE_PROVIDER",
+            ("telephony", "provider"),
+            ("phone", "provider"),
+            default=default,
+        )
+        .lower()
+        .strip()
+    )
 
 
 def _provider_decision_tree() -> list[dict[str, str]]:

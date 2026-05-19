@@ -2,51 +2,14 @@
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
 from difflib import unified_diff
-import os
 from pathlib import Path
 import re
-import shlex
 import time
 
 from packages.contracts import ExperienceRecord
 from packages.kernel.runtime import KernelOutcome
-from packages.operator.runtime import (
-    RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
-    build_recall_evidence_operator_surface,
-    build_profile_operator_surface,
-    render_recall_evidence_lines,
-    render_profile_lines,
-)
 from packages.tools.handler_support import resolve_allowed_path
-from .provider_flow import provider_setup_defaults, run_provider_selection_wizard
-from .runtime import CliRuntime
-from .wizard import WIZARD_BACK
-from .shell_composer import (
-    build_command_palette as _build_shell_command_palette,
-    build_composer_body as _build_shell_composer_body,
-    build_divider_window as _build_shell_divider_window,
-    build_input_window as _build_shell_input_window,
-    build_key_bindings as _build_shell_key_bindings,
-    build_prompt_buffer as _build_shell_prompt_buffer,
-    build_queue_preview_window as _build_shell_queue_preview_window,
-    prompt_continuation as _shell_prompt_continuation,
-    prompt_label as _shell_prompt_label,
-    prompt_style as _shell_prompt_style,
-    prompt_style_map as _shell_prompt_style_map,
-    prompt_toolkit_composer_available as _shell_prompt_toolkit_composer_available,
-    read_command as _read_shell_command,
-    shell_history as _shell_history,
-)
-from .shell_boot import WAKE_DISPLAY_SECONDS, BootFrameContext, render_boot_frame
-from .shell_opening import (
-    ShellOpeningContext,
-    compose_shell_opening_instruction,
-    compose_shell_opener,
-)
 from .shell_progress import (
     animations_enabled as _shell_animations_enabled,
     render_queued_followup_fragments as _render_shell_queued_followup_fragments,
@@ -74,31 +37,19 @@ from .shell_render import (
     growth_progress_counts as _shell_growth_progress_counts,
     recent_activity_lines as _shell_recent_activity_lines,
     recent_experience_lines as _shell_recent_experience_lines,
-    render_brand_column as _render_shell_brand_column,
     render_chat_entry as _render_shell_chat_entry,
     render_entry as _render_shell_entry,
     render_elephant_brand_mark as _render_shell_elephant_mark,
     render_growth_mark_for_stage as _render_shell_growth_mark,
     render_pending_entries as _render_shell_pending_entries,
-    render_shell_frame as _render_shell_frame_view,
-    render_status_column as _render_shell_status_column,
     should_display_experience as _should_display_shell_experience,
     styled_growth_progress_bar as _styled_shell_growth_progress_bar,
 )
 from .shell_stack import (
-    Align,
-    Completion,
-    Completer,
     Console,
     Document,
     FormattedText,
-    Group,
-    Live,
-    PROMPT_TOOLKIT_AVAILABLE,
-    Panel,
     RICH_AVAILABLE,
-    Table,
-    Text,
 )
 from .shell_ui import (
     BRAND_ACCENT,
@@ -114,20 +65,16 @@ from .shell_ui import (
     GROWTH_PROGRESS_WIDTH,
     HATCHLING_HEAD_ROWS,
     HATCHLING_STAGE_ROWS,
-    HATCHLING_STAGE_ROWS,
     QUEUE_PREVIEW_INSET,
     SCOUT_STAGE_ROWS,
     SEED_STAGE_ROWS,
     SHELL_WELCOME_HEADLINE,
     USER_HISTORY_BG,
     USER_HISTORY_FG,
-    WEB_URL_PATTERN,
     compact_line as _compact_line,
     centered_elephant_rows as _centered_elephant_rows,
-    display_path as _display_path,
     display_width as _display_width,
     render_elephant_mark,
-    resolve_elephant_version as _resolve_elephant_version,
 )
 
 __all__ = [
@@ -164,8 +111,8 @@ __all__ = [
 ]
 
 
-
 from .shell_support_runtime import *  # noqa: F401,F403
+
 
 def _identity_lines(self, profile_id: str) -> list[str]:
     profile = self.runtime.inspect_profile(profile_id)
@@ -195,6 +142,7 @@ def _identity_lines(self, profile_id: str) -> list[str]:
     )
     return lines
 
+
 def _user_lines(self, profile_id: str) -> list[str]:
     user = self.runtime.inspect_user(profile_id=profile_id)
     return [
@@ -209,6 +157,7 @@ def _user_lines(self, profile_id: str) -> list[str]:
         f"shared_preferences: {', '.join(user.shared_preferences) or '<empty>'}",
     ]
 
+
 def _relationship_lines(self, profile_id: str) -> list[str]:
     relationship = self.runtime.inspect_relationship(profile_id=profile_id)
     return [
@@ -221,12 +170,14 @@ def _relationship_lines(self, profile_id: str) -> list[str]:
         f"continuity_notes: {', '.join(relationship.continuity_notes) or '<empty>'}",
     ]
 
+
 def _append_entry(self, kind: str, title: str, body: str, *, meta: str = "") -> None:
     self.transcript.append(TranscriptEntry(kind=kind, title=title, body=body, meta=meta))
     if len(self.transcript) > 80:
         overflow = len(self.transcript) - 80
         self.transcript = self.transcript[overflow:]
         self._rendered_entries = max(0, self._rendered_entries - overflow)
+
 
 def _append_tooltrace_line(self, line: str) -> None:
     if self.transcript and self.transcript[-1].kind == "tooltrace":
@@ -241,6 +192,7 @@ def _append_tooltrace_line(self, line: str) -> None:
         )
         return
     self._append_entry("tooltrace", "Tool trace", line)
+
 
 def _capture_pending_file_review(self, tool_event: ToolLifecycleEvent) -> None:
     if tool_event.phase != "requested":
@@ -260,6 +212,7 @@ def _capture_pending_file_review(self, tool_event: ToolLifecycleEvent) -> None:
         before_text=before_text,
     )
 
+
 def _todo_trace_lines(self) -> tuple[str, ...]:
     todo_glyph = _shell_tool_trace_emoji("tool.todo.manage")
     items = self.runtime.todo_store.list_items(self.session_id)
@@ -276,12 +229,14 @@ def _todo_trace_lines(self) -> tuple[str, ...]:
         lines.append(f"┊ {todo_glyph} more        {remaining} additional item(s)")
     return tuple(lines)
 
+
 def _display_tool_diff_path(self, path: Path) -> str:
     resolved = path.expanduser().resolve()
     try:
         return str(resolved.relative_to(Path.cwd().resolve()))
     except ValueError:
         return str(resolved)
+
 
 def _file_review_trace_lines(self, tool_event: ToolLifecycleEvent) -> tuple[str, ...]:
     snapshot = self._pending_file_reviews.pop(tool_event.invocation.invocation_id, None)
@@ -321,6 +276,7 @@ def _file_review_trace_lines(self, tool_event: ToolLifecycleEvent) -> tuple[str,
         rendered.append(f"… omitted {overflow} diff line(s)")
     return tuple(rendered)
 
+
 def _tool_result_trace_lines(self, tool_event: ToolLifecycleEvent) -> tuple[str, ...]:
     if tool_event.phase == "execution.failed":
         self._pending_file_reviews.pop(tool_event.invocation.invocation_id, None)
@@ -333,6 +289,7 @@ def _tool_result_trace_lines(self, tool_event: ToolLifecycleEvent) -> tuple[str,
         return self._file_review_trace_lines(tool_event)
     return ()
 
+
 def _boot_growth_stage(self, active: int) -> tuple[str, int]:
     if active < 0:
         return ("seed", 0)
@@ -343,6 +300,7 @@ def _boot_growth_stage(self, active: int) -> tuple[str, int]:
         ("elephant", 4),
     )
     return stages[min(active, len(stages) - 1)]
+
 
 def _record_tool_event_trace(self, tool_event: ToolLifecycleEvent) -> None:
     self._capture_pending_file_review(tool_event)
@@ -360,6 +318,7 @@ def _record_tool_event_trace(self, tool_event: ToolLifecycleEvent) -> None:
     for extra_line in self._tool_result_trace_lines(tool_event):
         self._append_tooltrace_line(extra_line)
 
+
 def _kernel_stage_payload(event: dict[str, object]) -> dict[str, object] | None:
     event_type = str(event.get("event_type") or "").strip().lower()
     if event_type != "kernel.stage":
@@ -367,15 +326,18 @@ def _kernel_stage_payload(event: dict[str, object]) -> dict[str, object] | None:
     payload = event.get("payload")
     return payload if isinstance(payload, dict) else None
 
+
 def _parse_context_compaction_tokens(detail: str) -> tuple[int, int] | None:
     match = re.search(r"(?:^|\s)tokens=(\d+)->(\d+)(?:\s|$)", str(detail or ""))
     if match is None:
         return None
     return int(match.group(1)), int(match.group(2))
 
+
 def _parse_kernel_stage_int(detail: str, key: str) -> int | None:
     match = re.search(rf"(?:^|\s){re.escape(key)}=(\d+)(?:\s|$)", str(detail or ""))
     return int(match.group(1)) if match is not None else None
+
 
 def _kernel_trace_line(self, event: dict[str, object]) -> str | None:
     event_type = str(event.get("event_type") or "").strip().lower()
@@ -421,6 +383,7 @@ def _kernel_trace_line(self, event: dict[str, object]) -> str | None:
     body = _compact_line(" · ".join(part for part in body_parts if part), limit=96)
     return f"┊ 📚 disclosed    {body}"
 
+
 def _record_kernel_event_trace(self, event: dict[str, object]) -> None:
     stage_payload = _kernel_stage_payload(event)
     if stage_payload is not None:
@@ -446,14 +409,18 @@ def _record_kernel_event_trace(self, event: dict[str, object]) -> None:
     if line is not None:
         self._append_tooltrace_line(line)
 
+
 def _animations_enabled(self) -> bool:
     return _shell_animations_enabled()
+
 
 def _turn_phase(self, tick: int) -> tuple[str, str, str]:
     return _shell_turn_phase(tick)
 
+
 def _summarize_progress_prompt(self, prompt: str) -> str:
     return _summarize_shell_progress_prompt(prompt)
+
 
 def _render_turn_progress_fragments(
     self,
@@ -477,11 +444,14 @@ def _render_turn_progress_fragments(
         stream_text=stream_text,
     )
 
+
 def _render_queued_followup_fragments(self) -> FormattedText:
     return _render_shell_queued_followup_fragments(self)
 
+
 def _run_turn_with_queued_input(self, prompt: str) -> KernelOutcome:
     return _run_shell_turn_with_queued_input(self, prompt)
+
 
 def _run_turn_with_progress(
     self,
@@ -491,11 +461,14 @@ def _run_turn_with_progress(
 ) -> KernelOutcome:
     return _run_shell_turn_with_progress(self, prompt, event_payload=event_payload)
 
+
 def _run_tool_with_progress(self, tool_id: str, arguments: dict[str, str]):
     return _run_shell_tool_with_progress(self, tool_id, arguments)
 
+
 def _tool_event_tracker(self):
     return _shell_tool_event_tracker()
+
 
 def _render_turn_frame(
     self,
@@ -517,62 +490,84 @@ def _render_turn_frame(
         stream_text=stream_text,
     )
 
+
 def _render_tool_frame(self, *, tool_id: str, tick: int, tool_event: ToolLifecycleEvent | None = None):
     return _render_shell_tool_frame(self, tool_id=tool_id, tick=tick, tool_event=tool_event)
 
-def _tool_frame_phases(self, tool_id: str, *, tool_event: ToolLifecycleEvent | None = None) -> tuple[tuple[str, str], ...]:
+
+def _tool_frame_phases(
+    self, tool_id: str, *, tool_event: ToolLifecycleEvent | None = None
+) -> tuple[tuple[str, str], ...]:
     return _shell_tool_frame_phases(self, tool_id, tool_event=tool_event)
+
 
 def _tool_event_lines(self, tool_event: ToolLifecycleEvent | None) -> tuple[str | None, str | None]:
     return _shell_tool_event_lines(self, tool_event)
 
+
 def _tool_event_summary(self, tool_event: ToolLifecycleEvent | None) -> str | None:
     return _shell_tool_event_summary(self, tool_event)
+
 
 def _tool_trace_line(self, tool_event: ToolLifecycleEvent | None) -> str | None:
     return _shell_tool_trace_line(self, tool_event)
 
+
 def _render_pending_entries(self) -> None:
     _render_shell_pending_entries(self)
+
 
 def _render_entry(self, entry: TranscriptEntry):
     return _render_shell_entry(self, entry)
 
+
 def _growth_panel_lines(self, session, continuity, provider, growth) -> tuple[str, ...]:
     return _shell_growth_panel_lines(self, session, continuity, provider, growth)
+
 
 def _recent_activity_lines(self, session, continuity, provider) -> tuple[str, ...]:
     return _shell_recent_activity_lines(self, session, continuity, provider)
 
+
 def _recent_experience_lines(self, experiences: tuple[ExperienceRecord, ...]) -> tuple[str, ...]:
     return _shell_recent_experience_lines(experiences)
+
 
 def _displayable_experiences(self, experiences: tuple[ExperienceRecord, ...]) -> tuple[ExperienceRecord, ...]:
     return _displayable_shell_experiences(experiences)
 
+
 def _should_display_experience(self, experience: ExperienceRecord) -> bool:
     return _should_display_shell_experience(experience)
+
 
 def _format_experience_status(self, experience: ExperienceRecord) -> str:
     return _format_shell_experience_status(experience)
 
+
 def _growth_progress_counts(self, growth, *, width: int = GROWTH_PROGRESS_WIDTH) -> tuple[int, int]:
     return _shell_growth_progress_counts(growth, width=width)
+
 
 def _growth_progress_bar(self, growth, *, width: int = GROWTH_PROGRESS_WIDTH) -> str:
     return _shell_growth_progress_bar(growth, width=width)
 
+
 def _styled_growth_progress_bar(self, growth, *, width: int = GROWTH_PROGRESS_WIDTH):
     return _styled_shell_growth_progress_bar(growth, width=width)
+
 
 def _render_chat_entry(self, entry: TranscriptEntry, *, accent: str):
     return _render_shell_chat_entry(self, entry, accent=accent)
 
+
 def _history_row_width(self) -> int:
     return max(24, len(self._composer_divider()))
 
+
 def _queue_preview_row_width(self) -> int:
     return max(16, self._history_row_width() - (QUEUE_PREVIEW_INSET * 2))
+
 
 def _pad_history_line(self, content: str) -> str:
     display_width = _display_width(content)
@@ -581,6 +576,7 @@ def _pad_history_line(self, content: str) -> str:
         return content
     return content + (" " * (width - display_width))
 
+
 def _pad_queue_preview_line(self, content: str) -> str:
     display_width = _display_width(content)
     width = self._queue_preview_row_width()
@@ -588,11 +584,14 @@ def _pad_queue_preview_line(self, content: str) -> str:
         return content
     return content + (" " * (width - display_width))
 
+
 def _center_brand_block(self, renderable):
     return _center_shell_brand_block(renderable)
 
+
 def _render_growth_mark(self, stage_id: str, *, level: int | None = None):
     return _render_shell_growth_mark(stage_id, level=level)
+
 
 def _render_elephant_mark(self):
     return _render_shell_elephant_mark()

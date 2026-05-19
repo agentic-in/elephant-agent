@@ -29,7 +29,9 @@ class ShellClipboardTest(unittest.TestCase):
         self.assertEqual(attachment.display_label, "[Pasted Content 10 chars]")
         self.assertEqual(attachment.prompt_fragment, "[Clipboard text]\nalpha\nbeta")
 
-    def test_build_path_attachment_uses_filename_but_preserves_absolute_path(self) -> None:
+    def test_build_path_attachment_uses_filename_but_preserves_absolute_path(
+        self,
+    ) -> None:
         attachment = build_path_attachment("./notes/design.md")
 
         self.assertIsNotNone(attachment)
@@ -40,7 +42,9 @@ class ShellClipboardTest(unittest.TestCase):
         self.assertIn("design.md", attachment.prompt_fragment)
         self.assertTrue(Path(attachment.prompt_fragment.split(":", 1)[1]).is_absolute())
 
-    def test_compile_submission_keeps_visible_summary_separate_from_full_prompt(self) -> None:
+    def test_compile_submission_keeps_visible_summary_separate_from_full_prompt(
+        self,
+    ) -> None:
         text_attachment = build_text_attachment("full copied text payload")
         file_attachment = build_path_attachment("./notes/design.md")
         assert text_attachment is not None
@@ -61,7 +65,9 @@ class ShellClipboardTest(unittest.TestCase):
         self.assertEqual(submission.event_payload["message"], submission.display_command)
         self.assertIn("full copied text payload", submission.event_payload["message"])
 
-    def test_compile_submission_ignores_clipboard_attachments_for_slash_commands(self) -> None:
+    def test_compile_submission_ignores_clipboard_attachments_for_slash_commands(
+        self,
+    ) -> None:
         attachment = build_text_attachment("keep out of slash command")
         assert attachment is not None
 

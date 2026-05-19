@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from .discord_support import *  # noqa: F401,F403
-from .discord_transport import DiscordPyDeliveryTransport
 from .discord_service import DiscordGatewayService
 
-def register_discord_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+
+def register_discord_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     registry.register_service(
         "discord",
         factory=lambda app, **kwargs: DiscordGatewayService(app=app, **kwargs),

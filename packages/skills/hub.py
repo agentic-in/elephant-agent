@@ -16,7 +16,12 @@ from packages.runtime_layout import (
     default_installed_skills_dir,
 )
 
-from .runtime import SkillDefinition, SkillDependency, SkillScope, load_skill_package_definition
+from .runtime import (
+    SkillDefinition,
+    SkillDependency,
+    SkillScope,
+    load_skill_package_definition,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,8 +265,20 @@ def default_skill_hub_sources(
 def elephant_operator_skill_sources(*, install_root: Path | None = None) -> tuple[SkillHubSource, ...]:
     sources = [
         SkillHubSource("builtin", "Built In", builtin_elephant_skill_source_root()),
-        SkillHubSource("elephant-installed", "Elephant Agent Installed", default_installed_elephant_skill_source_root() if install_root is None else default_installed_skills_dir(install_root=install_root)),
-        SkillHubSource("elephant-authored", "Elephant Agent Authored", default_authored_elephant_skill_source_root() if install_root is None else default_authored_skills_dir(install_root=install_root)),
+        SkillHubSource(
+            "elephant-installed",
+            "Elephant Agent Installed",
+            default_installed_elephant_skill_source_root()
+            if install_root is None
+            else default_installed_skills_dir(install_root=install_root),
+        ),
+        SkillHubSource(
+            "elephant-authored",
+            "Elephant Agent Authored",
+            default_authored_elephant_skill_source_root()
+            if install_root is None
+            else default_authored_skills_dir(install_root=install_root),
+        ),
     ]
     return tuple(source for source in sources if source.root.exists())
 
@@ -387,7 +404,10 @@ def catalog_entry_from_definition(definition: SkillDefinition, *, source: SkillH
     category = "/".join(relative_parts[:-1]).strip("/") if len(relative_parts) > 1 else ""
     if category:
         metadata.setdefault("category", category)
-    metadata.setdefault("slash_command", _skill_command_slug(definition.skill_id or definition.display_name))
+    metadata.setdefault(
+        "slash_command",
+        _skill_command_slug(definition.skill_id or definition.display_name),
+    )
     storage_tier = _storage_tier_for_source(source.source_id)
     metadata.setdefault("storage_tier", storage_tier)
     is_builtin = source.source_id == "builtin" or source_kind == "elephant-builtin"
@@ -396,7 +416,10 @@ def catalog_entry_from_definition(definition: SkillDefinition, *, source: SkillH
         default=True if is_builtin else definition.enabled,
     )
     metadata.setdefault("default_enabled", default_enabled)
-    prompt_index_default = is_builtin or source.source_id in {"elephant-installed", "elephant-authored"}
+    prompt_index_default = is_builtin or source.source_id in {
+        "elephant-installed",
+        "elephant-authored",
+    }
     visibility = SkillCatalogVisibility(
         include_in_hub=_metadata_bool(metadata.get("include_in_hub"), default=True),
         include_in_prompt_index=_metadata_bool(metadata.get("include_in_prompt_index"), default=prompt_index_default),
@@ -424,7 +447,9 @@ def catalog_entry_from_definition(definition: SkillDefinition, *, source: SkillH
     )
 
 
-def _custom_skill_sources_from_paths(paths: Sequence[Path]) -> tuple[SkillHubSource, ...]:
+def _custom_skill_sources_from_paths(
+    paths: Sequence[Path],
+) -> tuple[SkillHubSource, ...]:
     sources: list[SkillHubSource] = []
     seen_roots: set[Path] = set()
     for index, path in enumerate(paths, start=1):
@@ -478,7 +503,9 @@ def _iter_skill_entry_paths(root: Path) -> tuple[Path, ...]:
     return tuple(entries)
 
 
-def _external_skill_sources_from_paths(paths: Sequence[str | Path]) -> tuple[SkillHubSource, ...]:
+def _external_skill_sources_from_paths(
+    paths: Sequence[str | Path],
+) -> tuple[SkillHubSource, ...]:
     sources: list[SkillHubSource] = []
     seen_roots: set[Path] = set()
     seen_ids: set[str] = set()
@@ -526,12 +553,16 @@ def _append_elephant_skill_sources(
         SkillHubSource(
             "elephant-installed",
             "Elephant Agent Installed",
-            default_installed_elephant_skill_source_root() if install_root is None else default_installed_skills_dir(install_root=install_root),
+            default_installed_elephant_skill_source_root()
+            if install_root is None
+            else default_installed_skills_dir(install_root=install_root),
         ),
         SkillHubSource(
             "elephant-authored",
             "Elephant Agent Authored",
-            default_authored_elephant_skill_source_root() if install_root is None else default_authored_skills_dir(install_root=install_root),
+            default_authored_elephant_skill_source_root()
+            if install_root is None
+            else default_authored_skills_dir(install_root=install_root),
         ),
     )
     for source in elephant_sources:
@@ -543,7 +574,9 @@ def _append_elephant_skill_sources(
     return tuple(resolved)
 
 
-def _prepend_builtin_source(sources: tuple[SkillHubSource, ...]) -> tuple[SkillHubSource, ...]:
+def _prepend_builtin_source(
+    sources: tuple[SkillHubSource, ...],
+) -> tuple[SkillHubSource, ...]:
     builtin_root = builtin_elephant_skill_source_root()
     resolved = list(sources)
     if not builtin_root.exists():

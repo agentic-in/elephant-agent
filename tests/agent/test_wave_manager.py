@@ -50,7 +50,11 @@ class WaveManagerTests(unittest.TestCase):
         self.assertEqual(
             MODULE.parse_worktree_records(output),
             [
-                {"worktree": "/tmp/elephant", "HEAD": "abc123", "branch": "refs/heads/main"},
+                {
+                    "worktree": "/tmp/elephant",
+                    "HEAD": "abc123",
+                    "branch": "refs/heads/main",
+                },
                 {
                     "worktree": "/tmp/elephant/.worktrees/fnd-1",
                     "HEAD": "def456",

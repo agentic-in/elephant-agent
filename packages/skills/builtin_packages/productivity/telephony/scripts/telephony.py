@@ -78,7 +78,6 @@ except ImportError:
         _load_state,
         _mask_phone,
         _normalize_phone,
-        _parse_twilio_date,
         _save_state,
         _state_path,
         TelephonyError,
@@ -88,6 +87,8 @@ TWILIO_API_BASE = "https://api.twilio.com/2010-04-01/Accounts"
 VAPI_API_BASE = "https://api.vapi.ai"
 BLAND_API_BASE = "https://api.bland.ai/v1"
 TWILIO_DEFAULT_TTS_VOICE = "Polly.Joanna"
+
+
 @dataclass
 class OwnedTwilioNumber:
     sid: str
@@ -313,7 +314,7 @@ def _twilio_set_default(identifier: str, *, save_env: bool = False) -> dict[str,
 
 
 def _twiml_say(message: str, voice: str) -> str:
-    return f"<Response><Say voice=\"{xml_escape(voice)}\">{xml_escape(message)}</Say></Response>"
+    return f'<Response><Say voice="{xml_escape(voice)}">{xml_escape(message)}</Say></Response>'
 
 
 def _twiml_play(audio_url: str) -> str:
@@ -491,9 +492,7 @@ def _vapi_import_twilio_number(
 ) -> dict[str, Any]:
     api_key = _vapi_api_key()
     if not api_key:
-        raise TelephonyError(
-            "Vapi is not configured. Use 'save-vapi' or set VAPI_API_KEY in ~/.elephant/.env first."
-        )
+        raise TelephonyError("Vapi is not configured. Use 'save-vapi' or set VAPI_API_KEY in ~/.elephant/.env first.")
     owned = _resolve_twilio_number(phone_identifier)
     sid, token = _twilio_creds()
     payload = _json_request(
@@ -538,9 +537,7 @@ def _bland_call(
 ) -> dict[str, Any]:
     api_key = _bland_api_key()
     if not api_key:
-        raise TelephonyError(
-            "Bland.ai is not configured. Use 'save-bland' or set BLAND_API_KEY in ~/.elephant/.env."
-        )
+        raise TelephonyError("Bland.ai is not configured. Use 'save-bland' or set BLAND_API_KEY in ~/.elephant/.env.")
     normalized = _normalize_phone(phone_number)
     if voice is None:
         voice = _env_or_config(
@@ -616,9 +613,7 @@ def _vapi_call(
 ) -> dict[str, Any]:
     api_key = _vapi_api_key()
     if not api_key:
-        raise TelephonyError(
-            "Vapi is not configured. Use 'save-vapi' or set VAPI_API_KEY in ~/.elephant/.env."
-        )
+        raise TelephonyError("Vapi is not configured. Use 'save-vapi' or set VAPI_API_KEY in ~/.elephant/.env.")
     phone_number_id = _vapi_phone_number_id()
     if not phone_number_id:
         raise TelephonyError(
@@ -763,7 +758,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--media-url", action="append", default=[])
     p.add_argument("--from-number", default="")
 
-    p = sub.add_parser("twilio-inbox", help="Poll inbound SMS for the default or specified Twilio number")
+    p = sub.add_parser(
+        "twilio-inbox",
+        help="Poll inbound SMS for the default or specified Twilio number",
+    )
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--since-last", action="store_true")
     p.add_argument("--mark-seen", action="store_true")
@@ -794,7 +792,12 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     if cmd == "diagnose":
         return diagnose()
     if cmd == "save-twilio":
-        return save_twilio(args.account_sid, args.auth_token, phone_number=args.phone_number, phone_sid=args.phone_sid)
+        return save_twilio(
+            args.account_sid,
+            args.auth_token,
+            phone_number=args.phone_number,
+            phone_sid=args.phone_sid,
+        )
     if cmd == "save-bland":
         return save_bland(args.api_key, voice=args.voice)
     if cmd == "save-vapi":
@@ -894,7 +897,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     except TelephonyError as exc:
-        print(json.dumps({"success": False, "error": str(exc)}, indent=2, ensure_ascii=False), file=sys.stderr)
+        print(
+            json.dumps({"success": False, "error": str(exc)}, indent=2, ensure_ascii=False),
+            file=sys.stderr,
+        )
         return 1
 
 

@@ -2,32 +2,11 @@
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
-from difflib import unified_diff
-import os
-from pathlib import Path
-import re
-import shlex
 import threading
 import time
 
-from packages.contracts import ExperienceRecord
 from packages.growth import ProgressionProjectionBuilder
-from packages.kernel.runtime import KernelOutcome
 from packages.state.governance import companion_display_name
-from packages.operator.runtime import (
-    RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
-    build_recall_evidence_operator_surface,
-    build_profile_operator_surface,
-    render_recall_evidence_lines,
-    render_profile_lines,
-)
-from packages.tools.handler_support import resolve_allowed_path
-from .provider_flow import provider_setup_defaults, run_provider_selection_wizard
-from .runtime import CliRuntime
-from .wizard import WIZARD_BACK
 from .shell_composer import (
     build_command_palette as _build_shell_command_palette,
     build_composer_body as _build_shell_composer_body,
@@ -44,64 +23,21 @@ from .shell_composer import (
     read_command as _read_shell_command,
     shell_history as _shell_history,
 )
-from .shell_boot import WAKE_DISPLAY_SECONDS, BootFrameContext, render_boot_frame
 from .shell_opening import (
     ShellOpeningContext,
     compose_shell_opening_instruction,
     compose_shell_opener,
 )
-from .shell_progress import (
-    animations_enabled as _shell_animations_enabled,
-    render_queued_followup_fragments as _render_shell_queued_followup_fragments,
-    render_tool_frame as _render_shell_tool_frame,
-    tool_trace_line as _shell_tool_trace_line,
-    render_turn_frame as _render_shell_turn_frame,
-    render_turn_progress_fragments as _render_shell_turn_progress_fragments,
-    run_tool_with_progress as _run_shell_tool_with_progress,
-    run_turn_with_progress as _run_shell_turn_with_progress,
-    run_turn_with_queued_input as _run_shell_turn_with_queued_input,
-    summarize_progress_prompt as _summarize_shell_progress_prompt,
-    tool_event_lines as _shell_tool_event_lines,
-    tool_event_summary as _shell_tool_event_summary,
-    tool_event_tracker as _shell_tool_event_tracker,
-    tool_frame_phases as _shell_tool_frame_phases,
-    turn_phase as _shell_turn_phase,
-    _tool_trace_emoji as _shell_tool_trace_emoji,
-)
 from .shell_render import (
-    center_brand_block as _center_shell_brand_block,
-    displayable_experiences as _displayable_shell_experiences,
-    format_experience_status as _format_shell_experience_status,
-    growth_panel_lines as _shell_growth_panel_lines,
-    growth_progress_bar as _shell_growth_progress_bar,
-    growth_progress_counts as _shell_growth_progress_counts,
-    recent_activity_lines as _shell_recent_activity_lines,
-    recent_experience_lines as _shell_recent_experience_lines,
     render_brand_column as _render_shell_brand_column,
-    render_chat_entry as _render_shell_chat_entry,
-    render_entry as _render_shell_entry,
-    render_elephant_brand_mark as _render_shell_elephant_mark,
-    render_growth_mark_for_stage as _render_shell_growth_mark,
-    render_pending_entries as _render_shell_pending_entries,
     render_shell_frame as _render_shell_frame_view,
     render_status_column as _render_shell_status_column,
-    should_display_experience as _should_display_shell_experience,
-    styled_growth_progress_bar as _styled_shell_growth_progress_bar,
 )
 from .shell_stack import (
-    Align,
-    Completion,
-    Completer,
     Console,
     Document,
-    FormattedText,
-    Group,
-    Live,
     PROMPT_TOOLKIT_AVAILABLE,
-    Panel,
     RICH_AVAILABLE,
-    Table,
-    Text,
 )
 from .shell_ui import (
     BRAND_ACCENT,
@@ -117,20 +53,16 @@ from .shell_ui import (
     GROWTH_PROGRESS_WIDTH,
     HATCHLING_HEAD_ROWS,
     HATCHLING_STAGE_ROWS,
-    HATCHLING_STAGE_ROWS,
     QUEUE_PREVIEW_INSET,
     SCOUT_STAGE_ROWS,
     SEED_STAGE_ROWS,
     SHELL_WELCOME_HEADLINE,
     USER_HISTORY_BG,
     USER_HISTORY_FG,
-    WEB_URL_PATTERN,
     compact_line as _compact_line,
     centered_elephant_rows as _centered_elephant_rows,
-    display_path as _display_path,
     display_width as _display_width,
     render_elephant_mark,
-    resolve_elephant_version as _resolve_elephant_version,
 )
 
 __all__ = [
@@ -167,13 +99,15 @@ __all__ = [
 ]
 
 
-
 from .shell_support_runtime import *  # noqa: F401,F403
 
 
 def _first_language_from_runtime(runtime, profile) -> str:
     try:
-        from packages.runtime_config import global_config_path_for_state_dir, load_global_config
+        from packages.runtime_config import (
+            global_config_path_for_state_dir,
+            load_global_config,
+        )
 
         config_path = global_config_path_for_state_dir(runtime.paths.state_dir)
         config = load_global_config(config_path, state_dir=runtime.paths.state_dir)
@@ -195,26 +129,34 @@ def _next_command(self) -> PendingShellCommand:
         return self._pending_commands.popleft()
     return coerce_pending_shell_command(self._read_command())
 
+
 def _prompt_toolkit_composer_available(self) -> bool:
     return _shell_prompt_toolkit_composer_available(self)
+
 
 def _shell_history(self):
     return _shell_history(self)
 
+
 def _build_prompt_buffer(self):
     return _build_shell_prompt_buffer(self)
+
 
 def _build_input_window(self, buffer):
     return _build_shell_input_window(self, buffer)
 
+
 def _build_command_palette(self):
     return _build_shell_command_palette(self)
+
 
 def _build_queue_preview_window(self):
     return _build_shell_queue_preview_window(self)
 
+
 def _build_divider_window(self):
     return _build_shell_divider_window(self)
+
 
 def _build_composer_body(
     self,
@@ -232,8 +174,10 @@ def _build_composer_body(
         buffer=buffer,
     )
 
+
 def _read_command(self) -> object:
     return _read_shell_command(self)
+
 
 def personality_preset_choices(self) -> tuple[tuple[str, str], ...]:
     return tuple(
@@ -242,20 +186,26 @@ def personality_preset_choices(self) -> tuple[tuple[str, str], ...]:
         if preset.preset_id != "custom"
     )
 
+
 def _prompt_label(self) -> str:
     return _shell_prompt_label(self)
+
 
 def _prompt_continuation(self):
     return _shell_prompt_continuation()
 
+
 def _prompt_style(self):
     return _shell_prompt_style()
+
 
 def _prompt_style_map(self) -> dict[str, str]:
     return _shell_prompt_style_map()
 
+
 def _build_key_bindings(self, *, submit=None, allow_exit: bool = True) -> KeyBindings:
     return _build_shell_key_bindings(self, submit=submit, allow_exit=allow_exit)
+
 
 def _composer_divider(self) -> str:
     try:
@@ -269,6 +219,7 @@ def _composer_divider(self) -> str:
     self._composer_divider_cache = (width, divider)
     return divider
 
+
 def _format_status_tokens(self, value: int | None) -> str:
     if value is None or value <= 0:
         return "--"
@@ -280,6 +231,7 @@ def _format_status_tokens(self, value: int | None) -> str:
         return f"{whole}K"
     return str(value)
 
+
 def _status_bar_context_style(self, percent_used: int | None) -> str:
     if percent_used is None:
         return "class:status-bar-muted"
@@ -288,6 +240,7 @@ def _status_bar_context_style(self, percent_used: int | None) -> str:
     if percent_used > 80:
         return "class:status-bar-warn"
     return "class:status-bar-good"
+
 
 _STATUS_BAR_PROGRESS_FILLED = "█"
 _STATUS_BAR_PROGRESS_EMPTY = "░"
@@ -326,6 +279,7 @@ def _build_growth_bar_fragments(self, growth, *, width: int = 12) -> list[tuple[
         fragments.append(("class:status-bar-growth-empty", _STATUS_BAR_PROGRESS_EMPTY * empty))
     fragments.append(("class:status-bar-growth-bracket", "]"))
     return fragments
+
 
 def _status_bar_elapsed_fragments(elapsed_seconds: int, *, streaming_active: bool = False) -> list[tuple[str, str]]:
     fragments: list[tuple[str, str]] = [("class:status-bar-muted", f"{elapsed_seconds}s")]
@@ -613,6 +567,7 @@ def _status_bar_snapshot(self) -> dict[str, object]:
     self._status_bar_snapshot_cache = (now, snapshot, active_turn)
     return snapshot
 
+
 def _status_bar_fragments(self):
     snapshot = self._status_bar_snapshot()
     growth = _status_bar_growth(self)
@@ -639,26 +594,35 @@ def _status_bar_fragments(self):
         phase_style, phase_label = phase_indicator
         fragments.append(("class:status-bar-sep", " · "))
         fragments.append((phase_style, phase_label))
-    fragments.extend([
-        ("class:status-bar-sep", " │ "),
-        ("class:status-bar-model", str(snapshot["model_short"])),
-        ("class:status-bar-sep", " │ "),
-        ("class:status-bar-muted", f"{context_used}/{context_limit}"),
-        ("class:status-bar-sep", " "),
-        (percent_style, self._build_context_ring(percent if isinstance(percent, int) else None)),
-        ("class:status-bar-sep", " "),
-        (percent_style, percent_label),
-        ("class:status-bar-sep", " │ "),
-        *_status_bar_elapsed_fragments(elapsed_seconds, streaming_active=streaming_active),
-        ("class:status-bar-sep", " │ "),
-        ("class:status-bar-level", growth.cycle_label),
-        ("class:status-bar-sep", " "),
-        *self._build_growth_bar_fragments(growth),
-        ("class:status-bar-sep", " "),
-        ("class:status-bar-level", f"checkpoint {growth.level} · {growth.progress_percent}%"),
-    ])
+    fragments.extend(
+        [
+            ("class:status-bar-sep", " │ "),
+            ("class:status-bar-model", str(snapshot["model_short"])),
+            ("class:status-bar-sep", " │ "),
+            ("class:status-bar-muted", f"{context_used}/{context_limit}"),
+            ("class:status-bar-sep", " "),
+            (
+                percent_style,
+                self._build_context_ring(percent if isinstance(percent, int) else None),
+            ),
+            ("class:status-bar-sep", " "),
+            (percent_style, percent_label),
+            ("class:status-bar-sep", " │ "),
+            *_status_bar_elapsed_fragments(elapsed_seconds, streaming_active=streaming_active),
+            ("class:status-bar-sep", " │ "),
+            ("class:status-bar-level", growth.cycle_label),
+            ("class:status-bar-sep", " "),
+            *self._build_growth_bar_fragments(growth),
+            ("class:status-bar-sep", " "),
+            (
+                "class:status-bar-level",
+                f"checkpoint {growth.level} · {growth.progress_percent}%",
+            ),
+        ]
+    )
     fragments.append(("class:status-bar-edge", " "))
     return fragments
+
 
 def _clear_composer(self, command: str) -> None:
     if PROMPT_TOOLKIT_AVAILABLE:
@@ -671,6 +635,7 @@ def _clear_composer(self, command: str) -> None:
     for _ in range(logical_lines):
         stream.write("\x1b[1A\r\x1b[2K")
     stream.flush()
+
 
 def _enqueue_followup_command(self, raw_command: object) -> None:
     pending = coerce_pending_shell_command(raw_command)
@@ -685,26 +650,32 @@ def _enqueue_followup_command(self, raw_command: object) -> None:
         )
     )
 
+
 def _is_startup_conversational_command(self, raw_command: str) -> bool:
     command = raw_command.strip()
     return bool(command) and not command.startswith("/")
 
+
 def _startup_state_focus_dispatch_ready(self) -> bool:
     return True
+
 
 def _startup_should_hold_user_command(self, raw_command: str) -> bool:
     if not self._is_startup_conversational_command(raw_command):
         return False
     return not self._startup_transcript_primed
 
+
 def _mark_startup_user_turn_submitted(self, raw_command: str) -> None:
     if self._is_startup_conversational_command(raw_command):
         self._startup_user_turn_submitted = True
+
 
 def _startup_should_surface_state_focus_notices(self) -> bool:
     if not self._startup_surface_prepared or not self._state_focus_runtime_ready_seen:
         return True
     return not self._startup_transcript_primed
+
 
 def _set_state_focus_runtime_notice(self, title: str, body: str) -> None:
     """Replace the live startup notice with a single (title, body) slot.
@@ -718,9 +689,11 @@ def _set_state_focus_runtime_notice(self, title: str, body: str) -> None:
         return
     self._state_focus_runtime_notices = [notice]
 
+
 def _clear_state_focus_runtime_notice(self) -> None:
     if self._state_focus_runtime_notices:
         self._state_focus_runtime_notices = []
+
 
 def _sync_state_focus_runtime_notices(self) -> None:
     status = self.runtime.state_focus_runtime_status()
@@ -768,6 +741,7 @@ def _sync_state_focus_runtime_notices(self) -> None:
         self._state_focus_runtime_ready_seen = True
         self._state_focus_runtime_ready_seen_at = time.monotonic()
 
+
 def _prepare_startup_surface(self) -> None:
     self._sync_state_focus_runtime_notices()
     if self._startup_surface_prepared or self._startup_surface_prepare_started:
@@ -788,6 +762,7 @@ def _prepare_startup_surface(self) -> None:
         daemon=True,
     ).start()
 
+
 def _prime_startup_transcript_if_needed(self) -> None:
     if self._startup_transcript_primed:
         self._sync_state_focus_runtime_notices()
@@ -795,6 +770,7 @@ def _prime_startup_transcript_if_needed(self) -> None:
     self._prime_transcript()
     self._startup_transcript_primed = True
     self._sync_state_focus_runtime_notices()
+
 
 def _prime_transcript(self, *, use_proactive_opening: bool = True) -> None:
     session = self.runtime.inspect_session(self.session_id)
@@ -826,7 +802,11 @@ def _prime_transcript(self, *, use_proactive_opening: bool = True) -> None:
             )
         except Exception as error:
             if self.debug:
-                self._append_entry("notice", "Startup prompt", f"fallback to local opener\nreason: {error}")
+                self._append_entry(
+                    "notice",
+                    "Startup prompt",
+                    f"fallback to local opener\nreason: {error}",
+                )
     if startup_outcome is not None and startup_outcome.execution.summary.strip():
         self._append_entry("assistant", assistant_name, startup_outcome.execution.summary.strip())
     else:
@@ -858,6 +838,7 @@ def _prime_transcript(self, *, use_proactive_opening: bool = True) -> None:
         )
     self._startup_transcript_primed = True
 
+
 def _assistant_name(self) -> str:
     session = self.runtime.inspect_session(self.session_id)
     state = self.runtime.state_for_elephant(session.elephant_id or "") if session.elephant_id else None
@@ -868,14 +849,18 @@ def _assistant_name(self) -> str:
         return identity.display_name.strip()
     return "Elephant Agent"
 
+
 def _append_assistant_surface_reply(self, body: str, *, meta: str = "") -> None:
     self._append_entry("assistant", self._assistant_name(), body, meta=meta)
+
 
 def _render_shell_frame(self):
     return _render_shell_frame_view(self)
 
+
 def _render_brand_column(self, session, continuity, provider, growth):
     return _render_shell_brand_column(self, session, continuity, provider, growth)
+
 
 def _render_status_column(self, session, continuity, context_frame, provider, growth):
     return _render_shell_status_column(self, session, continuity, context_frame, provider, growth)

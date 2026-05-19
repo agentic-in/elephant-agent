@@ -33,7 +33,9 @@ def _episode(
 
 
 class ContinuityRuntimeTests(unittest.TestCase):
-    def test_build_episode_continuity_state_inherits_ancestor_interruption(self) -> None:
+    def test_build_episode_continuity_state_inherits_ancestor_interruption(
+        self,
+    ) -> None:
         parent = _episode("root", interruption_state="Need to finish the plan")
         child = _episode("child", parent_episode_id="root")
 
@@ -48,7 +50,9 @@ class ContinuityRuntimeTests(unittest.TestCase):
         self.assertEqual(continuity.inherited_interruption_state, "Need to finish the plan")
         self.assertNotIn("current-work item", continuity.summary)
 
-    def test_build_episode_continuity_state_normalizes_generated_resume_text(self) -> None:
+    def test_build_episode_continuity_state_normalizes_generated_resume_text(
+        self,
+    ) -> None:
         episode = _episode(
             "child",
             parent_episode_id="root",
@@ -63,7 +67,9 @@ class ContinuityRuntimeTests(unittest.TestCase):
         self.assertEqual(continuity.mode, "background")
         self.assertEqual(continuity.inherited_interruption_state, "Recover the thread")
 
-    def test_apply_episode_continuity_state_restores_inherited_interruption_when_needed(self) -> None:
+    def test_apply_episode_continuity_state_restores_inherited_interruption_when_needed(
+        self,
+    ) -> None:
         parent = _episode("root", interruption_state="Return to the design review")
         child = _episode("child", parent_episode_id="root")
         continuity = build_episode_continuity_state(child, lineage=(parent, child))

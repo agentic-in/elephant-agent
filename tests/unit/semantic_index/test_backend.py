@@ -42,7 +42,10 @@ class SQLiteVecSemanticIndexTest(unittest.TestCase):
             deleted = restarted.delete(SemanticIndexDeleteRequest(("entry-alpha",), dimensions=4))
             remaining = restarted.search(SemanticIndexVectorQuery(4, (1.0, 0.0, 0.0, 0.0), limit=2))
 
-        self.assertEqual(tuple(match.semantic_index_entry_id for match in matches), ("entry-alpha", "entry-beta"))
+        self.assertEqual(
+            tuple(match.semantic_index_entry_id for match in matches),
+            ("entry-alpha", "entry-beta"),
+        )
         self.assertEqual(matches[0].distance, 0.0)
         self.assertEqual(deleted.accepted, 1)
         self.assertEqual(tuple(match.semantic_index_entry_id for match in remaining), ("entry-beta",))

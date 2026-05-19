@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +12,9 @@ from apps.cli.runtime import CliRuntime
 
 
 class CliRuntimeLearningTest(unittest.TestCase):
-    def test_schedule_learning_for_session_enqueues_job_and_surfaces_status(self) -> None:
+    def test_schedule_learning_for_session_enqueues_job_and_surfaces_status(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
             state_dir = root / "state"
@@ -38,7 +39,10 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 mode="companion",
             )
 
-            with mock.patch("apps.learning_worker_runtime.ensure_learning_worker_running", return_value=True) as ensure_worker:
+            with mock.patch(
+                "apps.learning_worker_runtime.ensure_learning_worker_running",
+                return_value=True,
+            ) as ensure_worker:
                 job = runtime.schedule_learning_for_session(
                     session_id=session.episode_id,
                     trigger="clear",
@@ -87,7 +91,10 @@ class CliRuntimeLearningTest(unittest.TestCase):
             runtime = CliRuntime.create(state_dir=state_dir)
             session = runtime.create_elephant(elephant_id="atlas")
 
-            with mock.patch("apps.learning_worker_runtime.ensure_learning_worker_running", return_value=True) as ensure_worker:
+            with mock.patch(
+                "apps.learning_worker_runtime.ensure_learning_worker_running",
+                return_value=True,
+            ) as ensure_worker:
                 run_exit = cli_main_impl._run_learn(
                     runtime,
                     SimpleNamespace(learn_command="run", elephant_id="atlas", limit=12, wait=False),
@@ -96,7 +103,14 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 runtime,
                 SimpleNamespace(learn_command="list", elephant_id="atlas", limit=12),
             )
-            with mock.patch("apps.learning_worker_runtime.stop_learning_worker", return_value={"status": "stopped", "stopped_pid": None, "signal_sent": False}) as stop_worker:
+            with mock.patch(
+                "apps.learning_worker_runtime.stop_learning_worker",
+                return_value={
+                    "status": "stopped",
+                    "stopped_pid": None,
+                    "signal_sent": False,
+                },
+            ) as stop_worker:
                 kill_exit = cli_main_impl._run_learn(
                     runtime,
                     SimpleNamespace(learn_command="kill", elephant_id=None, limit=12),
@@ -106,12 +120,17 @@ class CliRuntimeLearningTest(unittest.TestCase):
             self.assertEqual(list_exit, 0)
             self.assertEqual(kill_exit, 0)
             ensure_worker.assert_called_once()
-            stop_worker.assert_called_once_with(state_dir=runtime.paths.state_dir, reason="operator requested learn kill")
+            stop_worker.assert_called_once_with(
+                state_dir=runtime.paths.state_dir,
+                reason="operator requested learn kill",
+            )
             jobs = runtime.repository.list_learning_jobs(episode_id=session.episode_id)
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0].trigger, "manual")
 
-    def test_learn_run_wait_uses_subprocess_once_without_starting_background_worker(self) -> None:
+    def test_learn_run_wait_uses_subprocess_once_without_starting_background_worker(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             state_dir = Path(tempdir) / "state"
             state_dir.mkdir(parents=True, exist_ok=True)
@@ -119,18 +138,29 @@ class CliRuntimeLearningTest(unittest.TestCase):
             runtime.create_elephant(elephant_id="atlas")
 
             completed = SimpleNamespace(returncode=0)
-            with mock.patch("apps.learning_worker_runtime.ensure_learning_worker_running", return_value=True) as ensure_worker:
+            with mock.patch(
+                "apps.learning_worker_runtime.ensure_learning_worker_running",
+                return_value=True,
+            ) as ensure_worker:
                 with mock.patch.object(cli_main_impl.subprocess, "run", return_value=completed) as run_worker:
                     exit_code = cli_main_impl._run_learn(
                         runtime,
-                        SimpleNamespace(learn_command="run", elephant_id="atlas", limit=12, wait=True),
+                        SimpleNamespace(
+                            learn_command="run",
+                            elephant_id="atlas",
+                            limit=12,
+                            wait=True,
+                        ),
                     )
 
             self.assertEqual(exit_code, 0)
             ensure_worker.assert_not_called()
             run_worker.assert_called_once()
             command = run_worker.call_args.args[0]
-            self.assertEqual(command[:3], (cli_main_impl.sys.executable, "-m", "apps.learning_worker_command"))
+            self.assertEqual(
+                command[:3],
+                (cli_main_impl.sys.executable, "-m", "apps.learning_worker_command"),
+            )
             self.assertIn("--once", command)
             self.assertIn(str(runtime.paths.state_dir), command)
 
@@ -146,7 +176,12 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 with mock.patch("apps.learning_worker_runtime.mark_learning_job_terminal_failure") as mark_failed:
                     exit_code = cli_main_impl._run_learn(
                         runtime,
-                        SimpleNamespace(learn_command="run", elephant_id="atlas", limit=12, wait=True),
+                        SimpleNamespace(
+                            learn_command="run",
+                            elephant_id="atlas",
+                            limit=12,
+                            wait=True,
+                        ),
                     )
 
             self.assertEqual(exit_code, 139)
@@ -172,7 +207,9 @@ class CliRuntimeLearningTest(unittest.TestCase):
 
             ensure_worker.assert_not_called()
 
-    def test_learning_sub_agent_child_episode_history_is_preserved_after_job_completion(self) -> None:
+    def test_learning_sub_agent_child_episode_history_is_preserved_after_job_completion(
+        self,
+    ) -> None:
         from apps.learning_worker_runtime import run_learning_job
 
         with tempfile.TemporaryDirectory() as tempdir:
@@ -185,7 +222,9 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 reason="learning_child",
                 summary="learning child Episode opened",
             ).episode
-            job = runtime.schedule_learning_for_session(session_id=session.episode_id, trigger="manual", start_worker=False)
+            job = runtime.schedule_learning_for_session(
+                session_id=session.episode_id, trigger="manual", start_worker=False
+            )
             agent_result = SimpleNamespace(
                 status="completed",
                 summary="done",
@@ -193,7 +232,10 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 child_episode_id=child.episode_id,
             )
 
-            with mock.patch("apps.learning_agents.run_background_learning_agent", return_value=agent_result):
+            with mock.patch(
+                "apps.learning_agents.run_background_learning_agent",
+                return_value=agent_result,
+            ):
                 run_learning_job(runtime, job, worker_id="worker:test")
 
             self.assertIsNotNone(runtime.repository.load_episode(child.episode_id))
@@ -253,7 +295,10 @@ class CliRuntimeLearningTest(unittest.TestCase):
                     progress_detail="test completed one job",
                 )
 
-            with mock.patch("apps.learning_worker_runtime.run_learning_job", side_effect=complete_one):
+            with mock.patch(
+                "apps.learning_worker_runtime.run_learning_job",
+                side_effect=complete_one,
+            ):
                 exit_code = run_learning_worker(state_dir=state_dir, once=True)
 
             self.assertEqual(exit_code, 0)

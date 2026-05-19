@@ -2,73 +2,25 @@
 
 from __future__ import annotations
 import asyncio
-from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-import getpass
-import apps.cli.wizard as cli_wizard
-import importlib.util
+from argparse import ArgumentParser, Namespace
+from collections.abc import Mapping, Sequence
 import json
-import os
 from pathlib import Path
-import re
-import shlex
-import signal
-import subprocess
 import sys
 import time
 from wsgiref.simple_server import make_server
 
 import typer
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
-    render_elephant_mark,
-)
-from apps.provider_runtime import load_runtime_local_secret_env
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID
 
 from . import (
-    DEFAULT_DINGDING_CLIENT_ID_ENV,
-    DEFAULT_DINGDING_CLIENT_SECRET_ENV,
-    DEFAULT_DINGDING_ROBOT_CODE_ENV,
-    DEFAULT_DISCORD_BOT_TOKEN_ENV,
-    DEFAULT_FEISHU_APP_ID_ENV,
-    DEFAULT_FEISHU_APP_SECRET_ENV,
-    DEFAULT_FEISHU_EVENT_PATH,
-    DEFAULT_WECOM_BOT_ID_ENV,
-    DEFAULT_WECOM_SECRET_ENV,
-    FEISHU_ADAPTER_ID,
     GatewayHttpService,
-    GatewayManagedRuntime,
     GatewayManagedService,
-    SUPPORTED_DINGDING_TRANSPORTS,
-    SUPPORTED_DISCORD_TRANSPORTS,
-    SUPPORTED_FEISHU_TRANSPORTS,
-    SUPPORTED_WECOM_TRANSPORTS,
-    SUPPORTED_WEIXIN_TRANSPORTS,
-    WECOM_ADAPTER_ID,
-    build_gateway_app,
-    build_gateway_plugin_registry,
     create_gateway_web_app,
 )
-from .dingding import DINGTALK_STREAM_PIP_SPEC, DingdingGatewayService
-from .discord import DISCORD_PY_PIP_SPEC, DiscordGatewayService
-from .feishu import FEISHU_SDK_PIP_SPEC, FeishuGatewayService
+from .dingding import DingdingGatewayService
+from .discord import DiscordGatewayService
+from .feishu import FeishuGatewayService
 from .wecom import WecomGatewayService
 from .weixin import WeixinGatewayService
 
@@ -100,25 +52,7 @@ from .gateway_main_runtime import *  # noqa: F401,F403
 from .gateway_main_wizard import *  # noqa: F401,F403
 from .gateway_main_wizard import (
     GATEWAY_WIZARD_BACK,
-    _confirm_gateway_wizard_intro,
     _gateway_wizard_choice_prompt,
-    _gateway_wizard_dialogs_supported,
-    _gateway_wizard_secret_prompt,
-    _gateway_wizard_text_prompt,
-    _interactive_shell_supported,
-    _print_gateway_dingding_wizard_intro,
-    _print_gateway_discord_wizard_intro,
-    _print_gateway_feishu_wizard_intro,
-    _print_gateway_setup_paused,
-    _print_gateway_wecom_wizard_intro,
-    _print_gateway_weixin_wizard_intro,
-    _run_interactive_dingding_wizard,
-    _run_interactive_discord_wizard,
-    _run_interactive_feishu_wizard,
-    _run_interactive_wecom_wizard,
-    _run_interactive_weixin_wizard,
-    _shared_wizard_choice_prompt,
-    _shared_wizard_text_prompt,
 )
 
 
@@ -142,10 +76,7 @@ def _add_message_subparser(
     parser = parent_subparsers.add_parser(
         "message",
         parents=[common],
-        help=(
-            f"Send a one-off text message through the {adapter_label} gateway outbound queue "
-            f"(connectivity test)."
-        ),
+        help=(f"Send a one-off text message through the {adapter_label} gateway outbound queue (connectivity test)."),
     )
     _add_optional_account_argument(
         parser,
@@ -234,6 +165,7 @@ def _run_start(service: FeishuGatewayService, args: Namespace) -> int:
         service.stop_outbound_drain()
     return 0
 
+
 def _run_discord_start(service: DiscordGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
     service.prepare_managed_runtime(action="startup", target=transport)
@@ -249,6 +181,7 @@ def _run_discord_start(service: DiscordGatewayService, args: Namespace) -> int:
     asyncio.run(service.start_gateway(account_id=args.account_id))
     return 0
 
+
 def _run_dingding_start(service: DingdingGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
     service.prepare_managed_runtime(action="startup", target=transport)
@@ -263,6 +196,7 @@ def _run_dingding_start(service: DingdingGatewayService, args: Namespace) -> int
     print(f"DingDing account: {account_label}")
     asyncio.run(service.start_gateway(account_id=args.account_id))
     return 0
+
 
 def _run_weixin_start(service: WeixinGatewayService, args: Namespace) -> int:
     transport = _resolve_runtime_target_argument(args, service=service)
@@ -369,7 +303,6 @@ def _run_adapter_message(
     reach your chat, the problem is in the gateway; if it does, the problem is
     upstream (prompt, scheduler, model provider).
     """
-    import time
     from pathlib import Path
 
     from packages.gateway_core import (
@@ -471,6 +404,7 @@ def _run_wecom_start(service: WecomGatewayService, args: Namespace) -> int:
     asyncio.run(service.start_gateway(account_id=args.account_id))
     return 0
 
+
 def _start_wecom_runtime_after_setup(args: Namespace, *, transport: str) -> int:
     start_args = Namespace(**vars(args))
     start_args.runtime_target = transport or "configured"
@@ -516,10 +450,10 @@ def _start_via_daemon(args: Namespace) -> int:
         host = record.get("host", "0.0.0.0")
         port = record.get("port", 8900)
         print(f"Elephant daemon is already running (pid {pid}).")
-        print(f"All configured IM adapters are managed by the daemon.")
+        print("All configured IM adapters are managed by the daemon.")
         print(f"  HTTP: http://{host}:{port}/healthz")
-        print(f"  Stop: elephant daemon stop")
-        print(f"  Status: elephant daemon status")
+        print("  Stop: elephant daemon stop")
+        print("  Status: elephant daemon status")
         return 0
 
     # Start the daemon — use args.host/port if available, otherwise defaults
@@ -536,6 +470,7 @@ def _start_via_daemon(args: Namespace) -> int:
 def _resolve_daemon_http_addr(state_dir: Path) -> tuple[str, int]:
     """Resolve the daemon HTTP address from runtime record."""
     from apps.daemon_command import _load_record, _daemon_record_path
+
     record_path = _daemon_record_path(state_dir)
     record = _load_record(record_path) if record_path.exists() else {}
     record = record or {}
@@ -687,14 +622,12 @@ def _restart_via_daemon(args: Namespace) -> int:
         force=bool(getattr(args, "force", False)),
     )
 
+
 def _http_services(
     services: Mapping[str, object],
 ) -> dict[str, GatewayHttpService]:
-    return {
-        key: service
-        for key, service in services.items()
-        if isinstance(service, GatewayHttpService)
-    }
+    return {key: service for key, service in services.items() if isinstance(service, GatewayHttpService)}
+
 
 def _run_serve(args: Namespace) -> int:
     app, services = _build_services(args)
@@ -711,6 +644,7 @@ def _run_serve(args: Namespace) -> int:
             print(f"{key} event paths: {event_paths}")
         server.serve_forever()
     return 0
+
 
 def command_main(
     argv: Sequence[str] | None = None,
@@ -764,7 +698,6 @@ def command_main(
     )
     describe.set_defaults(command_action="describe_all")
 
-
     feishu = subparsers.add_parser("feishu", parents=[common], help="Manage Feishu accounts.")
     feishu.set_defaults(command_action="status", service_key="feishu")
     feishu_subparsers = feishu.add_subparsers(dest="feishu_command")
@@ -775,7 +708,11 @@ def command_main(
         help="Add or update a Feishu account.",
     )
     _add_feishu_add_options(feishu_setup)
-    feishu_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    feishu_setup.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Only save config, do not start the adapter after setup.",
+    )
     feishu_setup.set_defaults(command_action="add_feishu", service_key="feishu", auto_start=True)
 
     feishu_remove = feishu_subparsers.add_parser(
@@ -850,8 +787,7 @@ def command_main(
         service_key="feishu",
         adapter_label="feishu",
         conversation_description=(
-            "Feishu conversation id (chat_id / open_chat_id). Omit to fall back to the single "
-            "feishu elephant."
+            "Feishu conversation id (chat_id / open_chat_id). Omit to fall back to the single feishu elephant."
         ),
     )
 
@@ -865,7 +801,11 @@ def command_main(
         help="Add or update a Discord account.",
     )
     _add_discord_add_options(discord_setup)
-    discord_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    discord_setup.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Only save config, do not start the adapter after setup.",
+    )
     discord_setup.set_defaults(command_action="add_discord", service_key="discord", auto_start=True)
 
     discord_remove = discord_subparsers.add_parser(
@@ -939,9 +879,7 @@ def command_main(
         common=common,
         service_key="discord",
         adapter_label="discord",
-        conversation_description=(
-            "Discord channel id. Omit to fall back to the single discord elephant."
-        ),
+        conversation_description=("Discord channel id. Omit to fall back to the single discord elephant."),
     )
 
     dingding = subparsers.add_parser("dingding", parents=[common], help="Manage DingDing accounts.")
@@ -950,14 +888,20 @@ def command_main(
 
     dingding_setup = dingding_subparsers.add_parser("setup", parents=[common], help="Add or update a DingDing account.")
     _add_dingding_add_options(dingding_setup)
-    dingding_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    dingding_setup.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Only save config, do not start the adapter after setup.",
+    )
     dingding_setup.set_defaults(command_action="add_dingding", service_key="dingding", auto_start=True)
 
     dingding_remove = dingding_subparsers.add_parser("remove", parents=[common], help="Remove a DingDing account.")
     _add_required_account_argument(dingding_remove, help_text="DingDing account id to remove.")
     dingding_remove.set_defaults(command_action="remove_dingding", service_key="dingding")
 
-    dingding_start = dingding_subparsers.add_parser("start", parents=[common], help="Start all or one DingDing account.")
+    dingding_start = dingding_subparsers.add_parser(
+        "start", parents=[common], help="Start all or one DingDing account."
+    )
     _add_dingding_start_options(dingding_start)
     dingding_start.set_defaults(command_action="start", service_key="dingding")
 
@@ -969,7 +913,9 @@ def command_main(
     _add_dingding_stop_options(dingding_stop)
     dingding_stop.set_defaults(command_action="stop", service_key="dingding")
 
-    dingding_restart = dingding_subparsers.add_parser("restart", parents=[common], help="Restart all or one DingDing account.")
+    dingding_restart = dingding_subparsers.add_parser(
+        "restart", parents=[common], help="Restart all or one DingDing account."
+    )
     _add_dingding_restart_options(dingding_restart)
     dingding_restart.set_defaults(command_action="restart", service_key="dingding")
 
@@ -977,11 +923,18 @@ def command_main(
     _add_dingding_logs_options(dingding_logs)
     dingding_logs.set_defaults(command_action="logs", service_key="dingding")
 
-    dingding_describe = dingding_subparsers.add_parser("describe", parents=[common], help="Print resolved DingDing account wiring as JSON.")
+    dingding_describe = dingding_subparsers.add_parser(
+        "describe",
+        parents=[common],
+        help="Print resolved DingDing account wiring as JSON.",
+    )
     dingding_describe.set_defaults(command_action="describe", service_key="dingding")
 
     dingding_doctor = dingding_subparsers.add_parser("doctor", parents=[common], help="Check DingDing health.")
-    _add_optional_account_argument(dingding_doctor, help_text="DingDing account id. Omit to inspect all DingDing accounts.")
+    _add_optional_account_argument(
+        dingding_doctor,
+        help_text="DingDing account id. Omit to inspect all DingDing accounts.",
+    )
     dingding_doctor.set_defaults(command_action="doctor", service_key="dingding")
 
     weixin = subparsers.add_parser("weixin", parents=[common], help="Manage WeChat accounts.")
@@ -990,7 +943,11 @@ def command_main(
 
     weixin_setup = weixin_subparsers.add_parser("setup", parents=[common], help="Add or update a WeChat account.")
     _add_weixin_add_options(weixin_setup)
-    weixin_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    weixin_setup.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Only save config, do not start the adapter after setup.",
+    )
     weixin_setup.set_defaults(command_action="add_weixin", service_key="weixin", auto_start=True)
 
     weixin_remove = weixin_subparsers.add_parser("remove", parents=[common], help="Remove a WeChat account.")
@@ -1009,7 +966,9 @@ def command_main(
     _add_weixin_stop_options(weixin_stop)
     weixin_stop.set_defaults(command_action="stop", service_key="weixin")
 
-    weixin_restart = weixin_subparsers.add_parser("restart", parents=[common], help="Restart all or one WeChat account.")
+    weixin_restart = weixin_subparsers.add_parser(
+        "restart", parents=[common], help="Restart all or one WeChat account."
+    )
     _add_weixin_restart_options(weixin_restart)
     weixin_restart.set_defaults(command_action="restart", service_key="weixin")
 
@@ -1017,11 +976,18 @@ def command_main(
     _add_weixin_logs_options(weixin_logs)
     weixin_logs.set_defaults(command_action="logs", service_key="weixin")
 
-    weixin_describe = weixin_subparsers.add_parser("describe", parents=[common], help="Print resolved WeChat account wiring as JSON.")
+    weixin_describe = weixin_subparsers.add_parser(
+        "describe",
+        parents=[common],
+        help="Print resolved WeChat account wiring as JSON.",
+    )
     weixin_describe.set_defaults(command_action="describe", service_key="weixin")
 
     weixin_doctor = weixin_subparsers.add_parser("doctor", parents=[common], help="Check WeChat health.")
-    _add_optional_account_argument(weixin_doctor, help_text="WeChat account id. Omit to inspect all WeChat accounts.")
+    _add_optional_account_argument(
+        weixin_doctor,
+        help_text="WeChat account id. Omit to inspect all WeChat accounts.",
+    )
     weixin_doctor.set_defaults(command_action="doctor", service_key="weixin")
 
     _add_message_subparser(
@@ -1038,7 +1004,11 @@ def command_main(
 
     wecom_setup = wecom_subparsers.add_parser("setup", parents=[common], help="Add or update a WeCom account.")
     _add_wecom_add_options(wecom_setup)
-    wecom_setup.add_argument("--no-start", action="store_true", help="Only save config, do not start the adapter after setup.")
+    wecom_setup.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Only save config, do not start the adapter after setup.",
+    )
     wecom_setup.set_defaults(command_action="add_wecom", service_key="wecom", auto_start=True)
 
     wecom_remove = wecom_subparsers.add_parser("remove", parents=[common], help="Remove a WeCom account.")
@@ -1065,7 +1035,11 @@ def command_main(
     _add_wecom_logs_options(wecom_logs)
     wecom_logs.set_defaults(command_action="logs", service_key="wecom")
 
-    wecom_describe = wecom_subparsers.add_parser("describe", parents=[common], help="Print resolved WeCom account wiring as JSON.")
+    wecom_describe = wecom_subparsers.add_parser(
+        "describe",
+        parents=[common],
+        help="Print resolved WeCom account wiring as JSON.",
+    )
     wecom_describe.set_defaults(command_action="describe", service_key="wecom")
 
     wecom_doctor = wecom_subparsers.add_parser("doctor", parents=[common], help="Check WeCom health.")
@@ -1215,6 +1189,7 @@ def command_main(
         raise TypeError("gateway service plugin 'feishu' must build FeishuGatewayService")
     return _run_start(feishu_service, args)
 
+
 def run_im_setup(
     *,
     default_state_dir: Path | None = None,
@@ -1240,6 +1215,7 @@ def run_im_setup(
         default_state_dir=default_state_dir,
         default_control_state_dir=default_control_state_dir,
     )
+
 
 def build_typer_app(
     *,
@@ -1271,19 +1247,35 @@ def build_typer_app(
         if ctx.invoked_subcommand is None:
             raise typer.Exit(_forward(ctx))
 
-    @app.command("setup", help="Open interactive IM setup.", context_settings=passthrough_settings)
+    @app.command(
+        "setup",
+        help="Open interactive IM setup.",
+        context_settings=passthrough_settings,
+    )
     def setup_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "setup"))
 
-    @app.command("status", help="Show status for all providers and accounts.", context_settings=passthrough_settings)
+    @app.command(
+        "status",
+        help="Show status for all providers and accounts.",
+        context_settings=passthrough_settings,
+    )
     def status_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "status"))
 
-    @app.command("doctor", help="Run health checks for all providers and accounts.", context_settings=passthrough_settings)
+    @app.command(
+        "doctor",
+        help="Run health checks for all providers and accounts.",
+        context_settings=passthrough_settings,
+    )
     def doctor_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "doctor"))
 
-    @app.command("describe", help="Print resolved IM provider and account wiring as JSON.", context_settings=passthrough_settings)
+    @app.command(
+        "describe",
+        help="Print resolved IM provider and account wiring as JSON.",
+        context_settings=passthrough_settings,
+    )
     def describe_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "describe"))
 
@@ -1291,11 +1283,19 @@ def build_typer_app(
     def feishu_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "feishu"))
 
-    @app.command("discord", help="Manage Discord accounts.", context_settings=passthrough_settings)
+    @app.command(
+        "discord",
+        help="Manage Discord accounts.",
+        context_settings=passthrough_settings,
+    )
     def discord_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "discord"))
 
-    @app.command("dingding", help="Manage DingDing accounts.", context_settings=passthrough_settings)
+    @app.command(
+        "dingding",
+        help="Manage DingDing accounts.",
+        context_settings=passthrough_settings,
+    )
     def dingding_command(ctx: typer.Context) -> None:
         raise typer.Exit(_forward(ctx, "dingding"))
 

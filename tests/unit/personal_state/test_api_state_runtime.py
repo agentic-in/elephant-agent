@@ -84,7 +84,9 @@ class APIStateServiceTest(unittest.TestCase):
             if str(fact.metadata.get("sync_source") or "") == sync_source
         )
 
-    def test_ensure_personal_model_state_bootstrap_captures_governed_updates(self) -> None:
+    def test_ensure_personal_model_state_bootstrap_captures_governed_updates(
+        self,
+    ) -> None:
         tmpdir, repository, personal_model, state, episode, runtime = self._build_runtime()
         self.addCleanup(tmpdir.cleanup)
 
@@ -118,7 +120,10 @@ class APIStateServiceTest(unittest.TestCase):
         )
 
         self.assertEqual(updated.display_name, "Elephant Agent Revised")
-        self.assertEqual(self._personal_model_fact_count(repository, personal_model.profile_id), before)
+        self.assertEqual(
+            self._personal_model_fact_count(repository, personal_model.profile_id),
+            before,
+        )
         canonical_facts = self._canonical_facts(
             repository,
             personal_model_id=personal_model.profile_id,
@@ -138,7 +143,10 @@ class APIStateServiceTest(unittest.TestCase):
         )
 
         self.assertEqual(updated.preferred_name, "Bit")
-        self.assertEqual(self._personal_model_fact_count(repository, personal_model.profile_id), before + 1)
+        self.assertEqual(
+            self._personal_model_fact_count(repository, personal_model.profile_id),
+            before + 1,
+        )
         canonical_facts = self._canonical_facts(
             repository,
             personal_model_id=personal_model.profile_id,
@@ -162,7 +170,10 @@ class APIStateServiceTest(unittest.TestCase):
         )
 
         self.assertIn("Protect focused work windows.", updated.continuity_notes)
-        self.assertEqual(self._personal_model_fact_count(repository, personal_model.profile_id), before + 1)
+        self.assertEqual(
+            self._personal_model_fact_count(repository, personal_model.profile_id),
+            before + 1,
+        )
         canonical_facts = self._canonical_facts(
             repository,
             personal_model_id=personal_model.profile_id,

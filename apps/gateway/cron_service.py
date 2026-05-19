@@ -13,9 +13,12 @@ from typing import Any
 from apps.cli.runtime import CliRuntime
 from apps.runtime_layout import default_cli_state_dir
 from packages.cron import CronJob, CronJobExecution
-from packages.runtime_layout import infer_install_root_from_state_dir
 
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
+from .plugins import (
+    GatewayManagedRuntime,
+    GatewayPluginRegistry,
+    default_gateway_runtime_path,
+)
 
 
 CRON_SCHEDULER_TARGET = "scheduler"
@@ -173,6 +176,7 @@ def run_cron_scheduler_loop(
         if now_ts - last_maintenance_at > 86400:
             try:
                 from packages.understanding.auto_retire import retire_stale_facts
+
                 retired = retire_stale_facts(runtime.repository)
                 if retired:
                     print(f"auto-retire: {retired} stale fact(s) retired", flush=True)
@@ -287,6 +291,7 @@ def build_gateway_cron_delivery_callback(
             callbacks.append(callback)
     if not callbacks:
         return None
+
     def _fanout(job, execution) -> None:
         for callback in callbacks:
             try:
@@ -364,7 +369,9 @@ def _try_weixin_cron_callback(
         return None
 
 
-def register_cron_scheduler_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_cron_scheduler_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     registry.register_service("cron", factory=build_cron_scheduler_service, enabled_by_default=True)
     return registry
 

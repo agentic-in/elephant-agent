@@ -73,7 +73,12 @@ class MockOpenAICompatibleProvider:
                     return
                 if outer.fail_chat:
                     self._send_json(
-                        {"error": {"message": "stub provider is unavailable", "type": "server_error"}},
+                        {
+                            "error": {
+                                "message": "stub provider is unavailable",
+                                "type": "server_error",
+                            }
+                        },
                         status=503,
                     )
                     return
@@ -144,4 +149,3 @@ class MockOpenAICompatibleProvider:
                 return
 
         return Handler
-

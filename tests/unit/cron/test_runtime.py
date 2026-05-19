@@ -56,7 +56,11 @@ class CronRuntimeTest(unittest.TestCase):
             elephant_id="atlas",
         )
 
-        due = runtime.due_jobs(now=base + timedelta(hours=2, minutes=1), profile_id="elephant:atlas", elephant_id="atlas")
+        due = runtime.due_jobs(
+            now=base + timedelta(hours=2, minutes=1),
+            profile_id="elephant:atlas",
+            elephant_id="atlas",
+        )
         self.assertEqual(len(due), 1)
         self.assertEqual(due[0].job_id, job.job_id)
 
@@ -115,7 +119,11 @@ class CronRuntimeTest(unittest.TestCase):
             payload={"prompt": "scan"},
         )
 
-        due = runtime.due_jobs(now=base + timedelta(hours=1, minutes=1), profile_id="elephant:atlas", elephant_id="atlas")
+        due = runtime.due_jobs(
+            now=base + timedelta(hours=1, minutes=1),
+            profile_id="elephant:atlas",
+            elephant_id="atlas",
+        )
 
         self.assertEqual(tuple(item.job_id for item in due), (job.job_id,))
 

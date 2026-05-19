@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID, GatewayExchange, GatewayInboundMessage
+from packages.gateway_core import (
+    DEFAULT_GATEWAY_ACCOUNT_ID,
+    GatewayExchange,
+    GatewayInboundMessage,
+)
 
 from ..plugins import GatewayAdapterDescriptor, GatewayServicePluginRegistration
 from ..runtime_app import GatewayApp
@@ -71,6 +75,7 @@ class ChatBotMessagingAdapter:
                 **inbound_metadata,
             },
         )
+
 
 @dataclass(frozen=True, slots=True)
 class ChatBotGatewayPlatform:

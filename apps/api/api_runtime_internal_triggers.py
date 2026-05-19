@@ -22,6 +22,7 @@ def trigger_diary_write(self, *, target_date: str) -> dict[str, Any]:
     try:
         # Attempt to enqueue journal job
         from datetime import datetime
+
         target = datetime.strptime(target_date.strip()[:10], "%Y-%m-%d").date()
         metadata["target_date"] = target.isoformat()
     except (ValueError, AttributeError):
@@ -57,7 +58,11 @@ def delete_diary_entry(self, *, entry_date: str) -> dict[str, Any]:
         personal_model_id=pm.personal_model_id,
         entry_date=target,
     )
-    return {"status": "deleted" if deleted else "not_found", "entry_date": target, "deleted": deleted}
+    return {
+        "status": "deleted" if deleted else "not_found",
+        "entry_date": target,
+        "deleted": deleted,
+    }
 
 
 def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> dict[str, Any]:
@@ -102,7 +107,12 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
         ensure_learning_worker_running(state_dir=self.repository.database_path.parent)
     except Exception:
         pass
-    return {"status": "queued", "job_id": job.job_id, "trigger": trigger or "manual", "features": features}
+    return {
+        "status": "queued",
+        "job_id": job.job_id,
+        "trigger": trigger or "manual",
+        "features": features,
+    }
 
 
 __all__ = ["delete_diary_entry", "trigger_diary_write", "trigger_reflect_job"]

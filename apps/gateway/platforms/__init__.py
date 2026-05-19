@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from .chat_bot import CHAT_BOT_PLATFORM, ChatBotGatewayPlatform, ChatBotMessagingAdapter
-from .dingding import DINGDING_PLATFORM, DingdingGatewayPlatform, DingdingMessagingAdapter
+from .dingding import (
+    DINGDING_PLATFORM,
+    DingdingGatewayPlatform,
+    DingdingMessagingAdapter,
+)
 from .discord import DISCORD_PLATFORM, DiscordGatewayPlatform, DiscordMessagingAdapter
 from .feishu import FEISHU_PLATFORM, FeishuGatewayPlatform, FeishuMessagingAdapter
-from .telegram import TELEGRAM_PLATFORM, TelegramGatewayPlatform, TelegramMessagingAdapter
+from .telegram import (
+    TELEGRAM_PLATFORM,
+    TelegramGatewayPlatform,
+    TelegramMessagingAdapter,
+)
 from .wecom import WECOM_PLATFORM, WecomGatewayPlatform, WecomMessagingAdapter
 from .weixin import WEIXIN_PLATFORM, WeixinGatewayPlatform, WeixinMessagingAdapter
 from .webhook import WEBHOOK_PLATFORM, WebhookGatewayPlatform, WebhookMessagingAdapter

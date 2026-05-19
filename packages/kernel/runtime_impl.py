@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-import concurrent.futures
 import sys
 from uuid import uuid4
 
 from .context_compaction import (
-    append_episode_continuity_packet,
-    compact_context_after_usage,
     compaction_step_metadata,
-    episode_continuity_packet,
     flush_projection_cache,
     latest_compacted_projection,
     projection_compaction_detail,
     retry_context_after_provider_overflow,
     stage_context_projection,
-    stage_context_usage,
 )
 from .execution_support import execute_kernel_turn
 from .generation_context import build_context_for_generation
@@ -27,6 +22,7 @@ from .lifecycle_support import (
     resolve_runtime_identity,
 )
 from .runtime_support import *  # noqa: F401,F403
+
 _SUPPORT_UTC_NOW = _utc_now
 
 
@@ -68,9 +64,7 @@ def _primary_learning_trigger(
     outcome = str(getattr(execution, "outcome", "") or "").strip()
     if outcome == "paused":
         return "checkpoint"
-    checkpoint_seen = any(
-        step.action == "checkpoint" and step.status == "completed" for step in steps
-    )
+    checkpoint_seen = any(step.action == "checkpoint" and step.status == "completed" for step in steps)
     if checkpoint_seen:
         return "checkpoint"
     if outcome == "failed":
@@ -106,8 +100,12 @@ def _prompt_for_request_execution(
         return request.prompt
     prompt = request.prompt
     # Time injection: first turn of episode, idle > 1h, or temporal keywords
-    if _should_inject_time(prompt, is_first_turn=is_first_turn_of_episode,
-                           session_updated_at=previous_updated_at, now=clock.local_datetime):
+    if _should_inject_time(
+        prompt,
+        is_first_turn=is_first_turn_of_episode,
+        session_updated_at=previous_updated_at,
+        now=clock.local_datetime,
+    ):
         prompt = f"{prompt.rstrip()}\n\n{_time_annotation(clock)}"
     # Execution strategy hints (multi-source, compare, artifact)
     prompt = _apply_execution_guidance(prompt)
@@ -356,7 +354,10 @@ class KernelService:
                 current=_clock_now(),
                 summary=projection_compaction_detail(retry_compaction.result),
                 outcome=str(getattr(retry_compaction.result, "reason", "") or "provider-overflow"),
-                payload_refs=(*retry_compaction.packet.source_refs, retry_compaction.packet.packet_id),
+                payload_refs=(
+                    *retry_compaction.packet.source_refs,
+                    retry_compaction.packet.packet_id,
+                ),
                 metadata=compaction_step_metadata(
                     packet=retry_compaction.packet,
                     result=retry_compaction.result,
@@ -461,9 +462,15 @@ class KernelService:
         # episodes (multi-turn sessions) defer learning until explicit close.
         primary_job = None
         if episode.status != "closed":
-            stage("episode_learning", f"deferred episode={episode.episode_id} status={episode.status}")
+            stage(
+                "episode_learning",
+                f"deferred episode={episode.episode_id} status={episode.status}",
+            )
         elif _suppress_primary_learning_for_request(request):
-            stage("episode_learning", f"suppressed internal turn episode={episode.episode_id}")
+            stage(
+                "episode_learning",
+                f"suppressed internal turn episode={episode.episode_id}",
+            )
         else:
             primary_trigger = _primary_learning_trigger(execution=execution, steps=step_recorder.steps)
             primary_job = self._enqueue_episode_learning_job(
@@ -559,7 +566,9 @@ class KernelService:
         previous_updated_at = existing_session.updated_at if existing_session is not None else current
         return Episode(
             episode_id=request.route_id,
-            state_id=existing_session.state_id if existing_session is not None else (request.state_id or "state:default"),
+            state_id=existing_session.state_id
+            if existing_session is not None
+            else (request.state_id or "state:default"),
             personal_model_id=profile.profile_id,
             entry_surface=existing_session.entry_surface if existing_session is not None else request.surface,
             elephant_id=(existing_session.elephant_id if existing_session is not None else "") or "",
@@ -602,7 +611,9 @@ class KernelService:
             )
         work_item_ids: tuple[str, ...] = ()
         scope_episode_ids = _episode_lineage_ids(self.dependencies.storage, session)
-        scope_reason = "recovery follows the active episode lineage while allowing elephant and personal-model continuity recall"
+        scope_reason = (
+            "recovery follows the active episode lineage while allowing elephant and personal-model continuity recall"
+        )
         requested_scopes = ["episode"]
         if session.elephant_id:
             requested_scopes.append("elephant")
@@ -632,9 +643,7 @@ class KernelService:
             work_item_ids=work_item_ids,
             scope_episode_ids=retrieval.scope_episode_ids,
             scope_reason=retrieval.scope_reason,
-            vector_cache_status=str(
-                getattr(retrieval.recall_reasons, "vector_cache_status", "") or ""
-            ),
+            vector_cache_status=str(getattr(retrieval.recall_reasons, "vector_cache_status", "") or ""),
         )
 
     def _context_for_generation(
@@ -762,9 +771,7 @@ class KernelService:
         surface = (request.surface or "").strip().lower()
         source_event_type = (request.source_event_type or "").strip().lower()
         is_internal_turn = (
-            surface.startswith("cli.startup")
-            or surface.endswith(".startup")
-            or source_event_type == "turn.internal"
+            surface.startswith("cli.startup") or surface.endswith(".startup") or source_event_type == "turn.internal"
         )
         if is_internal_turn:
             return replace(state, updated_at=current)

@@ -32,8 +32,7 @@ def bootstrap(self) -> StorageBootstrapState:
         version = self.schema_version(connection)
         if version > SCHEMA_VERSION:
             raise RuntimeError(
-                f"database schema version {version} is newer than supported "
-                f"schema version {SCHEMA_VERSION}"
+                f"database schema version {version} is newer than supported schema version {SCHEMA_VERSION}"
             )
         if version == 0:
             _drop_legacy_storage_tables(connection)
@@ -64,8 +63,7 @@ def _require_empty_database(connection: sqlite3.Connection) -> None:
     existing_tables = _table_names(connection)
     if existing_tables:
         raise RuntimeError(
-            "existing storage database has no clean schema marker; reset runtime "
-            "storage before bootstrapping"
+            "existing storage database has no clean schema marker; reset runtime storage before bootstrapping"
         )
 
 

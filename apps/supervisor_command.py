@@ -19,7 +19,6 @@ from pathlib import Path
 import json
 import logging
 import signal
-import sys
 import threading
 from typing import Sequence
 

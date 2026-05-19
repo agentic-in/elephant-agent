@@ -5,18 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from packages.contracts.runtime import ExperienceRecord, ProcedureRecord, PersonalModelGrowthState
+from packages.contracts.runtime import (
+    ExperienceRecord,
+    ProcedureRecord,
+    PersonalModelGrowthState,
+)
 
 from .runtime import (
     GROWTH_STAGES,
-    GrowthSnapshot,
     GrowthStageDescriptor,
     GrowthUpdate,
     _PROMOTED_PROCEDURE_STATUSES,
     _canonical_active_days,
     _contains_any,
     _curve_stage_id_for_level,
-    _dedupe_text,
     _local_day,
     _round_to_five,
     _roman_numeral,
@@ -169,10 +171,7 @@ class ProgressionProjectionBuilder:
             1 for procedure in procedures if procedure.status.strip().lower() in _PROMOTED_PROCEDURE_STATUSES
         )
         skill_refs = {
-            skill_id
-            for experience in experiences
-            for skill_id in experience.related_skill_ids
-            if str(skill_id).strip()
+            skill_id for experience in experiences for skill_id in experience.related_skill_ids if str(skill_id).strip()
         }
         skill_refs.update(
             procedure.skill_id
@@ -192,7 +191,10 @@ class ProgressionProjectionBuilder:
         mastery_vector = (
             ProgressionMasterySignal(
                 axis="execution",
-                score=min(12, (4 if active_work_item is not None else 0) + min(4, experience_count) + min(4, artifact_count)),
+                score=min(
+                    12,
+                    (4 if active_work_item is not None else 0) + min(4, experience_count) + min(4, artifact_count),
+                ),
                 summary=(
                     f"Current focus is {str(getattr(active_work_item, 'title', '') or '')}."
                     if active_work_item is not None
@@ -201,7 +203,10 @@ class ProgressionProjectionBuilder:
             ),
             ProgressionMasterySignal(
                 axis="continuity",
-                score=min(12, continuity_bonus + min(4, continuity_recoveries) + min(4, power_state.streak_days)),
+                score=min(
+                    12,
+                    continuity_bonus + min(4, continuity_recoveries) + min(4, power_state.streak_days),
+                ),
                 summary=(
                     "Recovery context is active and the thread is being carried forward."
                     if continuity_mode.strip().lower() != "foreground"
@@ -371,7 +376,9 @@ def _projection_state_from_canonical(
         default=(state.last_dialogue_at if state is not None else None) or first_moment,
     )
     experience_count = len(experiences) if experiences else (state.total_experiences if state is not None else 0)
-    canonical_active_days = _canonical_active_days(experiences) if experiences else (state.active_days if state is not None else 0)
+    canonical_active_days = (
+        _canonical_active_days(experiences) if experiences else (state.active_days if state is not None else 0)
+    )
     if state is not None:
         power_score = max(0, state.growth_score)
         total_dialogues = max(state.total_dialogues, experience_count)
@@ -381,7 +388,10 @@ def _projection_state_from_canonical(
         power_score = _round_to_five(
             (experience_count * 40)
             + (promoted_procedures * 80)
-            + min(30, sum(len(experience.related_skill_ids) for experience in experiences) * 10)
+            + min(
+                30,
+                sum(len(experience.related_skill_ids) for experience in experiences) * 10,
+            )
         )
         total_dialogues = experience_count
         total_tokens = sum(max(0, len(experience.summary) + len(experience.title)) for experience in experiences)
@@ -395,9 +405,17 @@ def _projection_state_from_canonical(
         promoted_experiences=promoted_procedures,
         active_days=max(canonical_active_days, state.active_days if state is not None else 0),
         streak_days=streak_days,
-        first_dialogue_at=state.first_dialogue_at if state is not None and state.first_dialogue_at is not None else first_moment,
-        last_dialogue_at=state.last_dialogue_at if state is not None and state.last_dialogue_at is not None else last_moment,
-        last_active_day=(state.last_active_day if state is not None and state.last_active_day is not None else _local_day(last_moment).isoformat()),
+        first_dialogue_at=state.first_dialogue_at
+        if state is not None and state.first_dialogue_at is not None
+        else first_moment,
+        last_dialogue_at=state.last_dialogue_at
+        if state is not None and state.last_dialogue_at is not None
+        else last_moment,
+        last_active_day=(
+            state.last_active_day
+            if state is not None and state.last_active_day is not None
+            else _local_day(last_moment).isoformat()
+        ),
         created_at=state.created_at if state is not None and state.created_at is not None else first_moment,
         updated_at=fallback_updated_at or last_moment,
     )
@@ -406,7 +424,10 @@ def _projection_state_from_canonical(
 def _lifetime_days_for(state: PersonalModelGrowthState) -> int:
     if state.first_dialogue_at is None or state.last_dialogue_at is None:
         return 0
-    return max(1, (_local_day(state.last_dialogue_at) - _local_day(state.first_dialogue_at)).days + 1)
+    return max(
+        1,
+        (_local_day(state.last_dialogue_at) - _local_day(state.first_dialogue_at)).days + 1,
+    )
 
 
 def _understanding_rank(
@@ -473,7 +494,7 @@ def _active_challenge_tracks(
             ProgressionChallengeTrack(
                 track_id="current-focus",
                 label="Keep the current focus visible",
-                summary=str(getattr(active_work_item, 'title', '') or ''),
+                summary=str(getattr(active_work_item, "title", "") or ""),
                 status="active",
             )
         )

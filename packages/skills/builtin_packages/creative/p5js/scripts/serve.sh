@@ -19,10 +19,10 @@ echo "URL:     http://localhost:$PORT"
 echo "Press Ctrl+C to stop"
 echo ""
 
-cd "$DIR" && python3 -m http.server "$PORT" 2>/dev/null || {
+if ! cd "$DIR" || ! python3 -m http.server "$PORT" 2>/dev/null; then
   echo "Python3 not found. Trying Node.js..."
   npx serve -l "$PORT" "$DIR" 2>/dev/null || {
     echo "Error: Need python3 or npx (Node.js) for local server"
     exit 1
   }
-}
+fi

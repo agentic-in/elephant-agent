@@ -4,44 +4,27 @@ import argparse
 from dataclasses import dataclass
 import random
 import re
-import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity
 
 from .runtime import CliRuntime
 from .provider_flow import (
-    ProviderSelectionState,
     provider_choices as _shared_provider_choices,
-    provider_setup_defaults,
-    run_provider_selection_wizard,
 )
 
 _provider_choices = _shared_provider_choices
 from .shell import (
     Align,
     BRAND_ACCENT,
-    BRAND_DARK,
     BRAND_LIGHT,
     BRAND_MUTED,
     Console,
     Group,
     Panel,
-    ProductizedShell,
     RICH_AVAILABLE,
-    Table,
     Text,
-    _resolve_elephant_version,
     render_stage_zero_elephant_mark,
-)
-from .wizard import (
-    WIZARD_BACK,
-    WizardChoice,
-    _WizardBackSignal,
-    _wizard_choice_prompt,
-    _wizard_dialogs_supported,
-    _wizard_text_prompt,
 )
 
 try:
@@ -87,17 +70,38 @@ CLI_THEME_WELCOME_GLYPH = "🐘"
 CLI_THEME_SUBTITLE = "Personal Model first, curious at your pace."
 CLI_HELP_TAGLINE = "🐘 Model what matters · 👂 Ask gently · 🐾 Follow the path"
 CLI_HELP_COMMANDS = (
-    ("init", "Run first-time setup and persist identity, provider readiness, and the first elephant session."),
-    ("wake", "Enter an existing Elephant Agent elephant through the branded TUI or run one provider-backed turn."),
-    ("dashboard", "Launch the local operator dashboard when frontend assets are present."),
+    (
+        "init",
+        "Run first-time setup and persist identity, provider readiness, and the first elephant session.",
+    ),
+    (
+        "wake",
+        "Enter an existing Elephant Agent elephant through the branded TUI or run one provider-backed turn.",
+    ),
+    (
+        "dashboard",
+        "Launch the local operator dashboard when frontend assets are present.",
+    ),
     ("herd", "Create, inspect, select, or retire existing Elephant Agent herd."),
-    ("provider", "Configure or inspect the active provider, model, reasoning effort, and context window."),
+    (
+        "provider",
+        "Configure or inspect the active provider, model, reasoning effort, and context window.",
+    ),
     ("facts", "Inspect or retire Personal Model facts without entering wake."),
-    ("reflect", "Run, inspect, and manage background reflect agents (PM learning, dream, diary, audit)."),
-    ("skills", "Inspect, search, install, and toggle skill packages without entering wake."),
+    (
+        "reflect",
+        "Run, inspect, and manage background reflect agents (PM learning, dream, diary, audit).",
+    ),
+    (
+        "skills",
+        "Inspect, search, install, and toggle skill packages without entering wake.",
+    ),
     ("gateway", "Manage IM providers and accounts."),
     ("cron", "Manage the background cron scheduler."),
-    ("status", "Review provider, model, and security readiness before opening the wake surface."),
+    (
+        "status",
+        "Review provider, model, and security readiness before opening the wake surface.",
+    ),
 )
 CLI_COMMAND_HELP = {command: description for command, description in CLI_HELP_COMMANDS}
 CLI_HELP_NEXT_COMMANDS = ("elephant init", "elephant wake", "elephant dashboard")
@@ -122,12 +126,14 @@ class CliCardSection:
     title: str
     lines: tuple[str, ...] = ()
 
+
 class _WizardCancelledError(Exception):
     __slots__ = ("surface",)
 
     def __init__(self, surface: str) -> None:
         super().__init__(surface)
         self.surface = surface
+
 
 @dataclass(slots=True)
 class BirthWizardState:
@@ -166,6 +172,7 @@ class BirthWizardState:
     relationship_mode: str = ""
     starter_answers: tuple[tuple[str, str, str], ...] = ()
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="elephant",
@@ -179,7 +186,9 @@ def build_parser() -> argparse.ArgumentParser:
     def _add_init_parser(name: str, *, hidden: bool = False) -> None:
         init = subparsers.add_parser(
             name,
-            help=argparse.SUPPRESS if hidden else "Run first-time setup and persist identity, provider readiness, and the first elephant session.",
+            help=argparse.SUPPRESS
+            if hidden
+            else "Run first-time setup and persist identity, provider readiness, and the first elephant session.",
         )
         init.add_argument("--provider-id", default=DEFAULT_PROVIDER_ID)
         init.add_argument("--display-name", default=None)
@@ -189,7 +198,11 @@ def build_parser() -> argparse.ArgumentParser:
         init.add_argument("--model-id", default=None)
         init.add_argument("--api-key", default=None)
         init.add_argument("--secret-env-var", default=None)
-        init.add_argument("--embedding-provider", choices=("local", "openai-compatible"), default="local")
+        init.add_argument(
+            "--embedding-provider",
+            choices=("local", "openai-compatible"),
+            default="local",
+        )
         init.add_argument("--embedding-base-url", default=None)
         init.add_argument("--embedding-model", default=None)
         init.add_argument("--embedding-dimensions", default=None)
@@ -213,7 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     def _add_status_parser(name: str, *, hidden: bool = False) -> None:
         status = subparsers.add_parser(
             name,
-            help=argparse.SUPPRESS if hidden else "Review provider, model, and security readiness before opening the wake surface.",
+            help=argparse.SUPPRESS
+            if hidden
+            else "Review provider, model, and security readiness before opening the wake surface.",
         )
         status.add_argument(
             "--deep",
@@ -224,7 +239,9 @@ def build_parser() -> argparse.ArgumentParser:
     def _add_provider_parser(name: str, *, hidden: bool = False) -> None:
         provider = subparsers.add_parser(
             name,
-            help=argparse.SUPPRESS if hidden else "Configure or inspect the active provider, model, reasoning effort, and context window.",
+            help=argparse.SUPPRESS
+            if hidden
+            else "Configure or inspect the active provider, model, reasoning effort, and context window.",
         )
         provider.add_argument(
             "provider_command",
@@ -249,10 +266,20 @@ def build_parser() -> argparse.ArgumentParser:
     def _add_wake_parser(name: str, *, hidden: bool = False) -> None:
         wake = subparsers.add_parser(
             name,
-            help=argparse.SUPPRESS if hidden else "Open the next Elephant Agent Episode through the branded TUI or run one provider-backed turn.",
+            help=argparse.SUPPRESS
+            if hidden
+            else "Open the next Elephant Agent Episode through the branded TUI or run one provider-backed turn.",
         )
-        wake.add_argument("--elephant-id", default=None, help="Open the next Episode for a known elephant.")
-        wake.add_argument("--debug", action="store_true", help="Show runtime diagnostics inside the wake surface.")
+        wake.add_argument(
+            "--elephant-id",
+            default=None,
+            help="Open the next Episode for a known elephant.",
+        )
+        wake.add_argument(
+            "--debug",
+            action="store_true",
+            help="Show runtime diagnostics inside the wake surface.",
+        )
         wake.add_argument("--message", default=None, help="Run one wake turn and exit.")
 
     _add_init_parser("init")
@@ -271,7 +298,11 @@ def build_parser() -> argparse.ArgumentParser:
     elephant_new.add_argument("elephant_name", nargs="?", help="Name the new Elephant Agent elephant.")
     elephant_new.add_argument("--profile-id", default=None)
     elephant_new.add_argument("--display-name", default=None)
-    elephant_new.add_argument("--debug", action="store_true", help="Show runtime diagnostics inside the wake surface.")
+    elephant_new.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show runtime diagnostics inside the wake surface.",
+    )
     elephant_new.add_argument("--message", default=None, help="Create the elephant, run one turn, and exit.")
     elephant_current = herd_subparsers.add_parser(
         "current",
@@ -293,29 +324,47 @@ def build_parser() -> argparse.ArgumentParser:
         "facts",
         help="Inspect or retire Personal Model facts without entering wake.",
     )
-    facts.add_argument("--elephant-id", default=None, help="Resolve Personal Model facts through a named elephant.")
+    facts.add_argument(
+        "--elephant-id",
+        default=None,
+        help="Resolve Personal Model facts through a named elephant.",
+    )
     facts_subparsers = facts.add_subparsers(dest="facts_command")
     facts_list = facts_subparsers.add_parser(
         "list",
         help="List Personal Model facts for the current or named elephant.",
     )
-    facts_list.add_argument("--elephant-id", default=None, help="Resolve Personal Model facts through a named elephant.")
+    facts_list.add_argument(
+        "--elephant-id",
+        default=None,
+        help="Resolve Personal Model facts through a named elephant.",
+    )
     facts_delete = facts_subparsers.add_parser(
         "delete",
         help="Retire one Personal Model entry by id.",
     )
     facts_delete.add_argument("fact_id", help="Name the Personal Model entry to retire.")
-    facts_delete.add_argument("--elephant-id", default=None, help="Resolve Personal Model facts through a named elephant.")
-    facts_delete.add_argument("--reason", default=None, help="Record why this Personal Model entry is being retired.")
+    facts_delete.add_argument(
+        "--elephant-id",
+        default=None,
+        help="Resolve Personal Model facts through a named elephant.",
+    )
+    facts_delete.add_argument(
+        "--reason",
+        default=None,
+        help="Record why this Personal Model entry is being retired.",
+    )
 
     _add_wake_parser("wake")
 
     return parser
 
+
 def _print_heading(title: str, detail: str | None = None) -> None:
     print(f"{CLI_THEME_TITLE_GLYPH} {title}")
     if detail:
         print(f"  {detail}")
+
 
 def _print_field(label: str, value: object) -> None:
     rendered = ""
@@ -323,8 +372,10 @@ def _print_field(label: str, value: object) -> None:
         rendered = str(value)
     print(f"  {label}: {rendered}")
 
+
 def _print_bullet(text: str) -> None:
     print(f"  {CLI_THEME_BULLET} {text}")
+
 
 def _command_hint_glyph(command: str) -> str:
     normalized = " ".join(command.split()).strip()
@@ -333,8 +384,10 @@ def _command_hint_glyph(command: str) -> str:
             return glyph
     return CLI_THEME_BULLET
 
+
 def _format_command_hint(command: str) -> str:
     return f"{_command_hint_glyph(command)} {command}"
+
 
 def _format_command_line(command: str, detail: str) -> str:
     return f"{_command_hint_glyph(command)} {command} · {detail}"
@@ -348,7 +401,9 @@ def _append_command_highlight(target: Text, line: str) -> None:
     marker = " · "
     command_part, separator, detail_part = line.partition(marker)
     leading_token = command_part.split(maxsplit=1)[0] if command_part else ""
-    has_command_glyph = leading_token == CLI_THEME_BULLET or any(leading_token == glyph for _, glyph in CLI_COMMAND_GLYPHS)
+    has_command_glyph = leading_token == CLI_THEME_BULLET or any(
+        leading_token == glyph for _, glyph in CLI_COMMAND_GLYPHS
+    )
     if not has_command_glyph:
         target.append(f"{CLI_THEME_BULLET} ", style=BRAND_MUTED)
     if separator:
@@ -358,8 +413,10 @@ def _append_command_highlight(target: Text, line: str) -> None:
     else:
         target.append(line, style=BRAND_LIGHT)
 
+
 def _print_command_line(command: str, detail: str) -> None:
     print(f"  {_format_command_line(command, detail)}")
+
 
 def _print_command_hints(*commands: str) -> None:
     if not commands:
@@ -367,6 +424,7 @@ def _print_command_hints(*commands: str) -> None:
     print("  next_invocations:")
     for command in commands:
         print(f"  {_format_command_hint(command)}")
+
 
 def _print_cli_card(
     title: str,
@@ -438,9 +496,7 @@ def _print_cli_help(
     next_commands: tuple[str, ...] = (),
     tagline: str | None = None,
 ) -> None:
-    intro = (
-        "Elephant Agent is personal-model-first AI — it grows from you, understands first, gets curious at your pace, and grows into your shape over time."
-    )
+    intro = "Elephant Agent is personal-model-first AI — it grows from you, understands first, gets curious at your pace, and grows into your shape over time."
     sections: list[CliCardSection] = [CliCardSection("Elephant Agent", (intro,))]
     if options:
         sections.append(
@@ -468,12 +524,13 @@ def _print_cli_help(
 def _play_creating_transition(title: str, detail: str) -> None:
     return None
 
+
 def _provider_secret_ready(runtime: CliRuntime, *, provider_id: str) -> bool:
     provider_summary = dict(runtime.provider_summary())
-    if (
-        provider_summary.get("provider_id") == provider_id
-        and provider_summary.get("secret_status") in {"stored", "not-required"}
-    ):
+    if provider_summary.get("provider_id") == provider_id and provider_summary.get("secret_status") in {
+        "stored",
+        "not-required",
+    }:
         return True
     try:
         discovered = runtime.discovered_provider(provider_id)
@@ -497,7 +554,9 @@ def _embedding_bootstrap_ready_label(status: object) -> str:
     return normalized or "unknown"
 
 
-def _embedding_bootstrap_status_lines(embedding: Mapping[str, object]) -> tuple[str, ...]:
+def _embedding_bootstrap_status_lines(
+    embedding: Mapping[str, object],
+) -> tuple[str, ...]:
     status = str(embedding.get("embedding_bootstrap_status") or "<unset>")
     summary = str(embedding.get("embedding_bootstrap_summary") or "").strip()
     lines = [
@@ -509,7 +568,9 @@ def _embedding_bootstrap_status_lines(embedding: Mapping[str, object]) -> tuple[
     return tuple(lines)
 
 
-def _embedding_bootstrap_notice_lines(embedding: Mapping[str, object]) -> tuple[str, ...]:
+def _embedding_bootstrap_notice_lines(
+    embedding: Mapping[str, object],
+) -> tuple[str, ...]:
     status = str(embedding.get("embedding_bootstrap_status") or "").strip().lower()
     source = str(embedding.get("source") or "").strip().lower()
     if source != "local-default":
@@ -531,6 +592,7 @@ def _embedding_bootstrap_notice_lines(embedding: Mapping[str, object]) -> tuple[
             "Run elephant status to inspect the latest bootstrap summary.",
         )
     return ()
+
 
 def _print_brain_status(runtime: CliRuntime) -> None:
     provider = dict(runtime.provider_summary())
@@ -594,6 +656,7 @@ def _print_brain_status(runtime: CliRuntime) -> None:
         ),
     )
 
+
 def _print_brain_provider_inventory(runtime: CliRuntime) -> None:
     lines = tuple(
         f"{state.provider_id} · {state.display_name} · {state.transport_display_name} · status={state.status} · source={state.source}"
@@ -606,6 +669,7 @@ def _print_brain_provider_inventory(runtime: CliRuntime) -> None:
         sections=(CliCardSection("Catalog", lines),),
         next_commands=("elephant provider", "elephant provider status"),
     )
+
 
 def _print_brain_models(runtime: CliRuntime, *, provider_id: str) -> None:
     try:
@@ -628,6 +692,7 @@ def _print_brain_models(runtime: CliRuntime, *, provider_id: str) -> None:
         next_commands=("elephant provider", "elephant provider status"),
     )
 
+
 def _print_embedding_provider_status(runtime: CliRuntime) -> None:
     embedding = dict(runtime.embedding_provider_summary())
     sections = (
@@ -644,7 +709,11 @@ def _print_embedding_provider_status(runtime: CliRuntime) -> None:
                 *_embedding_bootstrap_status_lines(embedding),
             ),
         ),
-        *((CliCardSection("Background bootstrap", _embedding_bootstrap_notice_lines(embedding)),) if _embedding_bootstrap_notice_lines(embedding) else ()),
+        *(
+            (CliCardSection("Background bootstrap", _embedding_bootstrap_notice_lines(embedding)),)
+            if _embedding_bootstrap_notice_lines(embedding)
+            else ()
+        ),
     )
     _print_cli_card(
         "Embedding provider status",
@@ -657,22 +726,23 @@ def _print_embedding_provider_status(runtime: CliRuntime) -> None:
         ),
     )
 
+
 def _slugify_elephant_name(value: str) -> str:
     collapsed = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return collapsed or "elephant"
 
+
 def _display_name_from_elephant_name(value: str) -> str:
     collapsed = re.sub(r"[^a-zA-Z0-9]+", " ", value.strip()).strip()
     return collapsed.title() or "Elephant Agent"
+
 
 def _suggest_elephant_name(runtime: CliRuntime | None = None) -> str:
     candidates = DEFAULT_ELEPHANT_NAME_SUGGESTIONS
     if runtime is None:
         return random.choice(candidates)
     available = tuple(
-        name
-        for name in candidates
-        if runtime.latest_session_for_elephant(_slugify_elephant_name(name)) is None
+        name for name in candidates if runtime.latest_session_for_elephant(_slugify_elephant_name(name)) is None
     )
     return random.choice(available or candidates)
 
@@ -685,6 +755,7 @@ def _unique_elephant_name(runtime: CliRuntime, value: str) -> str:
         candidate = f"{base_name}-{suffix}"
         suffix += 1
     return candidate
+
 
 __all__ = [
     "_provider_choices",

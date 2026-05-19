@@ -84,4 +84,3 @@ understanding?**
 
 That boundary is why retrieval can be powerful without turning every retrieved
 chunk into truth.
-

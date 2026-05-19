@@ -10,13 +10,14 @@ from packages.contracts.layers import Episode, State
 from packages.contracts.runtime import (
     ContextBundle,
     ExecutionResult,
-    PersonalModelRuntimeState,
     PromptEnvelope,
     PromptMessage,
 )
 from packages.kernel import KernelService, KernelSourceRequest
-from packages.kernel.execution_support import execute_kernel_turn
-from packages.kernel.loop_checkpoint_support import LoopCheckpointBudget, LoopCheckpointService
+from packages.kernel.loop_checkpoint_support import (
+    LoopCheckpointBudget,
+    LoopCheckpointService,
+)
 from packages.kernel.runtime_support import (
     _TextToolCall,
     _build_clock,
@@ -57,7 +58,9 @@ class RuntimeSupportBudgetTest(unittest.TestCase):
         self.assertEqual(_step_event_type(source_step), "source_input")
         self.assertEqual(_step_event_content(source_step, {}), "raw question")
 
-    def test_agent_loop_budget_defaults_extend_model_turns_and_use_large_result_budgets(self) -> None:
+    def test_agent_loop_budget_defaults_extend_model_turns_and_use_large_result_budgets(
+        self,
+    ) -> None:
         budget = LoopCheckpointBudget()
 
         self.assertEqual(budget.max_model_turns, 100)
@@ -112,8 +115,7 @@ class RuntimeSupportBudgetTest(unittest.TestCase):
                 ),
             ),
             rendered_prompt=(
-                "system prompt :: frozen_prefix\n\n"
-                "## Turn attachments\nruntime-paths: startup_cwd=/tmp/start"
+                "system prompt :: frozen_prefix\n\n## Turn attachments\nruntime-paths: startup_cwd=/tmp/start"
             ),
         )
 
@@ -245,7 +247,9 @@ class RuntimeSupportBudgetTest(unittest.TestCase):
 
         self.assertTrue(_should_parallelize_tool_batch(calls))
 
-    def test_parallel_tool_batch_rejects_blocking_sub_loop_checkpoint_calls(self) -> None:
+    def test_parallel_tool_batch_rejects_blocking_sub_loop_checkpoint_calls(
+        self,
+    ) -> None:
         calls = (
             _TextToolCall("tool.sub_agents", {"action": "run", "task": "inspect core"}),
             _TextToolCall("tool.sub_agents", {"action": "run", "task": "inspect tools"}),
@@ -315,7 +319,10 @@ class RuntimeSupportBudgetTest(unittest.TestCase):
             current=datetime(2026, 4, 28, tzinfo=timezone.utc),
         )
 
-        self.assertEqual(updated.current_context_note, "Resume the dashboard redesign from the prior episode.")
+        self.assertEqual(
+            updated.current_context_note,
+            "Resume the dashboard redesign from the prior episode.",
+        )
         self.assertLessEqual(len(updated.summary), 480)
         self.assertNotIn("\n", updated.summary)
 

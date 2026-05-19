@@ -3,100 +3,22 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
-from difflib import unified_diff
 import os
 from pathlib import Path
-import re
-import shlex
 import sys
 import threading
 import time
 
-from packages.contracts import ExperienceRecord
-from packages.kernel.runtime import KernelOutcome
-from packages.operator.runtime import (
-    RecallEvidenceOperatorDetail,
-    RecallEvidenceSearchHit,
-    build_recall_evidence_operator_surface,
-    build_profile_operator_surface,
-    render_recall_evidence_lines,
-    render_profile_lines,
-)
-from packages.tools.handler_support import resolve_allowed_path
 from .provider_flow import provider_setup_defaults, run_provider_selection_wizard
 from .runtime import CliRuntime
 from .wizard import WIZARD_BACK, WIZARD_CANCEL
-from .shell_composer import (
-    build_command_palette as _build_shell_command_palette,
-    build_composer_body as _build_shell_composer_body,
-    build_divider_window as _build_shell_divider_window,
-    build_input_window as _build_shell_input_window,
-    build_key_bindings as _build_shell_key_bindings,
-    build_prompt_buffer as _build_shell_prompt_buffer,
-    build_queue_preview_window as _build_shell_queue_preview_window,
-    prompt_continuation as _shell_prompt_continuation,
-    prompt_label as _shell_prompt_label,
-    prompt_style as _shell_prompt_style,
-    prompt_style_map as _shell_prompt_style_map,
-    prompt_toolkit_composer_available as _shell_prompt_toolkit_composer_available,
-    read_command as _read_shell_command,
-    shell_history as _shell_history,
-)
 from .shell_clarify import ShellInteractiveClarifySurface
 from .shell_boot import WAKE_DISPLAY_SECONDS, BootFrameContext, render_boot_frame
-from .shell_opening import (
-    ShellOpeningContext,
-    compose_shell_opening_instruction,
-    compose_shell_opener,
-)
-from .shell_progress import (
-    animations_enabled as _shell_animations_enabled,
-    render_queued_followup_fragments as _render_shell_queued_followup_fragments,
-    render_tool_frame as _render_shell_tool_frame,
-    tool_trace_line as _shell_tool_trace_line,
-    render_turn_frame as _render_shell_turn_frame,
-    render_turn_progress_fragments as _render_shell_turn_progress_fragments,
-    run_tool_with_progress as _run_shell_tool_with_progress,
-    run_turn_with_progress as _run_shell_turn_with_progress,
-    run_turn_with_queued_input as _run_shell_turn_with_queued_input,
-    summarize_progress_prompt as _summarize_shell_progress_prompt,
-    tool_event_lines as _shell_tool_event_lines,
-    tool_event_summary as _shell_tool_event_summary,
-    tool_event_tracker as _shell_tool_event_tracker,
-    tool_frame_phases as _shell_tool_frame_phases,
-    turn_phase as _shell_turn_phase,
-    _tool_trace_emoji as _shell_tool_trace_emoji,
-)
-from .shell_render import (
-    center_brand_block as _center_shell_brand_block,
-    displayable_experiences as _displayable_shell_experiences,
-    format_experience_status as _format_shell_experience_status,
-    growth_panel_lines as _shell_growth_panel_lines,
-    growth_progress_bar as _shell_growth_progress_bar,
-    growth_progress_counts as _shell_growth_progress_counts,
-    recent_activity_lines as _shell_recent_activity_lines,
-    recent_experience_lines as _shell_recent_experience_lines,
-    render_brand_column as _render_shell_brand_column,
-    render_chat_entry as _render_shell_chat_entry,
-    render_entry as _render_shell_entry,
-    render_elephant_brand_mark as _render_shell_elephant_mark,
-    render_growth_mark_for_stage as _render_shell_growth_mark,
-    render_pending_entries as _render_shell_pending_entries,
-    render_shell_frame as _render_shell_frame_view,
-    render_status_column as _render_shell_status_column,
-    should_display_experience as _should_display_shell_experience,
-    styled_growth_progress_bar as _styled_shell_growth_progress_bar,
-)
 from .shell_stack import (
     Align,
-    Completion,
-    Completer,
     Console,
     Document,
-    FormattedText,
     Group,
-    PROMPT_TOOLKIT_AVAILABLE,
     Panel,
     RICH_AVAILABLE,
     Table,
@@ -110,7 +32,6 @@ from .shell_ui import (
     BRAND_MUTED,
     COMMAND_PALETTE_VISIBLE_ROWS,
     ELEPHANT_STAGE_ROWS,
-    ELEPHANT_STAGE_ROWS,
     GROWTH_HIGHLIGHT_FG,
     GROWTH_PROGRESS_EMPTY,
     GROWTH_PROGRESS_FILLED,
@@ -123,13 +44,10 @@ from .shell_ui import (
     SHELL_WELCOME_HEADLINE,
     USER_HISTORY_BG,
     USER_HISTORY_FG,
-    WEB_URL_PATTERN,
-    compact_line as _compact_line,
     centered_elephant_rows as _centered_elephant_rows,
     display_path as _display_path,
     display_width as _display_width,
     render_elephant_mark,
-    render_stage_zero_elephant_mark,
     resolve_elephant_version as _resolve_elephant_version,
 )
 
@@ -173,7 +91,6 @@ __all__ = [
 ]
 
 
-
 from .shell_support_runtime import *  # noqa: F401,F403
 from . import shell_methods_commands as _shell_commands
 from . import shell_methods_dispatch as _shell_dispatch
@@ -183,6 +100,7 @@ from . import shell_methods_skills as _shell_skills
 from . import shell_methods_trace as _shell_trace
 from . import turn_metrics as _shell_turn_metrics
 from . import shell_methods_ui as _shell_ui_methods
+
 
 def _latest_completed_learning_result_key(runtime: CliRuntime, *, session_id: str) -> str:
     try:
@@ -205,17 +123,30 @@ class ProductizedShell:
         ShellCommandSpec("/help", "Open the command palette and interaction hints"),
         ShellCommandSpec("/status", "Refresh elephant, provider, and Personal Model posture"),
         ShellCommandSpec("/recall", "Inspect Step/Episode recall evidence for this elephant"),
-        ShellCommandSpec("/tools", "Inspect, install, toggle, and run built-in or manifest-backed tools"),
-        ShellCommandSpec("/skills", "Discover, inspect, install, and toggle built-in or external skill packages"),
+        ShellCommandSpec(
+            "/tools",
+            "Inspect, install, toggle, and run built-in or manifest-backed tools",
+        ),
+        ShellCommandSpec(
+            "/skills",
+            "Discover, inspect, install, and toggle built-in or external skill packages",
+        ),
         ShellCommandSpec("/learn", "Queue or run background learning for this episode"),
         ShellCommandSpec("/gateway", "Inspect gateway posture and open the CLI gateway setup path"),
-        ShellCommandSpec("/cron", "Inspect, create, pause, resume, and remove built-in scheduled jobs"),
-        ShellCommandSpec("/providers", "Set or switch the active provider, endpoint, key, and embedding path"),
+        ShellCommandSpec(
+            "/cron",
+            "Inspect, create, pause, resume, and remove built-in scheduled jobs",
+        ),
+        ShellCommandSpec(
+            "/providers",
+            "Set or switch the active provider, endpoint, key, and embedding path",
+        ),
         ShellCommandSpec("/models", "Set or switch the active model and context window"),
         ShellCommandSpec("/expand", "Reprint the last folded entry in full"),
         ShellCommandSpec("/clear", "Start a fresh Loop in this elephant and replay the opening reply"),
         ShellCommandSpec("/exit", "Leave the wake surface"),
     )
+
 
 def __init__(self, runtime: CliRuntime, *, session_id: str, opened: str, debug: bool = False) -> None:
     self.runtime = runtime
@@ -279,6 +210,7 @@ def __init__(self, runtime: CliRuntime, *, session_id: str, opened: str, debug: 
     self.runtime.prepare_session_surface(self.session_id, steady_embeddings=False)
     self._skill_slash_specs = self._load_skill_slash_specs()
     self._last_learning_notice_id = _latest_completed_learning_result_key(self.runtime, session_id=self.session_id)
+
 
 def run(self) -> int:
     if self._use_alternate_screen:
@@ -368,6 +300,7 @@ def run(self) -> int:
                 learning_detail = "background learning queued"
                 try:
                     from packages.kernel.episode_state_machine import close_episode
+
                     closed = close_episode(
                         self.runtime.repository,
                         self.session_id,
@@ -377,7 +310,7 @@ def run(self) -> int:
                     )
                     # close_episode only enqueues; an explicit worker start is needed to consume the job
                     self.runtime._ensure_learning_worker_if_needed()
-                    learning_detail = f"episode closed · learning queued"
+                    learning_detail = "episode closed · learning queued"
                 except Exception:
                     pass
                 self._append_entry(
@@ -400,6 +333,7 @@ def run(self) -> int:
             sys.stdout.flush()
     return 0
 
+
 def _append_due_cron_jobs(self) -> None:
     assistant_name = self._assistant_name()
     for execution in self.runtime.run_due_cron_jobs(session_id=self.session_id):
@@ -410,11 +344,14 @@ def _append_due_cron_jobs(self) -> None:
             meta=f"cron · {execution.job.name}",
         )
 
+
 def _interactive_clarify_surface(self) -> ShellInteractiveClarifySurface:
     return ShellInteractiveClarifySurface(self)
 
+
 def _render_startup_sequence(self) -> None:
     return None
+
 
 def _render_boot_frame(self):
     continuity = self.runtime.inspect_continuity(session_id=self.session_id)
@@ -442,6 +379,7 @@ def _render_boot_frame(self):
         brand_mark=self._render_growth_mark(stage_id, level=growth.level),
     )
 
+
 def _refresh_shell_frame(self) -> None:
     current = self._current_shell_frame_token()
     if not self._use_alternate_screen and self._last_shell_frame_token == current:
@@ -456,6 +394,7 @@ def _refresh_shell_frame(self) -> None:
     self.console.print(self._render_shell_frame())
     self._last_shell_frame_token = current
 
+
 def _refresh_shell_frame_if_needed(self) -> bool:
     current = self._current_shell_frame_token()
     if current == self._last_shell_frame_token:
@@ -463,12 +402,14 @@ def _refresh_shell_frame_if_needed(self) -> bool:
     self._refresh_shell_frame()
     return True
 
+
 def _print_transition_footer(self) -> None:
     """No-op. Previously printed a static divider + elephant emoji between turns,
     but prompt_toolkit's erase_when_done never cleans it up — leaving orphan
     lines in scrollback. The composer Application now starts immediately
     after _render_pending_entries(), so no gap-filling is needed.
     """
+
 
 def _current_shell_frame_token(self) -> tuple[object, ...]:
     return (
@@ -500,6 +441,7 @@ def _pending_context_compaction_frame_token(self) -> tuple[object, ...]:
         int(frame.get("tick") or 0),
         tuple(stage_tokens),
     )
+
 
 def _append_providers(self, args: list[str]) -> None:
     action = args[0] if args else "configure"
@@ -562,9 +504,7 @@ def _append_providers(self, args: list[str]) -> None:
     current_provider_id = str(provider.get("provider_id") or "openai-compatible")
     initial_state = provider_setup_defaults(self.runtime, current_provider_id)
     initial_state.base_url = str(provider.get("base_url") or initial_state.base_url)
-    initial_state.model_id = str(
-        provider.get("model_id") or provider.get("default_model") or initial_state.model_id
-    )
+    initial_state.model_id = str(provider.get("model_id") or provider.get("default_model") or initial_state.model_id)
     initial_state.reasoning_effort = (
         str(provider.get("reasoning_effort")).strip()
         if provider.get("reasoning_effort") is not None
@@ -605,6 +545,7 @@ def _append_providers(self, args: list[str]) -> None:
             ]
         ),
     )
+
 
 def _append_provider_embeddings(self, args: list[str]) -> None:
     action = args[0] if args else "status"
@@ -699,6 +640,7 @@ def _append_provider_embeddings(self, args: list[str]) -> None:
         ),
     )
 
+
 def _show_growth_celebration_if_needed(self):
     update = self.runtime.consume_growth_update(session_id=self.session_id)
     if update is None:
@@ -712,6 +654,7 @@ def _show_growth_celebration_if_needed(self):
     # from the post-turn background thread while a prompt_toolkit
     # Application owns the terminal.
     return transition
+
 
 def _render_level_up_frame(self, update, *, tick: int):
     marker = ("*", "+", "*", "+")[tick % 4]
@@ -728,6 +671,7 @@ def _render_level_up_frame(self, update, *, tick: int):
         border_style=BRAND_ACCENT,
         padding=(0, 1),
     )
+
 
 def _render_stage_transition_frame(self, update, *, tick: int):
     if Table is None or Group is None:
@@ -759,6 +703,7 @@ def _render_stage_transition_frame(self, update, *, tick: int):
         border_style=BRAND_ACCENT,
         padding=(0, 1),
     )
+
 
 ProductizedShell.__init__ = __init__
 ProductizedShell.run = run
@@ -817,7 +762,9 @@ ProductizedShell._is_startup_conversational_command = _shell_ui_methods._is_star
 ProductizedShell._startup_state_focus_dispatch_ready = _shell_ui_methods._startup_state_focus_dispatch_ready
 ProductizedShell._startup_should_hold_user_command = _shell_ui_methods._startup_should_hold_user_command
 ProductizedShell._mark_startup_user_turn_submitted = _shell_ui_methods._mark_startup_user_turn_submitted
-ProductizedShell._startup_should_surface_state_focus_notices = _shell_ui_methods._startup_should_surface_state_focus_notices
+ProductizedShell._startup_should_surface_state_focus_notices = (
+    _shell_ui_methods._startup_should_surface_state_focus_notices
+)
 ProductizedShell._set_state_focus_runtime_notice = _shell_ui_methods._set_state_focus_runtime_notice
 ProductizedShell._clear_state_focus_runtime_notice = _shell_ui_methods._clear_state_focus_runtime_notice
 ProductizedShell._sync_state_focus_runtime_notices = _shell_ui_methods._sync_state_focus_runtime_notices

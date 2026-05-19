@@ -111,7 +111,7 @@ class PromptPurityTest(unittest.TestCase):
             self.assertIsNone(
                 match,
                 msg=f"runtime id matching {pattern.pattern!r} leaked into rendered prompt: "
-                    f"match={match.group(0) if match else None}",
+                f"match={match.group(0) if match else None}",
             )
 
     def test_prompt_contains_human_readable_titles_and_content(self) -> None:

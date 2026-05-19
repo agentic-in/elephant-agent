@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html import unescape as html_unescape
 import json
@@ -247,6 +247,7 @@ class UrllibJSONHTTPTransport:
             retry_after_raw = headers_dict.get("retry-after")
             if retry_after_raw is not None:
                 from packages.harness.retry_policy import parse_retry_after
+
                 retry_after_s = parse_retry_after(retry_after_raw)
         message = self._status_error_message(
             status_code=int(exc.code),
@@ -350,9 +351,7 @@ class UrllibJSONHTTPTransport:
     ) -> JSONHTTPResponse:
         curl = shutil.which("curl")
         if curl is None:
-            raise RuntimeError(
-                f"provider request failed for {url}: curl is unavailable for TLS fallback"
-            )
+            raise RuntimeError(f"provider request failed for {url}: curl is unavailable for TLS fallback")
         status_marker = "__ELEPHANT_STATUS__:"
         max_time = max(1, int(round(self.timeout_seconds)))
         connect_timeout = max(1, min(10, max_time))
@@ -418,9 +417,7 @@ class UrllibJSONHTTPTransport:
     ):
         curl = shutil.which("curl")
         if curl is None:
-            raise RuntimeError(
-                f"provider request failed for {url}: curl is unavailable for TLS fallback"
-            )
+            raise RuntimeError(f"provider request failed for {url}: curl is unavailable for TLS fallback")
         status_marker = "__ELEPHANT_STATUS__:"
         max_time = max(1, int(round(self.stream_timeout_seconds)))
         connect_timeout = max(1, min(10, max_time))

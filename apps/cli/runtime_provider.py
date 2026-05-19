@@ -7,7 +7,10 @@ from collections.abc import Mapping
 from typing import Any
 from uuid import uuid4
 
-from apps.provider_runtime import capture_runtime_secret_env, provider_profile_from_payload
+from apps.provider_runtime import (
+    capture_runtime_secret_env,
+    provider_profile_from_payload,
+)
 from packages.continuity import RelationshipPolicy, build_relationship_policy
 from packages.auth import AuthProfile, SecretReference
 from packages.embeddings import (
@@ -26,16 +29,21 @@ from packages.contracts.runtime import ExecutionResult, PersonalModelRuntimeStat
 from packages.models.provider_catalog import provider_definition
 from packages.models.provider_runtime import ProviderCatalogRecord, ProviderSetupGuide
 from packages.security import SecurityPolicy, default_surface_policy_bundles
-from packages.state import CompanionSettings, LoadedProfile, normalize_profile_mode
-from packages.state.loader import companion_manifest_payload
+from packages.state import CompanionSettings, LoadedProfile
 from .runtime_voice import VoiceInputRequest, build_provider_voice_service
 
 from .runtime_cognition import _CliContextCapability
 from .runtime_extensions import _PreviewTelemetrySink
-from .runtime_support import CliVoiceTurnResult, _PLACEHOLDER_MODELS_BY_PROVIDER, _iso, _utc_now
+from .runtime_support import (
+    CliVoiceTurnResult,
+    _PLACEHOLDER_MODELS_BY_PROVIDER,
+    _iso,
+    _utc_now,
+)
 
 _EMBEDDING_API_KEY_ENV_VAR = OPENAI_COMPATIBLE_EMBED_DEFAULT_SECRET_ENV_VAR
 _EMBEDDING_API_KEY_REFERENCE_ID = OPENAI_COMPATIBLE_EMBED_SECRET_REFERENCE_ID
+
 
 class CliRuntimeProviderMixin:
     def provider_summary(self) -> Mapping[str, object]:
@@ -201,7 +209,10 @@ class CliRuntimeProviderMixin:
         provider = dict(self.provider_summary())
         profile = self._active_embedding_provider_profile()
         if profile is not None:
-            reference = next((item for item in profile.secret_references if item.secret_key == "api_key"), None)
+            reference = next(
+                (item for item in profile.secret_references if item.secret_key == "api_key"),
+                None,
+            )
             reference_id = reference.reference_id if reference is not None else ""
             has_secret = bool(reference_id) and self.repository.has_auth_secret_value(reference_id)
             return {
@@ -420,7 +431,13 @@ class CliRuntimeProviderMixin:
                     )
                 )
             except Exception as error:  # pragma: no cover - defensive surface guard
-                checks.append({"check": "model_catalog", "status": "not-ready", "summary": str(error)})
+                checks.append(
+                    {
+                        "check": "model_catalog",
+                        "status": "not-ready",
+                        "summary": str(error),
+                    }
+                )
             else:
                 live_models = tuple(model for model in discovered_models if model.source != "catalog-hint")
                 if live_models:
@@ -448,9 +465,7 @@ class CliRuntimeProviderMixin:
                     "or enter the exact model id before running runtime checks"
                 )
             elif live_models and configured_model and configured_model not in {model.model_id for model in live_models}:
-                probe_error = (
-                    f"configured model '{configured_model}' was not returned by the provider model catalog"
-                )
+                probe_error = f"configured model '{configured_model}' was not returned by the provider model catalog"
             else:
                 try:
                     probe = self.provider_test(prompt="Doctor check")
@@ -493,9 +508,7 @@ class CliRuntimeProviderMixin:
             if self.repository.has_auth_secret_value(reference.reference_id)
         )
         missing_reference_ids = tuple(
-            reference.reference_id
-            for reference in secret_refs
-            if reference.reference_id not in stored_reference_ids
+            reference.reference_id for reference in secret_refs if reference.reference_id not in stored_reference_ids
         )
         checks: list[dict[str, object]] = [
             {
@@ -505,21 +518,14 @@ class CliRuntimeProviderMixin:
             },
             {
                 "check": "secret_boundary",
-                "status": (
-                    "ok"
-                    if not missing_reference_ids
-                    else "warning"
-                ),
+                "status": ("ok" if not missing_reference_ids else "warning"),
                 "summary": (
                     "preview fallback carries no runtime provider secrets"
                     if provider["source"] != "configured" and embedding_profile is None
                     else (
                         "provider and embedding secrets are stored in the encrypted local vault"
                         if not missing_reference_ids
-                        else (
-                            "missing stored provider secrets for "
-                            + ", ".join(missing_reference_ids)
-                        )
+                        else ("missing stored provider secrets for " + ", ".join(missing_reference_ids))
                     )
                 ),
             },
@@ -530,16 +536,10 @@ class CliRuntimeProviderMixin:
             },
         ]
         return {
-            "status": (
-                "ready"
-                if not missing_reference_ids
-                else "not-ready"
-            ),
+            "status": ("ready" if not missing_reference_ids else "not-ready"),
             "provider": provider,
             "checks": checks,
-            "surface_bundles": tuple(
-                bundle.to_record(policy) for bundle in default_surface_policy_bundles()
-            ),
+            "surface_bundles": tuple(bundle.to_record(policy) for bundle in default_surface_policy_bundles()),
             "support_bundle": self.security_support_bundle(),
         }
 
@@ -764,7 +764,11 @@ class CliRuntimeProviderMixin:
             extra_headers=extra_headers,
         )
         # Write provider to config.yaml
-        from packages.runtime_config import save_provider_to_config, global_config_path_for_state_dir
+        from packages.runtime_config import (
+            save_provider_to_config,
+            global_config_path_for_state_dir,
+        )
+
         config_path = global_config_path_for_state_dir(self.paths.state_dir)
         save_provider_to_config(
             config_path,

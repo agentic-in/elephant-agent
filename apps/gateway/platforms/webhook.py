@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID, GatewayExchange, GatewayInboundMessage
+from packages.gateway_core import (
+    DEFAULT_GATEWAY_ACCOUNT_ID,
+    GatewayExchange,
+    GatewayInboundMessage,
+)
 
 from ..plugins import GatewayAdapterDescriptor, GatewayServicePluginRegistration
 from ..runtime_app import GatewayApp
@@ -45,11 +49,7 @@ class WebhookMessagingAdapter:
             account=_account_ref(
                 self.adapter_id,
                 account_id=str(payload.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID),
-                tenant_id=(
-                    str(payload["tenant_id"])
-                    if payload.get("tenant_id") is not None
-                    else None
-                ),
+                tenant_id=(str(payload["tenant_id"]) if payload.get("tenant_id") is not None else None),
                 surface="generic-webhook",
             ),
             conversation=_conversation_ref(
@@ -58,21 +58,13 @@ class WebhookMessagingAdapter:
             ),
             sender=_sender_ref(
                 str(payload["external_user_id"]),
-                display_name=(
-                    str(payload["display_name"])
-                    if payload.get("display_name") is not None
-                    else None
-                ),
+                display_name=(str(payload["display_name"]) if payload.get("display_name") is not None else None),
             ),
             body=str(payload["body"]),
             reply_to_message_id=(
                 str(payload["reply_to_message_id"])
                 if payload.get("reply_to_message_id") is not None
-                else (
-                    str(payload["reply_to_event_id"])
-                    if payload.get("reply_to_event_id") is not None
-                    else None
-                )
+                else (str(payload["reply_to_event_id"]) if payload.get("reply_to_event_id") is not None else None)
             ),
             attachment_refs=attachment_refs,
             policy_hint=_policy_hint(
@@ -97,6 +89,7 @@ class WebhookMessagingAdapter:
             attachment_refs=inbound.attachment_refs,
             metadata=response_metadata,
         )
+
 
 @dataclass(frozen=True, slots=True)
 class WebhookGatewayPlatform:

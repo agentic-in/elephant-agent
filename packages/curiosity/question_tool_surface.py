@@ -49,11 +49,21 @@ class CuriosityQuestionManagementSurface:
         normalized = action.strip().lower()
         pm_id = self._personal_model_id(session_id, personal_model_id)
         if normalized in {"list", "ls"}:
-            return {"action": "list", "questions": self._list(pm_id, status=status, lens=lens, sub_lens=sub_lens, limit=limit)}
+            return {
+                "action": "list",
+                "questions": self._list(pm_id, status=status, lens=lens, sub_lens=sub_lens, limit=limit),
+            }
         if normalized in {"inspect", "view"}:
-            return {"action": "inspect", "question": self._question_payload(self._load(pm_id, question_id))}
+            return {
+                "action": "inspect",
+                "question": self._question_payload(self._load(pm_id, question_id)),
+            }
         if normalized in {"bank", "templates"}:
-            return {"action": "bank", "templates": [], "note": "Static question bank removed. Questions are now created by the learning agent."}
+            return {
+                "action": "bank",
+                "templates": [],
+                "note": "Static question bank removed. Questions are now created by the learning agent.",
+            }
         if normalized == "create":
             question = self._create(
                 pm_id,
@@ -109,7 +119,11 @@ class CuriosityQuestionManagementSurface:
             return {"action": "stale", "question": self._question_payload(question)}
         if normalized in {"delete", "remove"}:
             deleted = self._delete(pm_id, question_id)
-            return {"action": "delete", "question_id": deleted.question_id, "status": "deleted"}
+            return {
+                "action": "delete",
+                "question_id": deleted.question_id,
+                "status": "deleted",
+            }
         raise ValueError(f"tool.personal_model.questions unsupported action: {action!r}")
 
     def _personal_model_id(self, session_id: str, explicit: str) -> str:
@@ -124,9 +138,19 @@ class CuriosityQuestionManagementSurface:
             ensure(personal_model_id=pm_id)
         return pm_id
 
-    def _list(self, personal_model_id: str, *, status: str, lens: str, sub_lens: str, limit: int) -> list[dict[str, Any]]:
+    def _list(
+        self,
+        personal_model_id: str,
+        *,
+        status: str,
+        lens: str,
+        sub_lens: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
         statuses: str | tuple[str, ...]
-        statuses = tuple(item.strip() for item in status.replace("|", ",").split(",") if item.strip()) if status else "open"
+        statuses = (
+            tuple(item.strip() for item in status.replace("|", ",").split(",") if item.strip()) if status else "open"
+        )
         questions = self.repository.list_open_questions(
             personal_model_id=personal_model_id,
             status=statuses,
@@ -150,12 +174,12 @@ class CuriosityQuestionManagementSurface:
                 return question
         if "/" in resolved_id:
             lens, sub_lens = (part.strip() for part in resolved_id.split("/", 1))
-            matches = [
-                question for question in questions
-                if question.lens == lens and question.sub_lens == sub_lens
-            ]
+            matches = [question for question in questions if question.lens == lens and question.sub_lens == sub_lens]
             if matches:
-                return sorted(matches, key=lambda q: (q.status != "open", -q.priority, q.created_at))[0]
+                return sorted(
+                    matches,
+                    key=lambda q: (q.status != "open", -q.priority, q.created_at),
+                )[0]
         raise KeyError(resolved_id)
 
     def _create(
@@ -190,7 +214,10 @@ class CuriosityQuestionManagementSurface:
             source=resolved_source,
             created_at=datetime.now(timezone.utc),
             status="open",
-            metadata={"managed_by": "tool.personal_model.questions", **dict(metadata or {})},
+            metadata={
+                "managed_by": "tool.personal_model.questions",
+                **dict(metadata or {}),
+            },
         )
         self.repository.upsert_open_question(question)
         return question
@@ -215,7 +242,9 @@ class CuriosityQuestionManagementSurface:
         if updates.get("priority") is not None:
             values["priority"] = _priority(updates.get("priority"), default=current.priority)
         if str(updates.get("sensitivity") or "").strip():
-            values["sensitivity"] = _normalized_choice(str(updates["sensitivity"]), ALLOWED_SENSITIVITIES, field="sensitivity")
+            values["sensitivity"] = _normalized_choice(
+                str(updates["sensitivity"]), ALLOWED_SENSITIVITIES, field="sensitivity"
+            )
         if str(updates.get("source") or "").strip():
             values["source"] = _normalized_choice(str(updates["source"]), ALLOWED_QUESTION_SOURCES, field="source")
         updated = replace(current, **values)
@@ -251,7 +280,10 @@ class CuriosityQuestionManagementSurface:
             delete(question_id=current.question_id)
             return current
         with self.repository.connection() as connection:
-            connection.execute("DELETE FROM personal_model_open_questions WHERE question_id = ?", (current.question_id,))
+            connection.execute(
+                "DELETE FROM personal_model_open_questions WHERE question_id = ?",
+                (current.question_id,),
+            )
             connection.commit()
         return current
 
@@ -276,7 +308,13 @@ class CuriosityQuestionManagementSurface:
         }
 
 
-def _normalized_choice(value: str, allowed: set[str] | frozenset[str], *, default: str | None = None, field: str) -> str:
+def _normalized_choice(
+    value: str,
+    allowed: set[str] | frozenset[str],
+    *,
+    default: str | None = None,
+    field: str,
+) -> str:
     normalized = str(value or default or "").strip().lower()
     if normalized not in allowed:
         raise ValueError(f"{field} must be one of {sorted(allowed)}: {value!r}")

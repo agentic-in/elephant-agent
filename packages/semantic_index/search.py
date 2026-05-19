@@ -105,9 +105,7 @@ class HybridSemanticSearcher:
         )
         entries_by_id = {entry.semantic_index_entry_id: entry for entry in entries}
         documents_by_entry_id = _documents_by_entry_id(self.repository, entries, query)
-        contributions: dict[str, dict[str, float]] = {
-            entry_id: {} for entry_id in documents_by_entry_id
-        }
+        contributions: dict[str, dict[str, float]] = {entry_id: {} for entry_id in documents_by_entry_id}
         vector_ranked_ids = self._vector_ranking(query, documents_by_entry_id, entries_by_id)
         _add_ranked_signal(
             contributions,
@@ -249,7 +247,12 @@ def _episode_record(
         except Exception:
             episode = None
     if episode is None:
-        return _metadata_record(entry, metadata, schema_version="episode_summary/v1", layer_type="episode_summary")
+        return _metadata_record(
+            entry,
+            metadata,
+            schema_version="episode_summary/v1",
+            layer_type="episode_summary",
+        )
     episode_metadata = {str(key): str(value) for key, value in dict(getattr(episode, "metadata", {}) or {}).items()}
     text = _indexed_text(metadata)
     if not text:
@@ -271,7 +274,12 @@ def _episode_record(
         state_id=getattr(episode, "state_id", None) or entry.state_id,
         layer_type="episode_summary",
         created_at=getattr(episode, "ended_at", None) or getattr(episode, "started_at", None) or entry.created_at,
-        metadata={**episode_metadata, **dict(metadata), "kind": "episode_summary", "episode_id": episode_id},
+        metadata={
+            **episode_metadata,
+            **dict(metadata),
+            "kind": "episode_summary",
+            "episode_id": episode_id,
+        },
     )
 
 
@@ -322,7 +330,10 @@ def _step_text(step: object, metadata: Mapping[str, str]) -> str:
     elif action == "emit_response":
         parts = (str(metadata.get("final_response") or metadata.get("assistant_response") or summary).strip(),)
     elif action == "reply":
-        parts = (summary, str(metadata.get("final_response") or metadata.get("assistant_response") or "").strip())
+        parts = (
+            summary,
+            str(metadata.get("final_response") or metadata.get("assistant_response") or "").strip(),
+        )
     else:
         parts = (
             summary,
@@ -340,7 +351,12 @@ def _fact_record(
 ) -> SemanticSourceDocument | None:
     fact = _load_fact(repository, entry, fact_id)
     if fact is None:
-        return _metadata_record(entry, metadata, schema_version="personal_model_claim/v1", layer_type="personal_model_claim")
+        return _metadata_record(
+            entry,
+            metadata,
+            schema_version="personal_model_claim/v1",
+            layer_type="personal_model_claim",
+        )
     fact_metadata = {str(key): str(value) for key, value in dict(getattr(fact, "metadata", {}) or {}).items()}
     text = _indexed_text(metadata) or str(getattr(fact, "text", "") or "").strip()
     return SemanticSourceDocument(
@@ -376,7 +392,10 @@ def _load_fact(repository: SemanticSearchRepository, entry: SemanticIndexEntry, 
         )
     except Exception:
         return None
-    return next((fact for fact in facts if str(getattr(fact, "fact_id", "") or "") == fact_id), None)
+    return next(
+        (fact for fact in facts if str(getattr(fact, "fact_id", "") or "") == fact_id),
+        None,
+    )
 
 
 def _metadata_record(
@@ -389,7 +408,9 @@ def _metadata_record(
     text = _indexed_text(metadata)
     if not text:
         return None
-    resolved_layer = layer_type or str(metadata.get("layer_type") or metadata.get("kind") or entry.owner_scope or "semantic_index")
+    resolved_layer = layer_type or str(
+        metadata.get("layer_type") or metadata.get("kind") or entry.owner_scope or "semantic_index"
+    )
     return SemanticSourceDocument(
         source_id=entry.source_id,
         kind="derived",
@@ -489,15 +510,11 @@ def _bm25_ranking(
     query_tokens = _tokens(text)
     if not query_tokens or not documents_by_entry_id:
         return ()
-    documents = {
-        entry_id: _tokens(_document_text(document))
-        for entry_id, document in documents_by_entry_id.items()
-    }
+    documents = {entry_id: _tokens(_document_text(document)) for entry_id, document in documents_by_entry_id.items()}
     document_count = float(len(documents))
     average_length = sum(len(tokens) for tokens in documents.values()) / max(document_count, 1.0)
     document_frequency = {
-        token: sum(1 for tokens in documents.values() if token in tokens)
-        for token in set(query_tokens)
+        token: sum(1 for tokens in documents.values() if token in tokens) for token in set(query_tokens)
     }
     scored: list[tuple[str, float]] = []
     for entry_id, tokens in documents.items():
@@ -509,7 +526,9 @@ def _bm25_ranking(
             frequency = token_counts.get(token, 0)
             if frequency <= 0:
                 continue
-            idf = math.log(1.0 + ((document_count - document_frequency[token] + 0.5) / (document_frequency[token] + 0.5)))
+            idf = math.log(
+                1.0 + ((document_count - document_frequency[token] + 0.5) / (document_frequency[token] + 0.5))
+            )
             denominator = frequency + 1.5 * (1.0 - 0.75 + 0.75 * (len(tokens) / max(average_length, 1.0)))
             score += idf * ((frequency * 2.5) / denominator)
         if score > 0.0:

@@ -5,7 +5,10 @@ import unittest
 from unittest import mock
 
 from apps.gateway import cron_service
-from apps.gateway.cron_service import cron_execution_should_deliver, _try_deliver_cron_result
+from apps.gateway.cron_service import (
+    cron_execution_should_deliver,
+    _try_deliver_cron_result,
+)
 from packages.cron import CronJob, CronJobExecution
 
 
@@ -37,7 +40,10 @@ class CronServiceDeliveryTest(unittest.TestCase):
             recorded_at=datetime.now(timezone.utc),
         )
 
-        _try_deliver_cron_result(lambda delivered_job, delivered_execution: calls.append((delivered_job, delivered_execution)), execution)
+        _try_deliver_cron_result(
+            lambda delivered_job, delivered_execution: calls.append((delivered_job, delivered_execution)),
+            execution,
+        )
 
         self.assertEqual(calls, [])
         self.assertFalse(cron_execution_should_deliver(execution))
@@ -52,7 +58,10 @@ class CronServiceDeliveryTest(unittest.TestCase):
             recorded_at=datetime.now(timezone.utc),
         )
 
-        _try_deliver_cron_result(lambda delivered_job, delivered_execution: calls.append((delivered_job, delivered_execution)), execution)
+        _try_deliver_cron_result(
+            lambda delivered_job, delivered_execution: calls.append((delivered_job, delivered_execution)),
+            execution,
+        )
 
         self.assertEqual(calls, [(job, execution)])
         self.assertTrue(cron_execution_should_deliver(execution))
@@ -67,7 +76,10 @@ class CronServiceDeliveryTest(unittest.TestCase):
             recorded_at=datetime.now(timezone.utc),
         )
 
-        _try_deliver_cron_result(lambda delivered_job, delivered_execution: calls.append((delivered_job, delivered_execution)), execution)
+        _try_deliver_cron_result(
+            lambda delivered_job, delivered_execution: calls.append((delivered_job, delivered_execution)),
+            execution,
+        )
 
         self.assertEqual(calls, [])
         self.assertFalse(cron_execution_should_deliver(execution))

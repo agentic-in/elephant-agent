@@ -29,12 +29,7 @@ def _is_cjk(char: str) -> bool:
     if not char:
         return False
     code = ord(char)
-    return (
-        0x4E00 <= code <= 0x9FFF
-        or 0x3400 <= code <= 0x4DBF
-        or 0x3040 <= code <= 0x30FF
-        or 0xAC00 <= code <= 0xD7AF
-    )
+    return 0x4E00 <= code <= 0x9FFF or 0x3400 <= code <= 0x4DBF or 0x3040 <= code <= 0x30FF or 0xAC00 <= code <= 0xD7AF
 
 
 def _needs_collapsed_whitespace_spacing(previous: str, current: str) -> bool:
@@ -145,9 +140,7 @@ def _protect_code_blocks(text: str) -> _ProtectedCode:
 def _restore_code_blocks(text: str, blocks: tuple[str, ...]) -> str:
     if not blocks:
         return text
-    placeholder_re = re.compile(
-        re.escape(_PLACEHOLDER_PREFIX) + r"(\d+)" + re.escape(_PLACEHOLDER_SUFFIX)
-    )
+    placeholder_re = re.compile(re.escape(_PLACEHOLDER_PREFIX) + r"(\d+)" + re.escape(_PLACEHOLDER_SUFFIX))
     restored = text
     while True:
         changed = False
@@ -172,7 +165,7 @@ def parse_reasoning_content(content: str, *, streaming: bool) -> ParsedReasoning
     last_index = 0
 
     for match in _TAG_RE.finditer(masked):
-        body_parts.append(masked[last_index:match.start()])
+        body_parts.append(masked[last_index : match.start()])
         segments.append(match.group(2))
         last_index = match.end()
 
@@ -190,9 +183,7 @@ def parse_reasoning_content(content: str, *, streaming: bool) -> ParsedReasoning
         body_parts.append(rest)
 
     restored_segments = tuple(_restore_code_blocks(segment, protected.blocks) for segment in segments)
-    restored_pending = (
-        _restore_code_blocks(pending, protected.blocks) if pending is not None else None
-    )
+    restored_pending = _restore_code_blocks(pending, protected.blocks) if pending is not None else None
     restored_body = _restore_code_blocks("".join(body_parts), protected.blocks)
     return ParsedReasoningContent(
         segments=restored_segments,

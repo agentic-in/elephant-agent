@@ -33,7 +33,9 @@ def user_profile_field_values(record: RenderedUserProfileView | None) -> dict[st
     return values
 
 
-def user_profile_durable_notes(record: RenderedUserProfileView | None) -> tuple[str, ...]:
+def user_profile_durable_notes(
+    record: RenderedUserProfileView | None,
+) -> tuple[str, ...]:
     if record is None:
         return ()
     return tuple(_clean(note) for note in record.durable_notes if _clean(note) is not None)
@@ -52,9 +54,7 @@ def apply_user_profile_update(
         next_notes: tuple[str, ...] = ()
     else:
         explicit_values = {
-            key: cleaned
-            for key, value in (field_values or {}).items()
-            if (cleaned := _clean(value)) is not None
+            key: cleaned for key, value in (field_values or {}).items() if (cleaned := _clean(value)) is not None
         }
         parsed_text = parse_user_profile_content(text or "") if text is not None else None
         if text is not None and not append and not explicit_values:
@@ -108,4 +108,8 @@ def _clean(value: str | None) -> str | None:
     return cleaned or None
 
 
-__all__ = ["apply_user_profile_update", "user_profile_durable_notes", "user_profile_field_values"]
+__all__ = [
+    "apply_user_profile_update",
+    "user_profile_durable_notes",
+    "user_profile_field_values",
+]

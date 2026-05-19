@@ -43,7 +43,10 @@ class BrowserUseProvider(CloudBrowserProvider):
         response = _http_json(
             "POST",
             os.environ.get("BROWSER_USE_API_URL", "https://api.browser-use.com/api/v3").rstrip("/") + "/browsers",
-            headers={"X-Browser-Use-API-Key": api_key, "Content-Type": "application/json"},
+            headers={
+                "X-Browser-Use-API-Key": api_key,
+                "Content-Type": "application/json",
+            },
             payload={"timeout": int(os.environ.get("BROWSER_USE_TIMEOUT_MINUTES", "5"))},
         )
         session_id = str(response.get("id") or "")
@@ -63,7 +66,10 @@ class BrowserUseProvider(CloudBrowserProvider):
             "PATCH",
             os.environ.get("BROWSER_USE_API_URL", "https://api.browser-use.com/api/v3").rstrip()
             + f"/browsers/{session_id}",
-            headers={"X-Browser-Use-API-Key": api_key, "Content-Type": "application/json"},
+            headers={
+                "X-Browser-Use-API-Key": api_key,
+                "Content-Type": "application/json",
+            },
             payload={"action": "stop"},
             tolerate_http_errors=True,
         )
@@ -127,7 +133,10 @@ class FirecrawlProvider(CloudBrowserProvider):
         response = _http_json(
             "POST",
             os.environ.get("FIRECRAWL_API_URL", "https://api.firecrawl.dev").rstrip("/") + "/v2/browser",
-            headers={"Authorization": f"Bearer {os.environ.get('FIRECRAWL_API_KEY', '')}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {os.environ.get('FIRECRAWL_API_KEY', '')}",
+                "Content-Type": "application/json",
+            },
             payload={"ttl": int(os.environ.get("FIRECRAWL_BROWSER_TTL", "300"))},
         )
         session_id = str(response.get("id") or "")
@@ -166,8 +175,14 @@ def _http_json(
             data = response.read()
     except HTTPError as error:
         if tolerate_http_errors:
-            return {"ok": False, "status": error.code, "body": error.read().decode("utf-8", errors="replace")}
-        raise RuntimeError(f"browser provider request failed: HTTP {error.code} {error.read().decode('utf-8', errors='replace')}") from error
+            return {
+                "ok": False,
+                "status": error.code,
+                "body": error.read().decode("utf-8", errors="replace"),
+            }
+        raise RuntimeError(
+            f"browser provider request failed: HTTP {error.code} {error.read().decode('utf-8', errors='replace')}"
+        ) from error
     except URLError as error:
         if tolerate_http_errors:
             return {"ok": False, "error": str(error)}

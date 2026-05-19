@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -145,7 +144,9 @@ class SecurityObservabilityIntegrationTests(unittest.TestCase):
                 metadata={"token": "sk-live-123"},
             )
 
-    def test_security_records_redact_secret_like_metadata_and_support_details(self) -> None:
+    def test_security_records_redact_secret_like_metadata_and_support_details(
+        self,
+    ) -> None:
         sink = _CaptureSink()
         policy = SecurityPolicy(rules={})
         request = SecurityRequest(
@@ -214,11 +215,7 @@ class SecurityObservabilityIntegrationTests(unittest.TestCase):
 
             snapshot = json.loads(runtime.snapshot_path.read_text(encoding="utf-8"))
 
-        telemetry = [
-            record
-            for record in snapshot.get("telemetry", ())
-            if record.get("source") == "cli.operator"
-        ]
+        telemetry = [record for record in snapshot.get("telemetry", ()) if record.get("source") == "cli.operator"]
         self.assertGreaterEqual(len(telemetry), 2)
         self.assertEqual(telemetry[0]["name"], "approval.requested")
         self.assertIn(telemetry[-1]["name"], {"approval.granted", "approval.denied"})
@@ -254,16 +251,14 @@ class SecurityObservabilityIntegrationTests(unittest.TestCase):
             )
 
         self.assertEqual(exchange.delivery.policy_result.decision, PolicyDecision.ALLOW)
-        security_events = [
-            record
-            for record in app.telemetry.events
-            if record.get("source") == "gateway.messaging"
-        ]
+        security_events = [record for record in app.telemetry.events if record.get("source") == "gateway.messaging"]
         self.assertGreaterEqual(len(security_events), 4)
         self.assertEqual(security_events[0]["name"], "approval.requested")
         self.assertEqual(security_events[-1]["name"], "approval.granted")
 
-    def test_security_doctor_surfaces_redacted_support_bundle_and_policy_bundles(self) -> None:
+    def test_security_doctor_surfaces_redacted_support_bundle_and_policy_bundles(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             state_dir = root / "state"
@@ -303,8 +298,14 @@ class SecurityObservabilityIntegrationTests(unittest.TestCase):
             report["support_bundle"]["provider"]["stored_secret_reference_ids"],
             report["support_bundle"]["provider"]["secret_reference_ids"],
         )
-        self.assertEqual(report["support_bundle"]["provider"]["secret_store"], "encrypted-local-store")
-        self.assertEqual(report["support_bundle"]["embedding_provider"]["provider_id"], "openai-compatible-embed")
+        self.assertEqual(
+            report["support_bundle"]["provider"]["secret_store"],
+            "encrypted-local-store",
+        )
+        self.assertEqual(
+            report["support_bundle"]["embedding_provider"]["provider_id"],
+            "openai-compatible-embed",
+        )
         self.assertTrue(report["support_bundle"]["embedding_provider"]["secret_reference_ids"])
         self.assertEqual(
             report["support_bundle"]["embedding_provider"]["stored_secret_reference_ids"],
@@ -366,7 +367,10 @@ class SecurityObservabilityIntegrationTests(unittest.TestCase):
                             provider_id="openai-compatible-embed",
                             secret_name="api_token",
                             secret_key="api_key",
-                            metadata={"storage": "local-vault", "scope": "embedding-provider"},
+                            metadata={
+                                "storage": "local-vault",
+                                "scope": "embedding-provider",
+                            },
                         ),
                     ),
                     metadata={"embedding_active": "true", "dimensions": "1536"},
@@ -375,12 +379,13 @@ class SecurityObservabilityIntegrationTests(unittest.TestCase):
             report = runtime.security_doctor()
 
         self.assertEqual(report["status"], "not-ready")
-        boundary_check = next(
-            check for check in report["checks"] if check["check"] == "secret_boundary"
-        )
+        boundary_check = next(check for check in report["checks"] if check["check"] == "secret_boundary")
         self.assertEqual(boundary_check["status"], "warning")
         self.assertIn("missing stored provider secrets", str(boundary_check["summary"]))
-        self.assertIn("secret-embedding-provider-openai-compatible-active-api-key", str(boundary_check["summary"]))
+        self.assertIn(
+            "secret-embedding-provider-openai-compatible-active-api-key",
+            str(boundary_check["summary"]),
+        )
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 import re
 from typing import Mapping, Protocol
 from uuid import uuid4
@@ -293,17 +292,23 @@ def _extract_user_fields(text: str) -> dict[str, str]:
 def _extract_preference_updates(text: str) -> tuple[str, ...]:
     updates: list[str] = []
     lower = text.lower()
-    if re.search(r"(?i)(?:reply|respond|responses|replies|answers|be|keep).{0,24}(?:concise|brief|short)", text) or any(
-        token in text for token in ("简洁", "简短", "精炼")
-    ):
+    if re.search(
+        r"(?i)(?:reply|respond|responses|replies|answers|be|keep).{0,24}(?:concise|brief|short)",
+        text,
+    ) or any(token in text for token in ("简洁", "简短", "精炼")):
         updates.append("verbosity:concise")
-    if re.search(r"(?i)(?:reply|respond|responses|replies|answers|be|keep).{0,24}(?:detailed|thorough|long-form)", text) or any(
-        token in text for token in ("详细", "展开一些")
-    ):
+    if re.search(
+        r"(?i)(?:reply|respond|responses|replies|answers|be|keep).{0,24}(?:detailed|thorough|long-form)",
+        text,
+    ) or any(token in text for token in ("详细", "展开一些")):
         updates.append("verbosity:detailed")
-    if re.search(r"(?i)(?:reply|respond).{0,16}(?:in chinese)", text) or any(token in text for token in ("用中文", "中文回答", "请中文回答")):
+    if re.search(r"(?i)(?:reply|respond).{0,16}(?:in chinese)", text) or any(
+        token in text for token in ("用中文", "中文回答", "请中文回答")
+    ):
         updates.append("language:zh-CN")
-    if re.search(r"(?i)(?:reply|respond).{0,16}(?:in english)", text) or any(token in text for token in ("用英文", "英文回答", "请英文回答")):
+    if re.search(r"(?i)(?:reply|respond).{0,16}(?:in english)", text) or any(
+        token in text for token in ("用英文", "英文回答", "请英文回答")
+    ):
         updates.append("language:en")
     if "bullet" in lower or "bullets" in lower or "bullet points" in lower or "要点" in text or "列表" in text:
         updates.append("response-style:bullets")
@@ -317,13 +322,16 @@ def _extract_relationship_notes(text: str) -> tuple[str, ...]:
         lines = [text.strip()]
     for line in lines:
         lowered = line.lower()
-        if _first_match(
-            line,
-            (
-                r"(?im)^\s*(?:preferred name|name|nickname|current work|work|work focus)\s*[:：]",
-                r"(?im)^\s*(?:称呼|叫我|当前工作|工作方向|目前在做)\s*[:：]",
-            ),
-        ) is not None:
+        if (
+            _first_match(
+                line,
+                (
+                    r"(?im)^\s*(?:preferred name|name|nickname|current work|work|work focus)\s*[:：]",
+                    r"(?im)^\s*(?:称呼|叫我|当前工作|工作方向|目前在做)\s*[:：]",
+                ),
+            )
+            is not None
+        ):
             continue
         if any(
             marker in lowered
@@ -339,7 +347,19 @@ def _extract_relationship_notes(text: str) -> tuple[str, ...]:
                 "do not call me",
                 "keep it",
             )
-        ) or any(marker in line for marker in ("以后", "记住", "下次", "别叫我", "不要叫我", "回复时", "回答时", "说话时")):
+        ) or any(
+            marker in line
+            for marker in (
+                "以后",
+                "记住",
+                "下次",
+                "别叫我",
+                "不要叫我",
+                "回复时",
+                "回答时",
+                "说话时",
+            )
+        ):
             cleaned = _clean_capture(line)
             if cleaned:
                 notes.append(cleaned)
@@ -400,7 +420,9 @@ def _transcript_final_assistant_response(messages: tuple[PromptMessage, ...]) ->
     return ""
 
 
-def _transcript_tool_result_details(messages: tuple[PromptMessage, ...]) -> tuple[str, ...]:
+def _transcript_tool_result_details(
+    messages: tuple[PromptMessage, ...],
+) -> tuple[str, ...]:
     details: list[str] = []
     for message in messages:
         if message.role != "tool":

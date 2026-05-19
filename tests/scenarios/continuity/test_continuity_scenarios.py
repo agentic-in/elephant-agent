@@ -41,10 +41,12 @@ class ContinuityScenarioFixturesTest(unittest.TestCase):
         self.assertIn("no voice transport", fixture)
         self.assertNotIn("later voice support", fixture)
 
-    def test_companion_fixture_remains_the_text_first_identity_replacement(self) -> None:
+    def test_companion_fixture_remains_the_text_first_identity_replacement(
+        self,
+    ) -> None:
         fixture = (
-            SCENARIOS_PATH.parents[1] / "companion" / "text-first-continuity.md"
-        ).read_text(encoding="utf-8").lower()
+            (SCENARIOS_PATH.parents[1] / "companion" / "text-first-continuity.md").read_text(encoding="utf-8").lower()
+        )
 
         self.assertIn("text-first", fixture)
         self.assertIn("without voice transport", fixture)

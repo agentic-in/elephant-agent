@@ -114,8 +114,7 @@ def render_session_hint(
     if lang == "zh":
         return (
             "这里有一个可以顺带理解用户的开放问题。只在对话自然走到这里时，用自己的话轻轻问；"
-            "不要照抄模板，也不要像问卷。若用户回答，用 tool.personal_model.update 写成一个四 lens claim：\n"
-            + bullets
+            "不要照抄模板，也不要像问卷。若用户回答，用 tool.personal_model.update 写成一个四 lens claim：\n" + bullets
         )
     return (
         "One open question may help you understand the user. Ask it only when the conversation naturally opens a door; "
@@ -205,4 +204,9 @@ def _ensure_question_mark(text: str, language: str) -> str:
     return stripped + ("？" if language == "zh" else "?")
 
 
-__all__ = ["contextualize_question", "render_opener", "render_idle_push", "render_session_hint"]
+__all__ = [
+    "contextualize_question",
+    "render_opener",
+    "render_idle_push",
+    "render_session_hint",
+]

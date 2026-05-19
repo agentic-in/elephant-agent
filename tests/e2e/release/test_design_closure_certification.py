@@ -50,13 +50,13 @@ LIVE_PROVIDER_SMOKE_TARGETS = (
     "tests.e2e.deploy.test_installed_command_smoke.InstalledCommandLiveSmokeTest",
 )
 
-INSTALLED_USER_JOURNEY_TARGETS = (
-    "tests.e2e.deploy.test_installed_user_journey",
-)
+INSTALLED_USER_JOURNEY_TARGETS = ("tests.e2e.deploy.test_installed_user_journey",)
 
 
 class DesignClosureContractsTest(unittest.TestCase):
-    def test_design_closure_matrix_no_longer_tracks_deleted_voice_or_planning_modules(self) -> None:
+    def test_design_closure_matrix_no_longer_tracks_deleted_voice_or_planning_modules(
+        self,
+    ) -> None:
         makefile_text = MAKEFILE_PATH.read_text(encoding="utf-8")
 
         self.assertNotIn("tests.e2e.voice.test_voice_preview", makefile_text)
@@ -92,7 +92,9 @@ class DesignClosureContractsTest(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIn(target, text)
 
-    def test_design_closure_uses_canonical_docs_and_historical_inputs_stay_deleted(self) -> None:
+    def test_design_closure_uses_canonical_docs_and_historical_inputs_stay_deleted(
+        self,
+    ) -> None:
         for path in CANONICAL_DESIGN_DOCS:
             with self.subTest(path=path):
                 self.assertTrue(path.exists(), path)
@@ -138,6 +140,7 @@ class DesignClosureContractsTest(unittest.TestCase):
         ):
             with self.subTest(target=target):
                 self.assertIn(target, makefile_text)
+
 
 if __name__ == "__main__":
     unittest.main()

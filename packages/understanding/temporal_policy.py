@@ -14,7 +14,7 @@ The freshness score combines:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 VOLATILITY_HALF_LIVES: dict[str, float | None] = {
     "permanent": None,

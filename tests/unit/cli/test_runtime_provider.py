@@ -27,7 +27,9 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
             security_policy=mock.Mock(),
         )
 
-    def test_discover_provider_models_uses_discovered_credentials_when_profile_is_inactive(self) -> None:
+    def test_discover_provider_models_uses_discovered_credentials_when_profile_is_inactive(
+        self,
+    ) -> None:
         model_provider = mock.Mock()
         model_provider.active_profile.return_value = None
         model_provider.resolve_discovered_credentials.return_value = {"api_key": "ghu-discovered"}
@@ -47,7 +49,9 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
             api_key="ghu-discovered",
         )
 
-    def test_provider_doctor_rejects_placeholder_model_before_runtime_probe(self) -> None:
+    def test_provider_doctor_rejects_placeholder_model_before_runtime_probe(
+        self,
+    ) -> None:
         model_provider = mock.Mock()
         model_provider.describe.return_value = {
             "provider_id": "openai-compatible",
@@ -57,14 +61,19 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
             "model_id": "model-id",
             "base_url": "https://api.example.test/v1",
         }
-        model_provider.runtime_resolver.build_setup_guide.return_value = mock.Mock(as_mapping=mock.Mock(return_value={}))
+        model_provider.runtime_resolver.build_setup_guide.return_value = mock.Mock(
+            as_mapping=mock.Mock(return_value={})
+        )
         runtime = self._runtime(model_provider=model_provider)
 
-        with mock.patch.object(CliRuntime, "discover_provider_models", autospec=True, return_value=()), mock.patch.object(
-            CliRuntime,
-            "provider_test",
-            autospec=True,
-        ) as provider_test:
+        with (
+            mock.patch.object(CliRuntime, "discover_provider_models", autospec=True, return_value=()),
+            mock.patch.object(
+                CliRuntime,
+                "provider_test",
+                autospec=True,
+            ) as provider_test,
+        ):
             report = runtime.provider_doctor()
 
         provider_test.assert_not_called()
@@ -84,14 +93,19 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
             "embedding_bootstrap_status": "pending",
             "embedding_bootstrap_summary": "local semantic-index bootstrap is preparing minimal sentence-transformers dependencies in the background.",
         }
-        model_provider.runtime_resolver.build_setup_guide.return_value = mock.Mock(as_mapping=mock.Mock(return_value={}))
+        model_provider.runtime_resolver.build_setup_guide.return_value = mock.Mock(
+            as_mapping=mock.Mock(return_value={})
+        )
         runtime = self._runtime(model_provider=model_provider)
 
-        with mock.patch.object(CliRuntime, "discover_provider_models", autospec=True, return_value=()), mock.patch.object(
-            CliRuntime,
-            "provider_test",
-            autospec=True,
-            return_value=mock.Mock(summary="Doctor check"),
+        with (
+            mock.patch.object(CliRuntime, "discover_provider_models", autospec=True, return_value=()),
+            mock.patch.object(
+                CliRuntime,
+                "provider_test",
+                autospec=True,
+                return_value=mock.Mock(summary="Doctor check"),
+            ),
         ):
             report = runtime.provider_doctor()
 
@@ -111,14 +125,19 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
             "embedding_bootstrap_status": "ready",
             "embedding_bootstrap_summary": "local bootstrap is ready",
         }
-        model_provider.runtime_resolver.build_setup_guide.return_value = mock.Mock(as_mapping=mock.Mock(return_value={}))
+        model_provider.runtime_resolver.build_setup_guide.return_value = mock.Mock(
+            as_mapping=mock.Mock(return_value={})
+        )
         runtime = self._runtime(model_provider=model_provider)
 
-        with mock.patch.object(CliRuntime, "discover_provider_models", autospec=True) as discover, mock.patch.object(
-            CliRuntime,
-            "provider_test",
-            autospec=True,
-        ) as provider_test:
+        with (
+            mock.patch.object(CliRuntime, "discover_provider_models", autospec=True) as discover,
+            mock.patch.object(
+                CliRuntime,
+                "provider_test",
+                autospec=True,
+            ) as provider_test,
+        ):
             report = runtime.provider_doctor(deep=False)
 
         discover.assert_not_called()
@@ -191,7 +210,11 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
                     provider_id="openai-compatible-embed",
                     secret_name="api_token",
                     secret_key="api_key",
-                    metadata={"storage": "local-vault", "scope": "embedding-provider", "env_var": "OPENAI_API_KEY"},
+                    metadata={
+                        "storage": "local-vault",
+                        "scope": "embedding-provider",
+                        "env_var": "OPENAI_API_KEY",
+                    },
                 ),
             ),
             metadata={"embedding_active": "true", "dimensions": "1536"},
@@ -207,7 +230,10 @@ class CliRuntimeProviderMetadataTest(unittest.TestCase):
             secret_references=active_profile.secret_references,
             metadata={"embedding_active": "false", "dimensions": "1536"},
         )
-        runtime.repository.load_auth_profile.side_effect = [active_profile, inactive_profile]
+        runtime.repository.load_auth_profile.side_effect = [
+            active_profile,
+            inactive_profile,
+        ]
 
         summary = dict(runtime.set_local_embedding_provider())
 

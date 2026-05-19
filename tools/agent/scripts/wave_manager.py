@@ -39,23 +39,29 @@ def require_head() -> None:
 
 
 def branch_exists(branch: str) -> bool:
-    return subprocess.run(
-        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    ).returncode == 0
+    return (
+        subprocess.run(
+            ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def remote_branch_exists(branch: str, remote: str) -> bool:
-    return subprocess.run(
-        ["git", "ls-remote", "--exit-code", "--heads", remote, branch],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    ).returncode == 0
+    return (
+        subprocess.run(
+            ["git", "ls-remote", "--exit-code", "--heads", remote, branch],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def parse_worktree_records(output: str) -> list[dict[str, str]]:
@@ -133,7 +139,15 @@ def start_wave(wave_id: str, root: Path, base: str) -> int:
         if branch_exists(track["branch"]):
             command = ["git", "worktree", "add", str(target), track["branch"]]
         else:
-            command = ["git", "worktree", "add", "-b", track["branch"], str(target), base]
+            command = [
+                "git",
+                "worktree",
+                "add",
+                "-b",
+                track["branch"],
+                str(target),
+                base,
+            ]
         result = subprocess.run(command, cwd=ROOT, check=False)
         if result.returncode != 0:
             return result.returncode

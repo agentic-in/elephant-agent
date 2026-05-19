@@ -79,7 +79,13 @@ def _patch_choice_menu_dependencies(application_cls, *, bindings_cls=None, radio
         stack.enter_context(mock.patch.object(cli_wizard, "HSplit", lambda children, padding=0: (children, padding)))
         stack.enter_context(mock.patch.object(cli_wizard, "Window", lambda content, **kwargs: (content, kwargs)))
         stack.enter_context(mock.patch.object(cli_wizard, "FormattedTextControl", lambda fragments: fragments))
-        stack.enter_context(mock.patch.object(cli_wizard, "Layout", lambda dialog, focused_element=None: (dialog, focused_element)))
+        stack.enter_context(
+            mock.patch.object(
+                cli_wizard,
+                "Layout",
+                lambda dialog, focused_element=None: (dialog, focused_element),
+            )
+        )
         stack.enter_context(mock.patch.object(cli_wizard, "PromptDimension", SimpleNamespace))
         stack.enter_context(mock.patch.object(cli_wizard, "Button", _FakeButton))
         stack.enter_context(mock.patch.object(cli_wizard, "Dialog", _FakeDialog))
@@ -100,7 +106,9 @@ class _BoundedRadioListStub:
 
 
 class CliInitIntroTest(unittest.TestCase):
-    def test_init_welcome_frame_renders_enter_gate_without_removed_intro_animation(self) -> None:
+    def test_init_welcome_frame_renders_enter_gate_without_removed_intro_animation(
+        self,
+    ) -> None:
         if not cli_main_setup.RICH_AVAILABLE or cli_main_setup.Console is None:
             self.skipTest("rich is not available")
 
@@ -157,7 +165,9 @@ class CliInitIntroTest(unittest.TestCase):
         self.assertNotIn("database dump", rendered)
         self.assertNotIn("the elephant before recall", rendered)
 
-    def test_cli_help_intro_renders_only_once_without_separator_duplication(self) -> None:
+    def test_cli_help_intro_renders_only_once_without_separator_duplication(
+        self,
+    ) -> None:
         if not cli_main_support.RICH_AVAILABLE or cli_main_support.Console is None:
             self.skipTest("rich is not available")
 
@@ -177,7 +187,11 @@ class CliInitIntroTest(unittest.TestCase):
         self.assertNotIn("• • init", rendered)
 
     def test_render_cli_banner_mark_uses_stage_zero_elephant(self) -> None:
-        with mock.patch.object(cli_main_support, "render_stage_zero_elephant_mark", return_value="elephant-mark") as render_stage_zero_elephant_mark:
+        with mock.patch.object(
+            cli_main_support,
+            "render_stage_zero_elephant_mark",
+            return_value="elephant-mark",
+        ) as render_stage_zero_elephant_mark:
             result = cli_main_support._render_cli_banner_mark()
 
         self.assertEqual(result, "elephant-mark")
@@ -185,7 +199,9 @@ class CliInitIntroTest(unittest.TestCase):
 
 
 class InitQuestionDesignTest(unittest.TestCase):
-    def test_starter_questions_use_human_labels_for_manual_and_blank_options(self) -> None:
+    def test_starter_questions_use_human_labels_for_manual_and_blank_options(
+        self,
+    ) -> None:
         for spec in cli_main_impl._STARTER_QUESTIONS:
             choices = tuple(spec["choices_zh"])
             by_value = {choice[0]: choice for choice in choices}
@@ -255,7 +271,9 @@ class InitQuestionDesignTest(unittest.TestCase):
         self.assertNotIn("像站在一条路将要分开的地方", answer)
         self.assertNotEqual(answer, selected)
 
-    def test_english_attention_choice_persists_hidden_profile_answer_for_pm(self) -> None:
+    def test_english_attention_choice_persists_hidden_profile_answer_for_pm(
+        self,
+    ) -> None:
         selected = "standing at a fork"
         choice = next(choice for choice in cli_main_impl._ATTENTION_CHOICES_EN if choice[0] == selected)
         with mock.patch.object(cli_main_impl, "_wizard_choice_prompt", return_value=selected):
@@ -277,7 +295,11 @@ class InitQuestionDesignTest(unittest.TestCase):
     def test_attention_manual_input_persists_user_words(self) -> None:
         with (
             mock.patch.object(cli_main_impl, "_wizard_choice_prompt", return_value="type"),
-            mock.patch.object(cli_main_impl, "_wizard_text_prompt", return_value="我正在重新整理生活优先级"),
+            mock.patch.object(
+                cli_main_impl,
+                "_wizard_text_prompt",
+                return_value="我正在重新整理生活优先级",
+            ),
         ):
             answer = cli_main_impl._prompt_choice_with_type(
                 "zh",
@@ -427,25 +449,43 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
         self.assertEqual(radio_list._selected_index, 0)
         self.assertEqual(radio_list.current_value, "companion")
+
     def test_wizard_choice_window_caps_long_lists_to_nine_rows(self) -> None:
         self.assertEqual(_wizard_choice_window(4, 0), (0, 4))
         self.assertEqual(_wizard_choice_window(12, 0), (0, WIZARD_MAX_VISIBLE_CHOICES))
         self.assertEqual(_wizard_choice_window(12, 6), (2, 11))
         self.assertEqual(_wizard_choice_window(12, 11), (3, 12))
 
-    def test_wizard_choice_fragments_render_without_blank_lines_between_options(self) -> None:
+    def test_wizard_choice_fragments_render_without_blank_lines_between_options(
+        self,
+    ) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
 
         text = "".join(fragment for _, fragment in _wizard_choice_fragments("Choose", "Prompt", choices, selected=0))
 
-        self.assertIn("› 🤝  Companion\n  Steady and present.\n  🛠️  Operator\n  Direct and durable.\n", text)
+        self.assertIn(
+            "› 🤝  Companion\n  Steady and present.\n  🛠️  Operator\n  Direct and durable.\n",
+            text,
+        )
         self.assertNotIn("Steady and present.\n\n  Operator", text)
         self.assertIn("Enter confirms", text)
 
-    def test_wizard_choice_fragments_show_scroll_hints_for_hidden_provider_rows(self) -> None:
+    def test_wizard_choice_fragments_show_scroll_hints_for_hidden_provider_rows(
+        self,
+    ) -> None:
         choices = tuple(
             WizardChoice(
                 value=f"provider-{index}",
@@ -467,8 +507,18 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_wizard_choice_fragments_show_back_hint_when_allowed(self) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
 
         text = "".join(
@@ -480,8 +530,18 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_wizard_choice_menu_uses_centered_dialog_application(self) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
         captured: dict[str, object] = {}
 
@@ -501,8 +561,18 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_wizard_choice_menu_runs_dialog_in_thread_when_loop_is_active(self) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
         captured: dict[str, object] = {}
 
@@ -523,10 +593,22 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(answer, "operator")
         self.assertTrue(captured["in_thread"])
 
-    def test_wizard_choice_menu_uses_single_line_radio_entries_for_mouse_safety(self) -> None:
+    def test_wizard_choice_menu_uses_single_line_radio_entries_for_mouse_safety(
+        self,
+    ) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
         captured: dict[str, object] = {}
 
@@ -554,8 +636,18 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_wizard_choice_menu_can_return_back_signal(self) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
 
         class _FakeApplication:
@@ -572,8 +664,18 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_wizard_choice_menu_cancel_never_falls_back_to_default(self) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
 
         class _FakeApplication:
@@ -590,8 +692,18 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_wizard_choice_menu_binds_enter_eagerly_for_continue(self) -> None:
         choices = (
-            WizardChoice(value="companion", label="Companion", detail="Steady and present.", emoji="🤝"),
-            WizardChoice(value="operator", label="Operator", detail="Direct and durable.", emoji="🛠️"),
+            WizardChoice(
+                value="companion",
+                label="Companion",
+                detail="Steady and present.",
+                emoji="🤝",
+            ),
+            WizardChoice(
+                value="operator",
+                label="Operator",
+                detail="Direct and durable.",
+                emoji="🛠️",
+            ),
         )
         binding_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
@@ -655,7 +767,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         button_labels = [button.kwargs["text"] for button in captured["buttons"]]
         self.assertEqual(button_labels, ["Continue", "Back"])
 
-    def test_wizard_dual_choice_menu_binds_space_and_delete_for_selection_flow(self) -> None:
+    def test_wizard_dual_choice_menu_binds_space_and_delete_for_selection_flow(
+        self,
+    ) -> None:
         choices = (
             WizardChoice(value="gpt-5.4", label="gpt-5.4", detail="Large lane"),
             WizardChoice(value="gpt-5.4-mini", label="gpt-5.4-mini", detail="Small lane"),
@@ -694,7 +808,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertIn((("backspace",), {"eager": True}), binding_calls)
         self.assertIn((("delete",), {"eager": True}), binding_calls)
 
-    def test_wizard_dual_choice_menu_space_accepts_when_complete_off_radio(self) -> None:
+    def test_wizard_dual_choice_menu_space_accepts_when_complete_off_radio(
+        self,
+    ) -> None:
         choices = (
             WizardChoice(value="gpt-5.4", label="gpt-5.4", detail="Large lane"),
             WizardChoice(value="gpt-5.4-mini", label="gpt-5.4-mini", detail="Small lane"),
@@ -781,7 +897,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(input_dialog_mock.call_args.kwargs["ok_text"], "Continue")
         self.assertEqual(input_dialog_mock.call_args.kwargs["cancel_text"], "Back")
 
-    def test_wizard_text_prompt_uses_back_button_even_without_previous_step(self) -> None:
+    def test_wizard_text_prompt_uses_back_button_even_without_previous_step(
+        self,
+    ) -> None:
         dialog = mock.Mock()
         dialog.run.return_value = None
 
@@ -796,7 +914,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(input_dialog_mock.call_args.kwargs["ok_text"], "Continue")
         self.assertEqual(input_dialog_mock.call_args.kwargs["cancel_text"], "Back")
 
-    def test_wizard_text_prompt_uses_required_dialog_when_validation_copy_is_needed(self) -> None:
+    def test_wizard_text_prompt_uses_required_dialog_when_validation_copy_is_needed(
+        self,
+    ) -> None:
         with (
             mock.patch.object(cli_wizard, "_wizard_dialogs_supported", return_value=True),
             mock.patch.object(
@@ -840,7 +960,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
         self.assertEqual(answer, "")
 
-    def test_wizard_text_prompt_runs_input_dialog_in_thread_when_loop_is_active(self) -> None:
+    def test_wizard_text_prompt_runs_input_dialog_in_thread_when_loop_is_active(
+        self,
+    ) -> None:
         captured: dict[str, object] = {}
 
         class _FakeDialog:
@@ -872,15 +994,36 @@ class WizardChoiceMenuTest(unittest.TestCase):
     def test_provider_choices_use_plain_labels_and_brand_accent_detail(self) -> None:
         runtime = mock.Mock()
         runtime.provider_inventory.return_value = (
-            SimpleNamespace(provider_id="openai-compatible", display_name="OpenAI-compatible", status="requires-setup", source="none", runtime_enabled=True),
-            SimpleNamespace(provider_id="moonshot", display_name="Moonshot Kimi", status="requires-setup", source="none", runtime_enabled=True),
-            SimpleNamespace(provider_id="unknown-provider", display_name="Custom", status="requires-setup", source="none", runtime_enabled=True),
+            SimpleNamespace(
+                provider_id="openai-compatible",
+                display_name="OpenAI-compatible",
+                status="requires-setup",
+                source="none",
+                runtime_enabled=True,
+            ),
+            SimpleNamespace(
+                provider_id="moonshot",
+                display_name="Moonshot Kimi",
+                status="requires-setup",
+                source="none",
+                runtime_enabled=True,
+            ),
+            SimpleNamespace(
+                provider_id="unknown-provider",
+                display_name="Custom",
+                status="requires-setup",
+                source="none",
+                runtime_enabled=True,
+            ),
         )
 
         providers = _provider_choices(runtime)
 
         self.assertEqual([choice.emoji for choice in providers], ["", "", ""])
-        self.assertEqual([choice.detail_style for choice in providers], ["accent-detail", "accent-detail", "accent-detail"])
+        self.assertEqual(
+            [choice.detail_style for choice in providers],
+            ["accent-detail", "accent-detail", "accent-detail"],
+        )
 
     def test_build_parser_registers_brain_surface(self) -> None:
         parser = cli_main.build_parser()
@@ -1123,7 +1266,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         )
         print_card.assert_called_once()
 
-    def test_run_brain_interactive_provider_state_is_not_compared_as_hashable_signal(self) -> None:
+    def test_run_brain_interactive_provider_state_is_not_compared_as_hashable_signal(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         profile_state = SimpleNamespace(profile_id="profile-default", display_name="Atlas", mode="companion")
         runtime.current_profile.return_value = SimpleNamespace(state=profile_state)
@@ -1165,7 +1310,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         runtime.set_default_provider.assert_called_once()
 
-    def test_suggest_elephant_name_skips_existing_elephant_ids_when_possible(self) -> None:
+    def test_suggest_elephant_name_skips_existing_elephant_ids_when_possible(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.latest_session_for_elephant.side_effect = lambda elephant_id: object() if elephant_id == "ada" else None
         captured: dict[str, tuple[str, ...]] = {}
@@ -1180,7 +1327,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(suggested, captured["options"][0])
         self.assertNotIn("Ada", captured["options"])
 
-    def test_run_setup_uses_random_name_suggestion_when_no_initial_name_is_given(self) -> None:
+    def test_run_setup_uses_random_name_suggestion_when_no_initial_name_is_given(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.current_profile.return_value = SimpleNamespace(
             state=SimpleNamespace(display_name="Elephant Agent"),
@@ -1223,7 +1372,11 @@ class WizardChoiceMenuTest(unittest.TestCase):
     def test_run_setup_allows_oauth_provider_without_explicit_key(self) -> None:
         runtime = mock.Mock()
         runtime.current_profile.return_value = SimpleNamespace(
-            state=SimpleNamespace(profile_id="profile-companion", display_name="Elephant Agent", mode="companion"),
+            state=SimpleNamespace(
+                profile_id="profile-companion",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         runtime.provider_setup_guide.return_value = SimpleNamespace(
@@ -1232,7 +1385,11 @@ class WizardChoiceMenuTest(unittest.TestCase):
         )
         runtime.detect_provider_context_window.return_value = 128000
         updated_profile = SimpleNamespace(
-            state=SimpleNamespace(profile_id="profile-companion", display_name="Elephant Agent", mode="companion"),
+            state=SimpleNamespace(
+                profile_id="profile-companion",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         runtime.update_identity.return_value = updated_profile
@@ -1284,7 +1441,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         runtime.set_default_provider.assert_called_once()
         self.assertIsNone(runtime.set_default_provider.call_args.kwargs["api_key"])
 
-    def test_interactive_birth_wizard_cancels_when_provider_setup_is_escaped(self) -> None:
+    def test_interactive_birth_wizard_cancels_when_provider_setup_is_escaped(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.personality_presets.return_value = (
             SimpleNamespace(preset_id="companion", label="Companion", summary="Steady."),
@@ -1323,14 +1482,17 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(answer, "spring equinox 1991")
 
     def test_interactive_elephant_wizard_uses_suggested_name_as_default(self) -> None:
-        with mock.patch.object(
-            cli_main,
-            "_wizard_text_prompt",
-            return_value="Nova",
-        ) as text_prompt, mock.patch.object(
-            cli_main,
-            "_suggest_elephant_name",
-            return_value="Rowan",
+        with (
+            mock.patch.object(
+                cli_main,
+                "_wizard_text_prompt",
+                return_value="Nova",
+            ) as text_prompt,
+            mock.patch.object(
+                cli_main,
+                "_suggest_elephant_name",
+                return_value="Rowan",
+            ),
         ):
             state = _run_interactive_elephant_wizard(mock.Mock(), elephant_name=None)
 
@@ -1338,7 +1500,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(text_prompt.call_count, 1)
         self.assertEqual(text_prompt.call_args_list[0].kwargs["default"], "Rowan")
 
-    def test_interactive_elephant_wizard_can_cancel_before_creating_elephant(self) -> None:
+    def test_interactive_elephant_wizard_can_cancel_before_creating_elephant(
+        self,
+    ) -> None:
         with (
             mock.patch.object(cli_main, "_wizard_text_prompt", return_value=WIZARD_BACK),
             mock.patch.object(cli_main, "_suggest_elephant_name", return_value="Theo") as suggest_name,
@@ -1356,7 +1520,11 @@ class WizardChoiceMenuTest(unittest.TestCase):
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         updated_profile = SimpleNamespace(
-            state=SimpleNamespace(profile_id="profile-companion", display_name="Elephant Agent", mode="companion"),
+            state=SimpleNamespace(
+                profile_id="profile-companion",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         runtime.provider_setup_guide.return_value = SimpleNamespace(auth_type="api_key", required_secret_keys=())
@@ -1426,7 +1594,11 @@ class WizardChoiceMenuTest(unittest.TestCase):
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         updated_profile = SimpleNamespace(
-            state=SimpleNamespace(profile_id="profile-companion", display_name="Elephant Agent", mode="companion"),
+            state=SimpleNamespace(
+                profile_id="profile-companion",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         runtime.provider_setup_guide.return_value = SimpleNamespace(auth_type="api_key", required_secret_keys=())
@@ -1506,7 +1678,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(bootstrap_personal_model.call_args.args[2].birth_date, "late summer 1991")
 
-    def test_init_question_config_persists_proactive_ask_from_learning_intensity(self) -> None:
+    def test_init_question_config_persists_proactive_ask_from_learning_intensity(
+        self,
+    ) -> None:
         runtime = SimpleNamespace(paths=SimpleNamespace(state_dir="/tmp/elephant-test/herd"))
         captured: dict[str, object] = {}
 
@@ -1543,14 +1717,20 @@ class WizardChoiceMenuTest(unittest.TestCase):
         )
         self.assertEqual(captured["personal_model"]["first_language"], "zh")
 
-    def test_interactive_setup_uses_shallow_provider_doctor_before_tui_handoff(self) -> None:
+    def test_interactive_setup_uses_shallow_provider_doctor_before_tui_handoff(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.current_profile.return_value = SimpleNamespace(
             state=SimpleNamespace(display_name="Elephant Agent"),
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         updated_profile = SimpleNamespace(
-            state=SimpleNamespace(profile_id="profile-companion", display_name="Elephant Agent", mode="companion"),
+            state=SimpleNamespace(
+                profile_id="profile-companion",
+                display_name="Elephant Agent",
+                mode="companion",
+            ),
             companion=SimpleNamespace(personality_preset="companion", initiative="gentle"),
         )
         runtime.provider_setup_guide.return_value = SimpleNamespace(auth_type="api_key", required_secret_keys=())
@@ -1639,15 +1819,19 @@ class WizardChoiceMenuTest(unittest.TestCase):
             mock.patch.object(cli_main, "_print_birth_wizard_intro"),
             mock.patch.object(cli_main, "_run_interactive_birth_wizard", return_value=wizard_state),
             mock.patch.object(cli_main, "_print_init_section"),
-            mock.patch.object(cli_main, "provider_setup_defaults", return_value=cli_main.ProviderSelectionState(
-                provider_id="openai-compatible",
-                base_url="https://api.example.com/v1",
-                api_key="sk-cli-test-123",
-                model_id="openai/gpt-4o-mini",
-                reasoning_effort=None,
-                context_window_mode="auto",
-                context_window_tokens=128000,
-            )),
+            mock.patch.object(
+                cli_main,
+                "provider_setup_defaults",
+                return_value=cli_main.ProviderSelectionState(
+                    provider_id="openai-compatible",
+                    base_url="https://api.example.com/v1",
+                    api_key="sk-cli-test-123",
+                    model_id="openai/gpt-4o-mini",
+                    reasoning_effort=None,
+                    context_window_mode="auto",
+                    context_window_tokens=128000,
+                ),
+            ),
             mock.patch.object(cli_main, "_persist_init_question_config"),
             mock.patch.object(cli_main, "_bootstrap_personal_model_from_init"),
             mock.patch.object(cli_main, "_play_creating_transition"),
@@ -1718,7 +1902,9 @@ class WizardChoiceMenuTest(unittest.TestCase):
             mode="companion",
         )
 
-    def test_run_grow_defers_surface_prepare_until_after_interactive_shell_boot(self) -> None:
+    def test_run_grow_defers_surface_prepare_until_after_interactive_shell_boot(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.provider_doctor.return_value = {"status": "ready"}
         shell = mock.Mock()
@@ -1730,7 +1916,11 @@ class WizardChoiceMenuTest(unittest.TestCase):
         )
 
         with (
-            mock.patch.object(cli_main, "_open_growth_episode", return_value=("episode-atlas", "Opened elephant atlas")),
+            mock.patch.object(
+                cli_main,
+                "_open_growth_episode",
+                return_value=("episode-atlas", "Opened elephant atlas"),
+            ),
             mock.patch.object(cli_main, "_interactive_shell_supported", return_value=True),
             mock.patch.object(cli_main, "ProductizedShell", return_value=shell) as productized_shell,
         ):
@@ -1747,8 +1937,12 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_open_growth_episode_opens_next_episode_for_open_elephant(self) -> None:
         runtime = mock.Mock()
-        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-parent", status="open", exit_summary="")
-        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-child", status="open"))
+        runtime.latest_session_for_elephant.return_value = SimpleNamespace(
+            episode_id="episode-parent", status="open", exit_summary=""
+        )
+        runtime.open_next_episode.return_value = SimpleNamespace(
+            episode=SimpleNamespace(episode_id="episode-child", status="open")
+        )
 
         episode_id, opened = cli_main._open_growth_episode(runtime, elephant_id="atlas")
 
@@ -1758,47 +1952,100 @@ class WizardChoiceMenuTest(unittest.TestCase):
 
     def test_open_growth_episode_opens_next_episode_for_closed_elephant(self) -> None:
         runtime = mock.Mock()
-        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-parent", status="closed", exit_summary="parent handoff")
-        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-child", status="open"))
+        runtime.latest_session_for_elephant.return_value = SimpleNamespace(
+            episode_id="episode-parent", status="closed", exit_summary="parent handoff"
+        )
+        runtime.open_next_episode.return_value = SimpleNamespace(
+            episode=SimpleNamespace(episode_id="episode-child", status="open")
+        )
 
         episode_id, opened = cli_main._open_growth_episode(runtime, elephant_id="atlas")
 
         self.assertEqual(episode_id, "episode-child")
         self.assertEqual(opened, "Opened elephant atlas")
-        runtime.open_next_episode.assert_called_once_with("episode-parent", reason="wake_boundary", summary="parent handoff")
+        runtime.open_next_episode.assert_called_once_with(
+            "episode-parent", reason="wake_boundary", summary="parent handoff"
+        )
 
-    def test_resolve_growth_session_prefers_current_elephant_snapshot_when_multiple_prompting_is_disabled(self) -> None:
+    def test_resolve_growth_session_prefers_current_elephant_snapshot_when_multiple_prompting_is_disabled(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.elephant_id_for_session.return_value = "atlas"
         runtime.list_herd.return_value = (
-            SimpleNamespace(elephant_id="atlas", latest_session_id="episode-atlas", session_count=1, latest_status="open"),
-            SimpleNamespace(elephant_id="beta", latest_session_id="episode-beta", session_count=1, latest_status="open"),
+            SimpleNamespace(
+                elephant_id="atlas",
+                latest_session_id="episode-atlas",
+                session_count=1,
+                latest_status="open",
+            ),
+            SimpleNamespace(
+                elephant_id="beta",
+                latest_session_id="episode-beta",
+                session_count=1,
+                latest_status="open",
+            ),
         )
-        current_session = SimpleNamespace(episode_id="episode-current", elephant_id="atlas", status="open", exit_summary="")
-        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-next", status="open"))
+        current_session = SimpleNamespace(
+            episode_id="episode-current",
+            elephant_id="atlas",
+            status="open",
+            exit_summary="",
+        )
+        runtime.open_next_episode.return_value = SimpleNamespace(
+            episode=SimpleNamespace(episode_id="episode-next", status="open")
+        )
 
-        with mock.patch.object(cli_elephant_support, "_current_elephant_session", return_value=current_session):
+        with mock.patch.object(
+            cli_elephant_support,
+            "_current_elephant_session",
+            return_value=current_session,
+        ):
             episode_id, opened = cli_main._open_growth_episode(runtime, prompt_for_multiple=False)
 
         self.assertEqual(episode_id, "episode-next")
         self.assertEqual(opened, "Opened elephant atlas")
         runtime.open_next_episode.assert_called_once_with("episode-current", reason="wake_boundary", summary="")
 
-    def test_resolve_growth_session_prompts_for_multiple_elephants_in_interactive_mode(self) -> None:
+    def test_resolve_growth_session_prompts_for_multiple_elephants_in_interactive_mode(
+        self,
+    ) -> None:
         runtime = mock.Mock()
         runtime.list_herd.return_value = (
-            SimpleNamespace(elephant_id="atlas", latest_session_id="episode-atlas", session_count=2, latest_status="open"),
-            SimpleNamespace(elephant_id="beta", latest_session_id="episode-beta", session_count=3, latest_status="open"),
+            SimpleNamespace(
+                elephant_id="atlas",
+                latest_session_id="episode-atlas",
+                session_count=2,
+                latest_status="open",
+            ),
+            SimpleNamespace(
+                elephant_id="beta",
+                latest_session_id="episode-beta",
+                session_count=3,
+                latest_status="open",
+            ),
         )
         runtime.elephant_id_for_session.return_value = "atlas"
-        runtime.inspect_session.return_value = SimpleNamespace(episode_id="episode-beta", status="open", exit_summary="")
-        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-beta-next", status="open"))
+        runtime.inspect_session.return_value = SimpleNamespace(
+            episode_id="episode-beta", status="open", exit_summary=""
+        )
+        runtime.open_next_episode.return_value = SimpleNamespace(
+            episode=SimpleNamespace(episode_id="episode-beta-next", status="open")
+        )
         current_session = SimpleNamespace(episode_id="episode-current", elephant_id="atlas", status="open")
         selected_elephant = runtime.list_herd.return_value[1]
 
         with (
-            mock.patch.object(cli_elephant_support, "_current_elephant_session", return_value=current_session),
-            mock.patch.object(cli_elephant_support, "_prompt_elephant_choice", return_value=selected_elephant) as prompt_elephant_choice,
+            mock.patch.object(
+                cli_elephant_support,
+                "_current_elephant_session",
+                return_value=current_session,
+            ),
+            mock.patch.object(
+                cli_elephant_support,
+                "_prompt_elephant_choice",
+                return_value=selected_elephant,
+            ) as prompt_elephant_choice,
         ):
             episode_id, opened = cli_main._open_growth_episode(runtime, prompt_for_multiple=True)
 
@@ -1812,14 +2059,24 @@ class WizardChoiceMenuTest(unittest.TestCase):
         runtime.inspect_session.assert_called_once_with("episode-beta")
         runtime.schedule_learning_for_session.assert_not_called()
 
-    def test_resolve_growth_session_does_not_queue_boundary_learning_when_opening_different_elephant(self) -> None:
+    def test_resolve_growth_session_does_not_queue_boundary_learning_when_opening_different_elephant(
+        self,
+    ) -> None:
         runtime = mock.Mock()
-        runtime.latest_session_for_elephant.return_value = SimpleNamespace(episode_id="episode-beta", status="open", exit_summary="")
-        runtime.open_next_episode.return_value = SimpleNamespace(episode=SimpleNamespace(episode_id="episode-beta-next", status="open"))
+        runtime.latest_session_for_elephant.return_value = SimpleNamespace(
+            episode_id="episode-beta", status="open", exit_summary=""
+        )
+        runtime.open_next_episode.return_value = SimpleNamespace(
+            episode=SimpleNamespace(episode_id="episode-beta-next", status="open")
+        )
         current_session = SimpleNamespace(episode_id="episode-atlas", elephant_id="atlas", status="open")
         runtime.elephant_id_for_session.return_value = "atlas"
 
-        with mock.patch.object(cli_elephant_support, "_current_elephant_session", return_value=current_session):
+        with mock.patch.object(
+            cli_elephant_support,
+            "_current_elephant_session",
+            return_value=current_session,
+        ):
             episode_id, opened = cli_main._open_growth_episode(runtime, elephant_id="beta")
 
         self.assertEqual(episode_id, "episode-beta-next")

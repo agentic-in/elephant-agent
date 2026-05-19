@@ -8,9 +8,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import time
-from typing import Any
 import urllib.error
 import urllib.request
 import webbrowser
@@ -187,11 +185,14 @@ def _ensure_frontend_dist(*, skip_build: bool = False, rebuild: bool = False) ->
             "Elephant Agent dashboard",
             "Dashboard frontend dependencies are not installed.",
             sections=(
-                CliCardSection("Next step", (
-                    "Install dependencies first:",
-                    "  cd apps/dashboard && npm install",
-                    "Then run this command again.",
-                )),
+                CliCardSection(
+                    "Next step",
+                    (
+                        "Install dependencies first:",
+                        "  cd apps/dashboard && npm install",
+                        "Then run this command again.",
+                    ),
+                ),
             ),
         )
         return False
@@ -344,10 +345,18 @@ def build_typer_app(
     @app.callback(invoke_without_command=True)
     def main_callback(
         state_dir: Path = typer.Option(default_state_dir, "--state-dir", hidden=True),
-        open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the dashboard URL in the default browser."),
+        open_browser: bool = typer.Option(
+            True,
+            "--open/--no-open",
+            help="Open the dashboard URL in the default browser.",
+        ),
         skip_build: bool = typer.Option(False, "--skip-build", help="Skip the frontend build check."),
         rebuild: bool = typer.Option(False, "--rebuild", help="Force rebuild the frontend assets."),
-        start_daemon: bool = typer.Option(True, "--start/--no-start", help="Start the daemon automatically when it is not running."),
+        start_daemon: bool = typer.Option(
+            True,
+            "--start/--no-start",
+            help="Start the daemon automatically when it is not running.",
+        ),
     ) -> None:
         plan = DashboardLaunchPlan(state_dir=state_dir)
         raise typer.Exit(

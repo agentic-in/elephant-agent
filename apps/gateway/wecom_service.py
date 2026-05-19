@@ -14,7 +14,6 @@ from uuid import uuid4
 
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
-    GatewayExchange,
     GatewayInboundMessage,
     GatewayOutboundMessage,
 )
@@ -27,19 +26,22 @@ from .cli_control import (
     GatewayCliControlService,
     load_gateway_cli_control_config,
 )
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
-from .runtime import WECOM_ADAPTER_ID, WecomMessagingAdapter, GatewayApp, build_gateway_app
+from .plugins import (
+    GatewayManagedRuntime,
+    GatewayPluginRegistry,
+    default_gateway_runtime_path,
+)
+from .runtime import (
+    WECOM_ADAPTER_ID,
+    WecomMessagingAdapter,
+    GatewayApp,
+    build_gateway_app,
+)
 
 from .wecom_support import (
-    DEFAULT_WECOM_BOT_ID_ENV,
-    DEFAULT_WECOM_SECRET_ENV,
-    DEFAULT_WECOM_WS_URL,
     MESSAGE_DEDUP_TTL_SECONDS,
-    WECOM_AVAILABLE,
     WecomGatewayAccountConfig,
-    WecomGatewayEventResult,
     WecomResolvedAccount,
-    _coerce_bool,
     _extract_wecom_text,
     _normalize_transport,
     check_wecom_requirements,
@@ -140,14 +142,8 @@ class WecomGatewayService:
                 binding_store = self.cli_binding_store
                 if binding_store is None:
                     state_root = self.app.state_dir
-                    binding_path = (
-                        None
-                        if state_root is None
-                        else os.path.join(state_root, "wecom-cli-bindings.json")
-                    )
-                    binding_store = GatewayCliBindingStore(
-                        path=None if binding_path is None else Path(binding_path)
-                    )
+                    binding_path = None if state_root is None else os.path.join(state_root, "wecom-cli-bindings.json")
+                    binding_store = GatewayCliBindingStore(path=None if binding_path is None else Path(binding_path))
                 self.cli_control = GatewayCliControlService(
                     config=self._resolved_cli_control_config(config),
                     app=self.app,
@@ -326,9 +322,7 @@ class WecomGatewayService:
             raise LookupError("no enabled WeCom gateway accounts are configured")
         if len(enabled_configs) == 1:
             return resolve_wecom_account(enabled_configs[0], environ=self.environ)
-        raise LookupError(
-            "multiple enabled WeCom gateway accounts are configured; pass account_id explicitly"
-        )
+        raise LookupError("multiple enabled WeCom gateway accounts are configured; pass account_id explicitly")
 
     # -----------------------------------------------------------------------
     # Async WebSocket lifecycle
@@ -337,10 +331,7 @@ class WecomGatewayService:
     async def start_gateway(self, *, account_id: str | None = None) -> None:
         """Connect WebSocket and run the listen loop."""
         if not check_wecom_requirements():
-            raise RuntimeError(
-                "WeCom startup failed: aiohttp is required. "
-                "Install it with: pip install aiohttp"
-            )
+            raise RuntimeError("WeCom startup failed: aiohttp is required. Install it with: pip install aiohttp")
 
         account = self._match_account(account_id=account_id)
         config = account.config
@@ -417,7 +408,6 @@ class WecomGatewayService:
 
     async def _open_connection(self) -> None:
         """Authenticate via aibot_subscribe command."""
-        import aiohttp
 
         assert self._session is not None
 
@@ -434,9 +424,7 @@ class WecomGatewayService:
                 receive_timeout=WS_READ_TIMEOUT,
             )
         except Exception as exc:
-            raise RuntimeError(
-                f"WeCom WebSocket connection failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"WeCom WebSocket connection failed: {exc}") from exc
 
         # Send subscribe command
         req_id = self._new_req_id("subscribe")
@@ -475,16 +463,12 @@ class WecomGatewayService:
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                raise RuntimeError(
-                    "WeCom WebSocket handshake timed out; check bot_id and secret"
-                )
+                raise RuntimeError("WeCom WebSocket handshake timed out; check bot_id and secret")
 
             try:
                 msg = await asyncio.wait_for(self._ws.receive(), timeout=remaining)
             except asyncio.TimeoutError:
-                raise RuntimeError(
-                    "WeCom WebSocket handshake timed out; check bot_id and secret"
-                )
+                raise RuntimeError("WeCom WebSocket handshake timed out; check bot_id and secret")
 
             if msg.type == aiohttp.WSMsgType.TEXT:
                 try:
@@ -501,9 +485,7 @@ class WecomGatewayService:
                     errcode = payload.get("errcode", 0)
                     if errcode not in (0, None):
                         errmsg = payload.get("errmsg") or "authentication failed"
-                        raise RuntimeError(
-                            f"WeCom subscribe failed: {errmsg} (errcode={errcode})"
-                        )
+                        raise RuntimeError(f"WeCom subscribe failed: {errmsg} (errcode={errcode})")
                     return
 
                 LOGGER.debug(
@@ -517,9 +499,7 @@ class WecomGatewayService:
                 aiohttp.WSMsgType.CLOSE,
                 aiohttp.WSMsgType.ERROR,
             ):
-                raise RuntimeError(
-                    "WeCom WebSocket closed during authentication"
-                )
+                raise RuntimeError("WeCom WebSocket closed during authentication")
 
     async def _listen_loop(self) -> None:
         """Read events with automatic reconnection and exponential backoff."""
@@ -647,7 +627,11 @@ class WecomGatewayService:
                     break
                 try:
                     await self._send_json(
-                        {"cmd": "ping", "headers": {"req_id": self._new_req_id("ping")}, "body": {}}
+                        {
+                            "cmd": "ping",
+                            "headers": {"req_id": self._new_req_id("ping")},
+                            "body": {},
+                        }
                     )
                 except Exception as exc:
                     LOGGER.debug("[%s] Heartbeat send failed: %s", self.service_key, exc)
@@ -961,7 +945,9 @@ def _safe_id(value: str) -> str:
     return value[:4] + "***" + value[-4:]
 
 
-def register_wecom_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_wecom_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     from .wecom import WecomGatewayService
 
     registry.register_service(

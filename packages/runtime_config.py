@@ -15,6 +15,7 @@ GLOBAL_CONFIG_FILENAME = "config.yaml"
 DEFAULT_EXTERNAL_SKILL_DIRS: tuple[str, ...] = ("~/.agents/skills",)
 _MISSING = object()
 
+
 def default_personal_model_question_config() -> dict[str, Any]:
     return {
         "proactive_ask": {
@@ -26,7 +27,9 @@ def default_personal_model_question_config() -> dict[str, Any]:
     }
 
 
-def personal_model_question_config_from_global(config: Mapping[str, Any] | None) -> dict[str, Any]:
+def personal_model_question_config_from_global(
+    config: Mapping[str, Any] | None,
+) -> dict[str, Any]:
     if not isinstance(config, Mapping):
         return default_personal_model_question_config()
     questions = config.get("personal_model_questions")
@@ -38,7 +41,6 @@ def personal_model_question_config_from_global(config: Mapping[str, Any] | None)
 def global_config_path_for_state_dir(state_dir: str | Path) -> Path:
     install_root = infer_install_root_from_state_dir(Path(state_dir))
     return install_root / GLOBAL_CONFIG_FILENAME
-
 
 
 def default_global_config(*, state_dir: str | Path) -> dict[str, Any]:
@@ -89,30 +91,150 @@ def default_global_config(*, state_dir: str | Path) -> dict[str, Any]:
 
 def global_config_schema() -> list[dict[str, Any]]:
     return [
-        {"path": "runtime.state_dir", "type": "string", "label": "Elephant directory", "section": "Runtime"},
-        {"path": "runtime.default_profile_id", "type": "string", "label": "Default profile", "section": "Runtime"},
-        {"path": "models.default_provider_source", "type": "string", "label": "Provider source", "section": "Models"},
-        {"path": "models.provider", "type": "object", "label": "Provider profile", "section": "Models"},
-        {"path": "sessions.persist_system_prompts", "type": "boolean", "label": "Persist system prompts", "section": "Sessions"},
-        {"path": "sessions.persist_assistant_responses", "type": "boolean", "label": "Persist assistant responses", "section": "Sessions"},
-        {"path": "sessions.max_history_rows", "type": "number", "label": "Max history rows", "section": "Sessions"},
-        {"path": "skills.enable_profile_overrides", "type": "boolean", "label": "Skill profile overrides", "section": "Skills"},
-        {"path": "skills.external_dirs", "type": "string_list", "label": "External skill dirs", "section": "Skills"},
-        {"path": "tools.require_approval_for_risky", "type": "boolean", "label": "Approval for risky tools", "section": "Tools"},
-        {"path": "gateway.enabled", "type": "boolean", "label": "Gateway enabled", "section": "Gateway"},
-        {"path": "gateway.state_dir", "type": "string", "label": "Gateway herd directory", "section": "Gateway"},
-        {"path": "dashboard.host", "type": "string", "label": "Dashboard host", "section": "Dashboard"},
-        {"path": "dashboard.port", "type": "number", "label": "Dashboard port", "section": "Dashboard"},
-        {"path": "personal_model.first_language", "type": "string", "label": "First language", "section": "Personal Model"},
-        {"path": "personal_model_questions.proactive_ask.enabled", "type": "boolean", "label": "Proactive asks enabled", "section": "Personal Model"},
-        {"path": "personal_model_questions.proactive_ask.idle_threshold_minutes", "type": "number", "label": "Idle threshold (minutes)", "section": "Personal Model"},
-        {"path": "personal_model_questions.proactive_ask.daily_max", "type": "number", "label": "Daily max questions", "section": "Personal Model"},
-        {"path": "personal_model_questions.proactive_ask.quiet_hours", "type": "string_list", "label": "Quiet hours [start, end]", "section": "Personal Model"},
-        {"path": "observability.enabled", "type": "boolean", "label": "Observability enabled", "section": "Observability"},
-        {"path": "observability.log_level", "type": "string", "label": "Log level", "section": "Observability"},
-        {"path": "observability.log_file", "type": "string", "label": "Log file path", "section": "Observability"},
-        {"path": "observability.otel_endpoint", "type": "string", "label": "OTLP endpoint", "section": "Observability"},
-        {"path": "observability.service_name", "type": "string", "label": "Service name", "section": "Observability"},
+        {
+            "path": "runtime.state_dir",
+            "type": "string",
+            "label": "Elephant directory",
+            "section": "Runtime",
+        },
+        {
+            "path": "runtime.default_profile_id",
+            "type": "string",
+            "label": "Default profile",
+            "section": "Runtime",
+        },
+        {
+            "path": "models.default_provider_source",
+            "type": "string",
+            "label": "Provider source",
+            "section": "Models",
+        },
+        {
+            "path": "models.provider",
+            "type": "object",
+            "label": "Provider profile",
+            "section": "Models",
+        },
+        {
+            "path": "sessions.persist_system_prompts",
+            "type": "boolean",
+            "label": "Persist system prompts",
+            "section": "Sessions",
+        },
+        {
+            "path": "sessions.persist_assistant_responses",
+            "type": "boolean",
+            "label": "Persist assistant responses",
+            "section": "Sessions",
+        },
+        {
+            "path": "sessions.max_history_rows",
+            "type": "number",
+            "label": "Max history rows",
+            "section": "Sessions",
+        },
+        {
+            "path": "skills.enable_profile_overrides",
+            "type": "boolean",
+            "label": "Skill profile overrides",
+            "section": "Skills",
+        },
+        {
+            "path": "skills.external_dirs",
+            "type": "string_list",
+            "label": "External skill dirs",
+            "section": "Skills",
+        },
+        {
+            "path": "tools.require_approval_for_risky",
+            "type": "boolean",
+            "label": "Approval for risky tools",
+            "section": "Tools",
+        },
+        {
+            "path": "gateway.enabled",
+            "type": "boolean",
+            "label": "Gateway enabled",
+            "section": "Gateway",
+        },
+        {
+            "path": "gateway.state_dir",
+            "type": "string",
+            "label": "Gateway herd directory",
+            "section": "Gateway",
+        },
+        {
+            "path": "dashboard.host",
+            "type": "string",
+            "label": "Dashboard host",
+            "section": "Dashboard",
+        },
+        {
+            "path": "dashboard.port",
+            "type": "number",
+            "label": "Dashboard port",
+            "section": "Dashboard",
+        },
+        {
+            "path": "personal_model.first_language",
+            "type": "string",
+            "label": "First language",
+            "section": "Personal Model",
+        },
+        {
+            "path": "personal_model_questions.proactive_ask.enabled",
+            "type": "boolean",
+            "label": "Proactive asks enabled",
+            "section": "Personal Model",
+        },
+        {
+            "path": "personal_model_questions.proactive_ask.idle_threshold_minutes",
+            "type": "number",
+            "label": "Idle threshold (minutes)",
+            "section": "Personal Model",
+        },
+        {
+            "path": "personal_model_questions.proactive_ask.daily_max",
+            "type": "number",
+            "label": "Daily max questions",
+            "section": "Personal Model",
+        },
+        {
+            "path": "personal_model_questions.proactive_ask.quiet_hours",
+            "type": "string_list",
+            "label": "Quiet hours [start, end]",
+            "section": "Personal Model",
+        },
+        {
+            "path": "observability.enabled",
+            "type": "boolean",
+            "label": "Observability enabled",
+            "section": "Observability",
+        },
+        {
+            "path": "observability.log_level",
+            "type": "string",
+            "label": "Log level",
+            "section": "Observability",
+        },
+        {
+            "path": "observability.log_file",
+            "type": "string",
+            "label": "Log file path",
+            "section": "Observability",
+        },
+        {
+            "path": "observability.otel_endpoint",
+            "type": "string",
+            "label": "OTLP endpoint",
+            "section": "Observability",
+        },
+        {
+            "path": "observability.service_name",
+            "type": "string",
+            "label": "Service name",
+            "section": "Observability",
+        },
     ]
 
 

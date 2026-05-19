@@ -1,42 +1,17 @@
 """Inbound-event and async-job stores for the Feishu gateway."""
 
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-import importlib.util
 import json
 import logging
-import os
-import queue
 import threading
 import time
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from packages.gateway_core import (
-    DEFAULT_GATEWAY_ACCOUNT_ID,
-    GatewayExchange,
-    GatewayInboundMessage,
-    GatewayOutboundMessage,
-)
-
-from apps.provider_runtime import secret_reference_from_payload
-from apps.runtime_layout import default_cli_state_dir
-from packages.auth import AuthProfile, EnvironmentSecretStore, ProfileCredentialResolver, SecretReference
-
-from .cli_control import (
-    CliRuntimeFactory,
-    FeishuCliBindingStore,
-    FeishuCliControlService,
-    load_feishu_cli_control_config,
-)
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
-from .runtime import FEISHU_ADAPTER_ID, FeishuMessagingAdapter, GatewayApp, build_gateway_app
 
 DEFAULT_FEISHU_APP_ID_ENV = "ELEPHANT_FEISHU_APP_ID"
 DEFAULT_FEISHU_APP_SECRET_ENV = "ELEPHANT_FEISHU_APP_SECRET"
@@ -62,6 +37,7 @@ FeishuWSClientFactory = Callable[[Any, str, str, object, object | None], object]
 LOGGER = logging.getLogger(__name__)
 
 from .feishu_support import *  # noqa: F401,F403
+
 
 @dataclass(slots=True)
 class FeishuInboundEventStore:
@@ -202,11 +178,7 @@ class FeishuInboundEventStore:
 
     def _prune(self) -> None:
         cutoff = time.time() - max(self.retention_seconds, 0)
-        kept = [
-            (key, record)
-            for key, record in self._records.items()
-            if record.recorded_at >= cutoff
-        ]
+        kept = [(key, record) for key, record in self._records.items() if record.recorded_at >= cutoff]
         kept.sort(key=lambda item: item[1].recorded_at, reverse=True)
         if self.max_records > 0:
             kept = kept[: self.max_records]
@@ -243,6 +215,7 @@ class FeishuInboundEventStore:
         }
         self.path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
+
 @dataclass(frozen=True, slots=True)
 class FeishuAsyncJobRecord:
     account_id: str
@@ -263,6 +236,7 @@ class FeishuAsyncJobRecord:
     started_at: float | None = None
     completed_at: float | None = None
     failed_at: float | None = None
+
 
 @dataclass(slots=True)
 class FeishuAsyncJobStore:
@@ -447,11 +421,7 @@ class FeishuAsyncJobStore:
     def incomplete_records(self) -> tuple[tuple[str, FeishuAsyncJobRecord], ...]:
         with self._lock:
             self._prune()
-            items = [
-                (key, record)
-                for key, record in self._records.items()
-                if record.status in {"queued", "running"}
-            ]
+            items = [(key, record) for key, record in self._records.items() if record.status in {"queued", "running"}]
         items.sort(key=lambda item: (item[1].created_at, item[0]))
         return tuple(items)
 
@@ -513,12 +483,7 @@ class FeishuAsyncJobStore:
             account_id = _optional_text(item.get("account_id"))
             conversation_id = _optional_text(item.get("conversation_id"))
             transport = _optional_text(item.get("transport"))
-            if (
-                payload_mapping is None
-                or account_id is None
-                or conversation_id is None
-                or transport is None
-            ):
+            if payload_mapping is None or account_id is None or conversation_id is None or transport is None:
                 continue
             event_id = _optional_text(item.get("event_id"))
             message_id = _optional_text(item.get("message_id"))
@@ -547,27 +512,15 @@ class FeishuAsyncJobStore:
                 retry_count=int(item.get("retry_count") or 0),
                 created_at=float(item.get("created_at") or 0.0),
                 updated_at=float(item.get("updated_at") or 0.0),
-                started_at=(
-                    None if item.get("started_at") is None else float(item.get("started_at"))
-                ),
-                completed_at=(
-                    None
-                    if item.get("completed_at") is None
-                    else float(item.get("completed_at"))
-                ),
-                failed_at=(
-                    None if item.get("failed_at") is None else float(item.get("failed_at"))
-                ),
+                started_at=(None if item.get("started_at") is None else float(item.get("started_at"))),
+                completed_at=(None if item.get("completed_at") is None else float(item.get("completed_at"))),
+                failed_at=(None if item.get("failed_at") is None else float(item.get("failed_at"))),
             )
         return loaded
 
     def _prune(self) -> None:
         cutoff = time.time() - max(self.retention_seconds, 0)
-        kept = [
-            (key, record)
-            for key, record in self._records.items()
-            if record.updated_at >= cutoff
-        ]
+        kept = [(key, record) for key, record in self._records.items() if record.updated_at >= cutoff]
         kept.sort(key=lambda item: item[1].updated_at, reverse=True)
         if self.max_records > 0:
             kept = kept[: self.max_records]
@@ -599,9 +552,7 @@ class FeishuAsyncJobStore:
                     "status": record.status,
                     "placeholder_sent": record.placeholder_sent,
                     "placeholder_message_id": record.placeholder_message_id,
-                    "response_body": (
-                        None if record.response_body is None else dict(record.response_body)
-                    ),
+                    "response_body": (None if record.response_body is None else dict(record.response_body)),
                     "external_message_id": record.external_message_id,
                     "failure_summary": record.failure_summary,
                     "retry_count": record.retry_count,
@@ -619,6 +570,7 @@ class FeishuAsyncJobStore:
             ]
         }
         self.path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
 
 __all__ = [
     "DEFAULT_FEISHU_APP_ID_ENV",

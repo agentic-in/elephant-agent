@@ -155,7 +155,11 @@ class EpisodeLifecycleService:
         preserve_preferences: bool = True,
         preserve_corrections: bool = True,
         preserve_emotional_context: bool = True,
-        allowed_signal_kinds: tuple[str, ...] = ("relationship", "preference", "continuity"),
+        allowed_signal_kinds: tuple[str, ...] = (
+            "relationship",
+            "preference",
+            "continuity",
+        ),
     ) -> RelationshipPolicy:
         return build_relationship_policy(
             profile_mode=profile_mode,
@@ -168,7 +172,9 @@ class EpisodeLifecycleService:
         )
 
 
-def install_app_episode_runtime(repository: RuntimeStorageRepository) -> EpisodeLifecycleService:
+def install_app_episode_runtime(
+    repository: RuntimeStorageRepository,
+) -> EpisodeLifecycleService:
     """Build the app-owned Episode lifecycle service on top of repository methods."""
 
     return EpisodeLifecycleService(repository)

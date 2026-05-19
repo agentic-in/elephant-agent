@@ -54,7 +54,14 @@ class _AllowedToolRuntime:
     def list_tools(self, **kwargs: Any) -> tuple[Any, ...]:
         return tuple(tool for tool in self._runtime.list_tools(**kwargs) if tool.tool_id in self._allowed_tool_ids)
 
-    def invoke(self, tool_name: str, arguments: Mapping[str, Any], *, session_id: str, requester: str | None = None):
+    def invoke(
+        self,
+        tool_name: str,
+        arguments: Mapping[str, Any],
+        *,
+        session_id: str,
+        requester: str | None = None,
+    ):
         self._ensure_allowed(tool_name)
         return self._runtime.invoke(tool_name, arguments, session_id=session_id, requester=requester)
 
@@ -63,7 +70,6 @@ class _AllowedToolRuntime:
 
     def list_executions(self) -> tuple[Any, ...]:
         return self._runtime.list_executions()
-
 
 
 def cron_skill_ids(value: object) -> tuple[str, ...]:
@@ -112,7 +118,16 @@ def run_sub_agent_task(
     result = run_sub_agent_tasks(
         runtime,
         session_id=session_id,
-        tasks=({"task": task, "name": name, "skills": skills, "allowed_tools": allowed_tools, "system_prompt": system_prompt, "learning_agent": learning_agent},),
+        tasks=(
+            {
+                "task": task,
+                "name": name,
+                "skills": skills,
+                "allowed_tools": allowed_tools,
+                "system_prompt": system_prompt,
+                "learning_agent": learning_agent,
+            },
+        ),
         max_concurrency=1,
     )
     results = tuple(result.get("results") or ())
@@ -229,7 +244,9 @@ def start_sub_agent_tasks(
             run_id=run_id,
             task_index=index,
         )
-        future.add_done_callback(lambda completed, task_index=index: _record_async_sub_agent_result(run, task_index, completed))
+        future.add_done_callback(
+            lambda completed, task_index=index: _record_async_sub_agent_result(run, task_index, completed)
+        )
         futures.append(future)
     run.futures = tuple(futures)
     with _ASYNC_SUB_AGENT_RUNS_LOCK:
@@ -265,8 +282,7 @@ def list_sub_agent_runs(
     return {
         "status": "completed",
         "summary": "\n".join(
-            f"{run.run_id}: {run.status} ({_completed_sub_agent_count(run)}/{len(run.results)} done)"
-            for run in runs
+            f"{run.run_id}: {run.status} ({_completed_sub_agent_count(run)}/{len(run.results)} done)" for run in runs
         )
         or "no sub-agent runs",
         "runs": [_sub_agent_run_payload(run) for run in runs],
@@ -305,12 +321,16 @@ def _prepare_sub_agent_child(
 ) -> Mapping[str, Any]:
     child = _open_sub_agent_child_episode(runtime, parent_session_id)
     child_session_id = child.episode_id
-    prompt = task if system_prompt.strip() else _compose_sub_agent_prompt(
-        runtime,
-        task=task,
-        name=name,
-        skills=skills,
-        session_id=child_session_id,
+    prompt = (
+        task
+        if system_prompt.strip()
+        else _compose_sub_agent_prompt(
+            runtime,
+            task=task,
+            name=name,
+            skills=skills,
+            session_id=child_session_id,
+        )
     )
     return {
         "name": name or "sub-agent",
@@ -470,7 +490,6 @@ def _run_prepared_sub_agent_child(
     return result
 
 
-
 def _create_child_runtime(runtime: Any) -> Any:
     return runtime.__class__.create(
         state_dir=runtime.paths.state_dir,
@@ -499,7 +518,14 @@ def _normalize_sub_agent_task(item: Mapping[str, Any]) -> Mapping[str, Any]:
     allowed_tools = cron_skill_ids(item.get("allowed_tools") or item.get("allowed_tool_ids"))
     system_prompt = str(item.get("system_prompt") or "").strip()
     learning_agent = bool(item.get("learning_agent"))
-    return {"task": task, "name": name_text, "skills": skills, "allowed_tools": allowed_tools, "system_prompt": system_prompt, "learning_agent": learning_agent}
+    return {
+        "task": task,
+        "name": name_text,
+        "skills": skills,
+        "allowed_tools": allowed_tools,
+        "system_prompt": system_prompt,
+        "learning_agent": learning_agent,
+    }
 
 
 def _aggregate_sub_agent_status(results: list[Mapping[str, Any] | None]) -> str:
@@ -570,7 +596,9 @@ def _sub_agent_run_payload(run: _AsyncSubAgentRun) -> Mapping[str, Any]:
         f"progress: {completed}/{total}",
     ]
     if status == "running":
-        summary_lines.append(f"Use tool.sub_agents action=status run_id={run.run_id} to check progress, or action=join to wait.")
+        summary_lines.append(
+            f"Use tool.sub_agents action=status run_id={run.run_id} to check progress, or action=join to wait."
+        )
     for index, item in enumerate(resolved):
         summary_lines.append(
             f"{index + 1}. {item.get('name') or 'sub-agent'}: {item.get('summary') or item.get('status') or 'finished'}"

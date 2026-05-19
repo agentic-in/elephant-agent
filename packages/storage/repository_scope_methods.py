@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import json
 from packages.auth import AuthProfile, EncryptedSecretValue, SecretReference
 from packages.contracts import SemanticIndexEntry
@@ -184,11 +183,7 @@ def load_auth_profile(self, profile_id: str) -> AuthProfile | None:
 
 def list_auth_profiles(self, provider_id: str | None = None) -> tuple[AuthProfile, ...]:
     payload = _read_auth_profiles_payload(self)
-    profiles = tuple(
-        _auth_profile_from_payload(item)
-        for _, item in sorted(payload.items())
-        if isinstance(item, dict)
-    )
+    profiles = tuple(_auth_profile_from_payload(item) for _, item in sorted(payload.items()) if isinstance(item, dict))
     if provider_id is None:
         return profiles
     return tuple(profile for profile in profiles if profile.provider_id == provider_id)
@@ -345,14 +340,10 @@ def _auth_profile_from_payload(payload: dict[str, object]) -> AuthProfile:
         provider_id=str(payload["provider_id"]),
         transport_id=str(payload.get("transport_id") or "openai-compatible"),
         base_url=str(payload["base_url"]) if payload.get("base_url") is not None else None,
-        default_model=(
-            str(payload["default_model"]) if payload.get("default_model") is not None else None
-        ),
+        default_model=(str(payload["default_model"]) if payload.get("default_model") is not None else None),
         auth_method=str(payload.get("auth_method") or "api_key"),
         provider_kind=str(payload.get("provider_kind") or "first_party"),
-        extra_headers=(
-            dict(payload["extra_headers"]) if isinstance(payload.get("extra_headers"), dict) else {}
-        ),
+        extra_headers=(dict(payload["extra_headers"]) if isinstance(payload.get("extra_headers"), dict) else {}),
         secret_references=tuple(
             _secret_reference_from_payload(item)
             for item in payload.get("secret_references", ())
@@ -360,8 +351,6 @@ def _auth_profile_from_payload(payload: dict[str, object]) -> AuthProfile:
         ),
         priority=int(payload.get("priority") or 0),
         session_pin=str(payload["session_pin"]) if payload.get("session_pin") is not None else None,
-        cooldown_until=(
-            _parse_datetime(str(cooldown_until)) if cooldown_until is not None else None
-        ),
+        cooldown_until=(_parse_datetime(str(cooldown_until)) if cooldown_until is not None else None),
         metadata=dict(payload["metadata"]) if isinstance(payload.get("metadata"), dict) else {},
     )

@@ -4,14 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from queue import Empty, Queue
-import threading
 from typing import TYPE_CHECKING, Callable
 from uuid import uuid4
 
 from packages.contracts.runtime import ExecutionResult
 from packages.tools.surfaces import ClarifySurface
 
-from .shell_stack import Condition, ConditionalContainer, FormattedText, FormattedTextControl, Window
+from .shell_stack import (
+    Condition,
+    ConditionalContainer,
+    FormattedText,
+    FormattedTextControl,
+    Window,
+)
 
 if TYPE_CHECKING:
     from .shell import ProductizedShell
@@ -124,7 +129,12 @@ def render_clarify_fragments(shell: ProductizedShell) -> FormattedText:
         for index, choice in enumerate(state.choices, start=1):
             fragments.append(("class:clarify-choice", f"\n{index}. {choice}"))
         fragments.append(("", "\n"))
-        fragments.append(("class:clarify-hint", "Type a number or a custom answer, then press Enter."))
+        fragments.append(
+            (
+                "class:clarify-hint",
+                "Type a number or a custom answer, then press Enter.",
+            )
+        )
         fragments.append(("", "\n"))
     else:
         fragments.append(("", "\n"))

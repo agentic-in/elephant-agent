@@ -3,62 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import re
 import tempfile
-from typing import Any
-from uuid import uuid4
 
-from apps.provider_runtime import (
-    load_provider_profile,
-    provider_profile_from_payload,
-)
-from packages.auth import AuthProfile, EnvironmentSecretStore, PersistentAuthProfileStore, ProfileCredentialResolver
-from packages.models import SurfaceModelProviderCapability
-from packages.models.runtime_capability import provider_fallback_summary, provider_profile_summary
-from packages.capabilities.runtime import (
-    CapabilityDescriptor,
-    ContextCapability,
-    RecallCapability,
-    ModelProviderCapability,
-    TelemetrySinkCapability,
-)
-from packages.context import ContextRuntime
-from packages.contracts import Episode
-from packages.contracts.runtime import (
-    ContextBundle,
-    EventEnvelope,
-    ExecutionResult,
-    RecallEvidence,
-)
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
-    FileGatewayIdentityStore,
-    FileGatewaySessionStore,
     GatewayAccountRef,
     GatewayAttachmentRef,
     GatewayConversationRef,
-    GatewayCoreDependencies,
-    GatewayCoreService,
-    GatewayExchange,
-    GatewayIdentityRecord,
-    GatewayInboundMessage,
     GatewayOutboundMessage,
     GatewayPolicyHint,
     GatewaySenderRef,
-    InMemoryGatewayIdentityStore,
-    InMemoryGatewaySessionStore,
 )
-from packages.kernel import KernelDependencies, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
-from packages.evidence.recall_runtime import RecallRuntime
-from packages.state import build_prompt_contract
-from packages.security.runtime import SecurityPolicy
-from packages.storage import RuntimeStorageRepository
-from .plugins import GatewayAdapterDescriptor, GatewayPluginRegistry
 
 CHAT_BOT_ADAPTER_ID = "messaging.chat-bot"
 WEBHOOK_ADAPTER_ID = "messaging.webhook"
@@ -354,10 +314,7 @@ _CODE_PREFIXES = (
     "<",
     "</",
 )
-_CODE_SIGNAL_RE = re.compile(
-    r"(\b[A-Za-z_][\w.]*\([^\n]*\)|\s:=\s|\s=\s|->|=>|::|\{.*\}|</?[A-Za-z][^>]*>|;\s*$)"
-)
-
+_CODE_SIGNAL_RE = re.compile(r"(\b[A-Za-z_][\w.]*\([^\n]*\)|\s:=\s|\s=\s|->|=>|::|\{.*\}|</?[A-Za-z][^>]*>|;\s*$)")
 
 
 def _is_command_line(line: str) -> bool:
@@ -367,7 +324,6 @@ def _is_command_line(line: str) -> bool:
     if stripped.startswith(("```", "- ", "* ", "+ ")):
         return False
     return _COMMAND_PREFIX_RE.match(stripped) is not None
-
 
 
 def _is_formula_line(line: str) -> bool:
@@ -389,7 +345,6 @@ def _is_formula_line(line: str) -> bool:
     return alpha_count <= max(16, len(stripped) // 2)
 
 
-
 def _looks_like_code_line(line: str) -> bool:
     stripped = line.strip()
     if not stripped or _is_command_line(stripped) or _is_formula_line(stripped):
@@ -399,7 +354,6 @@ def _looks_like_code_line(line: str) -> bool:
     if stripped.startswith(_CODE_PREFIXES):
         return True
     return _CODE_SIGNAL_RE.search(stripped) is not None
-
 
 
 def _detect_code_fence_language(lines: list[str]) -> str:
@@ -423,11 +377,9 @@ def _detect_code_fence_language(lines: list[str]) -> str:
     return "text"
 
 
-
 def _fenced_block(lines: list[str], *, language: str) -> list[str]:
     opening = f"```{language}" if language else "```"
     return [opening, *lines, "```"]
-
 
 
 def _wrap_rich_text_block(lines: list[str]) -> list[str]:
@@ -441,12 +393,9 @@ def _wrap_rich_text_block(lines: list[str]) -> list[str]:
     if all(_is_formula_line(line) for line in meaningful_lines):
         return _fenced_block(lines, language="tex")
     code_like_lines = [line for line in meaningful_lines if _looks_like_code_line(line)]
-    if code_like_lines and (
-        len(meaningful_lines) == 1 or len(code_like_lines) >= max(1, len(meaningful_lines) - 1)
-    ):
+    if code_like_lines and (len(meaningful_lines) == 1 or len(code_like_lines) >= max(1, len(meaningful_lines) - 1)):
         return _fenced_block(lines, language=_detect_code_fence_language(meaningful_lines))
     return lines
-
 
 
 def _render_rich_text_plain_segment(lines: list[str]) -> list[str]:
@@ -468,7 +417,6 @@ def _render_rich_text_plain_segment(lines: list[str]) -> list[str]:
         block.append(raw_line)
     flush_block()
     return rendered
-
 
 
 def _render_rich_text_body(body: str) -> str:
@@ -494,7 +442,6 @@ def _render_rich_text_body(body: str) -> str:
     if plain_segment:
         rendered.extend(_render_rich_text_plain_segment(plain_segment))
     return "\n".join(rendered)
-
 
 
 def _discord_reply_request(outbound: GatewayOutboundMessage) -> Mapping[str, object]:
@@ -561,7 +508,9 @@ def _feishu_message_content(content: object) -> dict[str, object]:
     return {"raw": str(content)}
 
 
-def _feishu_attachment_refs(content: Mapping[str, object]) -> tuple[GatewayAttachmentRef, ...]:
+def _feishu_attachment_refs(
+    content: Mapping[str, object],
+) -> tuple[GatewayAttachmentRef, ...]:
     deduped: dict[str, GatewayAttachmentRef] = {}
     for field_name, kind in (
         ("image_key", "image"),
@@ -661,7 +610,6 @@ def _feishu_extract_title_and_body(body: str) -> tuple[str, str]:
     return title, "\n".join(lines).strip() or normalized.strip() or "(empty reply)"
 
 
-
 def _feishu_json_v2_markdown_body(body: str) -> str:
     normalized = body.replace("\r\n", "\n")
     language_aliases = {
@@ -679,7 +627,6 @@ def _feishu_json_v2_markdown_body(body: str) -> str:
             continue
         rendered_lines.append(raw_line)
     return "\n".join(rendered_lines)
-
 
 
 def _feishu_interactive_payload(body: str) -> dict[str, object]:
@@ -708,7 +655,6 @@ def _feishu_interactive_payload(body: str) -> dict[str, object]:
     }
 
 
-
 def _feishu_reply_request(outbound: "GatewayOutboundMessage") -> dict[str, object]:
     if not outbound.reply_to_message_id:
         raise ValueError("feishu reply request requires reply_to_message_id")
@@ -731,6 +677,7 @@ def _runtime_database_path(state_dir: Path | None) -> Path:
         return Path(tempfile.mkdtemp(prefix="elephant-gateway-state-")) / "elephant.sqlite3"
     state_dir.mkdir(parents=True, exist_ok=True)
     return state_dir / "elephant.sqlite3"
+
 
 __all__ = [
     "CHAT_BOT_ADAPTER_ID",

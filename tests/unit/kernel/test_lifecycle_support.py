@@ -7,13 +7,19 @@ from pathlib import Path
 import unittest
 
 from packages.contracts.layers import Episode
-from packages.kernel.lifecycle_support import KernelRuntimeIdentity, close_episode_lifecycle, open_episode_lifecycle
+from packages.kernel.lifecycle_support import (
+    KernelRuntimeIdentity,
+    close_episode_lifecycle,
+    open_episode_lifecycle,
+)
 from packages.kernel.runtime_support import KernelSourceRequest
 from packages.storage.repository_impl import RuntimeStorageRepository
 
 
 class KernelLifecycleSupportTests(unittest.TestCase):
-    def test_gateway_idle_reuse_closes_stale_episode_and_opens_new_episode(self) -> None:
+    def test_gateway_idle_reuse_closes_stale_episode_and_opens_new_episode(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
             repository.bootstrap()
@@ -25,7 +31,10 @@ class KernelLifecycleSupportTests(unittest.TestCase):
                 state_id="state-gateway",
                 surface_bindings=("gateway:discord:room",),
             )
-            state = replace(state, current_context_note="Resume the gateway handoff from the prior episode.")
+            state = replace(
+                state,
+                current_context_note="Resume the gateway handoff from the prior episode.",
+            )
             repository.upsert_state(state)
             previous_at = datetime(2026, 4, 24, 10, tzinfo=timezone.utc)
             stale_episode = Episode(
@@ -59,7 +68,10 @@ class KernelLifecycleSupportTests(unittest.TestCase):
             stored_stale = repository.load_episode(stale_episode.episode_id)
             self.assertEqual(lifecycle.episode.episode_id, "episode:request-gateway-new")
             self.assertEqual(lifecycle.close_on_completion, False)
-            self.assertEqual(tuple(episode.episode_id for episode in lifecycle.idle_closed_episodes), ("episode:gateway-stale",))
+            self.assertEqual(
+                tuple(episode.episode_id for episode in lifecycle.idle_closed_episodes),
+                ("episode:gateway-stale",),
+            )
             self.assertIsNotNone(stored_stale)
             assert stored_stale is not None
             self.assertEqual(stored_stale.status, "closed")
@@ -191,7 +203,9 @@ class KernelLifecycleSupportTests(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored.status, "closed")
 
-    def test_close_episode_does_not_foreground_update_state_continuation_note(self) -> None:
+    def test_close_episode_does_not_foreground_update_state_continuation_note(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
             repository.bootstrap()

@@ -277,9 +277,7 @@ def resolve_cron_identity_records(
         records = identity_store.lookup_by_elephant_id(elephant_id)
     else:
         records = identity_store.list_records()
-    adapter_records = tuple(
-        record for record in records if record.key.adapter_id == adapter_id
-    )
+    adapter_records = tuple(record for record in records if record.key.adapter_id == adapter_id)
     if elephant_id or not adapter_records:
         return adapter_records
     unique_elephants = {record.elephant_id for record in adapter_records if record.elephant_id}
@@ -318,9 +316,7 @@ class GatewaySessionStore(Protocol):
 
 @dataclass(slots=True)
 class InMemoryGatewayIdentityStore:
-    _records: dict[GatewayIdentityKey, GatewayIdentityRecord] = field(
-        default_factory=dict
-    )
+    _records: dict[GatewayIdentityKey, GatewayIdentityRecord] = field(default_factory=dict)
 
     def lookup(self, key: GatewayIdentityKey) -> GatewayIdentityRecord | None:
         return self._records.get(key)
@@ -332,7 +328,7 @@ class InMemoryGatewayIdentityStore:
         return tuple(
             sorted(
                 (r for r in self._records.values() if r.elephant_id == elephant_id),
-                key=lambda r: (r.updated_at or r.created_at or _utc_now()),
+                key=lambda r: r.updated_at or r.created_at or _utc_now(),
                 reverse=True,
             )
         )
@@ -366,7 +362,7 @@ class FileGatewayIdentityStore:
         return tuple(
             sorted(
                 (r for r in self._load_records().values() if r.elephant_id == elephant_id),
-                key=lambda r: (r.updated_at or r.created_at or _utc_now()),
+                key=lambda r: r.updated_at or r.created_at or _utc_now(),
                 reverse=True,
             )
         )
@@ -405,17 +401,9 @@ class FileGatewayIdentityStore:
                 state_id=str(item["state_id"]) if item.get("state_id") is not None else None,
                 elephant_id=str(item["elephant_id"]) if item.get("elephant_id") is not None else None,
                 episode_id=str(item["episode_id"]) if item.get("episode_id") is not None else None,
-                display_name=(
-                    str(item["display_name"])
-                    if item.get("display_name") is not None
-                    else None
-                ),
-                created_at=_parse_datetime(
-                    str(item["created_at"]) if item.get("created_at") is not None else None
-                ),
-                updated_at=_parse_datetime(
-                    str(item["updated_at"]) if item.get("updated_at") is not None else None
-                ),
+                display_name=(str(item["display_name"]) if item.get("display_name") is not None else None),
+                created_at=_parse_datetime(str(item["created_at"]) if item.get("created_at") is not None else None),
+                updated_at=_parse_datetime(str(item["updated_at"]) if item.get("updated_at") is not None else None),
             )
             records[record.key] = record
         return records
@@ -518,9 +506,7 @@ class FileGatewaySessionStore:
                 started_at=datetime.fromisoformat(str(item["started_at"])),
                 updated_at=datetime.fromisoformat(str(item["updated_at"])),
                 interruption_state=(
-                    str(item["interruption_state"])
-                    if item.get("interruption_state") is not None
-                    else None
+                    str(item["interruption_state"]) if item.get("interruption_state") is not None else None
                 ),
             )
             records[session.session_id] = session
@@ -579,10 +565,14 @@ class GatewayCoreService:
             conversation_id=inbound.conversation_id,
         )
         existing = self.dependencies.identity_store.lookup(key)
-        session_id = existing.session_id if existing is not None else _session_id(
-            inbound.adapter_id,
-            inbound.account_id,
-            inbound.conversation_id,
+        session_id = (
+            existing.session_id
+            if existing is not None
+            else _session_id(
+                inbound.adapter_id,
+                inbound.account_id,
+                inbound.conversation_id,
+            )
         )
         session = self.dependencies.session_store.lookup(session_id)
         if session is None:
@@ -596,7 +586,9 @@ class GatewayCoreService:
         else:
             session = replace(session, updated_at=now)
         identity = GatewayIdentityRecord(
-            mapping_id=existing.mapping_id if existing is not None else _mapping_id(
+            mapping_id=existing.mapping_id
+            if existing is not None
+            else _mapping_id(
                 inbound.adapter_id,
                 inbound.account_id,
                 inbound.conversation_id,
@@ -629,7 +621,11 @@ class GatewayCoreService:
         )
         identity = self.dependencies.identity_store.lookup(key)
         inherited: GatewayIdentityRecord | None = None
-        if identity is None and inbound.parent_conversation_id and inbound.parent_conversation_id != inbound.conversation_id:
+        if (
+            identity is None
+            and inbound.parent_conversation_id
+            and inbound.parent_conversation_id != inbound.conversation_id
+        ):
             inherited = self.dependencies.identity_store.lookup(
                 GatewayIdentityKey(
                     adapter_id=inbound.adapter_id,
@@ -748,20 +744,10 @@ class GatewayCoreService:
         is_external: bool | None = None,
     ) -> GatewayDeliveryReceipt:
         resolved_target_trusted = (
-            route.inbound.policy_hint.target_trusted_default
-            if target_trusted is None
-            else target_trusted
+            route.inbound.policy_hint.target_trusted_default if target_trusted is None else target_trusted
         )
-        resolved_consent_given = (
-            route.inbound.policy_hint.consent_default
-            if consent_given is None
-            else consent_given
-        )
-        resolved_is_external = (
-            route.inbound.policy_hint.is_external_default
-            if is_external is None
-            else is_external
-        )
+        resolved_consent_given = route.inbound.policy_hint.consent_default if consent_given is None else consent_given
+        resolved_is_external = route.inbound.policy_hint.is_external_default if is_external is None else is_external
         request = SecurityRequest(
             request_id=f"{route.route_id}:policy:{uuid4().hex[:8]}",
             approval_class=ApprovalClass.MESSAGING,
@@ -841,9 +827,7 @@ class GatewayCoreService:
         delivery = self.deliver(
             route,
             body=body or inbound.body,
-            reply_to_message_id=reply_to_message_id
-            or inbound.reply_to_message_id
-            or inbound.event_id,
+            reply_to_message_id=reply_to_message_id or inbound.reply_to_message_id or inbound.event_id,
             attachment_refs=attachment_refs,
             metadata=metadata,
             target_trusted=target_trusted,

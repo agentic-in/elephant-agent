@@ -3,23 +3,15 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import os
-import random
-import re
 import select
 import sys
 import time
-from collections.abc import Iterable
-from pathlib import Path
 
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity
 
 from .runtime import CliRuntime
 from .provider_flow import (
     ProviderSelectionState,
-    provider_choices as _shared_provider_choices,
-    provider_setup_defaults,
     run_provider_selection_wizard,
 )
 from .shell import (
@@ -32,7 +24,6 @@ from .shell import (
     Console,
     Group,
     Panel,
-    ProductizedShell,
     RICH_AVAILABLE,
     Table,
     Text,
@@ -42,11 +33,8 @@ from .shell import (
 from .wizard import (
     WIZARD_BACK,
     WIZARD_CANCEL,
-    WizardChoice,
     _WizardBackSignal,
     _interactive_shell_supported,
-    _wizard_choice_prompt,
-    _wizard_dialogs_supported,
     _wizard_text_prompt,
 )
 from .shell_stack import Live
@@ -101,8 +89,8 @@ INIT_SETUP_STEPS = (
 )
 
 
-
 from .cli_main_support import *  # noqa: F401,F403
+
 
 def _default_personality_preset(runtime: CliRuntime, *, mode: str, current: str | None = None) -> str | None:
     if mode != "companion":
@@ -114,9 +102,13 @@ def _default_personality_preset(runtime: CliRuntime, *, mode: str, current: str 
             return preset.preset_id
     return runtime.personality_presets()[0].preset_id
 
+
 def _print_birth_wizard_intro() -> None:
     if not RICH_AVAILABLE or Table is None or Panel is None or Group is None:
-        _print_heading("Elephant Agent Init", "Start from you, then choose the first elephant and model path.")
+        _print_heading(
+            "Elephant Agent Init",
+            "Start from you, then choose the first elephant and model path.",
+        )
         for line in INIT_REFLECTION_LINES:
             _print_bullet(line)
         return
@@ -161,13 +153,15 @@ def _print_birth_wizard_intro() -> None:
         logo_block.add_row(_center_brand_block(render_stage_zero_elephant_mark()))
         layout.add_row(_center_brand_block(logo_block), Text(" "), questions, Text(" "), flow)
     console.print(
-        _center_intro_window(Panel(
-            layout,
-            title=f"[bold {BRAND_ACCENT}]Elephant Agent Init · Stage 0 → first wake · v{_resolve_elephant_version()}[/bold {BRAND_ACCENT}]",
-            border_style=BRAND_ACCENT,
-            expand=False,
-            padding=(1, 2),
-        ))
+        _center_intro_window(
+            Panel(
+                layout,
+                title=f"[bold {BRAND_ACCENT}]Elephant Agent Init · Stage 0 → first wake · v{_resolve_elephant_version()}[/bold {BRAND_ACCENT}]",
+                border_style=BRAND_ACCENT,
+                expand=False,
+                padding=(1, 2),
+            )
+        )
     )
 
 
@@ -245,7 +239,9 @@ _INIT_WELCOME_VARIANTS = (
 )
 
 
-def _init_welcome_variant(variant_index: int) -> tuple[str, str, str, str, tuple[str, ...], str]:
+def _init_welcome_variant(
+    variant_index: int,
+) -> tuple[str, str, str, str, tuple[str, ...], str]:
     variant = _INIT_WELCOME_VARIANTS[variant_index % len(_INIT_WELCOME_VARIANTS)]
     return (
         str(variant["title"]),
@@ -268,12 +264,7 @@ def _init_welcome_elephant_mark():
         return mark
     plain = getattr(mark, "plain", "")
     rows = plain.splitlines()
-    visible_cells = [
-        index
-        for row in rows
-        for index, cell in enumerate(row)
-        if cell != " "
-    ]
+    visible_cells = [index for row in rows for index, cell in enumerate(row) if cell != " "]
     if not rows or not visible_cells:
         return mark
     visible_left = min(visible_cells)
@@ -304,20 +295,25 @@ def _init_welcome_frame(variant_index: int):
         copy.append(prefix, style=style)
         copy.append("Elephant Agent", style=f"bold {BRAND_LIGHT}")
         copy.append(suffix + "\n", style=style)
-    indicator = " ".join("●" if index == variant_index % len(_INIT_WELCOME_VARIANTS) else "·" for index in range(len(_INIT_WELCOME_VARIANTS)))
+    indicator = " ".join(
+        "●" if index == variant_index % len(_INIT_WELCOME_VARIANTS) else "·"
+        for index in range(len(_INIT_WELCOME_VARIANTS))
+    )
     copy.append("\n" + indicator + "\n", style=BRAND_MUTED)
     copy.append(enter + "\n", style=f"bold {BRAND_LIGHT}")
     body.add_row(_center_brand_block(copy))
-    return _center_intro_window(Panel(
-        body,
-        subtitle=f"[bold {BRAND_ACCENT}]Create yours[/bold {BRAND_ACCENT}]",
-        subtitle_align="center",
-        border_style=BRAND_DARK,
-        expand=True,
-        padding=(1, 3),
-        width=92,
-        height=28,
-    ))
+    return _center_intro_window(
+        Panel(
+            body,
+            subtitle=f"[bold {BRAND_ACCENT}]Create yours[/bold {BRAND_ACCENT}]",
+            subtitle_align="center",
+            border_style=BRAND_DARK,
+            expand=True,
+            padding=(1, 3),
+            width=92,
+            height=28,
+        )
+    )
 
 
 def _prompt_init_welcome_gate() -> bool:
@@ -381,7 +377,12 @@ def _center_intro_window(renderable):
     _, height = _intro_console_size()
     try:
         if height > 0:
-            return Align(renderable, align="center", vertical="middle", height=max(22, height - 1))
+            return Align(
+                renderable,
+                align="center",
+                vertical="middle",
+                height=max(22, height - 1),
+            )
         return Align.center(renderable, vertical="middle")
     except TypeError:
         return Align.center(renderable)
@@ -399,6 +400,7 @@ def _prompt_first_elephant_name(default_name: str, *, allow_back: bool = False) 
         allow_back=allow_back,
     )
 
+
 def _run_interactive_elephant_wizard(
     runtime: CliRuntime,
     *,
@@ -414,6 +416,7 @@ def _run_interactive_elephant_wizard(
     if answer is WIZARD_BACK:
         return None
     return str(answer).strip() or current_elephant_name
+
 
 def _run_interactive_birth_wizard(
     runtime: CliRuntime,
@@ -475,12 +478,14 @@ def _run_interactive_birth_wizard(
             continue
     return state
 
+
 def _print_birth_paused() -> None:
     _print_cli_card(
         "Elephant Agent birth paused",
         "No new identity or provider changes were written.",
         next_commands=("elephant init", "elephant status"),
     )
+
 
 def _gateway_birth_lines(elephant_name: str) -> tuple[str, ...]:
     return (
@@ -489,6 +494,7 @@ def _gateway_birth_lines(elephant_name: str) -> tuple[str, ...]:
         "inspect skill packages · elephant skills",
         "launch operator dashboard · elephant daemon start && elephant dashboard",
     )
+
 
 def _prompt_im_onboarding(runtime: CliRuntime, *, elephant_name: str) -> None:
     from apps.gateway.__main__ import run_im_setup
@@ -500,6 +506,7 @@ def _prompt_im_onboarding(runtime: CliRuntime, *, elephant_name: str) -> None:
         prompt_text="💬 Which IM should Elephant Agent wire before wake opens?",
         allow_skip=True,
     )
+
 
 def _print_overview(runtime: CliRuntime) -> None:
     provider = dict(runtime.provider_summary())
@@ -515,23 +522,59 @@ def _print_overview(runtime: CliRuntime) -> None:
         capability = Text("You · Threads · Herd · Skills · Providers", style=BRAND_MUTED)
         action_lines = Text()
         action_lines.append("Start\n", style=f"bold {BRAND_ACCENT}")
-        action_lines.append(f"{_format_command_line('elephant wake', 'continue the active thread')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant init', 'set name, provider, model, and recall path')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant herd new <name>', 'create another named continuity thread')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant herd', 'inspect named continuity threads')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant dashboard', 'open the continuity console')}\n", style=BRAND_LIGHT)
+        action_lines.append(
+            f"{_format_command_line('elephant wake', 'continue the active thread')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant init', 'set name, provider, model, and recall path')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant herd new <name>', 'create another named continuity thread')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant herd', 'inspect named continuity threads')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant dashboard', 'open the continuity console')}\n",
+            style=BRAND_LIGHT,
+        )
         action_lines.append("\nSystem controls\n", style=f"bold {BRAND_ACCENT}")
-        action_lines.append(f"{_format_command_line('elephant provider', 'manage models, keys, context, and embeddings')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant skills', 'inspect, install, search, and toggle skills')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant gateway', 'bind messenger surfaces')}\n", style=BRAND_LIGHT)
-        action_lines.append(f"{_format_command_line('elephant status', 'check provider and recall readiness')}\n", style=BRAND_LIGHT)
+        action_lines.append(
+            f"{_format_command_line('elephant provider', 'manage models, keys, context, and embeddings')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant skills', 'inspect, install, search, and toggle skills')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant gateway', 'bind messenger surfaces')}\n",
+            style=BRAND_LIGHT,
+        )
+        action_lines.append(
+            f"{_format_command_line('elephant status', 'check provider and recall readiness')}\n",
+            style=BRAND_LIGHT,
+        )
         action_lines.append("\nCurrent install\n", style=f"bold {BRAND_ACCENT}")
-        action_lines.append(f"readiness · {doctor['status']}\n", style=BRAND_MUTED if doctor["status"] != "ready" else BRAND_LIGHT)
+        action_lines.append(
+            f"readiness · {doctor['status']}\n",
+            style=BRAND_MUTED if doctor["status"] != "ready" else BRAND_LIGHT,
+        )
         action_lines.append(f"provider · {provider['provider_id']}\n", style=BRAND_MUTED)
         if provider.get("model_id") or provider.get("default_model"):
-            action_lines.append(f"model · {provider.get('model_id') or provider.get('default_model')}\n", style=BRAND_MUTED)
+            action_lines.append(
+                f"model · {provider.get('model_id') or provider.get('default_model')}\n",
+                style=BRAND_MUTED,
+            )
         if herd:
-            action_lines.append("states · " + ", ".join(elephant.elephant_id for elephant in herd), style=BRAND_MUTED)
+            action_lines.append(
+                "states · " + ", ".join(elephant.elephant_id for elephant in herd),
+                style=BRAND_MUTED,
+            )
         else:
             action_lines.append("states · none yet", style=BRAND_MUTED)
         brand.add_row(_center_brand_block(headline))
@@ -581,12 +624,17 @@ def _print_overview(runtime: CliRuntime) -> None:
     _print_field("provider", provider["provider_id"])
     if provider.get("model_id") or provider.get("default_model"):
         _print_field("model", provider.get("model_id") or provider.get("default_model"))
-    _print_field("states", ", ".join(elephant.elephant_id for elephant in herd) if herd else "none yet")
+    _print_field(
+        "states",
+        ", ".join(elephant.elephant_id for elephant in herd) if herd else "none yet",
+    )
+
 
 def _center_brand_block(renderable):
     if Align is None:
         return renderable
     return Align.center(renderable)
+
 
 def _print_setup_intro(runtime: CliRuntime, *, provider_id: str) -> None:
     guide = runtime.provider_setup_guide(provider_id)
@@ -615,6 +663,7 @@ def _print_setup_intro(runtime: CliRuntime, *, provider_id: str) -> None:
         ),
     )
 
+
 def _default_born_args() -> argparse.Namespace:
     return argparse.Namespace(
         provider_id=DEFAULT_PROVIDER_ID,
@@ -638,12 +687,14 @@ def _default_born_args() -> argparse.Namespace:
         non_interactive=False,
     )
 
+
 def _default_grow_args() -> argparse.Namespace:
     return argparse.Namespace(
         elephant_id=None,
         debug=False,
         message=None,
     )
+
 
 def _ensure_elephant_ready(
     runtime: CliRuntime,
@@ -662,6 +713,7 @@ def _ensure_elephant_ready(
         mode="companion",
     )
     return session, "created"
+
 
 __all__ = [
     "DEFAULT_PROVIDER_ID",

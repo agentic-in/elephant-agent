@@ -14,14 +14,33 @@ from typing import Any, Callable, Mapping
 
 from packages.contracts.runtime import ExecutionToolCall
 
-from ..provider_runtime import ProviderRuntimeResolution, ProviderRuntimeResolver, attach_session_header
-from ..runtime import CredentialSource, ModelAdapterDescriptor, ModelEmbeddingResult, ModelRequest, ModelTextResult, ModelUsage
+from ..provider_runtime import (
+    ProviderRuntimeResolution,
+    ProviderRuntimeResolver,
+    attach_session_header,
+)
+from ..runtime import (
+    CredentialSource,
+    ModelAdapterDescriptor,
+    ModelEmbeddingResult,
+    ModelRequest,
+    ModelTextResult,
+    ModelUsage,
+)
 from ._tool_names import provider_tool_name
 from .identity_contract import build_provider_messages, build_provider_system_prompt
 from .http import JSONHTTPTransport, UrllibJSONHTTPTransport
-from .message_payloads import openai_chat_messages_payload, openai_responses_input_payload
+from .message_payloads import (
+    openai_chat_messages_payload,
+    openai_responses_input_payload,
+)
 from .openai_usage import openai_compatible_usage_from_payload
-from ..reasoning_parser import combine_reasoning_text, normalize_reasoning_text, split_reasoning_and_content, stitch_text_fragments
+from ..reasoning_parser import (
+    combine_reasoning_text,
+    normalize_reasoning_text,
+    split_reasoning_and_content,
+    stitch_text_fragments,
+)
 
 _SCHEMA_TYPE_PREFERENCE = ("string", "object", "array", "integer", "number", "boolean")
 
@@ -212,7 +231,13 @@ class OpenAICompatibleProviderAdapter:
             if delta:
                 text_parts.append(delta)
                 self._emit_stream_delta(delta, reasoning=False)
-            if any((chunk_usage.prompt_tokens, chunk_usage.completion_tokens, chunk_usage.total_tokens)):
+            if any(
+                (
+                    chunk_usage.prompt_tokens,
+                    chunk_usage.completion_tokens,
+                    chunk_usage.total_tokens,
+                )
+            ):
                 usage = chunk_usage
         if plan.request_family == "responses":
             payload = (
@@ -400,8 +425,7 @@ class OpenAICompatibleProviderAdapter:
         provider_id = request.provider_id or self.config.provider_id
         if provider_id != self.config.provider_id:
             raise ValueError(
-                f"request provider_id {provider_id!r} does not match adapter provider_id "
-                f"{self.config.provider_id!r}"
+                f"request provider_id {provider_id!r} does not match adapter provider_id {self.config.provider_id!r}"
             )
         return provider_id
 
@@ -494,11 +518,7 @@ class OpenAICompatibleProviderAdapter:
             "messages": messages,
             "stream": should_stream,
         }
-        if (
-            request.reasoning_effort
-            and resolution.supports_reasoning
-            and resolution.provider_id == "copilot"
-        ):
+        if request.reasoning_effort and resolution.supports_reasoning and resolution.provider_id == "copilot":
             payload["reasoning_effort"] = request.reasoning_effort
         if chat_tools:
             payload["tools"] = chat_tools
@@ -568,7 +588,9 @@ class OpenAICompatibleProviderAdapter:
             )
             if not normalized:
                 continue
-            normalized = self._sanitize_tool_definition(normalized, request_family=request_family, strict_schema=strict_schema)
+            normalized = self._sanitize_tool_definition(
+                normalized, request_family=request_family, strict_schema=strict_schema
+            )
             if not normalized:
                 continue
             if request_family == "responses":
@@ -595,7 +617,11 @@ class OpenAICompatibleProviderAdapter:
         return normalized_tools, tool_name_map
 
     def _requires_strict_tool_schema(self, resolution: ProviderRuntimeResolution) -> bool:
-        return resolution.request_family == "responses" or resolution.provider_id in {"copilot", "openai", "openai-codex"}
+        return resolution.request_family == "responses" or resolution.provider_id in {
+            "copilot",
+            "openai",
+            "openai-codex",
+        }
 
     def _sanitize_tool_definition(
         self,
@@ -648,9 +674,7 @@ class OpenAICompatibleProviderAdapter:
                 required = schema.get("required")
                 if isinstance(required, (list, tuple)) and normalized_properties:
                     normalized["required"] = [
-                        str(item)
-                        for item in required
-                        if str(item).strip() and str(item) in normalized_properties
+                        str(item) for item in required if str(item).strip() and str(item) in normalized_properties
                     ]
         if resolved_type == "array":
             items = schema.get("items")
@@ -747,9 +771,7 @@ class OpenAICompatibleProviderAdapter:
                     return content
                 if isinstance(content, list):
                     texts = [
-                        str(block.get("text", ""))
-                        for block in content
-                        if isinstance(block, dict) and block.get("text")
+                        str(block.get("text", "")) for block in content if isinstance(block, dict) and block.get("text")
                     ]
                     if texts:
                         return "".join(texts)
@@ -781,7 +803,12 @@ class OpenAICompatibleProviderAdapter:
     ) -> str:
         parts: list[str] = []
         if request_family == "responses":
-            for key in ("reasoning", "thinking", "reasoning_content", "thinking_content"):
+            for key in (
+                "reasoning",
+                "thinking",
+                "reasoning_content",
+                "thinking_content",
+            ):
                 value = payload.get(key)
                 if isinstance(value, str) and value.strip():
                     parts.append(value)
@@ -803,7 +830,12 @@ class OpenAICompatibleProviderAdapter:
             message = choice.get("message")
             if not isinstance(message, Mapping):
                 continue
-            for key in ("reasoning", "reasoning_content", "thinking", "thinking_content"):
+            for key in (
+                "reasoning",
+                "reasoning_content",
+                "thinking",
+                "thinking_content",
+            ):
                 value = message.get(key)
                 if isinstance(value, str) and value.strip():
                     parts.append(value)
@@ -825,12 +857,25 @@ class OpenAICompatibleProviderAdapter:
             node_type = str(payload.get("type") or "").strip().lower()
             effective_hint = hinted_reasoning or self._is_reasoning_type(node_type)
             parts: list[str] = []
-            for key in ("text", "output_text", "reasoning", "reasoning_content", "thinking", "thinking_content"):
+            for key in (
+                "text",
+                "output_text",
+                "reasoning",
+                "reasoning_content",
+                "thinking",
+                "thinking_content",
+            ):
                 value = payload.get(key)
                 if isinstance(value, str) and value.strip():
-                    parts.append(value.strip() if effective_hint or key != "text" else split_reasoning_and_content(value, streaming=False).reasoning)
+                    parts.append(
+                        value.strip()
+                        if effective_hint or key != "text"
+                        else split_reasoning_and_content(value, streaming=False).reasoning
+                    )
                 elif isinstance(value, (list, tuple, Mapping)):
-                    parts.append(self._reasoning_text_from_node(value, hinted_reasoning=effective_hint or key != "text"))
+                    parts.append(
+                        self._reasoning_text_from_node(value, hinted_reasoning=effective_hint or key != "text")
+                    )
             content = payload.get("content")
             if isinstance(content, (list, tuple, Mapping, str)):
                 parts.append(self._reasoning_text_from_node(content, hinted_reasoning=effective_hint))
@@ -978,7 +1023,11 @@ class OpenAICompatibleProviderAdapter:
             arguments = self._tool_arguments_from_payload(function.get("arguments"))
         else:
             payload_type = str(payload.get("type") or "").strip()
-            if payload_type and payload_type not in {"function_call", "tool_call", "function"} and "tool" not in payload_type:
+            if (
+                payload_type
+                and payload_type not in {"function_call", "tool_call", "function"}
+                and "tool" not in payload_type
+            ):
                 return None
             name = str(payload.get("name") or payload.get("tool_name") or "").strip()
             arguments = self._tool_arguments_from_payload(payload.get("arguments") or payload.get("input"))
@@ -1040,7 +1089,9 @@ class OpenAICompatibleProviderAdapter:
                 fragments.extend(
                     str(block.get("text", ""))
                     for block in content
-                    if isinstance(block, Mapping) and block.get("text") and not self._is_reasoning_type(block.get("type"))
+                    if isinstance(block, Mapping)
+                    and block.get("text")
+                    and not self._is_reasoning_type(block.get("type"))
                 )
         return "".join(fragments)
 
@@ -1071,7 +1122,12 @@ class OpenAICompatibleProviderAdapter:
             delta = choice.get("delta")
             if not isinstance(delta, Mapping):
                 continue
-            for key in ("reasoning", "reasoning_content", "thinking", "thinking_content"):
+            for key in (
+                "reasoning",
+                "reasoning_content",
+                "thinking",
+                "thinking_content",
+            ):
                 value = delta.get(key)
                 if isinstance(value, str) and value.strip():
                     parts.append(value)

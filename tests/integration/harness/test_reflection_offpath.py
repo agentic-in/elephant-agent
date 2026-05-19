@@ -25,14 +25,16 @@ from types import SimpleNamespace
 import tempfile
 import unittest
 
-from packages.contracts.layers import Episode
 from packages.contracts.runtime import (
     ContextBundle,
     ExecutionResult,
-    PersonalModelRuntimeState,
     PromptEnvelope,
 )
-from packages.kernel.runtime import KernelDependencies, KernelService, KernelSourceRequest
+from packages.kernel.runtime import (
+    KernelDependencies,
+    KernelService,
+    KernelSourceRequest,
+)
 from packages.storage import RuntimeStorageRepository
 
 
@@ -104,7 +106,9 @@ class _Telemetry:
 
 
 class ReflectionOffHotPathTest(unittest.TestCase):
-    def test_run_enqueues_learning_job_without_calling_reflection_synchronously(self) -> None:
+    def test_run_enqueues_learning_job_without_calling_reflection_synchronously(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
             repository.bootstrap()
@@ -142,7 +146,9 @@ class ReflectionOffHotPathTest(unittest.TestCase):
             self.assertEqual(job.status, "queued")
             self.assertIn(job.trigger, {"episode_close", "checkpoint", "episode_failed"})
 
-    def test_internal_learning_agent_turn_does_not_enqueue_recursive_learning_job(self) -> None:
+    def test_internal_learning_agent_turn_does_not_enqueue_recursive_learning_job(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
             repository.bootstrap()

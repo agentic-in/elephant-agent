@@ -34,7 +34,10 @@ class InternalReflectTriggerTest(unittest.TestCase):
         repository = _RepositoryStub()
         app = SimpleNamespace(repository=repository)
 
-        with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
+        with patch(
+            "apps.learning_worker_runtime.ensure_learning_worker_running",
+            lambda **_: None,
+        ):
             result = trigger_reflect_job(app, trigger="manual", features="dream,diary")
 
         self.assertEqual(result["status"], "queued")
@@ -42,13 +45,19 @@ class InternalReflectTriggerTest(unittest.TestCase):
         metadata = repository.enqueued_metadata or {}
         self.assertEqual(metadata["features"], "dream,diary")
         self.assertEqual(metadata["target_date"], date_type.today().isoformat())
-        self.assertEqual(metadata["diary_target_date"], (date_type.today() - timedelta(days=1)).isoformat())
+        self.assertEqual(
+            metadata["diary_target_date"],
+            (date_type.today() - timedelta(days=1)).isoformat(),
+        )
 
     def test_reflect_diary_feature_defaults_to_yesterday(self) -> None:
         repository = _RepositoryStub()
         app = SimpleNamespace(repository=repository)
 
-        with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
+        with patch(
+            "apps.learning_worker_runtime.ensure_learning_worker_running",
+            lambda **_: None,
+        ):
             trigger_reflect_job(app, trigger="manual", features="diary")
 
         metadata = repository.enqueued_metadata or {}

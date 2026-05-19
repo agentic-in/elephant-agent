@@ -19,8 +19,16 @@ from packages.contracts.layers import Episode
 class GatewayWizardIntegrationTest(unittest.TestCase):
     def test_gateway_text_prompt_uses_shared_wizard_dialogs(self) -> None:
         with (
-            mock.patch.object(gateway_wizard_ui, "_gateway_wizard_dialogs_supported", return_value=True),
-            mock.patch.object(gateway_wizard_ui, "_shared_wizard_text_prompt", return_value="demo-elephant") as shared_prompt,
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_gateway_wizard_dialogs_supported",
+                return_value=True,
+            ),
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_shared_wizard_text_prompt",
+                return_value="demo-elephant",
+            ) as shared_prompt,
         ):
             answer = gateway_main._gateway_wizard_text_prompt(
                 "Default Elephant",
@@ -41,12 +49,25 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
 
     def test_gateway_choice_prompt_uses_shared_wizard_dialogs(self) -> None:
         choices = (
-            WizardChoice(value="long-connection", label="Long Connection", detail="Local bridge.", emoji="🛰️"),
+            WizardChoice(
+                value="long-connection",
+                label="Long Connection",
+                detail="Local bridge.",
+                emoji="🛰️",
+            ),
             WizardChoice(value="skip", label="Skip", detail="Stay local.", emoji="➖"),
         )
         with (
-            mock.patch.object(gateway_wizard_ui, "_gateway_wizard_dialogs_supported", return_value=True),
-            mock.patch.object(gateway_wizard_ui, "_shared_wizard_choice_prompt", return_value="long-connection") as shared_choice,
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_gateway_wizard_dialogs_supported",
+                return_value=True,
+            ),
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_shared_wizard_choice_prompt",
+                return_value="long-connection",
+            ) as shared_choice,
         ):
             answer = gateway_main._gateway_wizard_choice_prompt(
                 "Ingress Transport",
@@ -67,8 +88,16 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
 
     def test_gateway_secret_prompt_uses_shared_password_dialog(self) -> None:
         with (
-            mock.patch.object(gateway_wizard_ui, "_gateway_wizard_dialogs_supported", return_value=True),
-            mock.patch.object(gateway_wizard_ui, "_shared_wizard_text_prompt", return_value="secret-value") as shared_prompt,
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_gateway_wizard_dialogs_supported",
+                return_value=True,
+            ),
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_shared_wizard_text_prompt",
+                return_value="secret-value",
+            ) as shared_prompt,
         ):
             answer = gateway_main._gateway_wizard_secret_prompt(
                 "Paste App Secret",
@@ -84,11 +113,21 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
             password=True,
         )
 
-    def test_gateway_choice_prompt_preserves_back_signal_from_shared_wizard(self) -> None:
+    def test_gateway_choice_prompt_preserves_back_signal_from_shared_wizard(
+        self,
+    ) -> None:
         choices = (WizardChoice(value="feishu", label="Feishu", detail="Wire Feishu.", emoji="🐦"),)
         with (
-            mock.patch.object(gateway_wizard_ui, "_gateway_wizard_dialogs_supported", return_value=True),
-            mock.patch.object(gateway_wizard_ui, "_shared_wizard_choice_prompt", return_value=WIZARD_BACK),
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_gateway_wizard_dialogs_supported",
+                return_value=True,
+            ),
+            mock.patch.object(
+                gateway_wizard_ui,
+                "_shared_wizard_choice_prompt",
+                return_value=WIZARD_BACK,
+            ),
         ):
             answer = gateway_main._gateway_wizard_choice_prompt(
                 "💬 IM Setup",
@@ -117,7 +156,9 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
             default_control_state_dir=Path("/tmp/state"),
         )
 
-    def test_gateway_discord_wizard_intro_prints_setup_card_without_extra_confirmation(self) -> None:
+    def test_gateway_discord_wizard_intro_prints_setup_card_without_extra_confirmation(
+        self,
+    ) -> None:
         output = io.StringIO()
         with (
             mock.patch.object(gateway_wizard_ui, "RICH_AVAILABLE", False),
@@ -132,7 +173,9 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
         self.assertIn("Bring Discord into Elephant Agent Gateway.", rendered)
         self.assertIn("Discord portal checklist", rendered)
 
-    def test_gateway_feishu_wizard_intro_prints_setup_card_without_extra_confirmation(self) -> None:
+    def test_gateway_feishu_wizard_intro_prints_setup_card_without_extra_confirmation(
+        self,
+    ) -> None:
         output = io.StringIO()
         with (
             mock.patch.object(gateway_wizard_ui, "RICH_AVAILABLE", False),
@@ -152,7 +195,9 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
 
         input_mock.assert_not_called()
 
-    def test_prompt_gateway_control_binding_uses_elephant_and_session_menus_when_runtime_is_ready(self) -> None:
+    def test_prompt_gateway_control_binding_uses_elephant_and_session_menus_when_runtime_is_ready(
+        self,
+    ) -> None:
         now = datetime.now(UTC)
         latest_session = Episode(
             episode_id="session-demo-latest",
@@ -220,7 +265,9 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
         self.assertEqual(session_choices[0].value, gateway_main._GATEWAY_FOLLOW_LATEST_SESSION)
         self.assertTrue(any(choice.value == "session-demo-root" for choice in session_choices))
 
-    def test_prompt_gateway_control_binding_skips_session_menu_when_elephant_has_single_session(self) -> None:
+    def test_prompt_gateway_control_binding_skips_session_menu_when_elephant_has_single_session(
+        self,
+    ) -> None:
         now = datetime.now(UTC)
         only_session = Episode(
             episode_id="session-demo-only",
@@ -320,7 +367,9 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
         self.assertFalse(restart_args.force)
         self.assertEqual(run_restart.call_args.kwargs["service"], build_service.return_value)
 
-    def test_prompt_gateway_control_binding_falls_back_to_text_when_runtime_is_unavailable(self) -> None:
+    def test_prompt_gateway_control_binding_falls_back_to_text_when_runtime_is_unavailable(
+        self,
+    ) -> None:
         with mock.patch.object(
             gateway_wizard_binding,
             "_gateway_wizard_text_prompt",
@@ -435,7 +484,10 @@ class GatewayManagedServiceTest(unittest.TestCase):
             "pid": 123,
             "pid_active": True,
             "stale_pid": False,
-            "record": {"status": "running", "command": ("python", "-m", "apps.launcher")},
+            "record": {
+                "status": "running",
+                "command": ("python", "-m", "apps.launcher"),
+            },
         }
         output = io.StringIO()
         with (
@@ -484,13 +536,21 @@ class GatewayManagedServiceTest(unittest.TestCase):
     def test_cron_logs_do_not_require_account_id(self) -> None:
         service = _ManagedOnlyService()
         service.service_key = "cron"
-        args = mock.Mock(runtime_target="configured", account_id=None, account_id_flag=None, path=True)
+        args = mock.Mock(
+            runtime_target="configured",
+            account_id=None,
+            account_id_flag=None,
+            path=True,
+        )
         runtime_state = {
             "status": "running",
             "pid": 123,
             "pid_active": True,
             "stale_pid": False,
-            "record": {"status": "running", "command": ("python", "-m", "apps.launcher")},
+            "record": {
+                "status": "running",
+                "command": ("python", "-m", "apps.launcher"),
+            },
         }
         output = io.StringIO()
         with (
@@ -569,10 +629,7 @@ class GatewayManagedServiceTest(unittest.TestCase):
             lines,
         )
         self.assertTrue(
-            any(
-                line.startswith("discord_account: shadow-discord · enabled=yes · startup=blocked")
-                for line in lines
-            )
+            any(line.startswith("discord_account: shadow-discord · enabled=yes · startup=blocked") for line in lines)
         )
 
     def test_doctor_services_lines_tolerate_non_mapping_runtime_payloads(self) -> None:

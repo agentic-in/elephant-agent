@@ -7,7 +7,10 @@ from packages.state import (
     CompanionSettings,
     render_user_profile_text,
 )
-from packages.state.canonical import build_canonical_profile_state, canonical_profile_ids
+from packages.state.canonical import (
+    build_canonical_profile_state,
+    canonical_profile_ids,
+)
 from packages.state.persistence import _relationship_capture_content
 from packages.state.rendered_views import RenderedRelationshipView
 from packages.state.projection import build_loaded_profile_from_state
@@ -42,8 +45,7 @@ class CanonicalPersonalModelRuntimeStateTest(unittest.TestCase):
             profile_dir="",
             manifest_path=None,
             elephant_identity_text=(
-                "Protect continuity, stay exact, and keep the user oriented around "
-                "the next useful move."
+                "Protect continuity, stay exact, and keep the user oriented around the next useful move."
             ),
             user_profile_text=render_user_profile_text(
                 preferred_name="Bit",
@@ -62,7 +64,9 @@ class CanonicalPersonalModelRuntimeStateTest(unittest.TestCase):
         self.assertEqual(ids.user_profile_id, "profile-companion:user-profile")
         self.assertEqual(ids.relationship_id, "profile-companion:relationship")
 
-    def test_build_canonical_profile_state_separates_user_and_relationship_truth(self) -> None:
+    def test_build_canonical_profile_state_separates_user_and_relationship_truth(
+        self,
+    ) -> None:
         loaded = self._load_profile()
         bundle = build_canonical_profile_state(loaded)
 
@@ -76,18 +80,33 @@ class CanonicalPersonalModelRuntimeStateTest(unittest.TestCase):
         self.assertEqual(bundle.user_profile.preferred_name, "Bit")
         self.assertEqual(bundle.user_profile.locale, "zh-CN")
         self.assertEqual(bundle.user_profile.timezone, "Asia/Shanghai")
-        self.assertEqual(bundle.user_profile.communication_preferences, ("tone:steady", "verbosity:concise"))
-        self.assertEqual(bundle.user_profile.shared_preferences, ("local-context:agentic-in/elephant",))
-        self.assertIn("current_work:Building durable agent systems.", bundle.user_profile.biography_fragments)
+        self.assertEqual(
+            bundle.user_profile.communication_preferences,
+            ("tone:steady", "verbosity:concise"),
+        )
+        self.assertEqual(
+            bundle.user_profile.shared_preferences,
+            ("local-context:agentic-in/elephant",),
+        )
+        self.assertIn(
+            "current_work:Building durable agent systems.",
+            bundle.user_profile.biography_fragments,
+        )
         self.assertIn("current_city:Shanghai", bundle.user_profile.biography_fragments)
         self.assertEqual(bundle.user_profile.boundaries, ("Prefer directness over fluff.",))
-        self.assertEqual(bundle.user_profile.durable_notes, ("Carries research context across weeks.",))
+        self.assertEqual(
+            bundle.user_profile.durable_notes,
+            ("Carries research context across weeks.",),
+        )
 
         self.assertEqual(bundle.relationship.elephant_id, bundle.elephant_identity.elephant_id)
         self.assertEqual(bundle.relationship.user_profile_id, bundle.user_profile.user_profile_id)
         self.assertIn("initiative:proactive", bundle.relationship.expectations)
         self.assertIn("recover long arcs", bundle.relationship.continuity_notes)
-        self.assertNotIn("current_work:Building durable agent systems.", bundle.relationship.expectations)
+        self.assertNotIn(
+            "current_work:Building durable agent systems.",
+            bundle.relationship.expectations,
+        )
         self.assertNotIn("Prefer directness over fluff.", bundle.relationship.continuity_notes)
 
     def test_relationship_capture_excludes_system_governance_defaults(self) -> None:

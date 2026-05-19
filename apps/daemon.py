@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from apps.logging_setup import setup_logging
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
 
 logger = logging.getLogger("elephant.daemon")
 
@@ -94,9 +93,7 @@ class ServiceDaemon:
         self._mark_runtime_ready()
 
         # Start periodic health heartbeat
-        heartbeat_task = asyncio.create_task(
-            self._health_heartbeat(), name="health-heartbeat"
-        )
+        heartbeat_task = asyncio.create_task(self._health_heartbeat(), name="health-heartbeat")
         self._tasks.append(heartbeat_task)
 
         # Block until shutdown requested
@@ -134,7 +131,10 @@ class ServiceDaemon:
                         task_name = task.get_name()
                         logger.error("task %s failed during shutdown: %s", task_name, result)
             except asyncio.TimeoutError:
-                logger.warning("shutdown timed out after %ss, some tasks may not have stopped cleanly", SHUTDOWN_TIMEOUT)
+                logger.warning(
+                    "shutdown timed out after %ss, some tasks may not have stopped cleanly",
+                    SHUTDOWN_TIMEOUT,
+                )
 
         # Update all statuses
         for name, status in self._service_statuses.items():
@@ -146,7 +146,11 @@ class ServiceDaemon:
     def _mark_runtime_ready(self) -> None:
         """Mark the runtime record ready after the daemon services are live."""
         try:
-            from apps.daemon_command import _daemon_record_path, _load_record, _write_record
+            from apps.daemon_command import (
+                _daemon_record_path,
+                _load_record,
+                _write_record,
+            )
 
             record_path = _daemon_record_path(self.state_dir)
             record = _load_record(record_path) or {}
@@ -172,7 +176,11 @@ class ServiceDaemon:
             await asyncio.wait_for(service.stop_daemon_task(), timeout=GRACEFUL_STOP_TIMEOUT)
             logger.info("service %s stopped gracefully", key)
         except asyncio.TimeoutError:
-            logger.warning("service %s did not stop within %ss, force-cancelling", key, GRACEFUL_STOP_TIMEOUT)
+            logger.warning(
+                "service %s did not stop within %ss, force-cancelling",
+                key,
+                GRACEFUL_STOP_TIMEOUT,
+            )
         except Exception as exc:
             logger.error("failed to stop service %s: %s", key, exc)
 
@@ -190,12 +198,12 @@ class ServiceDaemon:
             uptime = 0.0
             if self._started_at:
                 uptime = (datetime.now(UTC) - datetime.fromisoformat(self._started_at)).total_seconds()
-            service_summary = ", ".join(
-                f"{name}={s.status}" for name, s in self._service_statuses.items()
-            ) or "none"
+            service_summary = ", ".join(f"{name}={s.status}" for name, s in self._service_statuses.items()) or "none"
             logger.info(
                 "heartbeat: uptime=%.0fs tasks=%d services=[%s]",
-                uptime, len(self._tasks), service_summary,
+                uptime,
+                len(self._tasks),
+                service_summary,
             )
 
     # ── Gateway App ────────────────────────────────────────────
@@ -204,6 +212,7 @@ class ServiceDaemon:
         """Build the shared GatewayApp and plugin registry."""
         try:
             from apps.gateway.runtime import build_gateway_app
+
             app, chat_adapter, webhook_adapter = build_gateway_app(
                 state_dir=str(self.state_dir),
                 start_learning_worker=False,
@@ -230,7 +239,9 @@ class ServiceDaemon:
             database_path = self.cli_state_dir / "elephant.sqlite3"
             self._dashboard_api_app = create_app(database_path=database_path)
             self._service_statuses["dashboard_api"] = DaemonServiceStatus(
-                name="dashboard_api", status="running", started_at=datetime.now(UTC).isoformat()
+                name="dashboard_api",
+                status="running",
+                started_at=datetime.now(UTC).isoformat(),
             )
             logger.info("Dashboard API initialized (database=%s)", database_path)
         except Exception as exc:
@@ -265,9 +276,7 @@ class ServiceDaemon:
                     service = registry.create_service(key, app=app)
                 except Exception as exc:
                     logger.error("failed to create service %s: %s", key, exc)
-                    self._service_statuses[key] = DaemonServiceStatus(
-                        name=key, status="failed", last_error=str(exc)
-                    )
+                    self._service_statuses[key] = DaemonServiceStatus(name=key, status="failed", last_error=str(exc))
                     continue
 
             # ── Preflight: check credentials ──
@@ -299,13 +308,13 @@ class ServiceDaemon:
                     else:
                         logger.info("%s: webhook-only, no long-running task", key)
                     self._service_statuses[key] = DaemonServiceStatus(
-                        name=key, status="running", started_at=datetime.now(UTC).isoformat()
+                        name=key,
+                        status="running",
+                        started_at=datetime.now(UTC).isoformat(),
                     )
                 except Exception as exc:
                     logger.error("failed to start service %s: %s", key, exc)
-                    self._service_statuses[key] = DaemonServiceStatus(
-                        name=key, status="failed", last_error=str(exc)
-                    )
+                    self._service_statuses[key] = DaemonServiceStatus(name=key, status="failed", last_error=str(exc))
 
     # ── Service starters ───────────────────────────────────────
 
@@ -317,6 +326,7 @@ class ServiceDaemon:
         self._http_app = app
         try:
             from aiohttp import web
+
             runner = web.AppRunner(app, access_log=access_log)
             await runner.setup()
             site = web.TCPSite(runner, self.host, self.port)
@@ -327,7 +337,9 @@ class ServiceDaemon:
             logger.info("HTTP server listening on %s:%d", self.host, self.port)
         except ImportError:
             logger.warning("aiohttp not available, HTTP server skipped")
-            self._service_statuses["http"] = DaemonServiceStatus(name="http", status="failed", last_error="aiohttp not installed")
+            self._service_statuses["http"] = DaemonServiceStatus(
+                name="http", status="failed", last_error="aiohttp not installed"
+            )
 
     async def _start_cron_scheduler(self) -> None:
         """Start the cron scheduler as an async task."""
@@ -361,7 +373,9 @@ class ServiceDaemon:
         self._tasks.append(task)
         self._task_names[task] = "supervisor"
         self._service_statuses["supervisor"] = DaemonServiceStatus(
-            name="supervisor", status="running", started_at=datetime.now(UTC).isoformat()
+            name="supervisor",
+            status="running",
+            started_at=datetime.now(UTC).isoformat(),
         )
 
     async def _start_learning_worker(self) -> None:
@@ -378,7 +392,9 @@ class ServiceDaemon:
         self._tasks.append(task)
         self._task_names[task] = "learning_worker"
         self._service_statuses["learning_worker"] = DaemonServiceStatus(
-            name="learning_worker", status="running", started_at=datetime.now(UTC).isoformat()
+            name="learning_worker",
+            status="running",
+            started_at=datetime.now(UTC).isoformat(),
         )
 
     # ── Dynamic adapter lifecycle ─────────────────────────────────
@@ -439,7 +455,10 @@ class ServiceDaemon:
                     self._register_http_routes_for_service(service, key)
                     self._registered_http_service_keys.append(key)
                 else:
-                    logger.info("adapter %s HTTP routes already registered, skipping re-register", key)
+                    logger.info(
+                        "adapter %s HTTP routes already registered, skipping re-register",
+                        key,
+                    )
 
             # Start daemon task if applicable
             if is_daemon_service:
@@ -454,14 +473,14 @@ class ServiceDaemon:
                         self._tasks.append(guarded)
                         self._task_names[guarded] = key
                     self._service_statuses[key] = DaemonServiceStatus(
-                        name=key, status="running", started_at=datetime.now(UTC).isoformat()
+                        name=key,
+                        status="running",
+                        started_at=datetime.now(UTC).isoformat(),
                     )
                     logger.info("adapter %s started dynamically", key)
                     return {"status": "running"}
                 except Exception as exc:
-                    self._service_statuses[key] = DaemonServiceStatus(
-                        name=key, status="failed", last_error=str(exc)
-                    )
+                    self._service_statuses[key] = DaemonServiceStatus(name=key, status="failed", last_error=str(exc))
                     return {"status": "error", "reason": str(exc)}
 
             # Webhook-only services (e.g. telegram with no daemon task)
@@ -498,9 +517,7 @@ class ServiceDaemon:
                     del self._daemon_services[key]
 
             # Cancel the guarded task for this adapter
-            tasks_to_remove = [
-                t for t, n in self._task_names.items() if n == key
-            ]
+            tasks_to_remove = [t for t, n in self._task_names.items() if n == key]
             for task in tasks_to_remove:
                 if not task.done():
                     task.cancel()
@@ -513,9 +530,7 @@ class ServiceDaemon:
                 self._task_names.pop(task, None)
 
             # Update status
-            self._service_statuses[key] = DaemonServiceStatus(
-                name=key, status="stopped"
-            )
+            self._service_statuses[key] = DaemonServiceStatus(name=key, status="stopped")
 
             # Note: HTTP routes remain registered but the handler will return 503
             # for stopped services (checked via service status in the handler)
@@ -552,7 +567,11 @@ class ServiceDaemon:
             ),
             "started_at": self._started_at,
             "services": {
-                name: {"status": s.status, "started_at": s.started_at, "last_error": s.last_error}
+                name: {
+                    "status": s.status,
+                    "started_at": s.started_at,
+                    "last_error": s.last_error,
+                }
                 for name, s in self._service_statuses.items()
             },
         }
@@ -615,6 +634,7 @@ async def _daemon_task_guard(
 
 
 # ── CLI entry point ────────────────────────────────────────────
+
 
 def _pid() -> int:
     return __import__("os").getpid()

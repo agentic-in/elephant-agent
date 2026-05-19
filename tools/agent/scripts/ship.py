@@ -75,7 +75,13 @@ def resolve_base_ref(explicit: str) -> str:
 
 def lint_commit_message(message: str) -> None:
     result = run(
-        [sys.executable, "tools/agent/scripts/commit_msg_lint.py", "message", "--subject", message],
+        [
+            sys.executable,
+            "tools/agent/scripts/commit_msg_lint.py",
+            "message",
+            "--subject",
+            message,
+        ],
         check=False,
     )
     if result.returncode != 0:
@@ -93,7 +99,16 @@ def run_pr_gate(paths: list[str], base_ref: str) -> None:
 def run_soft_audit(paths: list[str]) -> None:
     csv_files = ",".join(paths)
     result = subprocess.run(
-        [sys.executable, "tools/agent/scripts/agent_gate.py", "report", "--changed-files", csv_files, "--audit", "--format", "json"],
+        [
+            sys.executable,
+            "tools/agent/scripts/agent_gate.py",
+            "report",
+            "--changed-files",
+            csv_files,
+            "--audit",
+            "--format",
+            "json",
+        ],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -103,6 +118,7 @@ def run_soft_audit(paths: list[str]) -> None:
         return
     try:
         import json
+
         data = json.loads(result.stdout)
     except (ValueError, ImportError):
         return

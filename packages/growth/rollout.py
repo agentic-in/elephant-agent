@@ -6,7 +6,11 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from packages.contracts.runtime import ExperienceRecord, ProcedureRecord, PersonalModelGrowthState
+from packages.contracts.runtime import (
+    ExperienceRecord,
+    ProcedureRecord,
+    PersonalModelGrowthState,
+)
 
 from .projection import ProgressionProjection, ProgressionProjectionBuilder
 from .runtime import (
@@ -287,7 +291,9 @@ def default_progression_rollout_scorecard() -> ProgressionRolloutScorecard:
         status="blocked",
         priority="high",
     )
-    meaningful_state = _certification_base_growth_state("profile-rollout-meaningful", now=now, dialogues=5, experiences=3)
+    meaningful_state = _certification_base_growth_state(
+        "profile-rollout-meaningful", now=now, dialogues=5, experiences=3
+    )
     trivial_state_a = _certification_base_growth_state("profile-rollout-trivial-a", now=now, dialogues=5, experiences=2)
     trivial_state_b = _certification_base_growth_state("profile-rollout-trivial-b", now=now, dialogues=7, experiences=2)
     cases = (
@@ -450,18 +456,18 @@ def _worst_variance_for(comparisons: tuple[ProgressionShadowComparison, ...]) ->
     return max(variances)
 
 
-def _minimum_motivation_delta_for(comparisons: tuple[ProgressionShadowComparison, ...]) -> int:
-    non_trivial = [
-        comparison.delta_score
-        for comparison in comparisons
-        if comparison.classification != "trivial"
-    ]
+def _minimum_motivation_delta_for(
+    comparisons: tuple[ProgressionShadowComparison, ...],
+) -> int:
+    non_trivial = [comparison.delta_score for comparison in comparisons if comparison.classification != "trivial"]
     if not non_trivial:
         return 0
     return min(non_trivial)
 
 
-def _explanation_drift_cases_for(comparisons: tuple[ProgressionShadowComparison, ...]) -> list[str]:
+def _explanation_drift_cases_for(
+    comparisons: tuple[ProgressionShadowComparison, ...],
+) -> list[str]:
     drifted: list[str] = []
     pattern_families = {comparison.pattern_family for comparison in comparisons}
     for family in pattern_families:
@@ -544,7 +550,12 @@ def _meaningful_rollout_signals(profile_id: str, *, session_id: str, now: dateti
         artifact_ids=("artifact:patch-note",),
         promoted_procedure_ids=("procedure:resume-checklist",),
         personal_model_fact_count=8,
-        personal_model_lens_counts=(("identity", 2), ("world", 2), ("pulse", 2), ("journey", 2)),
+        personal_model_lens_counts=(
+            ("identity", 2),
+            ("world", 2),
+            ("pulse", 2),
+            ("journey", 2),
+        ),
         personal_model_topic_count=6,
         personal_model_new_fact_count=2,
         personal_model_updated_fact_count=1,

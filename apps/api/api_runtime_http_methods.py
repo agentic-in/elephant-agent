@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import re
 import shutil
 from typing import Any, Mapping
 from urllib.parse import unquote
@@ -17,7 +16,10 @@ from packages.contracts import EventEnvelope
 from packages.kernel import KernelSourceRequest, ReconciliationPipeline, StateReconciler
 from packages.operator.runtime import RecallEvidenceOperatorDetail
 from packages.runtime_layout import elephant_file_path
-from packages.state import render_default_elephant_identity, write_elephant_identity_file
+from packages.state import (
+    render_default_elephant_identity,
+    write_elephant_identity_file,
+)
 
 from .api_runtime_support import (
     APILoopRecord,
@@ -33,10 +35,10 @@ from .api_runtime_http_dispatch_helpers import (
     _cron_job_system_kind,
     _elephant_id_from_name,
     _cron_payload,
-    _cron_skill_ids,
     _cron_job_record,
     _read_wsgi_body,
 )
+
 
 def run_loop(
     self,
@@ -139,6 +141,8 @@ def run_loop(
         latest_loop=record,
         inspection=inspection,
     )
+
+
 def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResponse:
     if method.upper() == "GET" and path == "/healthz":
         return APIResponse(200, {"status": "ok", "service": "elephant-api"})
@@ -168,6 +172,8 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
         return APIResponse(422, {"error": "configuration_required", "detail": str(error)})
     except Exception as error:
         return APIResponse(500, {"error": "internal_error", "detail": str(error)})
+
+
 def _unique_elephant_id(self, base_elephant_id: str) -> str:
     root = _elephant_id_from_name(base_elephant_id)
     elephant_id = root
@@ -176,6 +182,8 @@ def _unique_elephant_id(self, base_elephant_id: str) -> str:
         elephant_id = f"{root}-{suffix}"
         suffix += 1
     return elephant_id
+
+
 def _elephant_state_for_id(self, elephant_id: str):
     target = elephant_id.strip()
     if not target:
@@ -183,7 +191,12 @@ def _elephant_state_for_id(self, elephant_id: str):
     direct = self.repository.load_state(f"state:{target}")
     if direct is not None:
         return direct
-    return next((state for state in self.repository.list_states() if state.elephant_id == target), None)
+    return next(
+        (state for state in self.repository.list_states() if state.elephant_id == target),
+        None,
+    )
+
+
 def _default_elephant_identity_text(*, elephant_id: str, display_name: str, mode: str) -> str:
     """Seed identity text when none is supplied via the API.
 
@@ -206,22 +219,34 @@ def _default_elephant_identity_text(*, elephant_id: str, display_name: str, mode
             charter,
         )
     )
-def _elephant_identity_text_from_payload(payload: Mapping[str, Any], *, elephant_id: str, display_name: str, mode: str) -> str:
-    return (
-        _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
-        or _default_elephant_identity_text(elephant_id=elephant_id, display_name=display_name, mode=mode)
-    )
+
+
+def _elephant_identity_text_from_payload(
+    payload: Mapping[str, Any], *, elephant_id: str, display_name: str, mode: str
+) -> str:
+    return _optional_str(
+        payload.get("elephant_identity_text")
+        or payload.get("eggIdentityText")
+        or payload.get("text")
+        or payload.get("content")
+    ) or _default_elephant_identity_text(elephant_id=elephant_id, display_name=display_name, mode=mode)
+
+
 def _write_elephant_identity_file(self, *, elephant_id: str, text: str) -> str:
     path = write_elephant_identity_file(
         elephant_file_path(elephant_id, install_root=self.config.install_root),
         text,
     )
     return str(path)
+
+
 def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     normalized_method = method.upper()
     if normalized_method == "POST" and not parts:
         payload = _read_json_bytes(body)
-        display_name = str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name") or "").strip()
+        display_name = str(
+            payload.get("elephant_name") or payload.get("display_name") or payload.get("name") or ""
+        ).strip()
         if not display_name:
             raise ValueError("display_name is required")
         raw_elephant_id = str(payload.get("elephant_id") or payload.get("eggId") or "").strip()
@@ -234,7 +259,9 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             or payload.get("profile_id")
             or self.repository.ensure_default_personal_model().personal_model_id
         ).strip()
-        identity_text = _elephant_identity_text_from_payload(payload, elephant_id=elephant_id, display_name=display_name, mode=mode)
+        identity_text = _elephant_identity_text_from_payload(
+            payload, elephant_id=elephant_id, display_name=display_name, mode=mode
+        )
         state = self.repository.create_state(
             personal_model_id=personal_model_id,
             state_id=f"state:{elephant_id}",
@@ -250,7 +277,10 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             metadata={"profile_id": personal_model_id},
         )
         elephant_identity_path = _write_elephant_identity_file(self, elephant_id=elephant_id, text=identity_text)
-        return APIResponse(201, _jsonable({"elephant": state, "eggIdentityPath": elephant_identity_path}))
+        return APIResponse(
+            201,
+            _jsonable({"elephant": state, "eggIdentityPath": elephant_identity_path}),
+        )
     if len(parts) != 1:
         return APIResponse(404, {"error": "not_found"})
     elephant_id = unquote(parts[0]).strip()
@@ -261,12 +291,19 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         payload = _read_json_bytes(body)
         display_name = _optional_str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name"))
         mode = _optional_str(payload.get("mode"))
-        identity_text = _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
+        identity_text = _optional_str(
+            payload.get("elephant_identity_text")
+            or payload.get("eggIdentityText")
+            or payload.get("text")
+            or payload.get("content")
+        )
         updated = replace(
             state,
             elephant_name=display_name or state.elephant_name,
             identity_mode=mode or state.identity_mode or "companion",
-            initiative=_optional_str(payload.get("initiative")) if payload.get("initiative") is not None else state.initiative,
+            initiative=_optional_str(payload.get("initiative"))
+            if payload.get("initiative") is not None
+            else state.initiative,
             working_style=(
                 _optional_str(payload.get("personality_preset") or payload.get("working_style"))
                 if payload.get("personality_preset") is not None or payload.get("working_style") is not None
@@ -279,15 +316,34 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         self.repository.upsert_state(updated)
         elephant_identity_path = ""
         if identity_text is not None:
-            elephant_identity_path = _write_elephant_identity_file(self, elephant_id=updated.elephant_id, text=identity_text)
-        return APIResponse(200, _jsonable({"elephant": updated, "eggIdentityPath": elephant_identity_path}))
+            elephant_identity_path = _write_elephant_identity_file(
+                self, elephant_id=updated.elephant_id, text=identity_text
+            )
+        return APIResponse(
+            200,
+            _jsonable({"elephant": updated, "eggIdentityPath": elephant_identity_path}),
+        )
     if normalized_method == "DELETE":
         episode_ids = tuple(episode.episode_id for episode in self.repository.list_episodes(state_id=state.state_id))
         deleted_sessions = self.repository.delete_episodes(episode_ids, delete_orphaned_profiles=False)
         self.repository.delete_state(state.state_id)
-        shutil.rmtree(elephant_file_path(state.elephant_id, install_root=self.config.install_root), ignore_errors=True)
-        return APIResponse(200, _jsonable({"elephant_id": state.elephant_id, "deleted": True, "deleted_sessions": deleted_sessions}))
+        shutil.rmtree(
+            elephant_file_path(state.elephant_id, install_root=self.config.install_root),
+            ignore_errors=True,
+        )
+        return APIResponse(
+            200,
+            _jsonable(
+                {
+                    "elephant_id": state.elephant_id,
+                    "deleted": True,
+                    "deleted_sessions": deleted_sessions,
+                }
+            ),
+        )
     return APIResponse(404, {"error": "not_found"})
+
+
 def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if method.upper() == "POST" and len(parts) == 0:
         payload = _read_json_bytes(body)
@@ -330,17 +386,38 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
     if method.upper() == "GET" and len(parts) == 2 and parts[1] == "profile":
         inspection = self.inspect_episode(episode_id)
         return APIResponse(200, _jsonable({"personal_model": inspection.personal_model}))
-    if len(parts) == 2 and parts[1] in {"identity", "user", "relationship", "continuity"}:
+    if len(parts) == 2 and parts[1] in {
+        "identity",
+        "user",
+        "relationship",
+        "continuity",
+    }:
         episode = self.repository.load_episode(episode_id)
         if episode is None:
             raise KeyError(episode_id)
         return self._dispatch_states(method, (episode.state_id, parts[1]), body)
     if len(parts) == 2 and parts[1] == "recall":
         if method.upper() == "GET":
-            return APIResponse(200, _jsonable({"episode_id": episode_id, "recall": self.inspect_recall_evidence_surface(episode_id)}))
+            return APIResponse(
+                200,
+                _jsonable(
+                    {
+                        "episode_id": episode_id,
+                        "recall": self.inspect_recall_evidence_surface(episode_id),
+                    }
+                ),
+            )
     if len(parts) == 3 and parts[1] == "recall" and parts[2] == "evidence":
         if method.upper() == "GET":
-            return APIResponse(200, _jsonable({"episode_id": episode_id, "evidence": self.list_recall_evidence(episode_id)}))
+            return APIResponse(
+                200,
+                _jsonable(
+                    {
+                        "episode_id": episode_id,
+                        "evidence": self.list_recall_evidence(episode_id),
+                    }
+                ),
+            )
     if len(parts) == 3 and parts[1] == "recall" and parts[2] == "search":
         payload = _read_json_bytes(body)
         query = _optional_str(payload.get("query"))
@@ -349,10 +426,12 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
         limit = int(payload.get("limit", 5))
         return APIResponse(
             200,
-            _jsonable({
-                "episode_id": episode_id,
-                "recall": self.search_recall_evidence_surface(episode_id, query=query, limit=limit),
-            }),
+            _jsonable(
+                {
+                    "episode_id": episode_id,
+                    "recall": self.search_recall_evidence_surface(episode_id, query=query, limit=limit),
+                }
+            ),
         )
     if len(parts) == 3 and parts[1] == "recall":
         evidence_ref = parts[2]
@@ -372,13 +451,23 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
                 ),
             )
     return APIResponse(404, {"error": "not_found"})
+
+
 def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if len(parts) != 2:
         return APIResponse(404, {"error": "not_found"})
     state_id, surface = parts
     if surface == "identity":
         if method.upper() == "GET":
-            return APIResponse(200, _jsonable({"state_id": state_id, "identity": self.inspect_identity(state_id=state_id)}))
+            return APIResponse(
+                200,
+                _jsonable(
+                    {
+                        "state_id": state_id,
+                        "identity": self.inspect_identity(state_id=state_id),
+                    }
+                ),
+            )
         if method.upper() in {"PATCH", "POST"}:
             payload = _read_json_bytes(body)
             result = self.update_identity_state(
@@ -386,13 +475,21 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
                 display_name=_optional_str(payload.get("display_name") or payload.get("name")),
                 personality_preset=_optional_str(payload.get("personality_preset")),
                 initiative=_optional_str(payload.get("initiative")),
-                elephant_identity_text=_optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content")),
+                elephant_identity_text=_optional_str(
+                    payload.get("elephant_identity_text")
+                    or payload.get("eggIdentityText")
+                    or payload.get("text")
+                    or payload.get("content")
+                ),
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
             )
             return APIResponse(200, _jsonable({"state_id": state_id, "identity": result}))
     if surface == "user":
         if method.upper() == "GET":
-            return APIResponse(200, _jsonable({"state_id": state_id, "user": self.inspect_user(state_id=state_id)}))
+            return APIResponse(
+                200,
+                _jsonable({"state_id": state_id, "user": self.inspect_user(state_id=state_id)}),
+            )
         if method.upper() in {"PATCH", "POST"}:
             payload = _read_json_bytes(body)
             result = self.update_user_state(
@@ -405,7 +502,15 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
             return APIResponse(200, _jsonable({"state_id": state_id, "user": result}))
     if surface == "relationship":
         if method.upper() == "GET":
-            return APIResponse(200, _jsonable({"state_id": state_id, "relationship": self.inspect_relationship(state_id=state_id)}))
+            return APIResponse(
+                200,
+                _jsonable(
+                    {
+                        "state_id": state_id,
+                        "relationship": self.inspect_relationship(state_id=state_id),
+                    }
+                ),
+            )
         if method.upper() in {"PATCH", "POST"}:
             payload = _read_json_bytes(body)
             result = self.update_relationship_state(
@@ -418,6 +523,8 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
     if surface == "continuity" and method.upper() == "GET":
         return APIResponse(200, _jsonable(self.inspect_continuity(state_id).to_record()))
     return APIResponse(404, {"error": "not_found"})
+
+
 def _dispatch_providers(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if method.upper() == "GET" and len(parts) == 0:
         return APIResponse(200, _jsonable(self.list_providers()))
@@ -456,6 +563,7 @@ def _dispatch_providers(self, method: str, parts: tuple[str, ...], body: bytes |
         return APIResponse(200, _jsonable(self.delete_provider_key(parts[1])))
     return APIResponse(404, {"error": "not_found"})
 
+
 def _dispatch_internal(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if method.upper() == "GET" and len(parts) == 2 and parts[0] == "dashboard":
         return APIResponse(200, {"dashboard": _jsonable(self.inspect_internal_dashboard(parts[1]))})
@@ -480,10 +588,14 @@ def _dispatch_internal(self, method: str, parts: tuple[str, ...], body: bytes | 
         return APIResponse(200, _jsonable(result))
     return APIResponse(404, {"error": "not_found"})
 
+
 def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if parts and parts[0] == "cron":
         if method.upper() == "GET" and len(parts) == 1:
-            return APIResponse(200, {"cron": {"jobs": [_cron_job_record(job) for job in self.cron_runtime.list_jobs()]}})
+            return APIResponse(
+                200,
+                {"cron": {"jobs": [_cron_job_record(job) for job in self.cron_runtime.list_jobs()]}},
+            )
         if method.upper() == "POST" and len(parts) == 1:
             payload = _read_json_bytes(body)
             job_payload = _cron_payload(payload)
@@ -506,7 +618,10 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     if job is None:
                         raise ValueError(f"system cron job unavailable: {job_id}")
                     return APIResponse(200, {"cron": {"job": job}})
-                return APIResponse(200, {"cron": {"job": _cron_job_record(self.cron_runtime.inspect_job(job_id))}})
+                return APIResponse(
+                    200,
+                    {"cron": {"job": _cron_job_record(self.cron_runtime.inspect_job(job_id))}},
+                )
             if method.upper() == "PATCH":
                 payload = _read_json_bytes(body)
                 action = str(payload.get("action") or "").strip().lower()
@@ -530,7 +645,10 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     raise ValueError("cron PATCH requires action=pause or action=resume")
                 if job is None:
                     raise ValueError(f"system cron job unavailable: {job_id}")
-                return APIResponse(200, {"cron": {"job": job if isinstance(job, Mapping) else _cron_job_record(job)}})
+                return APIResponse(
+                    200,
+                    {"cron": {"job": job if isinstance(job, Mapping) else _cron_job_record(job)}},
+                )
             if method.upper() == "DELETE":
                 if job_id == "system:proactive-ask":
                     return APIResponse(403, {"error": "system_cron_jobs_cannot_be_deleted"})
@@ -586,9 +704,9 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
         )
         return APIResponse(200, _jsonable(result))
     return APIResponse(404, {"error": "not_found"})
-def _dispatch_personal_model(
-    self, method: str, parts: tuple[str, ...], body: bytes | None
-) -> APIResponse:
+
+
+def _dispatch_personal_model(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     """Operator-surface writes against Personal Model claims and questions.
 
     Routes:
@@ -627,9 +745,21 @@ def _dispatch_personal_model(
         intensity = str(payload.get("learning_intensity") or "").strip().lower()
         if intensity in {"low", "medium", "high"} and not proactive_updates:
             _INTENSITY_MAP = {
-                "low": {"idle_threshold_minutes": 720, "daily_max": 2, "quiet_hours": [23, 7]},
-                "medium": {"idle_threshold_minutes": 180, "daily_max": 8, "quiet_hours": [23, 7]},
-                "high": {"idle_threshold_minutes": 60, "daily_max": 24, "quiet_hours": [1, 7]},
+                "low": {
+                    "idle_threshold_minutes": 720,
+                    "daily_max": 2,
+                    "quiet_hours": [23, 7],
+                },
+                "medium": {
+                    "idle_threshold_minutes": 180,
+                    "daily_max": 8,
+                    "quiet_hours": [23, 7],
+                },
+                "high": {
+                    "idle_threshold_minutes": 60,
+                    "daily_max": 24,
+                    "quiet_hours": [1, 7],
+                },
             }
             proactive_updates = _INTENSITY_MAP[intensity]
         if not proactive_updates:
@@ -655,9 +785,20 @@ def _dispatch_personal_model(
                 return APIResponse(404, {"error": "question_not_found"})
             bumped = replace(target, priority=min(1.0, max(target.priority, 0.85)))
             upsert(bumped)
-            return APIResponse(200, {"personal_model": {"question_id": question_id, "priority": bumped.priority}})
+            return APIResponse(
+                200,
+                {
+                    "personal_model": {
+                        "question_id": question_id,
+                        "priority": bumped.priority,
+                    }
+                },
+            )
         if action == "dismiss":
-            surface = PersonalModelUnderstandingSurface(repository=self.repository, semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None))
+            surface = PersonalModelUnderstandingSurface(
+                repository=self.repository,
+                semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None),
+            )
             result = surface.manage_personal_model_questions(
                 str(payload.get("episode_id") or "dashboard"),
                 action="dismiss",
@@ -670,7 +811,10 @@ def _dispatch_personal_model(
             content = str(payload.get("content") or "").strip()
             if not content:
                 raise ValueError("answer requires 'content'")
-            surface = PersonalModelUnderstandingSurface(repository=self.repository, semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None))
+            surface = PersonalModelUnderstandingSurface(
+                repository=self.repository,
+                semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None),
+            )
             result = surface.manage_personal_model_questions(
                 str(payload.get("episode_id") or "dashboard"),
                 action="answer",
@@ -684,11 +828,26 @@ def _dispatch_personal_model(
     if normalized == "POST" and len(parts) >= 3 and parts[0] == "claims":
         claim_id = unquote(parts[1]).strip()
         action = parts[2].strip().lower()
-        if action not in {"correct", "forget", "dispute", "restore", "delete", "protect", "unprotect"}:
+        if action not in {
+            "correct",
+            "forget",
+            "dispute",
+            "restore",
+            "delete",
+            "protect",
+            "unprotect",
+        }:
             return APIResponse(404, {"error": "not_found"})
         payload = _read_json_bytes(body) if body else {}
-        personal_model_id = str(payload.get("personal_model_id") or DEFAULT_PERSONAL_MODEL_ID).strip() or DEFAULT_PERSONAL_MODEL_ID
-        facts = tuple(self.repository.list_personal_model_facts(personal_model_id=personal_model_id, status=("active", "retired", "disputed") if action in {"restore", "delete"} else "active"))
+        personal_model_id = (
+            str(payload.get("personal_model_id") or DEFAULT_PERSONAL_MODEL_ID).strip() or DEFAULT_PERSONAL_MODEL_ID
+        )
+        facts = tuple(
+            self.repository.list_personal_model_facts(
+                personal_model_id=personal_model_id,
+                status=("active", "retired", "disputed") if action in {"restore", "delete"} else "active",
+            )
+        )
         target = next((fact for fact in facts if fact.fact_id == claim_id), None)
         if target is None:
             return APIResponse(404, {"error": "claim_not_found"})
@@ -713,11 +872,31 @@ def _dispatch_personal_model(
                 }
             updated = replace(target, metadata=next_metadata)
             self.repository.upsert_personal_model_fact(updated)
-            return APIResponse(200, {"personal_model": {"action": action, "status": "active", "ref": claim_id, "claim": _serialize(updated)}})
+            return APIResponse(
+                200,
+                {
+                    "personal_model": {
+                        "action": action,
+                        "status": "active",
+                        "ref": claim_id,
+                        "claim": _serialize(updated),
+                    }
+                },
+            )
         if action == "delete":
-            from packages.understanding.personal_model_governance import is_protected_topic
+            from packages.understanding.personal_model_governance import (
+                is_protected_topic,
+            )
+
             if is_protected_topic(str(metadata.get("topic") or ""), metadata):
-                return APIResponse(409, {"error": "protected_topic", "detail": "protected Personal Model topics must be unprotected before delete", "ref": claim_id})
+                return APIResponse(
+                    409,
+                    {
+                        "error": "protected_topic",
+                        "detail": "protected Personal Model topics must be unprotected before delete",
+                        "ref": claim_id,
+                    },
+                )
             now = _now()
             deleted = replace(
                 target,
@@ -749,11 +928,23 @@ def _dispatch_personal_model(
                             },
                         )
                     )
-            return APIResponse(200, {"personal_model": {"action": "delete", "status": "deleted", "ref": claim_id}})
+            return APIResponse(
+                200,
+                {
+                    "personal_model": {
+                        "action": "delete",
+                        "status": "deleted",
+                        "ref": claim_id,
+                    }
+                },
+            )
         topic = str(payload.get("topic") or metadata.get("topic") or "").strip()
         if not topic:
             return APIResponse(409, {"error": "claim_missing_topic"})
-        surface = PersonalModelUnderstandingSurface(repository=self.repository, semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None))
+        surface = PersonalModelUnderstandingSurface(
+            repository=self.repository,
+            semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None),
+        )
         result = surface.update_personal_model(
             str(payload.get("episode_id") or "dashboard"),
             action=action,
@@ -769,16 +960,22 @@ def _dispatch_personal_model(
 
     return APIResponse(404, {"error": "not_found"})
 
+
 def _persist_proactive_ask_config(state_dir, updates: dict) -> None:
     try:
         from packages.runtime_config import (
-            personal_model_question_config_from_global, global_config_path_for_state_dir,
-            load_global_config, write_global_config,
+            personal_model_question_config_from_global,
+            global_config_path_for_state_dir,
+            load_global_config,
+            write_global_config,
         )
+
         config_path = global_config_path_for_state_dir(state_dir)
         config = load_global_config(config_path, state_dir=state_dir)
         question_policy = personal_model_question_config_from_global(config)
-        proactive = question_policy.get("proactive_ask") if isinstance(question_policy.get("proactive_ask"), dict) else {}
+        proactive = (
+            question_policy.get("proactive_ask") if isinstance(question_policy.get("proactive_ask"), dict) else {}
+        )
         proactive.update(updates)
         question_policy["proactive_ask"] = proactive
         question_policy.pop("learning_intensity", None)
@@ -786,6 +983,7 @@ def _persist_proactive_ask_config(state_dir, updates: dict) -> None:
         write_global_config(config_path, config)
     except Exception:  # pragma: no cover
         return
+
 
 def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
     """Fire one cron job on demand and return its execution result.
@@ -799,7 +997,10 @@ def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
     from pathlib import Path as _Path
 
     from apps.cli.runtime import CliRuntime
-    from apps.gateway.cron_service import build_gateway_cron_delivery_callback, cron_execution_should_deliver
+    from apps.gateway.cron_service import (
+        build_gateway_cron_delivery_callback,
+        cron_execution_should_deliver,
+    )
 
     state_dir = _Path(str(self.repository.database_path.parent))
     # Gateway and CLI share the same state dir and DB (`<home>/herd`) — the
@@ -839,6 +1040,7 @@ def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
             },
         }
     }
+
 
 def __call__(self, environ: Mapping[str, Any], start_response: Any) -> list[bytes]:
     from .api_runtime_support import _json_bytes as encode_json

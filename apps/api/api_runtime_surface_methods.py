@@ -9,16 +9,16 @@ from uuid import uuid4
 from apps.provider_runtime import provider_profile_from_payload
 from packages.contracts import Episode, State
 from packages.contracts.runtime import RecallEvidence, PersonalModelRuntimeState
-from packages.evidence.recall_runtime import RecallRuntime
 from packages.growth import ProgressionProjectionBuilder
-from packages.kernel.episode_state_machine import open_next_episode as _open_next_episode
+from packages.kernel.episode_state_machine import (
+    open_next_episode as _open_next_episode,
+)
 from packages.state.persistence import resolve_runtime_state
 from packages.storage.repository_support import canonical_personal_model_id
 from packages.operator.runtime import (
     RecallEvidenceOperatorDetail,
     RecallEvidenceSearchHit,
     ProcedureOperatorDetail,
-    build_canonical_procedure_detail,
     build_recall_evidence_operator_surface,
 )
 
@@ -27,10 +27,7 @@ from .api_runtime_support import (
     APIEpisodeInspection,
     APIEpisodeLifecycleResult,
     APIEpisodeTransitionResult,
-    APILoopRecord,
-    APILoopResult,
     _now,
-    _optional_str,
 )
 from .state_runtime import APIContinuityInspection
 
@@ -75,7 +72,10 @@ def _ensure_episode_state(
             identity_mode=personal_model.mode,
             surface_bindings=("api",),
             summary=f"{personal_model.display_name} is ready for API-bound continuity.",
-            metadata={"personal_model_id": personal_model.profile_id, "episode_id": episode.episode_id},
+            metadata={
+                "personal_model_id": personal_model.profile_id,
+                "episode_id": episode.episode_id,
+            },
         )
     else:
         state = replace(
@@ -84,7 +84,11 @@ def _ensure_episode_state(
             identity_mode=personal_model.mode,
             state_anchor=state_anchor,
             surface_bindings=tuple(sorted({*existing.surface_bindings, "api"})),
-            metadata={**dict(existing.metadata), "personal_model_id": personal_model.profile_id, "episode_id": episode.episode_id},
+            metadata={
+                **dict(existing.metadata),
+                "personal_model_id": personal_model.profile_id,
+                "episode_id": episode.episode_id,
+            },
         )
         self.repository.upsert_state(state)
     self.repository.switch_state(state.state_id)
@@ -127,7 +131,9 @@ def create_episode(
         )
     resolved_elephant_id = elephant_id or personal_model_id
     timestamp = _now()
-    resolved_state_id = f"state:{resolved_elephant_id}" if resolved_elephant_id else f"state:{personal_model.profile_id}:api"
+    resolved_state_id = (
+        f"state:{resolved_elephant_id}" if resolved_elephant_id else f"state:{personal_model.profile_id}:api"
+    )
     episode = Episode(
         episode_id=episode_id or uuid4().hex,
         state_id=resolved_state_id,
@@ -354,7 +360,11 @@ def search_recall_evidence_surface(self, episode_id: str, *, query: str, limit: 
         for evidence in self.list_recall_evidence(episode_id)
     )
     hits = tuple(
-        RecallEvidenceSearchHit(evidence=candidate.evidence, score=candidate.score, reasons=candidate.reasons)
+        RecallEvidenceSearchHit(
+            evidence=candidate.evidence,
+            score=candidate.score,
+            reasons=candidate.reasons,
+        )
         for candidate in retrieval.candidates
     )
     return build_recall_evidence_operator_surface(

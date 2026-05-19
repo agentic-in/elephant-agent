@@ -6,7 +6,11 @@ import unittest
 from unittest import mock
 
 from apps.gateway.weixin_service import MessageDeduplicator, WeixinGatewayService
-from packages.gateway_core import GatewayAccountRef, GatewayConversationRef, GatewayOutboundMessage
+from packages.gateway_core import (
+    GatewayAccountRef,
+    GatewayConversationRef,
+    GatewayOutboundMessage,
+)
 
 
 class _FakeGatewayApp:

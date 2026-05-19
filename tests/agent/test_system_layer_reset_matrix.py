@@ -62,7 +62,9 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIn(target, text)
 
-    def test_storage_suite_pins_default_model_clean_schema_and_delete_boundaries(self) -> None:
+    def test_storage_suite_pins_default_model_clean_schema_and_delete_boundaries(
+        self,
+    ) -> None:
         text = _read("tests/integration/storage_system_layers/test_repository.py")
 
         for marker in (
@@ -75,7 +77,9 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
 
-    def test_loop_checkpoint_and_personal_model_growth_live_in_repository_methods_without_runtime_shims(self) -> None:
+    def test_loop_checkpoint_and_personal_model_growth_live_in_repository_methods_without_runtime_shims(
+        self,
+    ) -> None:
         checkpoint_text = _read("packages/kernel/loop_checkpoint_support.py")
         episode_runtime_text = _read("apps/episode_runtime.py")
         repository_methods_text = _read("packages/storage/repository_system_methods.py")
@@ -103,7 +107,9 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
         self.assertNotIn("load_latest_open_agent_run", repository_methods_text)
         self.assertNotIn("profile_growth", repository_methods_text)
 
-    def test_kernel_and_context_suites_pin_state_query_and_compaction_coverage(self) -> None:
+    def test_kernel_and_context_suites_pin_state_query_and_compaction_coverage(
+        self,
+    ) -> None:
         kernel_text = _read("tests/integration/kernel/test_turn_lifecycle.py")
         context_text = _read("tests/unit/context/test_context_projection.py")
 
@@ -124,7 +130,9 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, context_text)
 
-    def test_skill_dashboard_and_continuity_suites_pin_reset_acceptance_surfaces(self) -> None:
+    def test_skill_dashboard_and_continuity_suites_pin_reset_acceptance_surfaces(
+        self,
+    ) -> None:
         skills_text = _read("tests/integration/tools_skills/test_tools_and_skills_runtime.py")
         api_text = _read("tests/e2e/api/test_api_surface.py")
         continuity_text = _read("tests/scenarios/continuity/test_continuity_scenarios.py")
@@ -139,7 +147,10 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
                 self.assertIn(marker, skills_text)
 
         self.assertIn("/v1/internal/dashboard", api_text)
-        self.assertIn("test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence", api_text)
+        self.assertIn(
+            "test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence",
+            api_text,
+        )
         self.assertIn("test_continuity_scenarios_index_is_stable", continuity_text)
         self.assertIn("test_state_continuity_fixture_declares_text_only_boundary", continuity_text)
 

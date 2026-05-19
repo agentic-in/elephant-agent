@@ -8,7 +8,7 @@ entering extended mode
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
 (./elephant.cls
-Document Class: elephant 
+Document Class: elephant
 (/usr/local/texlive/2026/texmf-dist/tex/latex/base/article.cls
 Document Class: article 2025/01/22 v1.4n Standard LaTeX document class
 (/usr/local/texlive/2026/texmf-dist/tex/latex/base/size10.clo
@@ -99,11 +99,11 @@ LaTeX Encoding Info:    Redeclaring text command \ij (encoding T1) on input lin
 e 2082.
 LaTeX Encoding Info:    Redeclaring text command \IJ (encoding T1) on input lin
 e 2083.
-LaTeX Encoding Info:    Ignoring declaration for text command \ij (encoding ?) 
+LaTeX Encoding Info:    Ignoring declaration for text command \ij (encoding ?)
 on input line 2084.
-LaTeX Encoding Info:    Ignoring declaration for text command \IJ (encoding ?) 
+LaTeX Encoding Info:    Ignoring declaration for text command \IJ (encoding ?)
 on input line 2086.
-LaTeX Encoding Info:    Ignoring declaration for text command \SS (encoding ?) 
+LaTeX Encoding Info:    Ignoring declaration for text command \SS (encoding ?)
 on input line 2111.
 \U@D=\dimen150
 \l@unhyphenated=\language92
@@ -995,7 +995,7 @@ tim
 * paper: a4paper
 * layout: <same size as paper>
 * layoutoffset:(h,v)=(0.0pt,0.0pt)
-* modes: 
+* modes:
 * h-part:(L,W,R)=(71.13188pt, 455.24411pt, 71.13188pt)
 * v-part:(T,H,B)=(71.13188pt, 702.78308pt, 71.13188pt)
 * \paperwidth=597.50787pt
@@ -1028,7 +1028,7 @@ File: assets/elephant-logo.png Graphic file (type png)
 Package pdftex.def Info: assets/elephant-logo.png  used on input line 40.
 (pdftex.def)             Requested size: 78.24507pt x 78.22696pt.
 (/usr/local/texlive/2026/texmf-dist/tex/latex/microtype/mt-cmr.cfg
-File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman 
+File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman
 (RS)
 )
 LaTeX Font Info:    Trying to load font information for U+msa on input line 40.
@@ -1221,7 +1221,7 @@ LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 Package rerunfilecheck Info: File `Elephant_Agent__Personal_Model_First_Evoluti
 on_for_Personal_AI.out' has not changed.
 (rerunfilecheck)             Checksum: 3DB92E103E96316ED498F4FCFE9C5071;7434.
- ) 
+ )
 Here is how much of TeX's memory you used:
  30437 strings out of 467525
  576955 string characters out of 5418982
@@ -1252,4 +1252,3 @@ PDF statistics:
  340 compressed objects within 4 object streams
  86 named destinations out of 1000 (max. 500000)
  14234 words of extra memory for PDF output out of 14400 (max. 10000000)
-

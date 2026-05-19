@@ -64,7 +64,11 @@ class ShellSkillSlashTest(unittest.TestCase):
     def test_skill_slash_command_without_instruction_loads_skill_metadata(self) -> None:
         shell = self._make_shell()
 
-        with mock.patch.object(shell, "_run_tool_with_progress", return_value=SimpleNamespace(summary="loaded")):
+        with mock.patch.object(
+            shell,
+            "_run_tool_with_progress",
+            return_value=SimpleNamespace(summary="loaded"),
+        ):
             handled = shell._handle_slash_command("/apple-notes")
 
         self.assertFalse(handled)
@@ -72,21 +76,37 @@ class ShellSkillSlashTest(unittest.TestCase):
         self.assertIn("display_name: Apple Notes", shell.transcript[-1].body)
         self.assertIn("run: /apple-notes <instruction>", shell.transcript[-1].body)
 
-    def test_skill_slash_command_with_instruction_injects_skill_guidance_into_turn(self) -> None:
+    def test_skill_slash_command_with_instruction_injects_skill_guidance_into_turn(
+        self,
+    ) -> None:
         shell = self._make_shell()
 
-        with mock.patch.object(shell, "_run_tool_with_progress", return_value=SimpleNamespace(summary="loaded")):
+        with mock.patch.object(
+            shell,
+            "_run_tool_with_progress",
+            return_value=SimpleNamespace(summary="loaded"),
+        ):
             with mock.patch.object(shell, "_render_pending_entries", return_value=None):
                 with mock.patch.object(shell, "_refresh_shell_frame", return_value=None):
-                    with mock.patch.object(shell, "_run_turn_with_progress", return_value=self._fake_outcome("Notes opened.")) as run_turn:
+                    with mock.patch.object(
+                        shell,
+                        "_run_turn_with_progress",
+                        return_value=self._fake_outcome("Notes opened."),
+                    ) as run_turn:
                         handled = shell._handle_slash_command("/apple-notes open Notes and create a travel checklist")
 
         self.assertFalse(handled)
         prompt = run_turn.call_args.args[0]
-        self.assertIn('[SYSTEM: This turn references the "Apple Notes" skill from the frozen skill index.]', prompt)
+        self.assertIn(
+            '[SYSTEM: This turn references the "Apple Notes" skill from the frozen skill index.]',
+            prompt,
+        )
         self.assertIn("User request: open Notes and create a travel checklist", prompt)
         self.assertEqual(shell.transcript[-2].kind, "user")
-        self.assertEqual(shell.transcript[-2].body, "/apple-notes open Notes and create a travel checklist")
+        self.assertEqual(
+            shell.transcript[-2].body,
+            "/apple-notes open Notes and create a travel checklist",
+        )
         self.assertEqual(shell.transcript[-1].kind, "assistant")
         self.assertIn("Notes opened.", shell.transcript[-1].body)
 

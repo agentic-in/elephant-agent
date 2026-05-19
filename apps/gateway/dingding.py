@@ -13,7 +13,9 @@ from .plugins import GatewayPluginRegistry
 from .runtime import build_gateway_app
 
 
-def register_dingding_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_dingding_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     registry.register_service(
         "dingding",
         factory=lambda app, **kwargs: DingdingGatewayService(app=app, **kwargs),

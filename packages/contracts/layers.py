@@ -103,9 +103,7 @@ class Episode:
         _ensure_non_empty_text(self.entry_surface, name="episode entry surface")
         _ensure_non_empty_text(self.status, name="episode status")
         if self.status not in _EPISODE_STATUSES:
-            raise ValueError(
-                f"episode status must be one of {sorted(_EPISODE_STATUSES)}: {self.status}"
-            )
+            raise ValueError(f"episode status must be one of {sorted(_EPISODE_STATUSES)}: {self.status}")
 
 
 @dataclass(frozen=True, slots=True)

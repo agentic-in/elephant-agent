@@ -61,7 +61,13 @@ GROWTH_MARK_CANVAS_WIDTH = max(
     24,
     *(
         len(row)
-        for rows in (ELEPHANT_STAGE_ROWS, SEED_STAGE_ROWS, HATCHLING_STAGE_ROWS, SCOUT_STAGE_ROWS, ELEPHANT_STAGE_ROWS)
+        for rows in (
+            ELEPHANT_STAGE_ROWS,
+            SEED_STAGE_ROWS,
+            HATCHLING_STAGE_ROWS,
+            SCOUT_STAGE_ROWS,
+            ELEPHANT_STAGE_ROWS,
+        )
         for row in rows
     ),
 )
@@ -162,7 +168,9 @@ def render_elephant_mark():
 
 def render_growth_mark(stage_id: str, *, level: int | None = None):
     rows = _growth_rows(stage_id, level=level)
-    fallback = "[Elephant Agent elephant]" if stage_id == "seed" and (level or 0) <= 0 else f"[Elephant Agent {stage_id}]"
+    fallback = (
+        "[Elephant Agent elephant]" if stage_id == "seed" and (level or 0) <= 0 else f"[Elephant Agent {stage_id}]"
+    )
     centered = rows if _uses_literal_cells(rows) else visual_centered_rows(rows, width=GROWTH_MARK_CANVAS_WIDTH)
     return _render_pixel_mark(centered, fallback=fallback)
 
@@ -187,12 +195,7 @@ def centered_rows(rows: tuple[str, ...], *, width: int | None = None) -> tuple[s
 
 def visual_centered_rows(rows: tuple[str, ...], *, width: int | None = None) -> tuple[str, ...]:
     """Center the visible pixels, not the transparent source-canvas whitespace."""
-    visible_cells = [
-        index
-        for row in rows
-        for index, cell in enumerate(row)
-        if cell != " "
-    ]
+    visible_cells = [index for row in rows for index, cell in enumerate(row) if cell != " "]
     if not visible_cells:
         return centered_rows(rows, width=width)
     visible_left = min(visible_cells)

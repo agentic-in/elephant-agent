@@ -6,28 +6,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 import importlib.util
 import os
-from pathlib import Path
 
-from apps.runtime_layout import default_cli_state_dir
 from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayExchange,
-    GatewayInboundMessage,
     GatewayOutboundMessage,
 )
 
-from .cli_control import (
-    CliRuntimeFactory,
-    GatewayCliBindingStore,
-    GatewayCliControlService,
-    load_gateway_cli_control_config,
-)
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
 from .runtime import (
-    DINGDING_ADAPTER_ID,
-    DingdingMessagingAdapter,
     GatewayApp,
-    build_gateway_app,
 )
 
 DEFAULT_DINGDING_CLIENT_ID_ENV = "ELEPHANT_DINGDING_CLIENT_ID"
@@ -66,10 +53,7 @@ def _normalize_transport(value: str | None) -> str:
     normalized = str(value or "stream").strip().lower().replace("_", "-")
     if normalized in {"stream", "dingtalk-stream"}:
         return "stream"
-    raise ValueError(
-        "dingding transport must be one of "
-        f"{', '.join(SUPPORTED_DINGDING_TRANSPORTS)}"
-    )
+    raise ValueError(f"dingding transport must be one of {', '.join(SUPPORTED_DINGDING_TRANSPORTS)}")
 
 
 def _dingtalk_stream_dependency_status() -> str:
@@ -145,15 +129,9 @@ def load_dingding_gateway_accounts(
             resolved.append(
                 DingdingGatewayAccountConfig(
                     account_id=str(account_mapping.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID),
-                    client_id_env_var=str(
-                        env_payload.get("client_id") or DEFAULT_DINGDING_CLIENT_ID_ENV
-                    ),
-                    client_secret_env_var=str(
-                        env_payload.get("client_secret") or DEFAULT_DINGDING_CLIENT_SECRET_ENV
-                    ),
-                    robot_code_env_var=str(
-                        env_payload.get("robot_code") or DEFAULT_DINGDING_ROBOT_CODE_ENV
-                    ),
+                    client_id_env_var=str(env_payload.get("client_id") or DEFAULT_DINGDING_CLIENT_ID_ENV),
+                    client_secret_env_var=str(env_payload.get("client_secret") or DEFAULT_DINGDING_CLIENT_SECRET_ENV),
+                    robot_code_env_var=str(env_payload.get("robot_code") or DEFAULT_DINGDING_ROBOT_CODE_ENV),
                     surface=str(account_mapping.get("surface") or default_surface),
                     enabled=account_enabled,
                     metadata={"manifest_index": index},
@@ -174,13 +152,9 @@ def resolve_dingding_account(
     client_secret = str(env.get(config.client_secret_env_var) or "").strip()
     robot_code = str(env.get(config.robot_code_env_var) or "").strip()
     if not client_id:
-        raise LookupError(
-            f"dingding account '{config.account_id}' requires {config.client_id_env_var}"
-        )
+        raise LookupError(f"dingding account '{config.account_id}' requires {config.client_id_env_var}")
     if not client_secret:
-        raise LookupError(
-            f"dingding account '{config.account_id}' requires {config.client_secret_env_var}"
-        )
+        raise LookupError(f"dingding account '{config.account_id}' requires {config.client_secret_env_var}")
     return DingdingResolvedAccount(
         account_id=config.account_id,
         client_id=client_id,

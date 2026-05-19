@@ -1,74 +1,23 @@
 """Gateway parser, account, and status helpers."""
 
 from __future__ import annotations
-import asyncio
-from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-import getpass
-import apps.cli.wizard as cli_wizard
-import importlib.util
+from argparse import Namespace
+from collections.abc import Iterable, Mapping
 import json
-import os
 from pathlib import Path
-import re
-import shlex
-import signal
-import subprocess
-import sys
-import time
-from wsgiref.simple_server import make_server
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
-    render_elephant_mark,
-)
-from apps.provider_runtime import load_provider_profile, load_runtime_local_secret_env
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
+from apps.provider_runtime import load_provider_profile
+from apps.runtime_layout import default_cli_state_dir
 from packages.runtime_config import global_config_path_for_state_dir
 
 from . import (
-    DEFAULT_DINGDING_CLIENT_ID_ENV,
-    DEFAULT_DINGDING_CLIENT_SECRET_ENV,
-    DEFAULT_DINGDING_ROBOT_CODE_ENV,
-    DEFAULT_DISCORD_BOT_TOKEN_ENV,
-    DEFAULT_FEISHU_APP_ID_ENV,
-    DEFAULT_FEISHU_APP_SECRET_ENV,
-    DEFAULT_FEISHU_EVENT_PATH,
-    DEFAULT_WECOM_BOT_ID_ENV,
-    DEFAULT_WECOM_SECRET_ENV,
-    DINGDING_ADAPTER_ID,
-    FEISHU_ADAPTER_ID,
-    GatewayHttpService,
-    GatewayManagedRuntime,
     GatewayManagedService,
-    SUPPORTED_DINGDING_TRANSPORTS,
-    SUPPORTED_DISCORD_TRANSPORTS,
-    SUPPORTED_FEISHU_TRANSPORTS,
-    SUPPORTED_WECOM_TRANSPORTS,
-    SUPPORTED_WEIXIN_TRANSPORTS,
-    WECOM_ADAPTER_ID,
-    WEIXIN_ADAPTER_ID,
     build_gateway_app,
     build_gateway_plugin_registry,
-    create_gateway_web_app,
 )
-from .dingding import DINGTALK_STREAM_PIP_SPEC, DingdingGatewayService
-from .discord import DISCORD_PY_PIP_SPEC, DiscordGatewayService
-from .feishu import FEISHU_SDK_PIP_SPEC, FeishuGatewayService
+from .dingding import DingdingGatewayService
+from .discord import DiscordGatewayService
+from .feishu import FeishuGatewayService
 from .wecom import WecomGatewayService
 from .weixin import WeixinGatewayService
 
@@ -104,12 +53,14 @@ from .gateway_main_parser_providers import __all__ as _PROVIDER_ALL
 from .gateway_main_parser_doctor import *  # noqa: F401,F403
 from .gateway_main_parser_doctor import __all__ as _DOCTOR_ALL
 
+
 def _build_registry():
     return build_gateway_plugin_registry()
 
+
 def _gateway_provider_profile_for(args: Namespace):
     """Load provider profile from the canonical CLI control runtime config.
-    
+
     Always uses cli_state_dir to ensure consistent configuration across all IM components.
     """
     cli_state_dir = getattr(args, "cli_state_dir", None)
@@ -117,7 +68,7 @@ def _gateway_provider_profile_for(args: Namespace):
         cli_state_dir = default_cli_state_dir()
     if cli_state_dir is None:
         return None
-    
+
     state_dir = Path(cli_state_dir)
     config_path = global_config_path_for_state_dir(state_dir)
     profile = load_provider_profile(state_dir, config_path=config_path)
@@ -146,12 +97,11 @@ def _build_app(args: Namespace, *, registry=None):
     )
     return app
 
+
 def _service_kwargs_for(service_key: str, args: Namespace) -> dict[str, object]:
     if service_key == "discord":
         return {
-            "default_cli_state_dir": (
-                None if args.cli_state_dir is None else str(args.cli_state_dir)
-            ),
+            "default_cli_state_dir": (None if args.cli_state_dir is None else str(args.cli_state_dir)),
             "environ": _gateway_runtime_environ(
                 args.state_dir,
                 cli_state_dir=args.cli_state_dir,
@@ -161,9 +111,7 @@ def _service_kwargs_for(service_key: str, args: Namespace) -> dict[str, object]:
         }
     if service_key == "feishu":
         return {
-            "default_cli_state_dir": (
-                None if args.cli_state_dir is None else str(args.cli_state_dir)
-            ),
+            "default_cli_state_dir": (None if args.cli_state_dir is None else str(args.cli_state_dir)),
             "environ": _gateway_runtime_environ(
                 args.state_dir,
                 cli_state_dir=args.cli_state_dir,
@@ -172,9 +120,7 @@ def _service_kwargs_for(service_key: str, args: Namespace) -> dict[str, object]:
         }
     if service_key == "dingding":
         return {
-            "default_cli_state_dir": (
-                None if args.cli_state_dir is None else str(args.cli_state_dir)
-            ),
+            "default_cli_state_dir": (None if args.cli_state_dir is None else str(args.cli_state_dir)),
             "environ": _gateway_runtime_environ(
                 args.state_dir,
                 cli_state_dir=args.cli_state_dir,
@@ -184,9 +130,7 @@ def _service_kwargs_for(service_key: str, args: Namespace) -> dict[str, object]:
         }
     if service_key == "weixin":
         return {
-            "default_cli_state_dir": (
-                None if args.cli_state_dir is None else str(args.cli_state_dir)
-            ),
+            "default_cli_state_dir": (None if args.cli_state_dir is None else str(args.cli_state_dir)),
             "environ": _gateway_runtime_environ(
                 args.state_dir,
                 cli_state_dir=args.cli_state_dir,
@@ -196,9 +140,7 @@ def _service_kwargs_for(service_key: str, args: Namespace) -> dict[str, object]:
         }
     if service_key == "wecom":
         return {
-            "default_cli_state_dir": (
-                None if args.cli_state_dir is None else str(args.cli_state_dir)
-            ),
+            "default_cli_state_dir": (None if args.cli_state_dir is None else str(args.cli_state_dir)),
             "environ": _gateway_runtime_environ(
                 args.state_dir,
                 cli_state_dir=args.cli_state_dir,
@@ -208,6 +150,7 @@ def _service_kwargs_for(service_key: str, args: Namespace) -> dict[str, object]:
         }
     return {}
 
+
 def _build_services(
     args: Namespace,
     *,
@@ -216,11 +159,7 @@ def _build_services(
     registry = _build_registry()
     app = _build_app(args, registry=registry)
     manifest = app.loaded_profile.manifest if app.loaded_profile is not None else None
-    resolved_keys = (
-        tuple(service_keys)
-        if service_keys is not None
-        else registry.configured_service_keys(manifest)
-    )
+    resolved_keys = tuple(service_keys) if service_keys is not None else registry.configured_service_keys(manifest)
     services = {
         key: registry.create_service(
             key,
@@ -230,6 +169,7 @@ def _build_services(
         for key in resolved_keys
     }
     return app, services
+
 
 def _build_service(
     args: Namespace,
@@ -247,11 +187,13 @@ def _build_service(
     )
     return service
 
+
 def _build_feishu_service(args: Namespace) -> FeishuGatewayService:
     service = _build_service(args, service_key="feishu", respect_enabled=False)
     if not isinstance(service, FeishuGatewayService):
         raise TypeError("gateway service plugin 'feishu' must build FeishuGatewayService")
     return service
+
 
 def _build_discord_service(args: Namespace) -> DiscordGatewayService:
     service = _build_service(args, service_key="discord", respect_enabled=False)
@@ -280,19 +222,20 @@ def _build_wecom_service(args: Namespace) -> WecomGatewayService:
         raise TypeError("gateway service plugin 'wecom' must build WecomGatewayService")
     return service
 
+
 def _build_managed_service(args: Namespace, *, service_key: str) -> GatewayManagedService:
     service = _build_service(args, service_key=service_key, respect_enabled=False)
     if not isinstance(service, GatewayManagedService):
-        raise TypeError(
-            f"gateway service plugin '{service_key}' must build a managed gateway service"
-        )
+        raise TypeError(f"gateway service plugin '{service_key}' must build a managed gateway service")
     return service
+
 
 def _describe_payload(service_key: str, service) -> dict[str, object]:
     return {
         "gateway": dict(service.app.setup_summary()),
         service_key: dict(service.describe()),
     }
+
 
 def _describe_services_payload(
     app,
@@ -301,15 +244,14 @@ def _describe_services_payload(
     payload: dict[str, object] = {
         "gateway": dict(app.setup_summary()),
         "services": {
-            key: dict(service.describe())
-            for key, service in services.items()
-            if hasattr(service, "describe")
+            key: dict(service.describe()) for key, service in services.items() if hasattr(service, "describe")
         },
     }
     for key, service in services.items():
         if hasattr(service, "describe"):
             payload[key] = dict(service.describe())
     return payload
+
 
 def _print_json(payload: dict[str, object]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
@@ -324,6 +266,7 @@ def _run_status_all(args: Namespace) -> int:
     try:
         from apps.daemon_command import daemon_is_running
         from apps.daemon_command import _read_pid, _daemon_pid_path
+
         state_dir_path = Path(args.state_dir)
         daemon_pid = _read_pid(_daemon_pid_path(state_dir_path))
         if daemon_is_running(state_dir_path):
@@ -364,4 +307,25 @@ def _run_status_all(args: Namespace) -> int:
     return 0
 
 
-__all__ = [*_STATE_ALL, *_PROVIDER_ALL, *_DOCTOR_ALL, *['_build_registry', '_build_app', '_service_kwargs_for', '_build_services', '_build_service', '_build_feishu_service', '_build_discord_service', '_build_dingding_service', '_build_weixin_service', '_build_wecom_service', '_build_managed_service', '_describe_payload', '_describe_services_payload', '_print_json', '_run_status_all']]
+__all__ = [
+    *_STATE_ALL,
+    *_PROVIDER_ALL,
+    *_DOCTOR_ALL,
+    *[
+        "_build_registry",
+        "_build_app",
+        "_service_kwargs_for",
+        "_build_services",
+        "_build_service",
+        "_build_feishu_service",
+        "_build_discord_service",
+        "_build_dingding_service",
+        "_build_weixin_service",
+        "_build_wecom_service",
+        "_build_managed_service",
+        "_describe_payload",
+        "_describe_services_payload",
+        "_print_json",
+        "_run_status_all",
+    ],
+]

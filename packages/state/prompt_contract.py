@@ -18,16 +18,31 @@ _ELEPHANT_IDENTITY_META_LINE_PATTERNS = (
     re.compile(r"^Elephant ID\s*:", re.IGNORECASE),
     re.compile(r"^Display name\s*:", re.IGNORECASE),
     re.compile(r"^Mode\s*:", re.IGNORECASE),
-    re.compile(r"^This file is (?:the local editable|the local editable identity source)", re.IGNORECASE),
+    re.compile(
+        r"^This file is (?:the local editable|the local editable identity source)",
+        re.IGNORECASE,
+    ),
     re.compile(r"^Elephant Agent injects it when an Episode", re.IGNORECASE),
     re.compile(r"^##\s*Default Elephant Identity\s*$", re.IGNORECASE),
     re.compile(r"^##\s*Operating Contract\s*$", re.IGNORECASE),
-    re.compile(r"Personal Model\s*->\s*Elephant\s*->\s*Episode\s*->\s*Loop\s*->\s*Step", re.IGNORECASE),
+    re.compile(
+        r"Personal Model\s*->\s*Elephant\s*->\s*Episode\s*->\s*Loop\s*->\s*Step",
+        re.IGNORECASE,
+    ),
     re.compile(r"Canonical containment", re.IGNORECASE),
     re.compile(r"active elephant identity for one durable elephant", re.IGNORECASE),
-    re.compile(r"named Elephant Agent elephant on one long-lived continuity line", re.IGNORECASE),
-    re.compile(r"Treat durable Personal Model and Elephant updates as governed understanding", re.IGNORECASE),
-    re.compile(r"Keep recall, capability, certainty, intimacy, and identity claims truthful", re.IGNORECASE),
+    re.compile(
+        r"named Elephant Agent elephant on one long-lived continuity line",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"Treat durable Personal Model and Elephant updates as governed understanding",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"Keep recall, capability, certainty, intimacy, and identity claims truthful",
+        re.IGNORECASE,
+    ),
     # HTML comments are never shown to the model (the new template uses
     # them to hide human-facing metadata like elephant id + mode).
     re.compile(r"^\s*<!--.*-->\s*$"),
@@ -174,7 +189,6 @@ def build_understanding_tool_policy_section(profile: LoadedProfile) -> tuple[str
     )
 
 
-
 def build_personality_section(
     profile: LoadedProfile,
     *,
@@ -189,7 +203,10 @@ def build_prompt_contract(
     prompt_mode: PromptMode = "full",
 ) -> PromptContract:
     stable_sections: list[tuple[str, tuple[str, ...]]] = [
-        ("system-layer-contract", build_system_layer_contract_section(profile, prompt_mode=prompt_mode)),
+        (
+            "system-layer-contract",
+            build_system_layer_contract_section(profile, prompt_mode=prompt_mode),
+        ),
         ("elephant-identity", build_elephant_identity_section(profile)),
         ("understanding-tool-policy", build_understanding_tool_policy_section(profile)),
     ]

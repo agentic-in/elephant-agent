@@ -13,7 +13,9 @@ from .plugins import GatewayPluginRegistry
 from .runtime import build_gateway_app
 
 
-def register_wecom_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_wecom_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     registry.register_service(
         "wecom",
         factory=lambda app, **kwargs: WecomGatewayService(app=app, **kwargs),

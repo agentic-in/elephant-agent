@@ -7,7 +7,10 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
-from packages.understanding.personal_model_governance import ensure_valid_facet, is_protected_topic
+from packages.understanding.personal_model_governance import (
+    ensure_valid_facet,
+    is_protected_topic,
+)
 
 from .handler_support import coerce_bool, coerce_int, optional_string, tool_summary
 from .runtime import ToolInvocation
@@ -96,13 +99,11 @@ def _check_topic_duplicate(
         if existing_topic == topic:
             fact_text = str(getattr(fact, "text", "") or "").strip()
             # Detect contradiction: same topic but different content
-            is_contradiction = (
-                new_text
-                and fact_text
-                and new_text.strip().lower() != fact_text.strip().lower()
-            )
+            is_contradiction = new_text and fact_text and new_text.strip().lower() != fact_text.strip().lower()
             status_label = "contradiction" if is_contradiction else "duplicate_topic"
-            hint_action = "This appears to be updated information" if is_contradiction else "An active claim already exists"
+            hint_action = (
+                "This appears to be updated information" if is_contradiction else "An active claim already exists"
+            )
             return (
                 f"action: remember\n"
                 f"status: {status_label}\n"
@@ -145,7 +146,9 @@ def _lines_for_claims(result: Mapping[str, Any]) -> list[str]:
         status = str(claim.get("status") or "").strip() or "-"
         protected = str(claim.get("protected") or "").strip()
         protected_suffix = f" protected={protected}" if protected else ""
-        lines.append(f"- [{lens}/{topic}] ref={ref} status={status} policy={policy}{protected_suffix} updated={updated}")
+        lines.append(
+            f"- [{lens}/{topic}] ref={ref} status={status} policy={policy}{protected_suffix} updated={updated}"
+        )
         lines.append(f"  text: {text}")
     diagnostics = result.get("diagnostics")
     if isinstance(diagnostics, Mapping):
@@ -168,7 +171,11 @@ def _lines_for_claims(result: Mapping[str, Any]) -> list[str]:
         lines.append(
             f"health_report: active={health.get('total_active_claims', 0)} retired={health.get('total_retired_claims', 0)} disputed={health.get('total_disputed_claims', 0)} topics={health.get('total_topics', 0)}"
         )
-        for key in ("conflicting_claim_candidates", "review_claims_overdue", "cleanup_suggestions"):
+        for key in (
+            "conflicting_claim_candidates",
+            "review_claims_overdue",
+            "cleanup_suggestions",
+        ):
             rows = tuple(health.get(key) or ())
             if rows:
                 lines.append(f"{key}: {len(rows)}")
@@ -181,7 +188,9 @@ def _lines_for_claims(result: Mapping[str, Any]) -> list[str]:
                 reason = str(item.get("relation_reason") or "").strip()
                 suffix = f" relation={relation}" if relation else ""
                 suffix += f" reason={reason}" if reason else ""
-                lines.append(f"  - [{item.get('lens', '')}/{item.get('topic', '')}] {item.get('text', '')} ({item.get('ref', '')}){suffix}")
+                lines.append(
+                    f"  - [{item.get('lens', '')}/{item.get('topic', '')}] {item.get('text', '')} ({item.get('ref', '')}){suffix}"
+                )
     return lines
 
 
@@ -205,7 +214,8 @@ def run_personal_model_search(
         limit=max(1, min(coerce_int(invocation.arguments.get("limit"), default=12), 30)),
         status=_resolve_search_status(optional_string(invocation.arguments.get("status"))),
         ref=optional_string(invocation.arguments.get("ref")) or "",
-        personal_model_id=optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id,
+        personal_model_id=optional_string(invocation.arguments.get("personal_model_id"))
+        or invocation.context.personal_model_id,
         mode=mode,
     )
     return tool_summary(
@@ -221,7 +231,9 @@ def _run_inventory_search(
     surface: PersonalModelUnderstandingSurface,
 ) -> Mapping[str, Any]:
     """Return lens→topic list with claim counts. No content returned."""
-    personal_model_id = optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id
+    personal_model_id = (
+        optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id
+    )
     lens_filter = optional_string(invocation.arguments.get("lens")) or ""
     status_filter = _resolve_search_status(optional_string(invocation.arguments.get("status")))
     pm_id = surface._personal_model_id(invocation.session_id, personal_model_id)  # noqa: SLF001
@@ -237,6 +249,7 @@ def _run_inventory_search(
         facts = ()
     # Group by lens → topic with count
     from collections import defaultdict
+
     inventory: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for fact in facts:
         fact_lens = str(getattr(fact, "lens", "") or "").strip()
@@ -245,7 +258,12 @@ def _run_inventory_search(
         if fact_lens and topic:
             inventory[fact_lens][topic] += 1
     # Format output
-    lines = [f"personal_model_id: {pm_id}", f"mode: inventory", f"status: {status_filter}", f"total_claims: {len(facts)}"]
+    lines = [
+        f"personal_model_id: {pm_id}",
+        "mode: inventory",
+        f"status: {status_filter}",
+        f"total_claims: {len(facts)}",
+    ]
     lens_order = ["identity", "world", "pulse", "journey"]
     for lens in lens_order:
         topics = inventory.get(lens, {})
@@ -274,13 +292,33 @@ def _conversation_time_range(arguments: Mapping[str, Any]) -> Mapping[str, str]:
     raw = arguments.get("time_range")
     out: dict[str, str] = {}
     if isinstance(raw, Mapping):
-        for key in ("expr", "start_at", "end_at", "start", "end", "timezone", "tz", "search_start_at", "search_end_at"):
+        for key in (
+            "expr",
+            "start_at",
+            "end_at",
+            "start",
+            "end",
+            "timezone",
+            "tz",
+            "search_start_at",
+            "search_end_at",
+        ):
             value = optional_string(raw.get(key))
             if value:
                 out[key] = value
     elif isinstance(raw, str) and raw.strip():
         out["expr"] = raw.strip()
-    for key in ("expr", "start_at", "end_at", "start", "end", "timezone", "tz", "search_start_at", "search_end_at"):
+    for key in (
+        "expr",
+        "start_at",
+        "end_at",
+        "start",
+        "end",
+        "timezone",
+        "tz",
+        "search_start_at",
+        "search_end_at",
+    ):
         value = optional_string(arguments.get(key))
         if value:
             out[key] = value
@@ -304,7 +342,8 @@ def run_conversation_search(
         preview=optional_string(invocation.arguments.get("preview")) or "anchors",
         view=optional_string(invocation.arguments.get("view")) or "conversation",
         limit=max(1, min(coerce_int(invocation.arguments.get("limit"), default=8), 30)),
-        personal_model_id=optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id,
+        personal_model_id=optional_string(invocation.arguments.get("personal_model_id"))
+        or invocation.context.personal_model_id,
         include_current_episode=True,
     )
     lines = [
@@ -326,7 +365,9 @@ def run_conversation_search(
         for item in ranges[:8]:
             if not isinstance(item, Mapping):
                 continue
-            lines.append(f"- {item.get('range_id', '')} {item.get('start_at', '')}..{item.get('end_at', '')} score={item.get('score', 0)} count={item.get('count', 0)} by_kind={item.get('by_kind', {})}")
+            lines.append(
+                f"- {item.get('range_id', '')} {item.get('start_at', '')}..{item.get('end_at', '')} score={item.get('score', 0)} count={item.get('count', 0)} by_kind={item.get('by_kind', {})}"
+            )
             time_range = item.get("time_range")
             if isinstance(time_range, Mapping) and time_range:
                 lines.append(
@@ -373,7 +414,8 @@ def run_personal_model_inspect(
         topic=optional_string(invocation.arguments.get("topic")) or "",
         query=optional_string(invocation.arguments.get("query")) or "",
         limit=max(1, min(coerce_int(invocation.arguments.get("limit"), default=5), 10)),
-        personal_model_id=optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id,
+        personal_model_id=optional_string(invocation.arguments.get("personal_model_id"))
+        or invocation.context.personal_model_id,
     )
     lines = [
         f"personal_model_id: {result.get('personal_model_id', '')}",
@@ -401,7 +443,8 @@ def run_personal_model_audit(
         action=optional_string(invocation.arguments.get("action")) or "health",
         lens=optional_string(invocation.arguments.get("lens")) or "",
         limit=max(1, min(coerce_int(invocation.arguments.get("limit"), default=30), 100)),
-        personal_model_id=optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id,
+        personal_model_id=optional_string(invocation.arguments.get("personal_model_id"))
+        or invocation.context.personal_model_id,
     )
     resolved_action = str(result.get("action", "") or "")
     lines = [f"action: {resolved_action}"]
@@ -416,11 +459,21 @@ def run_personal_model_audit(
         lines.append(
             f"health_report: active={health.get('total_active_claims', 0)} retired={health.get('total_retired_claims', 0)} disputed={health.get('total_disputed_claims', 0)} topics={health.get('total_topics', 0)}"
         )
-        for key in ("conflicting_claim_candidates", "review_claims_overdue", "current_claims_stale", "retired_chain_candidates", "cleanup_suggestions"):
+        for key in (
+            "conflicting_claim_candidates",
+            "review_claims_overdue",
+            "current_claims_stale",
+            "retired_chain_candidates",
+            "cleanup_suggestions",
+        ):
             rows = tuple(health.get(key) or ())
             if rows:
                 lines.append(f"{key}: {len(rows)}")
-        if resolved_action == "stale" and not tuple(health.get("review_claims_overdue") or ()) and not tuple(health.get("current_claims_stale") or ()):
+        if (
+            resolved_action == "stale"
+            and not tuple(health.get("review_claims_overdue") or ())
+            and not tuple(health.get("current_claims_stale") or ())
+        ):
             lines.append("stale: none")
     return tool_summary(invocation, "\n".join(lines), side_effects=("personal_model", "audit"))
 
@@ -524,16 +577,16 @@ def run_personal_model_update(
     if action in {"remember", "correct"} and not text:
         raise ValueError(f"tool.personal_model.update action={action} requires 'text'")
     if source == "learned" and action in {"remember", "correct"} and _looks_like_internal_learning_artifact(text):
-        raise ValueError("learned Personal Model facts cannot store internal learning, validation, dashboard, or question-bank bookkeeping text")
+        raise ValueError(
+            "learned Personal Model facts cannot store internal learning, validation, dashboard, or question-bank bookkeeping text"
+        )
     lens = optional_string(invocation.arguments.get("lens")) or ""
     topic = optional_string(invocation.arguments.get("topic")) or ""
     # Validate lens-prefixed topic format
     if topic and lens and action in {"remember", "correct"}:
         topic_parts = topic.split(".")
         if len(topic_parts) < 3:
-            raise ValueError(
-                f"topic must have at least 3 dot-separated segments (lens.domain.entity): {topic!r}"
-            )
+            raise ValueError(f"topic must have at least 3 dot-separated segments (lens.domain.entity): {topic!r}")
         if topic_parts[0] != lens:
             raise ValueError(
                 f"topic first segment must match lens: topic={topic!r} but lens={lens!r}. "
@@ -545,7 +598,9 @@ def run_personal_model_update(
     reason = optional_string(invocation.arguments.get("reason")) or ""
     if action in {"delete", "restore"} and not ref:
         raise ValueError(f"tool.personal_model.update action={action} requires exact 'ref' from personal_model.search")
-    personal_model_id = optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id
+    personal_model_id = (
+        optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id
+    )
     if action == "delete":
         result = _delete_personal_model_claim(
             invocation,
@@ -559,7 +614,14 @@ def run_personal_model_update(
     else:
         # Anti-duplication guard: warn if same topic already exists for remember
         if action == "remember" and topic and not ref:
-            duplicate_hint = _check_topic_duplicate(surface, invocation.session_id, personal_model_id, lens, topic, new_text=text)
+            duplicate_hint = _check_topic_duplicate(
+                surface,
+                invocation.session_id,
+                personal_model_id,
+                lens,
+                topic,
+                new_text=text,
+            )
             if duplicate_hint:
                 return tool_summary(
                     invocation,
@@ -606,7 +668,9 @@ def run_personal_model_update(
                 reason = str(item.get("relation_reason") or "").strip()
                 suffix = f" relation={relation}" if relation else ""
                 suffix += f" reason={reason}" if reason else ""
-                lines.append(f"- [{item.get('lens', '')}/{item.get('topic', '')}] {item.get('text', '')} ({item.get('ref', '')}){suffix}")
+                lines.append(
+                    f"- [{item.get('lens', '')}/{item.get('topic', '')}] {item.get('text', '')} ({item.get('ref', '')}){suffix}"
+                )
     return tool_summary(
         invocation,
         "\n".join(lines),
@@ -624,13 +688,22 @@ def run_personal_model_questions(
     result = surface.manage_personal_model_questions(
         invocation.session_id,
         action=optional_string(invocation.arguments.get("action")) or "",
-        personal_model_id=optional_string(invocation.arguments.get("personal_model_id")) or invocation.context.personal_model_id,
-        question_id=optional_string(invocation.arguments.get("question_id")) or optional_string(invocation.arguments.get("ref")) or "",
+        personal_model_id=optional_string(invocation.arguments.get("personal_model_id"))
+        or invocation.context.personal_model_id,
+        question_id=optional_string(invocation.arguments.get("question_id"))
+        or optional_string(invocation.arguments.get("ref"))
+        or "",
         status=optional_string(invocation.arguments.get("status")) or "",
         lens=optional_string(invocation.arguments.get("lens")) or "",
-        sub_lens=optional_string(invocation.arguments.get("topic")) or optional_string(invocation.arguments.get("sub_lens")) or "",
-        text=optional_string(invocation.arguments.get("text")) or optional_string(invocation.arguments.get("question")) or "",
-        rationale=optional_string(invocation.arguments.get("reason")) or optional_string(invocation.arguments.get("rationale")) or "",
+        sub_lens=optional_string(invocation.arguments.get("topic"))
+        or optional_string(invocation.arguments.get("sub_lens"))
+        or "",
+        text=optional_string(invocation.arguments.get("text"))
+        or optional_string(invocation.arguments.get("question"))
+        or "",
+        rationale=optional_string(invocation.arguments.get("reason"))
+        or optional_string(invocation.arguments.get("rationale"))
+        or "",
         priority=invocation.arguments.get("priority"),
         sensitivity=optional_string(invocation.arguments.get("sensitivity")) or "",
         source=optional_string(invocation.arguments.get("source")) or "contextual",
@@ -650,7 +723,9 @@ def run_personal_model_questions(
             lines.append(f"questions: {len(questions)}")
             for question in questions[:5]:
                 if isinstance(question, Mapping):
-                    lines.append(f"- [{question.get('lens', '')}/{question.get('sub_lens', '')}] {question.get('text', '')}")
+                    lines.append(
+                        f"- [{question.get('lens', '')}/{question.get('sub_lens', '')}] {question.get('text', '')}"
+                    )
         question = result.get("question")
         if isinstance(question, Mapping):
             lines.append(f"question_id: {question.get('question_id', '')}")

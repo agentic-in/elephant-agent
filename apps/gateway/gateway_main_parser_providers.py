@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from argparse import SUPPRESS, ArgumentParser
-from pathlib import Path
 
 from .gateway_main_parser_state import *  # noqa: F401,F403
 from .gateway_main_parser_state import (
@@ -15,6 +14,7 @@ from .gateway_main_parser_state import (
 )
 from .gateway_main_runtime import *  # noqa: F401,F403
 from .gateway_main_wizard import *  # noqa: F401,F403
+
 
 def _add_discord_runtime_target_options(
     parser: ArgumentParser,
@@ -32,6 +32,7 @@ def _add_discord_runtime_target_options(
     if include_account_id:
         parser.add_argument("--account-id", dest="account_id_flag", help=SUPPRESS)
 
+
 def _add_discord_start_options(parser: ArgumentParser) -> None:
     _add_discord_runtime_target_options(parser, include_account_id=True)
     _add_optional_account_argument(
@@ -44,12 +45,14 @@ def _add_discord_start_options(parser: ArgumentParser) -> None:
         help="Start the Discord gateway transport in a background process and return immediately.",
     )
 
+
 def _add_discord_status_options(parser: ArgumentParser) -> None:
     _add_discord_runtime_target_options(parser, include_account_id=True)
     _add_optional_account_argument(
         parser,
         help_text="Discord account id. Omit to inspect the provider-wide runtime and all accounts.",
     )
+
 
 def _add_discord_stop_options(parser: ArgumentParser) -> None:
     _add_discord_runtime_target_options(parser, include_account_id=True)
@@ -69,6 +72,7 @@ def _add_discord_stop_options(parser: ArgumentParser) -> None:
         help="Send SIGKILL when the process does not exit within --timeout.",
     )
 
+
 def _add_discord_restart_options(parser: ArgumentParser) -> None:
     _add_discord_runtime_target_options(parser, include_account_id=True)
     _add_optional_account_argument(
@@ -86,6 +90,7 @@ def _add_discord_restart_options(parser: ArgumentParser) -> None:
         action="store_true",
         help="Send SIGKILL when the previous process does not exit within --timeout.",
     )
+
 
 def _add_discord_logs_options(parser: ArgumentParser) -> None:
     _add_discord_runtime_target_options(parser, include_account_id=True)
@@ -109,6 +114,7 @@ def _add_discord_logs_options(parser: ArgumentParser) -> None:
         action="store_true",
         help="Print the resolved log file path and exit.",
     )
+
 
 def _add_discord_add_options(parser: ArgumentParser) -> None:
     _add_optional_account_argument(
@@ -192,6 +198,7 @@ def _add_discord_add_options(parser: ArgumentParser) -> None:
         help=SUPPRESS,
     )
 
+
 def _add_feishu_runtime_target_options(
     parser: ArgumentParser,
     *,
@@ -208,6 +215,7 @@ def _add_feishu_runtime_target_options(
     if include_account_id:
         parser.add_argument("--account-id", dest="account_id_flag", help=SUPPRESS)
 
+
 def _add_feishu_start_options(parser: ArgumentParser) -> None:
     _add_feishu_runtime_target_options(parser, include_account_id=True)
     _add_optional_account_argument(
@@ -221,12 +229,14 @@ def _add_feishu_start_options(parser: ArgumentParser) -> None:
     )
     _add_http_server_options(parser)
 
+
 def _add_feishu_status_options(parser: ArgumentParser) -> None:
     _add_feishu_runtime_target_options(parser, include_account_id=True)
     _add_optional_account_argument(
         parser,
         help_text="Feishu account id. Omit to inspect the provider-wide runtime and all accounts.",
     )
+
 
 def _add_feishu_stop_options(parser: ArgumentParser) -> None:
     _add_feishu_runtime_target_options(parser, include_account_id=True)
@@ -246,6 +256,7 @@ def _add_feishu_stop_options(parser: ArgumentParser) -> None:
         help="Send SIGKILL when the process does not exit within --timeout.",
     )
 
+
 def _add_feishu_restart_options(parser: ArgumentParser) -> None:
     _add_feishu_runtime_target_options(parser, include_account_id=True)
     _add_optional_account_argument(
@@ -264,6 +275,7 @@ def _add_feishu_restart_options(parser: ArgumentParser) -> None:
         action="store_true",
         help="Send SIGKILL when the previous process does not exit within --timeout.",
     )
+
 
 def _add_feishu_logs_options(parser: ArgumentParser) -> None:
     _add_feishu_runtime_target_options(parser, include_account_id=True)
@@ -287,6 +299,7 @@ def _add_feishu_logs_options(parser: ArgumentParser) -> None:
         action="store_true",
         help="Print the resolved log file path and exit.",
     )
+
 
 def _add_feishu_add_options(parser: ArgumentParser) -> None:
     _add_optional_account_argument(
@@ -861,5 +874,40 @@ def _add_wecom_add_options(parser: ArgumentParser) -> None:
     )
 
 
-
-__all__ = ['_add_discord_runtime_target_options', '_add_discord_start_options', '_add_discord_status_options', '_add_discord_stop_options', '_add_discord_restart_options', '_add_discord_logs_options', '_add_discord_add_options', '_add_feishu_runtime_target_options', '_add_feishu_start_options', '_add_feishu_status_options', '_add_feishu_stop_options', '_add_feishu_restart_options', '_add_feishu_logs_options', '_add_feishu_add_options', '_add_dingding_runtime_target_options', '_add_dingding_start_options', '_add_dingding_status_options', '_add_dingding_stop_options', '_add_dingding_restart_options', '_add_dingding_logs_options', '_add_dingding_add_options', '_add_weixin_runtime_target_options', '_add_weixin_start_options', '_add_weixin_status_options', '_add_weixin_stop_options', '_add_weixin_restart_options', '_add_weixin_logs_options', '_add_weixin_add_options', '_add_wecom_runtime_target_options', '_add_wecom_start_options', '_add_wecom_status_options', '_add_wecom_stop_options', '_add_wecom_restart_options', '_add_wecom_logs_options', '_add_wecom_add_options']
+__all__ = [
+    "_add_discord_runtime_target_options",
+    "_add_discord_start_options",
+    "_add_discord_status_options",
+    "_add_discord_stop_options",
+    "_add_discord_restart_options",
+    "_add_discord_logs_options",
+    "_add_discord_add_options",
+    "_add_feishu_runtime_target_options",
+    "_add_feishu_start_options",
+    "_add_feishu_status_options",
+    "_add_feishu_stop_options",
+    "_add_feishu_restart_options",
+    "_add_feishu_logs_options",
+    "_add_feishu_add_options",
+    "_add_dingding_runtime_target_options",
+    "_add_dingding_start_options",
+    "_add_dingding_status_options",
+    "_add_dingding_stop_options",
+    "_add_dingding_restart_options",
+    "_add_dingding_logs_options",
+    "_add_dingding_add_options",
+    "_add_weixin_runtime_target_options",
+    "_add_weixin_start_options",
+    "_add_weixin_status_options",
+    "_add_weixin_stop_options",
+    "_add_weixin_restart_options",
+    "_add_weixin_logs_options",
+    "_add_weixin_add_options",
+    "_add_wecom_runtime_target_options",
+    "_add_wecom_start_options",
+    "_add_wecom_status_options",
+    "_add_wecom_stop_options",
+    "_add_wecom_restart_options",
+    "_add_wecom_logs_options",
+    "_add_wecom_add_options",
+]

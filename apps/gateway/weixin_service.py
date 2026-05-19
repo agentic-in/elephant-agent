@@ -5,11 +5,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-import json
 import logging
 import os
 from pathlib import Path
-import threading
 from typing import Any
 from uuid import uuid4
 
@@ -17,7 +15,6 @@ from packages.gateway_core import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     GatewayAccountRef,
     GatewayConversationRef,
-    GatewayExchange,
     GatewayInboundMessage,
     GatewayOutboundMessage,
     GatewayOutboundQueue,
@@ -36,7 +33,11 @@ from .cli_control import (
     GatewayCliControlService,
     load_gateway_cli_control_config,
 )
-from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
+from .plugins import (
+    GatewayManagedRuntime,
+    GatewayPluginRegistry,
+    default_gateway_runtime_path,
+)
 from .runtime import (
     WEIXIN_ADAPTER_ID,
     WeixinMessagingAdapter,
@@ -46,14 +47,11 @@ from .runtime import (
 
 from .weixin_support import (
     ILINK_BASE_URL,
-    WEIXIN_CDN_BASE_URL,
-    AIOHTTP_AVAILABLE,
     ContextTokenStore,
     TypingTicketCache,
     WeixinGatewayAccountConfig,
     WeixinGatewayEventResult,
     WeixinResolvedAccount,
-    _coerce_bool,
     _extract_text,
     _guess_chat_type,
     _load_sync_buf,
@@ -66,31 +64,16 @@ from .weixin_support import (
     load_weixin_account,
     load_weixin_gateway_accounts,
     resolve_weixin_account,
-    save_weixin_account,
-    # iLink API helpers
-    _api_post,
     _get_updates,
     _send_message as _ilink_send_message,
-    _send_typing,
     _get_config,
-    EP_SEND_MESSAGE,
     LONG_POLL_TIMEOUT_MS,
-    API_TIMEOUT_MS,
     SESSION_EXPIRED_ERRCODE,
     MAX_CONSECUTIVE_FAILURES,
     RETRY_DELAY_SECONDS,
     BACKOFF_DELAY_SECONDS,
     MESSAGE_DEDUP_TTL_SECONDS,
-    ITEM_TEXT,
-    MSG_TYPE_BOT,
-    MSG_STATE_FINISH,
-    TYPING_START,
-    TYPING_STOP,
     _make_ssl_connector,
-    _headers,
-    _json_dumps,
-    _base_info,
-    _random_wechat_uin,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -171,14 +154,8 @@ class WeixinGatewayService:
                 binding_store = self.cli_binding_store
                 if binding_store is None:
                     state_root = self.app.state_dir
-                    binding_path = (
-                        None
-                        if state_root is None
-                        else os.path.join(state_root, "weixin-cli-bindings.json")
-                    )
-                    binding_store = GatewayCliBindingStore(
-                        path=None if binding_path is None else Path(binding_path)
-                    )
+                    binding_path = None if state_root is None else os.path.join(state_root, "weixin-cli-bindings.json")
+                    binding_store = GatewayCliBindingStore(path=None if binding_path is None else Path(binding_path))
                 self.cli_control = GatewayCliControlService(
                     config=self._resolved_cli_control_config(config),
                     app=self.app,
@@ -278,14 +255,10 @@ class WeixinGatewayService:
         transport_configs = self._transport_account_configs()
         if not transport_configs:
             return "ilink"
-        transports = tuple(
-            dict.fromkeys(_normalize_transport(config.surface) for config in transport_configs)
-        )
+        transports = tuple(dict.fromkeys(_normalize_transport(config.surface) for config in transport_configs))
         if len(transports) == 1:
             return transports[0]
-        raise LookupError(
-            "configured WeChat accounts use multiple transport surfaces; choose one explicitly"
-        )
+        raise LookupError("configured WeChat accounts use multiple transport surfaces; choose one explicitly")
 
     @property
     def event_paths(self) -> tuple[str, ...]:
@@ -302,7 +275,10 @@ class WeixinGatewayService:
         path: str,
     ) -> tuple[str, Mapping[str, object]]:
         # iLink mode does not use HTTP callbacks.
-        return "501 Not Implemented", {"ok": False, "error": "iLink transport does not use HTTP callbacks"}
+        return "501 Not Implemented", {
+            "ok": False,
+            "error": "iLink transport does not use HTTP callbacks",
+        }
 
     def configured_runtime_target(self) -> str:
         return self.configured_transport()
@@ -394,9 +370,7 @@ class WeixinGatewayService:
             raise LookupError("no enabled WeChat gateway accounts are configured")
         if len(enabled_configs) == 1:
             return resolve_weixin_account(enabled_configs[0])
-        raise LookupError(
-            "multiple enabled WeChat gateway accounts are configured; pass account_id explicitly"
-        )
+        raise LookupError("multiple enabled WeChat gateway accounts are configured; pass account_id explicitly")
 
     async def start_gateway(self, account_id: str | None = None) -> None:
         """Connect and start the long-polling loop."""
@@ -585,7 +559,10 @@ class WeixinGatewayService:
                 errcode = response.get("errcode", 0)
                 if ret not in (0, None) or errcode not in (0, None):
                     if ret == SESSION_EXPIRED_ERRCODE or errcode == SESSION_EXPIRED_ERRCODE:
-                        LOGGER.error("[%s] Session expired; pausing for 10 minutes", self.service_key)
+                        LOGGER.error(
+                            "[%s] Session expired; pausing for 10 minutes",
+                            self.service_key,
+                        )
                         await asyncio.sleep(600)
                         consecutive_failures = 0
                         continue
@@ -600,7 +577,8 @@ class WeixinGatewayService:
                         MAX_CONSECUTIVE_FAILURES,
                     )
                     await asyncio.sleep(
-                        BACKOFF_DELAY_SECONDS if consecutive_failures >= MAX_CONSECUTIVE_FAILURES
+                        BACKOFF_DELAY_SECONDS
+                        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES
                         else RETRY_DELAY_SECONDS
                     )
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
@@ -627,8 +605,7 @@ class WeixinGatewayService:
                     exc,
                 )
                 await asyncio.sleep(
-                    BACKOFF_DELAY_SECONDS if consecutive_failures >= MAX_CONSECUTIVE_FAILURES
-                    else RETRY_DELAY_SECONDS
+                    BACKOFF_DELAY_SECONDS if consecutive_failures >= MAX_CONSECUTIVE_FAILURES else RETRY_DELAY_SECONDS
                 )
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                     consecutive_failures = 0
@@ -763,7 +740,12 @@ class WeixinGatewayService:
             if typing_ticket and self._typing_cache:
                 self._typing_cache.set(user_id, typing_ticket)
         except Exception as exc:
-            LOGGER.debug("[%s] getConfig failed for %s: %s", self.service_key, _safe_id(user_id), exc)
+            LOGGER.debug(
+                "[%s] getConfig failed for %s: %s",
+                self.service_key,
+                _safe_id(user_id),
+                exc,
+            )
 
     async def _send_ilink_message(self, outbound: GatewayOutboundMessage) -> None:
         """Send a reply via iLink sendmessage API."""
@@ -772,15 +754,9 @@ class WeixinGatewayService:
 
         content = _normalize_markdown_blocks(outbound.body)
         chat_id = outbound.conversation_id
-        context_token = (
-            self._token_store.get(self._resolved_account_id, chat_id)
-            if self._token_store
-            else None
-        )
+        context_token = self._token_store.get(self._resolved_account_id, chat_id) if self._token_store else None
 
-        chunks = _split_text_for_weixin_delivery(
-            content, MAX_MESSAGE_LENGTH, self._split_multiline_messages
-        )
+        chunks = _split_text_for_weixin_delivery(content, MAX_MESSAGE_LENGTH, self._split_multiline_messages)
         chunks = [c for c in chunks if c and c.strip()]
 
         for idx, chunk in enumerate(chunks):
@@ -802,32 +778,31 @@ class WeixinGatewayService:
                         ret = resp.get("ret")
                         errcode = resp.get("errcode")
                         if (ret is not None and ret not in (0,)) or (errcode is not None and errcode not in (0,)):
-                            is_session_expired = (
-                                ret == SESSION_EXPIRED_ERRCODE
-                                or errcode == SESSION_EXPIRED_ERRCODE
-                            )
+                            is_session_expired = ret == SESSION_EXPIRED_ERRCODE or errcode == SESSION_EXPIRED_ERRCODE
                             if is_session_expired and not retried_without_token and context_token:
                                 retried_without_token = True
                                 context_token = None
                                 if self._token_store:
                                     self._token_store._cache.pop(
-                                        self._token_store._key(self._resolved_account_id, chat_id), None
+                                        self._token_store._key(self._resolved_account_id, chat_id),
+                                        None,
                                     )
                                 LOGGER.warning(
                                     "[%s] session expired for %s; retrying without context_token",
-                                    self.service_key, _safe_id(chat_id),
+                                    self.service_key,
+                                    _safe_id(chat_id),
                                 )
                                 continue
                             errmsg = resp.get("errmsg") or resp.get("msg") or "unknown error"
-                            raise RuntimeError(
-                                f"iLink sendmessage error: ret={ret} errcode={errcode} errmsg={errmsg}"
-                            )
+                            raise RuntimeError(f"iLink sendmessage error: ret={ret} errcode={errcode} errmsg={errmsg}")
                     break
                 except Exception as exc:
                     if attempt >= 2:
                         LOGGER.error(
                             "[%s] send failed to=%s after 3 attempts: %s",
-                            self.service_key, _safe_id(chat_id), exc,
+                            self.service_key,
+                            _safe_id(chat_id),
+                            exc,
                         )
                         raise
                     await asyncio.sleep(1.0 * (attempt + 1))
@@ -894,10 +869,7 @@ class WeixinGatewayService:
                 # Only warn when we have weixin identities but cannot disambiguate — if
                 # there are zero weixin identities, the scheduler's fan-out simply asked
                 # the wrong adapter, which is expected noise.
-                any_weixin = any(
-                    r.key.adapter_id == WEIXIN_ADAPTER_ID
-                    for r in identity_store.list_records()
-                )
+                any_weixin = any(r.key.adapter_id == WEIXIN_ADAPTER_ID for r in identity_store.list_records())
                 if any_weixin:
                     LOGGER.warning(
                         "cron delivery: skipping job=%s — no job.elephant_id and multiple weixin herd",
@@ -957,7 +929,9 @@ def _outbound_queue_for_state_dir(state_dir: str) -> GatewayOutboundQueue:
     return GatewayOutboundQueue(path=default_outbound_queue_path(state_dir))
 
 
-def register_weixin_gateway_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
+def register_weixin_gateway_service(
+    registry: GatewayPluginRegistry,
+) -> GatewayPluginRegistry:
     from .weixin import WeixinGatewayService
 
     registry.register_service(

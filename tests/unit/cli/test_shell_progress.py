@@ -40,15 +40,19 @@ from packages.tools.runtime import ToolLifecycleEvent, ToolInvocation
 
 
 class ShellProgressTest(unittest.TestCase):
-    def _evidence_event(self, *, tool_id: str, action: str | None = None, evidence_id: str = "evidence-release") -> ToolLifecycleEvent:
+    def _evidence_event(
+        self,
+        *,
+        tool_id: str,
+        action: str | None = None,
+        evidence_id: str = "evidence-release",
+    ) -> ToolLifecycleEvent:
         invocation = ToolInvocation(
             invocation_id="invoke-evidence",
             tool_id=tool_id,
             session_id="session-test",
             arguments=(
-                {"evidence_id": evidence_id}
-                if action is None
-                else {"action": action, "evidence_id": evidence_id}
+                {"evidence_id": evidence_id} if action is None else {"action": action, "evidence_id": evidence_id}
             ),
             requested_at=datetime.now(timezone.utc),
             requester="test",
@@ -92,16 +96,28 @@ class ShellProgressTest(unittest.TestCase):
         )
 
         self.assertEqual(_tool_trace_label(event), "model")
-        self.assertEqual(_tool_trace_preview(event.invocation.arguments, tool_id="tool.personal_model.search"), "release notes")
+        self.assertEqual(
+            _tool_trace_preview(event.invocation.arguments, tool_id="tool.personal_model.search"),
+            "release notes",
+        )
 
-    def test_personal_model_update_requested_trace_uses_current_prepare_label(self) -> None:
+    def test_personal_model_update_requested_trace_uses_current_prepare_label(
+        self,
+    ) -> None:
         event = self._tool_event(
             tool_id="tool.personal_model.update",
-            arguments={"action": "remember", "lens": "rapport", "topic": "assistant.review.style"},
+            arguments={
+                "action": "remember",
+                "lens": "rapport",
+                "topic": "assistant.review.style",
+            },
             phase="requested",
         )
 
-        self.assertEqual(tool_trace_line(None, event), "┊ 🌱 Calling learn · remember assistant.review.style…")
+        self.assertEqual(
+            tool_trace_line(None, event),
+            "┊ 🌱 Calling learn · remember assistant.review.style…",
+        )
 
     def test_personal_model_search_requested_trace_uses_current_label(self) -> None:
         event = self._tool_event(
@@ -112,7 +128,17 @@ class ShellProgressTest(unittest.TestCase):
 
         self.assertEqual(_tool_trace_label(event), "model")
         self.assertEqual(tool_trace_line(None, event), "┊ 🐘 Calling model · notes…")
-        self.assertEqual(tool_event_progress_line(None, self._tool_event(tool_id="tool.personal_model.search", arguments={"query": "notes"}, phase="execution.started")), "┊ 🐘 model        notes")
+        self.assertEqual(
+            tool_event_progress_line(
+                None,
+                self._tool_event(
+                    tool_id="tool.personal_model.search",
+                    arguments={"query": "notes"},
+                    phase="execution.started",
+                ),
+            ),
+            "┊ 🐘 model        notes",
+        )
 
     def test_conversation_search_trace_uses_current_label(self) -> None:
         search = self._tool_event(
@@ -149,9 +175,15 @@ class ShellProgressTest(unittest.TestCase):
 
         self.assertEqual(tool_event_progress_line(None, event), "┊ 🧩 mcp.km.hot-articles Top KM")
 
-    def test_tool_event_tracker_keeps_short_lived_feed_for_fast_personal_model_events(self) -> None:
+    def test_tool_event_tracker_keeps_short_lived_feed_for_fast_personal_model_events(
+        self,
+    ) -> None:
         holder, lock, observer = tool_event_tracker()
-        requested = self._tool_event(tool_id="tool.personal_model.search", arguments={"query": "evidence-release"}, phase="requested")
+        requested = self._tool_event(
+            tool_id="tool.personal_model.search",
+            arguments={"query": "evidence-release"},
+            phase="requested",
+        )
         completed = ToolLifecycleEvent(
             event_id="event-evidence-complete",
             invocation=requested.invocation,
@@ -166,7 +198,9 @@ class ShellProgressTest(unittest.TestCase):
 
         self.assertEqual([event.event.phase for event in feed], ["requested", "execution.completed"])
 
-    def test_kernel_event_tracker_forwards_skill_disclosures_without_adding_fake_stage(self) -> None:
+    def test_kernel_event_tracker_forwards_skill_disclosures_without_adding_fake_stage(
+        self,
+    ) -> None:
         captured: list[dict[str, object]] = []
         holder, lock, observer = kernel_event_tracker(captured.append)
 
@@ -194,7 +228,9 @@ class ShellProgressTest(unittest.TestCase):
             ],
         )
 
-    def test_kernel_event_tracker_keeps_context_compaction_visible_after_usage_events(self) -> None:
+    def test_kernel_event_tracker_keeps_context_compaction_visible_after_usage_events(
+        self,
+    ) -> None:
         holder, lock, observer = kernel_event_tracker()
         observer(
             {
@@ -221,7 +257,9 @@ class ShellProgressTest(unittest.TestCase):
         self.assertTrue(any(stage["payload"]["stage"] == "context-compact" for stage in stages))
         self.assertTrue(any(stage["payload"]["stage"] == "context-usage" for stage in stages))
 
-    def test_kernel_event_tracker_keeps_state_focus_visible_after_compaction_and_usage_events(self) -> None:
+    def test_kernel_event_tracker_keeps_state_focus_visible_after_compaction_and_usage_events(
+        self,
+    ) -> None:
         holder, lock, observer = kernel_event_tracker()
         observer(
             {
@@ -302,7 +340,9 @@ class ShellProgressTest(unittest.TestCase):
 
         self.assertEqual(line, "┊ 🗺️ recall       no signal")
 
-    def test_usage_progress_line_shows_projection_while_provider_usage_is_pending(self) -> None:
+    def test_usage_progress_line_shows_projection_while_provider_usage_is_pending(
+        self,
+    ) -> None:
         line = turn_usage_progress_line(
             kernel_stage_events=(
                 {
@@ -315,7 +355,10 @@ class ShellProgressTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(line, "┊ 📈 request      provider running · sent est 16000/128000 · 12% · usage pending")
+        self.assertEqual(
+            line,
+            "┊ 📈 request      provider running · sent est 16000/128000 · 12% · usage pending",
+        )
 
     def test_terminal_progress_line_shows_shell_command(self) -> None:
         event = self._tool_event(
@@ -353,12 +396,19 @@ class ShellProgressTest(unittest.TestCase):
             phase="execution.started",
         )
 
-        self.assertEqual(tool_event_progress_line(None, event), "┊ 🐘 herd         run · reviewer: inspect the cron scheduler")
+        self.assertEqual(
+            tool_event_progress_line(None, event),
+            "┊ 🐘 herd         run · reviewer: inspect the cron scheduler",
+        )
 
     def test_sub_agents_progress_line_shows_start_action(self) -> None:
         event = self._tool_event(
             tool_id="tool.sub_agents",
-            arguments={"action": "start", "name": "reviewer", "task": "inspect the cron scheduler"},
+            arguments={
+                "action": "start",
+                "name": "reviewer",
+                "task": "inspect the cron scheduler",
+            },
             phase="execution.started",
         )
 
@@ -374,7 +424,10 @@ class ShellProgressTest(unittest.TestCase):
             phase="execution.started",
         )
 
-        self.assertEqual(tool_event_progress_line(None, event), "┊ 🐘 herd         status · subrun-abc123")
+        self.assertEqual(
+            tool_event_progress_line(None, event),
+            "┊ 🐘 herd         status · subrun-abc123",
+        )
 
     def test_sub_agents_progress_lines_expand_batch_tasks(self) -> None:
         event = self._tool_event(
@@ -442,7 +495,9 @@ class ShellProgressTest(unittest.TestCase):
         self.assertIn("80->12 messages", line)
         self.assertIn("scanner: 2 cached / 5 pending / 1 missed", line)
 
-    def test_context_progress_line_marks_projection_rewrite_when_tokens_do_not_shrink(self) -> None:
+    def test_context_progress_line_marks_projection_rewrite_when_tokens_do_not_shrink(
+        self,
+    ) -> None:
         line = loop_context_progress_line(
             kernel_stage_events=(
                 {
@@ -563,7 +618,11 @@ class ShellProgressTest(unittest.TestCase):
     def test_tool_trace_keeps_gap_after_wide_variation_emoji(self) -> None:
         cases = (
             ("tool.file.write", {"path": "notes.md"}, "✍️  write"),
-            ("tool.process.manage", {"action": "poll", "process_id": "proc_123"}, "🖥️  proc"),
+            (
+                "tool.process.manage",
+                {"action": "poll", "process_id": "proc_123"},
+                "🖥️  proc",
+            ),
             ("tool.code.execute", {"code": "print('ok')"}, "🛠️  code"),
         )
         for tool_id, arguments, expected in cases:
@@ -577,7 +636,10 @@ class ShellProgressTest(unittest.TestCase):
             fragments = render_tool_trace_fragments(line or "")
 
             self.assertIn(expected, line or "")
-            self.assertIn(expected.split("  ", 1)[0] + "  ", "".join(text for _style, text in fragments))
+            self.assertIn(
+                expected.split("  ", 1)[0] + "  ",
+                "".join(text for _style, text in fragments),
+            )
 
     def test_turn_phase_cycles_marker_frames(self) -> None:
         self.assertEqual(turn_phase(0)[0], "✧")
@@ -595,9 +657,7 @@ class ShellProgressTest(unittest.TestCase):
             def __init__(self) -> None:
                 self._pending_commands = []
                 self._rendered_entries = 0
-                self.transcript = [
-                    _Entry("\n".join(f"┊ 💻 line {index}" for index in range(20)))
-                ]
+                self.transcript = [_Entry("\n".join(f"┊ 💻 line {index}" for index in range(20)))]
 
         lines = live_tool_feed_lines(_ShellProbe())
 
@@ -606,7 +666,9 @@ class ShellProgressTest(unittest.TestCase):
         self.assertIn("┊ 💻 line 19", lines)
         self.assertFalse(any("earlier tool line(s) hidden" in line for line in lines))
 
-    def test_live_tool_feed_lines_collapses_consecutive_duplicate_trace_rows(self) -> None:
+    def test_live_tool_feed_lines_collapses_consecutive_duplicate_trace_rows(
+        self,
+    ) -> None:
         class _Entry:
             def __init__(self, body: str) -> None:
                 self.kind = "tooltrace"

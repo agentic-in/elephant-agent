@@ -9,6 +9,7 @@ from . import GatewayManagedService
 from .gateway_main_parser_state import *  # noqa: F401,F403
 from .gateway_main_runtime import *  # noqa: F401,F403
 
+
 def _mapping_payload(value: object) -> dict[str, object]:
     return dict(value) if isinstance(value, Mapping) else {}
 
@@ -25,6 +26,7 @@ def _render_feishu_account_line(account: Mapping[str, object], *, prefix: str = 
         parts.append(f"app_id={resolved_app_id}")
     return f"{prefix}: " + " · ".join(parts)
 
+
 def _selected_account_payloads(
     description: Mapping[str, object],
     *,
@@ -35,9 +37,7 @@ def _selected_account_payloads(
     if account_id is None:
         return accounts
     matched = tuple(
-        account
-        for account in accounts
-        if str(account.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID) == account_id
+        account for account in accounts if str(account.get("account_id") or DEFAULT_GATEWAY_ACCOUNT_ID) == account_id
     )
     if matched:
         return matched
@@ -50,7 +50,9 @@ def _next_steps(service) -> tuple[str, ...]:
     control = dict(description.get("control") or {})
     steps: list[str] = []
     if description.get("sdk_dependency_status") == "missing_optional_dependency":
-        steps.append("Elephant Agent will auto-install the Feishu SDK when you run `elephant gateway` or `elephant gateway feishu start`.")
+        steps.append(
+            "Elephant Agent will auto-install the Feishu SDK when you run `elephant gateway` or `elephant gateway feishu start`."
+        )
     if any(account.get("credentials_status") != "configured" for account in accounts if isinstance(account, dict)):
         env_vars: list[str] = []
         secret_reference_ids: list[str] = []
@@ -59,9 +61,7 @@ def _next_steps(service) -> tuple[str, ...]:
                 continue
             credential_env_vars = account.get("credential_env_vars")
             if isinstance(credential_env_vars, (list, tuple)):
-                env_vars.extend(
-                    value for value in credential_env_vars if isinstance(value, str) and value
-                )
+                env_vars.extend(value for value in credential_env_vars if isinstance(value, str) and value)
             else:
                 env_vars.extend(
                     value
@@ -73,9 +73,7 @@ def _next_steps(service) -> tuple[str, ...]:
                 )
             secret_refs = account.get("secret_reference_ids")
             if isinstance(secret_refs, (list, tuple)):
-                secret_reference_ids.extend(
-                    value for value in secret_refs if isinstance(value, str) and value
-                )
+                secret_reference_ids.extend(value for value in secret_refs if isinstance(value, str) and value)
         if env_vars:
             steps.append(
                 "Complete Feishu IM setup again with `elephant gateway` to store the App ID and App Secret locally, or export these advanced credential aliases manually: "
@@ -99,6 +97,7 @@ def _next_steps(service) -> tuple[str, ...]:
         steps.append("IM wiring looks healthy. Start it with `elephant gateway feishu start`. ")
     return tuple(steps)
 
+
 def _render_discord_account_line(account: Mapping[str, object], *, prefix: str = "discord_account") -> str:
     allow_guild_ids = tuple(account.get("allow_guild_ids") or ())
     allow_channel_ids = tuple(account.get("allow_channel_ids") or ())
@@ -116,6 +115,7 @@ def _render_discord_account_line(account: Mapping[str, object], *, prefix: str =
     if credentials_error:
         parts.append(f"error={credentials_error}")
     return f"{prefix}: " + " · ".join(parts)
+
 
 def _feishu_async_status_lines(
     description: Mapping[str, object],
@@ -142,6 +142,7 @@ def _feishu_async_status_lines(
         )
     return tuple(lines)
 
+
 def _discord_account_status_lines(
     description: Mapping[str, object],
     *,
@@ -165,12 +166,14 @@ def _discord_account_status_lines(
         + (", ".join(str(account_id) for account_id in disabled_account_ids if account_id) or "<none>"),
     )
 
+
 def _discord_portal_checklist() -> tuple[str, ...]:
     return (
         "Open Discord Developer Portal → OAuth2 → URL Generator and include the `bot` scope before inviting the app.",
         "Enable the Discord `MESSAGE_CONTENT` privileged intent for this bot before starting the gateway runtime.",
         "Grant these bot permissions in Discord: `View Channels` (`查看频道`), `Send Messages` (`发送消息`), `Send Messages in Threads` (`在子区内发送消息`), and `Read Message History` (`阅读消息历史记录`).",
     )
+
 
 def _discord_next_steps(service) -> tuple[str, ...]:
     description = service.describe()
@@ -208,9 +211,7 @@ def _discord_next_steps(service) -> tuple[str, ...]:
         steps.append(
             "Enable at least one Discord account for runtime starts by re-running `elephant gateway discord setup [account-id]` before starting the gateway runtime."
         )
-    steps.append(
-        "Review the Discord developer portal checklist below before starting the gateway runtime."
-    )
+    steps.append("Review the Discord developer portal checklist below before starting the gateway runtime.")
     if runtime_status == "running":
         if service_status == "degraded" and blocked_account_ids:
             steps.append(
@@ -223,10 +224,9 @@ def _discord_next_steps(service) -> tuple[str, ...]:
             "Discord wiring is partially ready. Start it with `elephant gateway discord start`; runnable enabled accounts will connect while blocked accounts are skipped."
         )
     elif service_status == "ready" and runnable_accounts > 0:
-        steps.append(
-            "Discord wiring looks healthy. Start it with `elephant gateway discord start`."
-        )
+        steps.append("Discord wiring looks healthy. Start it with `elephant gateway discord start`.")
     return tuple(steps)
+
 
 def _doctor_lines(service, args: Namespace) -> tuple[str, ...]:
     description = service.describe()
@@ -252,12 +252,12 @@ def _doctor_lines(service, args: Namespace) -> tuple[str, ...]:
         lines.append(f"control_runtime_error: {control['runtime_error']}")
     known_elephants = tuple(control.get("known_elephants") or ())
     lines.append(
-        "control_known_elephants: "
-        + (", ".join(str(elephant) for elephant in known_elephants if elephant) or "<none>")
+        "control_known_elephants: " + (", ".join(str(elephant) for elephant in known_elephants if elephant) or "<none>")
     )
     lines.append("next_steps:")
     lines.extend(f"- {step}" for step in _next_steps(service))
     return tuple(lines)
+
 
 def _discord_doctor_lines(service, args: Namespace) -> tuple[str, ...]:
     description = service.describe()
@@ -287,8 +287,7 @@ def _discord_doctor_lines(service, args: Namespace) -> tuple[str, ...]:
         lines.append(f"control_runtime_error: {control['runtime_error']}")
     known_elephants = tuple(control.get("known_elephants") or ())
     lines.append(
-        "control_known_elephants: "
-        + (", ".join(str(elephant) for elephant in known_elephants if elephant) or "<none>")
+        "control_known_elephants: " + (", ".join(str(elephant) for elephant in known_elephants if elephant) or "<none>")
     )
     for account in _selected_account_payloads(
         description,
@@ -317,10 +316,14 @@ def _dingding_next_steps(service) -> tuple[str, ...]:
     accounts = tuple(description.get("accounts") or ())
     steps: list[str] = []
     if description.get("sdk_dependency_status") == "missing_optional_dependency":
-        steps.append("Elephant Agent will auto-install DingDing support when you run `elephant gateway dingding start`.")
+        steps.append(
+            "Elephant Agent will auto-install DingDing support when you run `elephant gateway dingding start`."
+        )
     missing_credentials = [
-        account for account in accounts
-        if isinstance(account, dict) and account.get("enabled") is not False
+        account
+        for account in accounts
+        if isinstance(account, dict)
+        and account.get("enabled") is not False
         and account.get("credentials_status") != "configured"
     ]
     if missing_credentials:
@@ -376,7 +379,9 @@ def _weixin_next_steps(service) -> tuple[str, ...]:
     description = service.describe()
     steps: list[str] = []
     if description.get("sdk_dependency_status") == "missing_optional_dependency":
-        steps.append("Elephant Agent will auto-install WeChat (iLink) support when you run `elephant gateway weixin start`.")
+        steps.append(
+            "Elephant Agent will auto-install WeChat (iLink) support when you run `elephant gateway weixin start`."
+        )
     if not steps:
         steps.append("WeChat wiring looks healthy. Start it with `elephant gateway weixin start`.")
     return tuple(steps)
@@ -427,8 +432,10 @@ def _wecom_next_steps(service) -> tuple[str, ...]:
     if description.get("sdk_dependency_status") == "missing_optional_dependency":
         steps.append("Elephant Agent will auto-install WeCom support when you run `elephant gateway wecom start`.")
     missing_credentials = [
-        account for account in accounts
-        if isinstance(account, dict) and account.get("enabled") is not False
+        account
+        for account in accounts
+        if isinstance(account, dict)
+        and account.get("enabled") is not False
         and account.get("credentials_status") != "configured"
     ]
     if missing_credentials:
@@ -465,6 +472,7 @@ def _wecom_doctor_lines(service, args: Namespace) -> tuple[str, ...]:
     lines.append("next_steps:")
     lines.extend(f"- {step}" for step in _wecom_next_steps(service))
     return tuple(lines)
+
 
 def _doctor_service_lines(
     service_key: str,
@@ -513,14 +521,10 @@ def _doctor_service_lines(
             f"service[{service_key}].configured_transport_error: {description.get('configured_transport_error')}"
         )
     if description.get("sdk_dependency_status") is not None:
-        lines.append(
-            f"service[{service_key}].sdk_dependency_status: {description.get('sdk_dependency_status')}"
-        )
+        lines.append(f"service[{service_key}].sdk_dependency_status: {description.get('sdk_dependency_status')}")
     runtime = _mapping_payload(description.get("runtime"))
     if runtime:
-        lines.append(
-            f"service[{service_key}].runtime_status: {runtime.get('runtime_status') or '<unknown>'}"
-        )
+        lines.append(f"service[{service_key}].runtime_status: {runtime.get('runtime_status') or '<unknown>'}")
         if runtime.get("target") is not None:
             lines.append(f"service[{service_key}].runtime_target: {runtime.get('target')}")
     for account in tuple(description.get("accounts") or ()):
@@ -528,6 +532,7 @@ def _doctor_service_lines(
             continue
         lines.append(render_account_line(account))
     return tuple(lines)
+
 
 def _doctor_services_lines(app, services: Mapping[str, object], args: Namespace) -> tuple[str, ...]:
     lines = [
@@ -537,9 +542,7 @@ def _doctor_services_lines(app, services: Mapping[str, object], args: Namespace)
         "registered_services: " + (", ".join(services.keys()) or "<none>"),
     ]
     lines.extend(
-        line
-        for service_key, service in services.items()
-        for line in _doctor_service_lines(service_key, service)
+        line for service_key, service in services.items() for line in _doctor_service_lines(service_key, service)
     )
     if "feishu" in services:
         lines.append("next_steps:")
@@ -558,6 +561,7 @@ def _doctor_services_lines(app, services: Mapping[str, object], args: Namespace)
         lines.extend(f"- {step}" for step in _wecom_next_steps(services["wecom"]))
     return tuple(lines)
 
+
 def _service_runtime_status_summary(service: object, args: Namespace) -> tuple[str, str | None]:
     if not isinstance(service, GatewayManagedService):
         return "unavailable", "service is not a managed runtime"
@@ -570,4 +574,27 @@ def _service_runtime_status_summary(service: object, args: Namespace) -> tuple[s
         return "unavailable", str(exc)
 
 
-__all__ = ['_render_feishu_account_line', '_selected_account_payloads', '_next_steps', '_render_discord_account_line', '_feishu_async_status_lines', '_discord_account_status_lines', '_discord_portal_checklist', '_discord_next_steps', '_doctor_lines', '_discord_doctor_lines', '_render_dingding_account_line', '_dingding_next_steps', '_dingding_doctor_lines', '_render_weixin_account_line', '_weixin_next_steps', '_weixin_doctor_lines', '_render_wecom_account_line', '_wecom_next_steps', '_wecom_doctor_lines', '_doctor_service_lines', '_doctor_services_lines', '_service_runtime_status_summary']
+__all__ = [
+    "_render_feishu_account_line",
+    "_selected_account_payloads",
+    "_next_steps",
+    "_render_discord_account_line",
+    "_feishu_async_status_lines",
+    "_discord_account_status_lines",
+    "_discord_portal_checklist",
+    "_discord_next_steps",
+    "_doctor_lines",
+    "_discord_doctor_lines",
+    "_render_dingding_account_line",
+    "_dingding_next_steps",
+    "_dingding_doctor_lines",
+    "_render_weixin_account_line",
+    "_weixin_next_steps",
+    "_weixin_doctor_lines",
+    "_render_wecom_account_line",
+    "_wecom_next_steps",
+    "_wecom_doctor_lines",
+    "_doctor_service_lines",
+    "_doctor_services_lines",
+    "_service_runtime_status_summary",
+]

@@ -25,12 +25,24 @@ from packages.contracts.runtime import (
     PersonalModelRuntimeState,
 )
 from packages.cron import CronRuntime
-from packages.evidence import RecallRuntime, SemanticSummaryIndexer, build_semantic_index_bundle
-from packages.gateway_core import FileGatewayIdentityStore, GatewayOutboundQueue, default_outbound_queue_path
+from packages.evidence import (
+    RecallRuntime,
+    SemanticSummaryIndexer,
+    build_semantic_index_bundle,
+)
+from packages.gateway_core import (
+    FileGatewayIdentityStore,
+    GatewayOutboundQueue,
+    default_outbound_queue_path,
+)
 from packages.gateway_core.outbound_delivery import GatewayMessageDeliverySurface
 from packages.growth import GrowthUpdate
 from packages.kernel import KernelDependencies, KernelOutcome
-from packages.runtime_config import configured_external_skill_dirs, global_config_path_for_state_dir, load_global_config
+from packages.runtime_config import (
+    configured_external_skill_dirs,
+    global_config_path_for_state_dir,
+    load_global_config,
+)
 from packages.runtime_layout import (
     default_authored_skills_dir,
     default_builtin_skills_dir,
@@ -42,10 +54,21 @@ from packages.runtime_layout import (
     infer_install_root_from_state_dir,
 )
 from packages.security import SecurityPolicy
-from packages.skills import SkillHub, SkillPromptContextBuilder, SkillSearchHub, SkillRuntime, default_skill_hub_sources, sync_builtin_skill_shelf
+from packages.skills import (
+    SkillHub,
+    SkillPromptContextBuilder,
+    SkillSearchHub,
+    SkillRuntime,
+    default_skill_hub_sources,
+    sync_builtin_skill_shelf,
+)
 from packages.state import ProfileLoader
 from packages.storage import RuntimeStorageRepository
-from packages.tools import BuiltinToolDependencies, InMemorySessionTodoStore, ToolRuntime
+from packages.tools import (
+    BuiltinToolDependencies,
+    InMemorySessionTodoStore,
+    ToolRuntime,
+)
 from packages.tools.adapters import StructuredClarifySurface
 from packages.tools.browser_backend import create_playwright_browser_backend
 from packages.tools.surfaces import BrowserToolBackend, ClarifySurface
@@ -62,8 +85,6 @@ from .runtime_extensions import (
     build_skill_runtime,
     build_tool_runtime,
     load_extension_manifest,
-    load_json_file,
-    sanitize_extension_manifest_payload,
 )
 from .runtime_extensions_surface import CliRuntimeExtensionsMixin
 from .runtime_profile import CliRuntimeProfileMixin
@@ -77,7 +98,10 @@ from .runtime_snapshot import (
     write_snapshot as _write_runtime_snapshot,
 )
 from .runtime_support import *  # noqa: F401,F403
-from .runtime_support import _default_elephant_identity_file_text, _seed_elephant_identity_text
+from .runtime_support import (
+    _default_elephant_identity_file_text,
+    _seed_elephant_identity_text,
+)
 from .runtime_turns import (
     build_kernel_dependencies as _build_runtime_kernel_dependencies,
     create_elephant_session as _create_runtime_elephant_session,
@@ -89,8 +113,14 @@ from .runtime_turns import (
     start_episode as _start_runtime_session,
 )
 
+
 @dataclass(frozen=True, slots=True)
-class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExtensionsMixin, CliRuntimeRecordsMixin):
+class CliRuntime(
+    CliRuntimeProfileMixin,
+    CliRuntimeProviderMixin,
+    CliRuntimeExtensionsMixin,
+    CliRuntimeRecordsMixin,
+):
     paths: CliPaths
     repository: RuntimeStorageRepository
     profile_loader: ProfileLoader
@@ -141,9 +171,12 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
         profile_loader = ProfileLoader(home_dir)
         global_config_path = global_config_path_for_state_dir(state_dir)
         # Ensure config.yaml is always written so the file is visible
-        from packages.runtime_config import read_global_config_text
         if not global_config_path.exists():
-            from packages.runtime_config import write_global_config, default_global_config
+            from packages.runtime_config import (
+                write_global_config,
+                default_global_config,
+            )
+
             write_global_config(
                 global_config_path,
                 default_global_config(state_dir=state_dir),
@@ -153,6 +186,7 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             state_dir=state_dir,
         )
         from packages.observability import setup_from_config
+
         setup_from_config(global_config, state_dir=str(state_dir))
         active_provider_profile = load_provider_profile(state_dir, config_path=global_config_path)
         active_provider_profile_id = None
@@ -164,9 +198,14 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             capture_runtime_secret_env(paths.state_dir, active_provider_profile)
         # Load extension manifest from config.yaml
         from packages.runtime_config import load_extensions_from_config
+
         config_extensions = load_extensions_from_config(global_config)
         extension_manifest = load_extension_manifest(config_extensions, profile_dir=home_dir)
-        cron_runtime = CronRuntime(paths.cron_jobs_path, output_dir=paths.cron_output_dir, lock_path=paths.cron_lock_path)
+        cron_runtime = CronRuntime(
+            paths.cron_jobs_path,
+            output_dir=paths.cron_output_dir,
+            lock_path=paths.cron_lock_path,
+        )
         skill_hub = SkillHub(
             sources=default_skill_hub_sources(
                 external_dirs=configured_external_skill_dirs(global_config),

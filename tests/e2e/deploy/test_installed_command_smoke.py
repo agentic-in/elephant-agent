@@ -26,9 +26,7 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
         self.base_url = (os.environ.get("ELEPHANT_LIVE_PROVIDER_BASE_URL") or "").strip()
         self.model_id = (os.environ.get("ELEPHANT_LIVE_PROVIDER_MODEL") or "").strip()
         self.api_key = os.environ.get("ELEPHANT_LIVE_PROVIDER_API_KEY") or ""
-        self.provider_id = (
-            os.environ.get("ELEPHANT_LIVE_PROVIDER_PROVIDER_ID") or "openai-compatible"
-        ).strip()
+        self.provider_id = (os.environ.get("ELEPHANT_LIVE_PROVIDER_PROVIDER_ID") or "openai-compatible").strip()
         if not self.base_url or not self.model_id or not self.api_key:
             self.skipTest(
                 "installed command smoke requires ELEPHANT_LIVE_PROVIDER_BASE_URL, "
@@ -47,15 +45,12 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
             self.model_id.startswith("tke/"),
             "installed command smoke keeps the release workflow model-id prefix contract",
         )
-        self.require_dashboard = os.environ.get(
-            "ELEPHANT_LIVE_INSTALLED_SMOKE_REQUIRE_DASHBOARD"
-        ) == "1"
+        self.require_dashboard = os.environ.get("ELEPHANT_LIVE_INSTALLED_SMOKE_REQUIRE_DASHBOARD") == "1"
         self.dashboard_index = ROOT / "apps" / "dashboard" / "dist" / "index.html"
         if self.require_dashboard:
             self.assertTrue(
                 self.dashboard_index.exists(),
-                "dashboard assets are required for the installed command smoke; "
-                "run make dashboard-build first",
+                "dashboard assets are required for the installed command smoke; run make dashboard-build first",
             )
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
@@ -172,9 +167,7 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
                 if not prompt_sent and time.monotonic() - start > 4:
                     os.write(
                         master_fd,
-                        "请只回复 ELEPHANT_SMOKE_OK，用于 installed TUI smoke 测试。\n".encode(
-                            "utf-8"
-                        ),
+                        "请只回复 ELEPHANT_SMOKE_OK，用于 installed TUI smoke 测试。\n".encode("utf-8"),
                     )
                     prompt_sent = True
                 if b"ELEPHANT_SMOKE_OK" in output and not exit_sent:
@@ -202,7 +195,17 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
         self.assertTrue(self._elephant_bin().exists())
 
         help_output = self._run_elephant("--help")
-        for command_name in ("init", "status", "provider", "herd", "wake", "skills", "gateway", "cron", "dashboard"):
+        for command_name in (
+            "init",
+            "status",
+            "provider",
+            "herd",
+            "wake",
+            "skills",
+            "gateway",
+            "cron",
+            "dashboard",
+        ):
             with self.subTest(command_name=command_name):
                 self.assertIn(command_name, help_output.stdout)
         self.assertNotIn("chat", help_output.stdout)

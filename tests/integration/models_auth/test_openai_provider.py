@@ -17,7 +17,11 @@ OPENAI = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = OPENAI
 SPEC.loader.exec_module(OPENAI)
 
-from packages.auth import InMemorySecretStore, ProfileCredentialResolver, SecretReference
+from packages.auth import (
+    InMemorySecretStore,
+    ProfileCredentialResolver,
+    SecretReference,
+)
 
 
 class OpenAIProviderAdapterTests(unittest.TestCase):

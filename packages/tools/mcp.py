@@ -11,7 +11,14 @@ from typing import Any
 
 from packages.contracts.runtime import ExecutionResult
 
-from .runtime import ToolAvailability, ToolDefinition, ToolHandler, ToolInvocation, ToolRuntime, ToolSideEffectMetadata
+from .runtime import (
+    ToolAvailability,
+    ToolDefinition,
+    ToolHandler,
+    ToolInvocation,
+    ToolRuntime,
+    ToolSideEffectMetadata,
+)
 
 _MCP_TOOL_VERSION = "1.0.0"
 _MCP_TOOL_KIND = "custom-mcp"
@@ -33,11 +40,7 @@ def sync_custom_mcp_tools(
     for definition, handler in custom_mcp_runtime_entries(config_path=config_path, config=config, cwd=cwd):
         desired[definition.tool_id] = (definition, handler)
 
-    existing_custom_ids = {
-        tool.tool_id
-        for tool in runtime.list_tools()
-        if _is_custom_mcp_tool(tool)
-    }
+    existing_custom_ids = {tool.tool_id for tool in runtime.list_tools() if _is_custom_mcp_tool(tool)}
     for stale_tool_id in sorted(existing_custom_ids - set(desired)):
         runtime.unregister_tool(stale_tool_id)
     for tool_id, (definition, handler) in desired.items():
@@ -56,7 +59,12 @@ def custom_mcp_runtime_entries(
     overrides = _mapping_rows(config.get("mcp_overrides"))
     entries: list[tuple[ToolDefinition, ToolHandler]] = []
     for server_id, server in sorted(_mapping_rows(config.get("mcp_servers")).items()):
-        transport = str(server.get("transport") or ("http" if str(server.get("url") or "").strip() else "stdio")).strip().lower() or "stdio"
+        transport = (
+            str(server.get("transport") or ("http" if str(server.get("url") or "").strip() else "stdio"))
+            .strip()
+            .lower()
+            or "stdio"
+        )
         label = str(server.get("label") or server_id).strip() or server_id
         command = str(server.get("command") or "").strip()
         url = str(server.get("url") or "").strip()
@@ -221,9 +229,7 @@ def _build_mcp_tool_handler(
                 execution_id=invocation.invocation_id,
                 episode_id=invocation.session_id,
                 outcome="failed",
-                summary=(
-                    f"MCP tool {server_id}.{tool_name} timed out after {_MCP_CALL_TIMEOUT_MS}ms"
-                ),
+                summary=(f"MCP tool {server_id}.{tool_name} timed out after {_MCP_CALL_TIMEOUT_MS}ms"),
                 side_effects=("mcp", f"server={server_id}", f"transport={transport}"),
             )
         except OSError as exc:

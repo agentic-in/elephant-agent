@@ -250,6 +250,7 @@ def _timer_is_ripe(
 
 def _replace(loop: LoopState, **updates) -> LoopState:
     from dataclasses import replace as dc_replace
+
     return dc_replace(loop, **updates)
 
 

@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID, GatewayExchange, GatewayInboundMessage
+from packages.gateway_core import (
+    DEFAULT_GATEWAY_ACCOUNT_ID,
+    GatewayExchange,
+    GatewayInboundMessage,
+)
 
 from ..plugins import GatewayAdapterDescriptor, GatewayServicePluginRegistration
 from ..runtime_app import GatewayApp
@@ -55,9 +59,7 @@ class TelegramMessagingAdapter:
                     update_kind = "callback_query"
                     if callback_query.get("data") is not None:
                         callback_data = str(callback_query["data"])
-                    if not isinstance(message.get("from"), Mapping) and isinstance(
-                        callback_query.get("from"), Mapping
-                    ):
+                    if not isinstance(message.get("from"), Mapping) and isinstance(callback_query.get("from"), Mapping):
                         message = {
                             **message,
                             "from": callback_query["from"],
@@ -73,11 +75,7 @@ class TelegramMessagingAdapter:
         thread_id = message.get("message_thread_id")
         normalized_chat_type = _normalized_chat_type(chat_type)
         attachment_refs = _attachment_refs(_telegram_attachment_ids(message))
-        message_id = (
-            str(message["message_id"])
-            if message.get("message_id") is not None
-            else None
-        )
+        message_id = str(message["message_id"]) if message.get("message_id") is not None else None
         metadata = {
             "channel": "telegram",
             "chat_type": chat_type,
@@ -91,9 +89,7 @@ class TelegramMessagingAdapter:
         if thread_id is not None:
             metadata["message_thread_id"] = str(thread_id)
         if message.get("reply_to_message") is not None:
-            metadata["reply_to_message_id"] = str(
-                dict(message["reply_to_message"]).get("message_id") or ""
-            )
+            metadata["reply_to_message_id"] = str(dict(message["reply_to_message"]).get("message_id") or "")
         if callback_data is not None:
             metadata["callback_data"] = callback_data
         target_trusted_default, consent_default, external_default = _telegram_delivery_defaults(chat_type)
@@ -115,22 +111,14 @@ class TelegramMessagingAdapter:
             sender=_sender_ref(
                 str(sender["id"]),
                 display_name=_telegram_display_name(sender),
-                username=(
-                    f"@{str(sender['username'])}"
-                    if sender.get("username") is not None
-                    else None
-                ),
+                username=(f"@{str(sender['username'])}" if sender.get("username") is not None else None),
                 is_bot=bool(sender.get("is_bot", False)),
             ),
             body=str(message.get("text") or message.get("caption") or callback_data or "telegram-event"),
-            reply_to_message_id=(
-                str(metadata.get("reply_to_message_id") or message_id or "") or None
-            ),
+            reply_to_message_id=(str(metadata.get("reply_to_message_id") or message_id or "") or None),
             attachment_refs=attachment_refs,
             policy_hint=_policy_hint(
-                target_trusted_default=(
-                    target_trusted_default if target_trusted is None else target_trusted
-                ),
+                target_trusted_default=(target_trusted_default if target_trusted is None else target_trusted),
                 consent_default=consent_default if consent_given is None else consent_given,
                 is_external_default=external_default if is_external is None else is_external,
                 audience_scope=normalized_chat_type,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -50,7 +50,10 @@ from packages.state import (
 if TYPE_CHECKING:
     from apps.cli.runtime import CliRuntime
 
-from .runtime_growth_metrics import active_personal_model_facts_for_growth, personal_model_growth_metrics
+from .runtime_growth_metrics import (
+    active_personal_model_facts_for_growth,
+    personal_model_growth_metrics,
+)
 from .runtime_support import _resolved_session_skills
 
 
@@ -82,7 +85,9 @@ def restore_snapshot_state_focus(
     payload = snapshot.get("state_focus")
     if not isinstance(payload, Mapping):
         return None
-    reasons = tuple(_restore_state_focus_reason(reason) for reason in payload.get("reasons", ()) if isinstance(reason, Mapping))
+    reasons = tuple(
+        _restore_state_focus_reason(reason) for reason in payload.get("reasons", ()) if isinstance(reason, Mapping)
+    )
     candidate_scores = tuple(
         _restore_state_focus_candidate_score(score)
         for score in payload.get("candidate_scores", ())
@@ -229,11 +234,7 @@ def _growth_state_predates_profile_sessions(
     if growth_timestamp is None:
         return False
     episodes = runtime.repository.list_episodes()
-    started_at_values = [
-        episode.started_at
-        for episode in episodes
-        if episode.personal_model_id == profile_id
-    ]
+    started_at_values = [episode.started_at for episode in episodes if episode.personal_model_id == profile_id]
     if not started_at_values:
         return False
     first_started_at = min(started_at_values)
@@ -270,7 +271,9 @@ def _build_growth_turn_signals(
         work_item_status=None,
         work_item_priority=None,
         progression_action="",
-        resume_signal="continue" if any(step.action == "resume" and step.status == "completed" for step in outcome.steps) else "none",
+        resume_signal="continue"
+        if any(step.action == "resume" and step.status == "completed" for step in outcome.steps)
+        else "none",
         continuity_mode="background" if session.interruption_state else "foreground",
         execution_outcome=outcome.execution.outcome,
         experience_status=experience.status if experience is not None else None,
@@ -308,9 +311,7 @@ def _promoted_procedure_delta(
     if not procedures:
         return 0, ()
     promoted = tuple(
-        procedure.procedure_id
-        for procedure in procedures
-        if procedure.status in {"active", "promoted", "verified"}
+        procedure.procedure_id for procedure in procedures if procedure.status in {"active", "promoted", "verified"}
     )
     already_recorded = current.promoted_experiences if current is not None else 0
     delta = max(0, len(promoted) - already_recorded)
@@ -407,9 +408,20 @@ def _next_session_context_epoch(
 ) -> SessionContextEpoch:
     disclosures = _skill_disclosure_records(runtime, context=context)
     frozen_skill_index = _frozen_session_skill_index(runtime, profile=profile, session=session)
-    can_refresh_episode_open = existing is not None and existing.frozen and event is None and execution is None and not existing.history_messages
+    can_refresh_episode_open = (
+        existing is not None
+        and existing.frozen
+        and event is None
+        and execution is None
+        and not existing.history_messages
+    )
     if context is None and (existing is None or not existing.frozen or can_refresh_episode_open):
-        context = _episode_open_frozen_context(runtime, profile=profile, session=session, frozen_skill_index=frozen_skill_index)
+        context = _episode_open_frozen_context(
+            runtime,
+            profile=profile,
+            session=session,
+            frozen_skill_index=frozen_skill_index,
+        )
     is_user_turn = event is not None and _snapshot_event_is_user_turn(event.event_type, event.source)
     fallback_history = session_history_messages(
         event=event,
@@ -460,7 +472,10 @@ def _episode_open_frozen_context(
         runtime_path_lines = _episode_open_runtime_path_lines(runtime, session=session)
         runtime_context = ContextRuntime(
             instruction_refs=stable_prefix_lines + skill_lines + runtime_path_lines,
-            total_tokens=max(1024, int(getattr(runtime, "active_provider_context_window", lambda: 0)() or 0)),
+            total_tokens=max(
+                1024,
+                int(getattr(runtime, "active_provider_context_window", lambda: 0)() or 0),
+            ),
         )
         assembled = runtime_context.assemble_detailed(
             session,
@@ -499,7 +514,9 @@ def _episode_open_frozen_context(
         return None
 
 
-def _frozen_skill_shelf_prompt_lines(frozen_skill_index: tuple[FrozenSkillIndexEntry, ...]) -> tuple[str, ...]:
+def _frozen_skill_shelf_prompt_lines(
+    frozen_skill_index: tuple[FrozenSkillIndexEntry, ...],
+) -> tuple[str, ...]:
     if not frozen_skill_index:
         return ()
     lines = [
@@ -634,7 +651,9 @@ def _skill_index_id(skill_id: str) -> str:
     return "_".join(part for part in cleaned.split("_") if part)
 
 
-def _skill_affinity_rows(runtime: CliRuntime, *, personal_model_id: str) -> tuple[tuple[float, str, dict[str, str], str], ...]:
+def _skill_affinity_rows(
+    runtime: CliRuntime, *, personal_model_id: str
+) -> tuple[tuple[float, str, dict[str, str], str], ...]:
     list_facts = getattr(runtime.repository, "list_personal_model_facts", None)
     if not callable(list_facts):
         return ()
@@ -670,10 +689,7 @@ def _frozen_session_skill_ids(
     profile: PersonalModelRuntimeState,
     session: Episode,
 ) -> tuple[str, ...]:
-    return tuple(
-        entry.skill_id
-        for entry in _frozen_session_skill_index(runtime, profile=profile, session=session)
-    )
+    return tuple(entry.skill_id for entry in _frozen_session_skill_index(runtime, profile=profile, session=session))
 
 
 def _frozen_session_tool_count(runtime: CliRuntime) -> int:
@@ -711,9 +727,7 @@ def _skill_disclosure_records(
     for skill_id in dict.fromkeys(disclosed_skill_ids):
         definition = runtime.skill_runtime.describe(skill_id)
         display_name = (
-            definition.display_name.strip()
-            if definition is not None and definition.display_name.strip()
-            else skill_id
+            definition.display_name.strip() if definition is not None and definition.display_name.strip() else skill_id
         )
         records.append(
             SkillDisclosureRecord(
@@ -726,9 +740,7 @@ def _skill_disclosure_records(
 
 
 def _skill_disclosure_reason(*, skill_id: str, display_name: str) -> str:
-    return (
-        f"{display_name} ({skill_id}) was disclosed because the runtime recorded an explicit skill overlay."
-    )
+    return f"{display_name} ({skill_id}) was disclosed because the runtime recorded an explicit skill overlay."
 
 
 def _profile_payload(profile: PersonalModelRuntimeState, *, elephant_identity_text: str | None) -> dict[str, Any]:
@@ -817,7 +829,9 @@ def _execution_payload(execution: ExecutionResult | None) -> dict[str, Any] | No
     }
 
 
-def _state_focus_payload(state_focus: StateFocusDecision | None) -> dict[str, Any] | None:
+def _state_focus_payload(
+    state_focus: StateFocusDecision | None,
+) -> dict[str, Any] | None:
     if state_focus is None:
         return None
     return {
@@ -851,7 +865,9 @@ def _state_focus_reason_payload(reason: StateFocusReason) -> dict[str, Any]:
     }
 
 
-def _state_focus_candidate_score_payload(score: StateFocusCandidateScore) -> dict[str, Any]:
+def _state_focus_candidate_score_payload(
+    score: StateFocusCandidateScore,
+) -> dict[str, Any]:
     return {
         "candidate_id": score.candidate_id,
         "kind": score.kind,
@@ -880,7 +896,9 @@ def _restore_state_focus_reason(payload: Mapping[str, Any]) -> StateFocusReason:
     )
 
 
-def _restore_state_focus_candidate_score(payload: Mapping[str, Any]) -> StateFocusCandidateScore:
+def _restore_state_focus_candidate_score(
+    payload: Mapping[str, Any],
+) -> StateFocusCandidateScore:
     return StateFocusCandidateScore(
         candidate_id=str(payload.get("candidate_id") or "").strip(),
         kind=str(payload.get("kind") or "").strip(),
@@ -889,14 +907,9 @@ def _restore_state_focus_candidate_score(payload: Mapping[str, Any]) -> StateFoc
         heuristics_score=float(payload.get("heuristics_score") or 0.0),
         embedding_score=float(payload.get("embedding_score") or 0.0),
         reasons=tuple(
-            _restore_state_focus_reason(reason)
-            for reason in payload.get("reasons", ())
-            if isinstance(reason, Mapping)
+            _restore_state_focus_reason(reason) for reason in payload.get("reasons", ()) if isinstance(reason, Mapping)
         ),
-        metadata={
-            str(key): str(value)
-            for key, value in dict(payload.get("metadata") or {}).items()
-        },
+        metadata={str(key): str(value) for key, value in dict(payload.get("metadata") or {}).items()},
     )
 
 

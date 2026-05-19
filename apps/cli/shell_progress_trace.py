@@ -2,29 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import os
 import re
-import threading
 from typing import TYPE_CHECKING
 
-from packages.kernel.runtime import KernelOutcome
 from packages.models.reasoning_parser import split_reasoning_and_content
 from packages.tools import ToolLifecycleEvent
 
 from .shell_stack import (
-    Application,
-    Condition,
-    ConditionalContainer,
-    FormattedText,
-    FormattedTextControl,
-    Group,
-    Layout,
-    Live,
     Panel,
     RICH_AVAILABLE,
     Text,
-    Window,
 )
 from .shell_ui import (
     BRAND_ACCENT,
@@ -32,12 +19,6 @@ from .shell_ui import (
     BRAND_DARK,
     BRAND_LIGHT,
     BRAND_MUTED,
-    LIVE_DIFF_ADD_FG,
-    LIVE_DIFF_CONTEXT_FG,
-    LIVE_DIFF_FILE_FG,
-    LIVE_DIFF_HUNK_FG,
-    LIVE_DIFF_REMOVE_FG,
-    QUEUE_PREVIEW_INSET,
     compact_line,
     strip_markdown_bold,
 )
@@ -72,16 +53,14 @@ from .shell_progress_support import (
     _ToolTraceDisplayParts,
     _VisibleToolEvent,
     live_tool_feed_lines,
-    pending_tool_display_lines,
-    summarize_progress_prompt,
     recall_progress_line,
     loop_context_progress_line,
     turn_state_focus_progress_line,
     turn_marker,
     turn_phase,
     turn_title,
-    turn_tool_progress_lines,
 )
+
 
 def render_turn_frame(
     shell: ProductizedShell,
@@ -122,7 +101,9 @@ def render_turn_frame(
     progress_body.append(marker, style=BRAND_MUTED)
     progress_body.append(f" {phase_detail}", style=BRAND_LIGHT)
     progress_body.append("\n")
-    progress_body.append_text(render_live_tool_line_text(turn_state_focus_progress_line(kernel_stage_events=kernel_stage_events)))
+    progress_body.append_text(
+        render_live_tool_line_text(turn_state_focus_progress_line(kernel_stage_events=kernel_stage_events))
+    )
     context_line = loop_context_progress_line(kernel_stage_events=kernel_stage_events)
     if _is_compaction_context_line(context_line):
         progress_body.append("\n")
@@ -131,11 +112,12 @@ def render_turn_frame(
     if recall_line:
         progress_body.append("\n")
         progress_body.append_text(render_live_tool_line_text(recall_line))
-    
+
     # Render tool lines with stream text anchored to the matching tool event when
     # possible, while preserving the full merged tool rail from transcript + live events.
     if tool_event_holder is not None and tool_event_lock is not None:
         from .shell_progress_runtime import stream_anchor_events, visible_tool_events
+
         visible_events = visible_tool_events(tool_event_holder, tool_event_lock)
         stable_stream_anchors = stream_anchor_events(tool_event_holder, tool_event_lock)
         previous_stream_was_reasoning_only = False
@@ -161,7 +143,7 @@ def render_turn_frame(
         for live_index, live_line in enumerate(live_lines):
             progress_body.append("\n\n" if live_index == 0 and stream_has_reasoning_only else "\n")
             progress_body.append_text(render_live_tool_line_text(live_line))
-    
+
     progress_panel = Panel(
         progress_body,
         title=f"[bold {BRAND_ACCENT}]{title_glyph} {title_copy}[/bold {BRAND_ACCENT}]",
@@ -169,6 +151,7 @@ def render_turn_frame(
         padding=(0, 1),
     )
     return progress_panel
+
 
 def render_tool_frame(
     shell: ProductizedShell,
@@ -203,6 +186,7 @@ def render_tool_frame(
         padding=(0, 1),
     )
 
+
 def tool_frame_phases(
     shell: ProductizedShell,
     tool_id: str,
@@ -214,6 +198,7 @@ def tool_frame_phases(
         ("tool.execute", "Working inside this Episode"),
         ("tool.report", "Adding the result to the Step trail"),
     )
+
 
 def tool_trace_line(
     shell: ProductizedShell,
@@ -249,6 +234,7 @@ def tool_trace_line(
         return f"┊ {marker}{label:<12} {preview}{duration_part}"
     return f"┊ {marker}{label}{duration_part}"
 
+
 def tool_event_progress_line(
     shell: ProductizedShell,
     tool_event: ToolLifecycleEvent | None,
@@ -264,6 +250,7 @@ def tool_event_progress_line(
             return f"┊ {marker}{label:<12} {preview}"
         return f"┊ {marker}{label}"
     return tool_trace_line(shell, tool_event)
+
 
 def tool_event_progress_lines(
     shell: ProductizedShell,
@@ -283,6 +270,7 @@ def tool_event_progress_lines(
             seen.add(key)
             lines.append(line)
     return tuple(lines)
+
 
 def anchored_tool_progress_items(
     shell: ProductizedShell,
@@ -338,12 +326,13 @@ def anchored_tool_progress_items(
 
     items: list[tuple[str, str]] = []
     for index, line in enumerate(tool_lines):
-        for response_text in insertions.get(index, ()): 
+        for response_text in insertions.get(index, ()):
             items.append(("stream", response_text))
         items.append(("line", line))
-    for response_text in insertions.get(len(tool_lines), ()): 
+    for response_text in insertions.get(len(tool_lines), ()):
         items.append(("stream", response_text))
     return tuple(items)
+
 
 def _tool_event_progress_lines_for_event(
     shell: ProductizedShell,
@@ -355,6 +344,7 @@ def _tool_event_progress_lines_for_event(
             return expanded
     line = tool_event_progress_line(shell, event)
     return () if line is None else (line,)
+
 
 def tool_event_lines(
     shell: ProductizedShell,
@@ -381,6 +371,7 @@ def tool_event_lines(
         details.append(f"outcome: {tool_event.execution.outcome}")
     return (title, " · ".join(part for part in details if part))
 
+
 def tool_event_summary(shell: ProductizedShell, tool_event: ToolLifecycleEvent | None) -> str | None:
     if tool_event is None:
         return None
@@ -390,13 +381,19 @@ def tool_event_summary(shell: ProductizedShell, tool_event: ToolLifecycleEvent |
     title, _ = tool_event_lines(shell, tool_event)
     return title
 
+
 def render_tool_trace_fragments(line: str, *, leading_newline: bool = False) -> list[tuple[str, str]]:
     parts = _tool_trace_display_parts(line)
     if _is_state_focus_trace_line(line):
         fragments: list[tuple[str, str]] = []
         if leading_newline:
             fragments.append(("", "\n"))
-        for text in (parts.rail, f"{parts.emoji} " if parts.emoji else "", parts.prefix, parts.label):
+        for text in (
+            parts.rail,
+            f"{parts.emoji} " if parts.emoji else "",
+            parts.prefix,
+            parts.label,
+        ):
             if text:
                 fragments.append(("class:progress-state-focus", text))
         if parts.body:
@@ -428,11 +425,17 @@ def render_tool_trace_fragments(line: str, *, leading_newline: bool = False) -> 
         fragments.append(("class:progress-tool-duration", parts.duration))
     return fragments
 
+
 def render_tool_trace_text(line: str) -> Text:
     parts = _tool_trace_display_parts(line)
     if _is_state_focus_trace_line(line):
         block = Text()
-        for text in (parts.rail, f"{parts.emoji} " if parts.emoji else "", parts.prefix, parts.label):
+        for text in (
+            parts.rail,
+            f"{parts.emoji} " if parts.emoji else "",
+            parts.prefix,
+            parts.label,
+        ):
             if text:
                 block.append(text, style=BRAND_ACCENT_STRONG)
         if parts.body:
@@ -462,6 +465,7 @@ def render_tool_trace_text(line: str) -> Text:
         block.append(parts.duration, style=BRAND_MUTED)
     return block
 
+
 def _is_state_focus_trace_line(line: str) -> bool:
     normalized = strip_markdown_bold(line)
     return (
@@ -470,10 +474,10 @@ def _is_state_focus_trace_line(line: str) -> bool:
         or normalized.startswith("┊ 🧭 routing")
     )
 
+
 def _is_compaction_context_line(line: str) -> bool:
-    return line.startswith("┊ 🧩 context") and (
-        "projection" in line or "compressing" in line
-    )
+    return line.startswith("┊ 🧩 context") and ("projection" in line or "compressing" in line)
+
 
 def _tool_trace_display_parts(line: str) -> _ToolTraceDisplayParts:
     body = strip_markdown_bold(line).rstrip("\n")
@@ -483,7 +487,16 @@ def _tool_trace_display_parts(line: str) -> _ToolTraceDisplayParts:
         body = body[2:]
     emoji_match = re.match(r"(?P<emoji>\S+)(?P<separator>\s+)(?P<remainder>.*)$", body)
     if emoji_match is None:
-        return _ToolTraceDisplayParts(rail="", emoji="", prefix="", label=body, gap="", body="", duration_gap="", duration="")
+        return _ToolTraceDisplayParts(
+            rail="",
+            emoji="",
+            prefix="",
+            label=body,
+            gap="",
+            body="",
+            duration_gap="",
+            duration="",
+        )
     emoji = emoji_match.group("emoji")
     remainder = emoji_match.group("remainder").lstrip()
 
@@ -520,6 +533,7 @@ def _tool_trace_display_parts(line: str) -> _ToolTraceDisplayParts:
         duration=duration,
     )
 
+
 def _tool_trace_state(line: str) -> str:
     normalized = strip_markdown_bold(line).rstrip("\n")
     parts = _tool_trace_display_parts(normalized)
@@ -532,6 +546,7 @@ def _tool_trace_state(line: str) -> str:
     if parts.body and not parts.duration:
         return "active"
     return "done"
+
 
 def _tool_trace_emoji(tool_id: str, arguments=None) -> str:
     if tool_id.startswith("mcp."):
@@ -568,10 +583,12 @@ def _tool_trace_emoji(tool_id: str, arguments=None) -> str:
         return "🌐"
     return "🧩"
 
+
 def _tool_trace_emoji_marker(emoji: str) -> str:
     if emoji in {"✍️", "🖥️", "🛠️"}:
         return f"{emoji}  "
     return f"{emoji} "
+
 
 def _tool_trace_label(tool_event: ToolLifecycleEvent) -> str:
     tool_id = tool_event.invocation.tool_id
@@ -603,6 +620,7 @@ def _tool_trace_label(tool_event: ToolLifecycleEvent) -> str:
         return tool_id.removeprefix("tool.browser.")
     return aliases.get(tool_id, tool_id.removeprefix("tool."))
 
+
 def _personal_model_trace_preview(arguments, *, tool_id: str | None = None) -> str:
     action = str(arguments.get("action") or "").strip().lower()
     topic = str(arguments.get("topic") or "").strip()
@@ -620,14 +638,23 @@ def _personal_model_trace_preview(arguments, *, tool_id: str | None = None) -> s
         "tool.personal_model.questions": "ask",
     }
     fallback = fallback_by_tool.get(tool_id, "model")
-    return compact_line(" ".join(item for item in (action, target) if item).strip() or fallback, limit=64)
+    return compact_line(
+        " ".join(item for item in (action, target) if item).strip() or fallback,
+        limit=64,
+    )
+
 
 def _tool_trace_preview(arguments, *, tool_id: str | None = None) -> str:
     if tool_id == "tool.sub_agents":
         preview = _sub_agents_trace_preview(arguments)
         if preview:
             return preview
-    if tool_id in {"tool.personal_model.search", "tool.conversation.search", "tool.personal_model.update", "tool.personal_model.questions"}:
+    if tool_id in {
+        "tool.personal_model.search",
+        "tool.conversation.search",
+        "tool.personal_model.update",
+        "tool.personal_model.questions",
+    }:
         preview = _personal_model_trace_preview(arguments, tool_id=tool_id)
         if preview:
             return preview
@@ -672,7 +699,11 @@ def _tool_trace_preview(arguments, *, tool_id: str | None = None) -> str:
             continue
         text = str(value).strip()
         if text:
-            if key in {"path", "file_path", "filePath"} and isinstance(tool_id, str) and tool_id.startswith("tool.file."):
+            if (
+                key in {"path", "file_path", "filePath"}
+                and isinstance(tool_id, str)
+                and tool_id.startswith("tool.file.")
+            ):
                 import os as _os
 
                 try:
@@ -687,6 +718,7 @@ def _tool_trace_preview(arguments, *, tool_id: str | None = None) -> str:
     if action in {"list", "ls"}:
         return "all"
     return ""
+
 
 def _sub_agents_trace_preview(arguments) -> str:
     action = _sub_agents_action_label(arguments)
@@ -709,6 +741,7 @@ def _sub_agents_trace_preview(arguments) -> str:
         return compact_line(f"{action} · {name}", limit=56)
     return action
 
+
 def _sub_agents_trace_progress_lines(arguments) -> tuple[str, ...]:
     tasks = arguments.get("tasks")
     if not isinstance(tasks, list) or not tasks:
@@ -722,6 +755,7 @@ def _sub_agents_trace_progress_lines(arguments) -> tuple[str, ...]:
         lines.append(f"┊   … {len(tasks) - len(previews)} more")
     return tuple(lines)
 
+
 def _sub_agents_action_label(arguments) -> str:
     action = str(arguments.get("action") or "run").strip().lower()
     aliases = {
@@ -729,6 +763,7 @@ def _sub_agents_action_label(arguments) -> str:
         "wait": "join",
     }
     return aliases.get(action, action or "run")
+
 
 def _sub_agent_task_previews(tasks: list, *, limit: int) -> tuple[str, ...]:
     previews: list[str] = []
@@ -745,11 +780,14 @@ def _sub_agent_task_previews(tasks: list, *, limit: int) -> tuple[str, ...]:
             previews.append(name)
     return tuple(previews)
 
+
 def _tool_trace_prepare_label(tool_event: ToolLifecycleEvent) -> str:
     return _tool_trace_label(tool_event)
 
+
 def _tool_trace_started_label(tool_event: ToolLifecycleEvent) -> str:
     return _tool_trace_label(tool_event)
+
 
 def _tool_trace_duration(tool_event: ToolLifecycleEvent) -> str:
     requested_at = tool_event.invocation.requested_at
@@ -757,6 +795,7 @@ def _tool_trace_duration(tool_event: ToolLifecycleEvent) -> str:
         return ""
     delta = max(0.0, (tool_event.occurred_at - requested_at).total_seconds())
     return f"{delta:.1f}s"
+
 
 def _stream_preview(stream_text: str, *, limit: int = 220) -> str:
     normalized = " ".join(_stream_response_text(stream_text).split())
@@ -766,7 +805,9 @@ def _stream_preview(stream_text: str, *, limit: int = 220) -> str:
         return normalized
     return f"{normalized[: limit - 3]}..."
 
+
 STREAM_REASONING_HEADING = "🐾 Elephant Agent's Trail:"
+
 
 def _stream_display_parts(stream_text: str, *, streaming: bool = True) -> tuple[str, str]:
     sanitized = _sanitize_stream_tool_markup(stream_text)
@@ -774,6 +815,7 @@ def _stream_display_parts(stream_text: str, *, streaming: bool = True) -> tuple[
     reasoning = strip_markdown_bold(parsed.reasoning.replace("\r\n", "\n").replace("\r", "\n")).lstrip("\n")
     response = strip_markdown_bold(parsed.content.replace("\r\n", "\n").replace("\r", "\n")).lstrip("\n")
     return reasoning, response
+
 
 def format_reasoning_display_text(reasoning: str, response: str = "") -> str:
     normalized_reasoning = str(reasoning or "").strip()
@@ -784,6 +826,7 @@ def format_reasoning_display_text(reasoning: str, response: str = "") -> str:
         return f"{STREAM_REASONING_HEADING}\n{normalized_reasoning}"
     return normalized_response
 
+
 def _compose_stream_markup(reasoning: str, response: str) -> str:
     normalized_reasoning = str(reasoning or "")
     normalized_response = str(response or "")
@@ -792,6 +835,7 @@ def _compose_stream_markup(reasoning: str, response: str) -> str:
     if normalized_reasoning:
         return f"<think>{normalized_reasoning}</think>"
     return normalized_response
+
 
 def _stream_response_fragments(stream_text: str) -> list[tuple[str, str]]:
     reasoning, response = _stream_display_parts(stream_text, streaming=True)
@@ -805,6 +849,7 @@ def _stream_response_fragments(stream_text: str) -> list[tuple[str, str]]:
             fragments.append(("", "\n\n"))
         fragments.extend(_format_stream_response_markdown(response))
     return fragments
+
 
 def _format_stream_response_markdown(response: str) -> list[tuple[str, str]]:
     fragments: list[tuple[str, str]] = []
@@ -839,16 +884,36 @@ def _format_stream_response_markdown(response: str) -> list[tuple[str, str]]:
             continue
         list_match = _list_pat.match(line)
         if list_match:
-            fragments.append(("class:stream-response-accent", f"{list_match.group(1)}{list_match.group(2)} "))
-            _append_inline_stream_fragments(fragments, list_match.group(3), _bold_italic_pat, _bold_pat, _italic_pat, _code_pat)
+            fragments.append(
+                (
+                    "class:stream-response-accent",
+                    f"{list_match.group(1)}{list_match.group(2)} ",
+                )
+            )
+            _append_inline_stream_fragments(
+                fragments,
+                list_match.group(3),
+                _bold_italic_pat,
+                _bold_pat,
+                _italic_pat,
+                _code_pat,
+            )
             continue
         if line.startswith(">"):
             fragments.append(("class:stream-response-muted", "│ "))
-            _append_inline_stream_fragments(fragments, line.lstrip("> "), _bold_italic_pat, _bold_pat, _italic_pat, _code_pat)
+            _append_inline_stream_fragments(
+                fragments,
+                line.lstrip("> "),
+                _bold_italic_pat,
+                _bold_pat,
+                _italic_pat,
+                _code_pat,
+            )
             continue
         _append_inline_stream_fragments(fragments, line, _bold_italic_pat, _bold_pat, _italic_pat, _code_pat)
 
     return fragments
+
 
 def _append_inline_stream_fragments(
     fragments: list[tuple[str, str]],
@@ -881,9 +946,11 @@ def _append_inline_stream_fragments(
     if pos < len(text):
         fragments.append(("class:stream-response-body", text[pos:]))
 
+
 def _stream_has_reasoning_only(stream_text: str) -> bool:
     reasoning, response = _stream_display_parts(stream_text, streaming=True)
     return bool(reasoning and not response)
+
 
 def _stream_response_rich_text(stream_text: str) -> Text:
     text = Text()
@@ -905,6 +972,7 @@ def _stream_response_rich_text(stream_text: str) -> Text:
         text.append(fragment, style=style_map.get(style, BRAND_LIGHT))
     return text
 
+
 def _stream_response_text(stream_text: str, *, limit: int = 3200) -> str:
     reasoning, response = _stream_display_parts(stream_text, streaming=True)
     normalized = format_reasoning_display_text(reasoning, response)
@@ -920,6 +988,7 @@ def _stream_response_text(stream_text: str, *, limit: int = 3200) -> str:
             return f"...\n{trimmed}"
     return f"... {tail.lstrip()}"
 
+
 def select_stream_response_text(
     stream_text: str,
     *,
@@ -934,6 +1003,7 @@ def select_stream_response_text(
     if current and len(current) >= len(selected):
         return current
     return selected
+
 
 def stream_response_delta(stream_text: str, *, previous_stream_text: str = "") -> str:
     current_reasoning, current_response = _stream_display_parts(stream_text, streaming=True)
@@ -952,6 +1022,7 @@ def stream_response_delta(stream_text: str, *, previous_stream_text: str = "") -
         delta_response = current_response
     return _compose_stream_markup(delta_reasoning.lstrip("\n"), delta_response.lstrip("\n"))
 
+
 def _sanitize_stream_tool_markup(raw: str) -> str:
     cleaned = raw
     for pattern in _STREAM_TOOL_BLOCK_PATTERNS:
@@ -968,6 +1039,7 @@ def _sanitize_stream_tool_markup(raw: str) -> str:
         cleaned = cleaned[:partial_start]
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned
+
 
 def _partial_tool_tag_start(text: str) -> int | None:
     marker = text.rfind("<")

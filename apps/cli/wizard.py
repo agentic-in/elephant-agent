@@ -21,7 +21,14 @@ try:
     from prompt_toolkit.layout.dimension import Dimension as PromptDimension
     from prompt_toolkit.shortcuts import input_dialog
     from prompt_toolkit.styles import Style as PromptStyle
-    from prompt_toolkit.widgets import Button, CheckboxList, Dialog, Label, RadioList, TextArea
+    from prompt_toolkit.widgets import (
+        Button,
+        CheckboxList,
+        Dialog,
+        Label,
+        RadioList,
+        TextArea,
+    )
 
     PROMPT_TOOLKIT_DIALOGS_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional wizard polish
@@ -182,7 +189,10 @@ def _wizard_choice_menu(
         and RadioList is not None
     ):
         return default
-    default_value = next((choice.value for choice in choices if choice.value == default), choices[0].value)
+    default_value = next(
+        (choice.value for choice in choices if choice.value == default),
+        choices[0].value,
+    )
     values = tuple(
         (
             choice.value,
@@ -200,7 +210,11 @@ def _wizard_choice_menu(
         show_scrollbar=len(choices) > WIZARD_MAX_VISIBLE_CHOICES,
     )
     _guard_radio_list_selection_bounds(radio_list)
-    hint = "Enter continues · Back goes back · Esc cancels · ↑/↓ or j/k moves" if allow_back else "Enter continues · Esc cancels · ↑/↓ or j/k moves"
+    hint = (
+        "Enter continues · Back goes back · Esc cancels · ↑/↓ or j/k moves"
+        if allow_back
+        else "Enter continues · Esc cancels · ↑/↓ or j/k moves"
+    )
 
     def _accept() -> None:
         get_app().exit(result=radio_list.current_value)
@@ -291,7 +305,11 @@ def _wizard_dual_choice_menu(
     fallback = choices[0].value
     selected = {
         "first": default_first if default_first in values_by_id else fallback,
-        "second": default_second if default_second in values_by_id else default_first if default_first in values_by_id else fallback,
+        "second": default_second
+        if default_second in values_by_id
+        else default_first
+        if default_first in values_by_id
+        else fallback,
     }
     active_role = {"name": "first"}
     selection_history: list[str] = [role for role in ("first", "second") if selected[role]]
@@ -325,9 +343,15 @@ def _wizard_dual_choice_menu(
         second_suffix = " · next" if active_role["name"] == "second" else ""
         return [
             ("class:role-primary", f"* {first_title}"),
-            ("class:role-primary-detail", f" · {(first_choice.label if first_choice is not None else '<unset>')}{first_suffix}\n"),
+            (
+                "class:role-primary-detail",
+                f" · {(first_choice.label if first_choice is not None else '<unset>')}{first_suffix}\n",
+            ),
             ("class:role-secondary", f"* {second_title}"),
-            ("class:role-secondary-detail", f" · {(second_choice.label if second_choice is not None else '<unset>')}{second_suffix}"),
+            (
+                "class:role-secondary-detail",
+                f" · {(second_choice.label if second_choice is not None else '<unset>')}{second_suffix}",
+            ),
         ]
 
     def _validation_fragments():
@@ -476,10 +500,20 @@ def _wizard_multi_choice_menu(
     dialog = Dialog(
         title=title,
         body=HSplit(
-            [Label(text=prompt, dont_extend_height=True), checkbox, Label(text="Space toggles · Enter continues · Back goes back · Esc cancels", dont_extend_height=True)],
+            [
+                Label(text=prompt, dont_extend_height=True),
+                checkbox,
+                Label(
+                    text="Space toggles · Enter continues · Back goes back · Esc cancels",
+                    dont_extend_height=True,
+                ),
+            ],
             padding=1,
         ),
-        buttons=[Button(text="Continue", handler=_accept), Button(text="Back", handler=_back)],
+        buttons=[
+            Button(text="Continue", handler=_accept),
+            Button(text="Back", handler=_back),
+        ],
         with_background=True,
     )
     bindings = PromptKeyBindings()
@@ -492,13 +526,15 @@ def _wizard_multi_choice_menu(
     def _cancel_binding(_event) -> None:
         _cancel()
 
-    answer = _wizard_run_dialog(Application(
-        layout=Layout(dialog, focused_element=checkbox),
-        key_bindings=bindings,
-        style=_wizard_style(),
-        full_screen=True,
-        mouse_support=True,
-    ))
+    answer = _wizard_run_dialog(
+        Application(
+            layout=Layout(dialog, focused_element=checkbox),
+            key_bindings=bindings,
+            style=_wizard_style(),
+            full_screen=True,
+            mouse_support=True,
+        )
+    )
     if answer is WIZARD_BACK or answer is WIZARD_CANCEL:
         return answer
     return tuple(str(value) for value in (answer or ()))
@@ -547,7 +583,9 @@ def _wizard_multi_choice_prompt(
             return tuple(selected)
 
 
-def _wizard_choice_window(total: int, selected: int, *, max_visible: int = WIZARD_MAX_VISIBLE_CHOICES) -> tuple[int, int]:
+def _wizard_choice_window(
+    total: int, selected: int, *, max_visible: int = WIZARD_MAX_VISIBLE_CHOICES
+) -> tuple[int, int]:
     if total <= max_visible:
         return 0, total
     if selected < 0:
@@ -584,11 +622,7 @@ def _wizard_choice_fragments(
         active = index == selected
         marker = "›" if active else " "
         label_style = "class:selected" if active else "class:item"
-        detail_style = (
-            f"class:{choice.selected_detail_style}"
-            if active
-            else f"class:{choice.detail_style}"
-        )
+        detail_style = f"class:{choice.selected_detail_style}" if active else f"class:{choice.detail_style}"
         fragments.append((label_style, f"{marker} {_wizard_choice_label(choice)}\n"))
         fragments.append((detail_style, f"  {choice.detail}\n"))
     if end < len(choices):
@@ -699,7 +733,11 @@ def _wizard_required_text_dialog(
         prompt="",
     )
     validation_state = {"message": ""}
-    hint = "Enter continues · Esc goes back · Tab moves focus" if allow_back else "Enter continues · Esc cancels · Tab moves focus"
+    hint = (
+        "Enter continues · Esc goes back · Tab moves focus"
+        if allow_back
+        else "Enter continues · Esc cancels · Tab moves focus"
+    )
 
     def _set_validation() -> None:
         validation_state["message"] = required_message
@@ -723,7 +761,11 @@ def _wizard_required_text_dialog(
             [
                 Label(text=prompt, dont_extend_height=True),
                 text_field,
-                Label(text=lambda: validation_state["message"], style="class:validation", dont_extend_height=True),
+                Label(
+                    text=lambda: validation_state["message"],
+                    style="class:validation",
+                    dont_extend_height=True,
+                ),
                 Label(text=hint, dont_extend_height=True),
             ],
             padding=1,
@@ -791,7 +833,11 @@ def _wizard_password_dialog(
         wrap_lines=False,
         prompt="",
     )
-    hint = "Enter continues · Esc goes back · Tab moves focus" if allow_back else "Enter continues · Esc cancels · Tab moves focus"
+    hint = (
+        "Enter continues · Esc goes back · Tab moves focus"
+        if allow_back
+        else "Enter continues · Esc cancels · Tab moves focus"
+    )
 
     def _accept() -> None:
         get_app().exit(result=password_field.text)

@@ -1,64 +1,32 @@
 """Gateway managed-runtime persistence and process helpers."""
 
 from __future__ import annotations
-import asyncio
-from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from argparse import Namespace
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from datetime import UTC, datetime
-import getpass
-import apps.cli.wizard as cli_wizard
-import importlib.util
 import json
 import os
 from pathlib import Path
-import re
 import shlex
 import signal
 import subprocess
 import sys
 import time
 import warnings
-from wsgiref.simple_server import make_server
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_LIGHT,
-    BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
-    render_elephant_mark,
-)
 from apps.provider_runtime import load_runtime_local_secret_env
-from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
-from packages.gateway_core import DEFAULT_GATEWAY_ACCOUNT_ID
-from packages.runtime_config import save_extensions_to_config, global_config_path_for_state_dir, load_extensions_from_config, load_global_config
+from apps.runtime_layout import default_cli_state_dir
+from packages.runtime_config import (
+    global_config_path_for_state_dir,
+    load_extensions_from_config,
+    load_global_config,
+)
 
 from . import (
-    DEFAULT_DISCORD_BOT_TOKEN_ENV,
-    DEFAULT_FEISHU_APP_ID_ENV,
-    DEFAULT_FEISHU_APP_SECRET_ENV,
-    DEFAULT_FEISHU_EVENT_PATH,
-    FEISHU_ADAPTER_ID,
-    GatewayHttpService,
     GatewayManagedRuntime,
     GatewayManagedService,
-    SUPPORTED_DISCORD_TRANSPORTS,
-    SUPPORTED_FEISHU_TRANSPORTS,
-    build_gateway_app,
-    build_gateway_plugin_registry,
-    create_gateway_web_app,
 )
-from .discord import DISCORD_PY_PIP_SPEC, DiscordGatewayService
-from .feishu import FEISHU_SDK_PIP_SPEC, FeishuGatewayService
 
 GATEWAY_LOCAL_SECRET_ENV_FILE = "gateway-local-secrets.json"
 
@@ -86,8 +54,10 @@ except ModuleNotFoundError:  # pragma: no cover - optional wizard polish
 
 from .gateway_main_wizard import *  # noqa: F401,F403
 
+
 def _mapping(value: object) -> Mapping[str, object] | None:
     return value if isinstance(value, Mapping) else None
+
 
 def _mapping_payload(value: object, *, path: str) -> dict[str, object]:
     if value is None:
@@ -95,6 +65,7 @@ def _mapping_payload(value: object, *, path: str) -> dict[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{path} must be a JSON object")
     return {str(key): item for key, item in value.items()}
+
 
 def _load_profile_manifest(state_dir: Path) -> dict[str, object]:
     """Load gateway and extension data from the canonical config.yaml."""
@@ -113,8 +84,10 @@ def _load_profile_manifest(state_dir: Path) -> dict[str, object]:
         manifest.update(extensions)
     return manifest
 
+
 def _gateway_local_secret_env_path(state_dir: Path) -> Path:
     return state_dir / GATEWAY_LOCAL_SECRET_ENV_FILE
+
 
 def _load_gateway_local_secret_env(state_dir: Path) -> dict[str, str]:
     path = _gateway_local_secret_env_path(state_dir)
@@ -129,6 +102,7 @@ def _load_gateway_local_secret_env(state_dir: Path) -> dict[str, str]:
         if text:
             resolved[str(key)] = text
     return resolved
+
 
 def _persist_gateway_local_secret_env(
     state_dir: Path,
@@ -147,6 +121,7 @@ def _persist_gateway_local_secret_env(
     except OSError:
         pass
     return path
+
 
 def _delete_gateway_local_secret_env(
     state_dir: Path,
@@ -177,6 +152,7 @@ def _delete_gateway_local_secret_env(
         pass
     return path
 
+
 def _gateway_runtime_environ(
     state_dir: Path,
     *,
@@ -188,6 +164,7 @@ def _gateway_runtime_environ(
     env.update(os.environ)
     return env
 
+
 def _read_pid(path: Path) -> int | None:
     if not path.exists():
         return None
@@ -195,6 +172,7 @@ def _read_pid(path: Path) -> int | None:
         return int(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
+
 
 def _pid_is_running(pid: int | None) -> bool:
     if pid is None or pid <= 0:
@@ -205,11 +183,13 @@ def _pid_is_running(pid: int | None) -> bool:
         return False
     return True
 
+
 def _optional_text(value: object) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
     return text or None
+
 
 def _resolved_cli_account_id(args: Namespace) -> str | None:
     raw_account_id = getattr(args, "account_id", None)
@@ -221,6 +201,7 @@ def _resolved_cli_account_id(args: Namespace) -> str | None:
         return None
     return _optional_text(raw_account_id_flag)
 
+
 def _coerce_int(value: object) -> int | None:
     if value is None:
         return None
@@ -229,8 +210,10 @@ def _coerce_int(value: object) -> int | None:
     except (TypeError, ValueError):
         return None
 
+
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
 
 def _load_runtime_record(path: Path) -> dict[str, object] | None:
     if not path.exists():
@@ -243,12 +226,14 @@ def _load_runtime_record(path: Path) -> dict[str, object] | None:
         return None
     return {str(key): value for key, value in payload.items()}
 
+
 def _write_runtime_record(path: Path, record: GatewayRuntimeRecord) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(asdict(record), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
 
 def _build_runtime_record(
     args: Namespace,
@@ -264,10 +249,7 @@ def _build_runtime_record(
     last_error: str | None = None,
 ) -> GatewayRuntimeRecord:
     existing_payload = dict(existing or {})
-    command_payload = tuple(
-        str(value)
-        for value in (command or existing_payload.get("command") or ())
-    )
+    command_payload = tuple(str(value) for value in (command or existing_payload.get("command") or ()))
     cli_state_dir = _optional_text(getattr(args, "cli_state_dir", None)) or _optional_text(
         existing_payload.get("cli_state_dir")
     )
@@ -313,6 +295,7 @@ def _build_runtime_record(
         transport=runtime.target,
     )
 
+
 def _runtime_state(runtime: GatewayManagedRuntime) -> dict[str, object]:
     record = _load_runtime_record(runtime.record_path) or {}
     pid_from_file = _read_pid(runtime.pid_path)
@@ -336,11 +319,13 @@ def _runtime_state(runtime: GatewayManagedRuntime) -> dict[str, object]:
         "status": status,
     }
 
+
 def _remove_file_if_exists(path: Path) -> None:
     try:
         path.unlink()
     except FileNotFoundError:
         return
+
 
 def _wait_for_pid_exit(pid: int, *, timeout_seconds: float) -> bool:
     deadline = time.monotonic() + max(timeout_seconds, 0.0)
@@ -349,6 +334,7 @@ def _wait_for_pid_exit(pid: int, *, timeout_seconds: float) -> bool:
             return True
         time.sleep(0.2)
     return not _pid_is_running(pid)
+
 
 def _terminate_pid(pid: int, *, timeout_seconds: float, force: bool) -> str | None:
     if timeout_seconds < 0:
@@ -377,6 +363,7 @@ def _terminate_pid(pid: int, *, timeout_seconds: float, force: bool) -> str | No
         return signal.Signals(signal.SIGKILL).name
     raise SystemExit(f"Process {pid} is still running after SIGKILL.")
 
+
 def _resolve_runtime_target_argument(
     args: Namespace,
     *,
@@ -386,10 +373,9 @@ def _resolve_runtime_target_argument(
     if requested_target != "configured":
         return requested_target
     if service is None:
-        raise SystemExit(
-            "Resolving the configured runtime target requires an active gateway service profile."
-        )
+        raise SystemExit("Resolving the configured runtime target requires an active gateway service profile.")
     return service.configured_runtime_target()
+
 
 def _process_command_contains(pid: int, needles: Sequence[str]) -> bool:
     """Return True if the process command line contains all of the given needles.
@@ -620,9 +606,7 @@ def _run_start_detached(
     state = _runtime_state(runtime)
     existing_pid = state["pid"]
     if state["pid_active"]:
-        raise SystemExit(
-            f"{runtime.label} is already running in the background with pid {existing_pid}."
-        )
+        raise SystemExit(f"{runtime.label} is already running in the background with pid {existing_pid}.")
     args.state_dir.mkdir(parents=True, exist_ok=True)
     command = service.build_detached_runtime_command(args=args, target=target)
     started_at = _utc_now_iso()
@@ -714,6 +698,7 @@ def _run_start_detached(
         del process
     return 0
 
+
 def _read_log_excerpt(path: Path, *, tail: int) -> tuple[str, ...]:
     if tail < 0:
         raise SystemExit("--tail must be zero or a positive integer.")
@@ -724,6 +709,7 @@ def _read_log_excerpt(path: Path, *, tail: int) -> tuple[str, ...]:
     if tail == 0:
         return ()
     return tuple(lines[-tail:])
+
 
 def _follow_log_file(path: Path) -> None:
     with path.open("r", encoding="utf-8") as stream:
@@ -742,6 +728,7 @@ def _follow_log_file(path: Path) -> None:
             if current_size < stream.tell():
                 stream.seek(0)
 
+
 def _format_runtime_command(record: Mapping[str, object]) -> str:
     command = record.get("command")
     if not isinstance(command, (list, tuple)):
@@ -750,6 +737,7 @@ def _format_runtime_command(record: Mapping[str, object]) -> str:
     if not parts:
         return "<none>"
     return shlex.join(parts)
+
 
 def _run_status(args: Namespace, *, service: GatewayManagedService | None = None) -> int:
     if service is None:
@@ -808,6 +796,7 @@ def _run_status(args: Namespace, *, service: GatewayManagedService | None = None
                 print(_render_feishu_account_line(account, prefix="account"))
     return 0
 
+
 def _stop_managed_runtime(
     args: Namespace,
     *,
@@ -850,6 +839,7 @@ def _stop_managed_runtime(
     )
     return "stopped", signal_name, runtime
 
+
 def _run_stop(args: Namespace, *, service: GatewayManagedService | None = None) -> int:
     if service is None:
         raise TypeError("_run_stop requires a managed gateway service")
@@ -868,6 +858,7 @@ def _run_stop(args: Namespace, *, service: GatewayManagedService | None = None) 
     print(f"Runtime record: {runtime.record_path}")
     return 0
 
+
 def _run_restart(args: Namespace, *, service: GatewayManagedService | None = None) -> int:
     if service is None:
         raise TypeError("_run_restart requires a managed gateway service")
@@ -878,6 +869,7 @@ def _run_restart(args: Namespace, *, service: GatewayManagedService | None = Non
     if outcome == "already-stopped":
         print("No running detached runtime was found; starting a fresh background process.")
     return _run_start_detached(args, service=service, target=target, action="restart")
+
 
 def _run_logs(args: Namespace, *, service: GatewayManagedService | None = None) -> int:
     if service is None:
@@ -891,9 +883,7 @@ def _run_logs(args: Namespace, *, service: GatewayManagedService | None = None) 
         print(runtime.log_path)
         return 0
     if not runtime.log_path.exists():
-        running_hint = (
-            f" Background pid {state['pid']} is still recorded." if state["pid_active"] else ""
-        )
+        running_hint = f" Background pid {state['pid']} is still recorded." if state["pid_active"] else ""
         raise SystemExit(
             f"No log file found for {runtime.label} at {runtime.log_path}."
             f" Start it with `{service.managed_runtime_log_hint(target=target).replace(' logs ', ' start ').replace('--follow', '--detach')}` first.{running_hint}"
@@ -909,6 +899,7 @@ def _run_logs(args: Namespace, *, service: GatewayManagedService | None = None) 
         except KeyboardInterrupt:
             return 0
     return 0
+
 
 __all__ = [
     "_mapping",

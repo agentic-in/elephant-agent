@@ -160,9 +160,7 @@ def _normalize_phone(number: str) -> str:
         raise TelephonyError("Phone number is required")
     trimmed = number.strip()
     if not trimmed.startswith("+"):
-        raise TelephonyError(
-            f"Phone number must be E.164 format (for example +15551234567), got: {number}"
-        )
+        raise TelephonyError(f"Phone number must be E.164 format (for example +15551234567), got: {number}")
     digits = "+" + re.sub(r"\D", "", trimmed)
     if len(digits) < 8:
         raise TelephonyError(f"Phone number looks too short: {number}")

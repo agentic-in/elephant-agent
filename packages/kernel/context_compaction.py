@@ -41,7 +41,6 @@ def looks_like_context_overflow(error: BaseException) -> bool:
     )
 
 
-
 def projection_compaction_detail(result: object) -> str:
     before_tokens = getattr(result, "before_tokens", 0)
     after_tokens = getattr(result, "after_tokens", 0)
@@ -70,7 +69,6 @@ def projection_compaction_detail(result: object) -> str:
     )
 
 
-
 def latest_compacted_projection(context_capability: object) -> object | None:
     result = getattr(context_capability, "last_projection_compaction", None)
     if result is None or not bool(getattr(result, "compacted", False)):
@@ -78,12 +76,10 @@ def latest_compacted_projection(context_capability: object) -> object | None:
     return result
 
 
-
 def flush_projection_cache(context_capability: object) -> None:
     flush = getattr(context_capability, "flush_projection_cache", None)
     if callable(flush):
         flush()
-
 
 
 def stage_context_usage(
@@ -100,7 +96,6 @@ def stage_context_usage(
     )
 
 
-
 def estimate_context_projection_tokens(context: Any) -> int:
     rendered_prompt = str(getattr(context, "rendered_prompt", "") or "").strip()
     if rendered_prompt:
@@ -112,7 +107,6 @@ def estimate_context_projection_tokens(context: Any) -> int:
     return 0
 
 
-
 def stage_context_projection(stage: Any, context: Any, *, source: str = "generation") -> None:
     if not callable(stage):
         return
@@ -120,8 +114,10 @@ def stage_context_projection(stage: Any, context: Any, *, source: str = "generat
     token_budget = int(getattr(context, "token_budget", 0) or 0)
     if prompt_tokens <= 0 and token_budget <= 0:
         return
-    stage("context-projection", f"prompt_tokens={prompt_tokens} token_budget={token_budget} source={source}")
-
+    stage(
+        "context-projection",
+        f"prompt_tokens={prompt_tokens} token_budget={token_budget} source={source}",
+    )
 
 
 def compact_context_after_usage(
@@ -138,7 +134,6 @@ def compact_context_after_usage(
     compress after each turn. This stub is kept for API compatibility.
     """
     return None
-
 
 
 def episode_continuity_packet(
@@ -181,7 +176,6 @@ def episode_continuity_packet(
     return EpisodeContinuityPacket(packet_id=packet_id, text="\n".join(lines), source_refs=source_refs)
 
 
-
 def compaction_step_metadata(
     *,
     packet: EpisodeContinuityPacket,
@@ -201,7 +195,6 @@ def compaction_step_metadata(
     }
 
 
-
 def append_episode_continuity_packet(context: ContextBundle, packet: EpisodeContinuityPacket) -> ContextBundle:
     rendered = str(context.rendered_prompt or "").strip()
     updated_rendered = packet.text if not rendered else f"{rendered}\n\n{packet.text}"
@@ -212,16 +205,13 @@ def append_episode_continuity_packet(context: ContextBundle, packet: EpisodeCont
     )
 
 
-
 def _csv(values: tuple[object, ...], *, separator: str = ", ") -> str:
     cleaned = tuple(str(value).strip() for value in values if str(value).strip())
     return separator.join(cleaned) if cleaned else "<none>"
 
 
-
 def _single_line(value: str) -> str:
     return " ".join(str(value).split())
-
 
 
 def retry_context_after_provider_overflow(

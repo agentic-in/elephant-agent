@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import subprocess
@@ -8,10 +7,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from packages.contracts import ExperienceRecord, State
-from packages.contracts.runtime import PersonalModelRuntimeState
+from packages.contracts import State
 from packages.security import SecurityPolicy
-from packages.storage import RuntimeStorageRepository
 from packages.tools import (
     CallableApprovalGateway,
     InMemoryToolExecutor,
@@ -76,7 +73,9 @@ class _CaptureSink:
 
 
 class ToolsAndSkillsIntegrationTest(unittest.TestCase):
-    def test_tool_runtime_resolves_canonical_runtime_context_before_execution(self) -> None:
+    def test_tool_runtime_resolves_canonical_runtime_context_before_execution(
+        self,
+    ) -> None:
         registry = InMemoryToolRegistry()
         executor = InMemoryToolExecutor()
         runtime = ToolRuntime(
@@ -103,22 +102,24 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
                 version="1.0.0",
                 description="Capture resolved tool runtime context.",
             ),
-            handler=lambda invocation: captured.update(
-                {
-                    "cwd": invocation.context.cwd,
-                    "allowed_roots": invocation.context.allowed_roots,
-                    "surface_id": invocation.context.surface_id,
-                    "state_id": invocation.context.state_id,
-                    "personal_model_id": invocation.context.personal_model_id,
-                    "elephant_id": invocation.context.elephant_id,
-                    "requester": invocation.context.requester,
+            handler=lambda invocation: (
+                captured.update(
+                    {
+                        "cwd": invocation.context.cwd,
+                        "allowed_roots": invocation.context.allowed_roots,
+                        "surface_id": invocation.context.surface_id,
+                        "state_id": invocation.context.state_id,
+                        "personal_model_id": invocation.context.personal_model_id,
+                        "elephant_id": invocation.context.elephant_id,
+                        "requester": invocation.context.requester,
+                    }
+                )
+                or {
+                    "execution_id": invocation.invocation_id,
+                    "summary": "captured context",
+                    "outcome": "success",
                 }
-            )
-            or {
-                "execution_id": invocation.invocation_id,
-                "summary": "captured context",
-                "outcome": "success",
-            },
+            ),
         )
 
         result = runtime.invoke(
@@ -137,7 +138,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertEqual(captured["elephant_id"], "atlas")
         self.assertEqual(captured["requester"], "operator")
 
-    def test_tool_runtime_emits_lifecycle_events_for_successful_invocation(self) -> None:
+    def test_tool_runtime_emits_lifecycle_events_for_successful_invocation(
+        self,
+    ) -> None:
         registry = InMemoryToolRegistry()
         executor = InMemoryToolExecutor()
         runtime = ToolRuntime(
@@ -188,7 +191,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(events[-1].execution.summary, "created Design review")
 
-    def test_tool_runtime_preserves_original_tool_error_in_failed_execution_path(self) -> None:
+    def test_tool_runtime_preserves_original_tool_error_in_failed_execution_path(
+        self,
+    ) -> None:
         registry = InMemoryToolRegistry()
         executor = InMemoryToolExecutor()
         runtime = ToolRuntime(
@@ -239,7 +244,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertEqual(record.approval.decision, "approved")
         self.assertEqual(record.detail, "fetch failed for https://example.com")
 
-    def test_tool_runtime_registers_and_executes_with_side_effect_metadata(self) -> None:
+    def test_tool_runtime_registers_and_executes_with_side_effect_metadata(
+        self,
+    ) -> None:
         registry = InMemoryToolRegistry()
         executor = InMemoryToolExecutor()
         runtime = ToolRuntime(
@@ -346,7 +353,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertEqual(result.outcome, "success")
         self.assertEqual(result.summary, "operator handled tool.skill.manage")
 
-    def test_tool_runtime_records_deferred_approval_without_executing_handler(self) -> None:
+    def test_tool_runtime_records_deferred_approval_without_executing_handler(
+        self,
+    ) -> None:
         registry = InMemoryToolRegistry()
         executor = InMemoryToolExecutor()
         runtime = ToolRuntime(
@@ -428,7 +437,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertTrue(str(approval.approval_token).startswith("auto:"))
         self.assertTrue(any(record["family"] == "approval" for record in sink.records))
 
-    def test_tool_manifest_loader_discovers_external_tools_and_runtime_feedback(self) -> None:
+    def test_tool_manifest_loader_discovers_external_tools_and_runtime_feedback(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest_path = Path(tmpdir) / "tools.json"
             manifest_path.write_text(
@@ -466,7 +477,10 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             self.assertEqual(manifest.source_path, str(manifest_path))
             self.assertEqual(runtime.describe("tool.notes.capture").provenance, str(manifest_path))
             self.assertEqual(runtime.list_manifest_loads()[0].tool_ids, ("tool.notes.capture",))
-            self.assertEqual(runtime.list_manifest_loads()[0].executable_tool_ids, ("tool.notes.capture",))
+            self.assertEqual(
+                runtime.list_manifest_loads()[0].executable_tool_ids,
+                ("tool.notes.capture",),
+            )
 
             result = runtime.invoke(
                 "tool.notes.capture",
@@ -481,7 +495,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             self.assertEqual(runtime.list_executions()[0].invocation.tool_id, "tool.notes.capture")
             self.assertEqual(runtime.list_executions()[0].detail, "captured Operator review")
 
-    def test_tool_manifest_loader_preserves_enable_override_and_records_blocked_invocations(self) -> None:
+    def test_tool_manifest_loader_preserves_enable_override_and_records_blocked_invocations(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest_path = Path(tmpdir) / "tools.json"
             manifest_path.write_text(
@@ -524,9 +540,14 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             )
             self.assertEqual(result.outcome, "blocked")
             self.assertEqual(runtime.list_executions()[0].approved, False)
-            self.assertEqual(runtime.list_executions()[0].detail, "blocked by callable approval gateway")
+            self.assertEqual(
+                runtime.list_executions()[0].detail,
+                "blocked by callable approval gateway",
+            )
 
-    def test_sync_custom_mcp_tools_registers_model_visible_handlers_and_removes_stale_tools(self) -> None:
+    def test_sync_custom_mcp_tools_registers_model_visible_handlers_and_removes_stale_tools(
+        self,
+    ) -> None:
         runtime = ToolRuntime(approval_gateway=CallableApprovalGateway(lambda *_: True))
         config = {
             "mcp_servers": {
@@ -534,7 +555,11 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
                     "label": "Filesystem",
                     "transport": "stdio",
                     "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                    "args": [
+                        "-y",
+                        "@modelcontextprotocol/server-filesystem",
+                        "/tmp/demo",
+                    ],
                     "env": {"ALLOW": "1"},
                     "tools": {
                         "read_file": {
@@ -610,7 +635,10 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             cwd=Path("/tmp/tool-root"),
         )
         self.assertFalse(runtime.describe("mcp.filesystem.read_file").enabled)
-        self.assertEqual(runtime.list_tools(audience="model", enabled_only=True, available_only=True), ())
+        self.assertEqual(
+            runtime.list_tools(audience="model", enabled_only=True, available_only=True),
+            (),
+        )
 
         sync_custom_mcp_tools(
             runtime,
@@ -620,7 +648,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         )
         self.assertIsNone(runtime.describe("mcp.filesystem.read_file"))
 
-    def test_sync_custom_mcp_tools_remote_runtime_uses_mcporter_config_shape(self) -> None:
+    def test_sync_custom_mcp_tools_remote_runtime_uses_mcporter_config_shape(
+        self,
+    ) -> None:
         runtime = ToolRuntime(approval_gateway=CallableApprovalGateway(lambda *_: True))
         config = {
             "mcp_servers": {
@@ -713,9 +743,7 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
                                     "surface_kinds": ["cli"],
                                     "modes": ["companion"],
                                 },
-                                "dependencies": [
-                                    {"skill_id": "skill.write-helper", "required": True}
-                                ],
+                                "dependencies": [{"skill_id": "skill.write-helper", "required": True}],
                             },
                         ]
                     }
@@ -739,7 +767,10 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             self.assertEqual(manifest.source_path, str(manifest_path))
             self.assertEqual(len(manifest.skills), 2)
             self.assertEqual(runtime.list_skills(), manifest.skills)
-            self.assertEqual(runtime.list_manifest_loads()[0].skill_ids, ("skill.write-helper", "skill.voice-helper"))
+            self.assertEqual(
+                runtime.list_manifest_loads()[0].skill_ids,
+                ("skill.write-helper", "skill.voice-helper"),
+            )
             self.assertEqual(
                 tuple(
                     skill.skill_id
@@ -826,7 +857,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         )
         self.assertNotIn("skill.blocked", tuple(skill.skill_id for skill in resolved))
 
-    def test_skill_runtime_activate_rejects_suppressed_retired_and_state_blocked_skills(self) -> None:
+    def test_skill_runtime_activate_rejects_suppressed_retired_and_state_blocked_skills(
+        self,
+    ) -> None:
         catalog = InMemorySkillCatalog()
         for definition in (
             SkillDefinition(
@@ -953,7 +986,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             self.assertEqual(matches[0].reference, "elephant-installed:installed-skill")
             self.assertFalse(bool(matches[0].metadata.get("default_enabled")))
 
-    def test_external_skill_source_accepts_parent_with_symlinked_skills_dir(self) -> None:
+    def test_external_skill_source_accepts_parent_with_symlinked_skills_dir(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             external_parent = root / ".external"
@@ -997,7 +1032,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             )
             (external_parent / "skills").symlink_to(real_skills_root, target_is_directory=True)
             (real_skills_root / "linked-helper").symlink_to(linked_source_dir, target_is_directory=True)
-            hub = SkillHub(sources=default_skill_hub_sources(external_dirs=(external_parent,), install_root=root / "elephant"))
+            hub = SkillHub(
+                sources=default_skill_hub_sources(external_dirs=(external_parent,), install_root=root / "elephant")
+            )
 
             entries = {entry.skill_id: entry for entry in hub.list()}
 
@@ -1006,9 +1043,14 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             self.assertEqual(entries["notes-helper"].source_id, "external")
             self.assertEqual(entries["linked-helper"].source_id, "external")
             self.assertEqual(Path(entries["notes-helper"].skill_path).resolve(), skill_dir.resolve())
-            self.assertEqual(Path(entries["linked-helper"].skill_path).resolve(), linked_source_dir.resolve())
+            self.assertEqual(
+                Path(entries["linked-helper"].skill_path).resolve(),
+                linked_source_dir.resolve(),
+            )
 
-    def test_materialized_skill_package_persists_public_source_and_install_provenance(self) -> None:
+    def test_materialized_skill_package_persists_public_source_and_install_provenance(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             source_dir = root / "source"
@@ -1120,14 +1162,7 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
 
     def test_builtin_elephant_agent_package_is_loadable(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
-        skill_dir = (
-            repo_root
-            / "packages"
-            / "skills"
-            / "builtin_packages"
-            / "autonomous-ai-agents"
-            / "elephant-agent"
-        )
+        skill_dir = repo_root / "packages" / "skills" / "builtin_packages" / "autonomous-ai-agents" / "elephant-agent"
 
         definition = load_skill_package_definition(skill_dir)
 
@@ -1138,14 +1173,7 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
 
     def test_builtin_ascii_art_package_is_loadable(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
-        skill_dir = (
-            repo_root
-            / "packages"
-            / "skills"
-            / "builtin_packages"
-            / "creative"
-            / "ascii-art"
-        )
+        skill_dir = repo_root / "packages" / "skills" / "builtin_packages" / "creative" / "ascii-art"
 
         definition = load_skill_package_definition(skill_dir)
 
@@ -1155,7 +1183,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertEqual(definition.metadata.get("source_kind"), "elephant-builtin")
         self.assertTrue(definition.metadata.get("default_enabled"))
 
-    def test_builtin_skill_catalog_unifies_runtime_defaults_and_hub_projection(self) -> None:
+    def test_builtin_skill_catalog_unifies_runtime_defaults_and_hub_projection(
+        self,
+    ) -> None:
         default_catalog = builtin_skill_catalog()
         override_catalog = builtin_skill_catalog({"shell-execution": False, "docker-management": True})
         section_map = {section.section_id: section for section in default_catalog.sections}
@@ -1170,12 +1200,24 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertTrue(
             all(entry.source_kind == "elephant-builtin" for entry in default_catalog.entries),
         )
-        self.assertIn("shell-execution", {entry.skill_id for entry in section_map["runtime"].entries})
-        self.assertIn("plan", {entry.skill_id for entry in section_map["software-development"].entries})
+        self.assertIn(
+            "shell-execution",
+            {entry.skill_id for entry in section_map["runtime"].entries},
+        )
+        self.assertIn(
+            "plan",
+            {entry.skill_id for entry in section_map["software-development"].entries},
+        )
         self.assertIn("ascii-art", {entry.skill_id for entry in section_map["creative"].entries})
-        self.assertIn("docker-management", {entry.skill_id for entry in section_map["devops"].entries})
+        self.assertIn(
+            "docker-management",
+            {entry.skill_id for entry in section_map["devops"].entries},
+        )
         self.assertIn("1password", {entry.skill_id for entry in section_map["security"].entries})
-        self.assertIn("minecraft-modpack-server", {entry.skill_id for entry in section_map["gaming"].entries})
+        self.assertIn(
+            "minecraft-modpack-server",
+            {entry.skill_id for entry in section_map["gaming"].entries},
+        )
         self.assertIn("apple-notes", {entry.skill_id for entry in section_map["apple"].entries})
 
         catalog = {entry.skill_id: entry for entry in builtin_skill_catalog_entries()}
@@ -1236,8 +1278,14 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             len({entry.slug for entry in site_catalog.entries}),
             len(site_catalog.entries),
         )
-        self.assertEqual(site_catalog.stats["external_source_count"], len(site_catalog.external_sources))
-        self.assertLess(site_catalog.stats["default_enabled_count"], site_catalog.stats["entry_count"])
+        self.assertEqual(
+            site_catalog.stats["external_source_count"],
+            len(site_catalog.external_sources),
+        )
+        self.assertLess(
+            site_catalog.stats["default_enabled_count"],
+            site_catalog.stats["entry_count"],
+        )
         apple_notes = next(entry for entry in site_catalog.entries if entry.skill_id == "apple-notes")
         docker_management = next(entry for entry in site_catalog.entries if entry.skill_id == "docker-management")
         self.assertEqual(apple_notes.detail_doc_id, "skillhub/library/apple-notes")
@@ -1248,8 +1296,14 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertIn("Bundled", apple_notes.packaging_posture)
         self.assertIn("elephant skills install apple-notes", apple_notes.install_posture)
         self.assertEqual(docker_management.default_enabled_label, "Disabled by default")
-        self.assertEqual(docker_management.install_command, "elephant skills install docker-management")
-        self.assertIn("elephant skills install <source:reference>", site_catalog.operator_install_posture)
+        self.assertEqual(
+            docker_management.install_command,
+            "elephant skills install docker-management",
+        )
+        self.assertIn(
+            "elephant skills install <source:reference>",
+            site_catalog.operator_install_posture,
+        )
         self.assertIn("Creative", {section.display_name for section in site_catalog.sections})
         self.assertIn("Data Science", {section.display_name for section in site_catalog.sections})
         self.assertIn("DevOps", {section.display_name for section in site_catalog.sections})
@@ -1257,7 +1311,10 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertIn("MLOps", {section.display_name for section in site_catalog.sections})
         self.assertIn("Security", {section.display_name for section in site_catalog.sections})
         self.assertEqual(site_catalog.external_sources[0].source_id, "github")
-        self.assertIn("elephant skills search <query> --source github", site_catalog.external_sources[0].search_command)
+        self.assertIn(
+            "elephant skills search <query> --source github",
+            site_catalog.external_sources[0].search_command,
+        )
 
         repo_root = Path(__file__).resolve().parents[3]
         generated_catalog_module = (repo_root / "apps" / "site" / "src" / "generated" / "skillhubCatalog.ts").read_text(
@@ -1265,7 +1322,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         )
         self.assertNotIn("slash_command", generated_catalog_module)
         catalog_prefix = "export const skillHubCatalog: SkillHubCatalogData = "
-        catalog_suffix = ";\n\nexport const skillHubCatalogById: Record<string, SkillHubSiteEntry> = Object.fromEntries("
+        catalog_suffix = (
+            ";\n\nexport const skillHubCatalogById: Record<string, SkillHubSiteEntry> = Object.fromEntries("
+        )
         catalog_start = generated_catalog_module.index(catalog_prefix) + len(catalog_prefix)
         catalog_end = generated_catalog_module.index(catalog_suffix, catalog_start)
         generated_catalog_payload = json.loads(generated_catalog_module[catalog_start:catalog_end])
@@ -1279,23 +1338,30 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             sorted(path.stem for path in (repo_root / "apps" / "site" / "docs" / "skillhub" / "library").glob("*.mdx"))
         )
         site_page_slugs = tuple(
-            sorted(path.stem for path in (repo_root / "apps" / "site" / "src" / "pages" / "skillhub" / "library").glob("*.tsx"))
+            sorted(
+                path.stem
+                for path in (repo_root / "apps" / "site" / "src" / "pages" / "skillhub" / "library").glob("*.tsx")
+            )
         )
         self.assertEqual(site_doc_slugs, expected_slugs)
         self.assertEqual(site_page_slugs, expected_slugs)
 
-        hub = SkillHub(
-            sources=(SkillHubSource("builtin", "Built In", builtin_elephant_skill_source_root()),)
-        )
+        hub = SkillHub(sources=(SkillHubSource("builtin", "Built In", builtin_elephant_skill_source_root()),))
         entries = {entry.skill_id: entry for entry in hub.list()}
         builtin_hub_entries = {
             entry.skill_id: entry
             for entry in builtin_skill_hub_entries({"shell-execution": False, "docker-management": True})
         }
-        self.assertEqual(tuple(entries), tuple(entry.skill_id for entry in builtin_skill_hub_entries()))
+        self.assertEqual(
+            tuple(entries),
+            tuple(entry.skill_id for entry in builtin_skill_hub_entries()),
+        )
         self.assertNotIn("shell-execution", builtin_hub_entries)
         self.assertIn("docker-management", builtin_hub_entries)
-        self.assertEqual(tuple(builtin_hub_entries), tuple(entry.skill_id for entry in override_catalog.hub_entries()))
+        self.assertEqual(
+            tuple(builtin_hub_entries),
+            tuple(entry.skill_id for entry in override_catalog.hub_entries()),
+        )
         self.assertTrue(entries["shell-execution"].metadata.get("default_enabled"))
         self.assertTrue(entries["apple-notes"].metadata.get("default_enabled"))
         self.assertEqual(entries["apple-notes"].metadata.get("source_kind"), "elephant-builtin")
@@ -1326,7 +1392,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             )
         )
 
-    def test_skill_dependency_validation_reports_missing_required_dependencies(self) -> None:
+    def test_skill_dependency_validation_reports_missing_required_dependencies(
+        self,
+    ) -> None:
         catalog = InMemorySkillCatalog()
         catalog.register(
             SkillDefinition(

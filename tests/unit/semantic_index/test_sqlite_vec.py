@@ -10,7 +10,11 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from packages.semantic_index import SQLITE_VEC_VERSION, load_sqlite_vec_extension, sqlite_vec_dependency_state
+from packages.semantic_index import (
+    SQLITE_VEC_VERSION,
+    load_sqlite_vec_extension,
+    sqlite_vec_dependency_state,
+)
 
 
 class _FakeConnection:
@@ -53,8 +57,14 @@ class SQLiteVecLoadTest(unittest.TestCase):
         fake_connection = _FakeConnection()
 
         with (
-            mock.patch("packages.semantic_index.sqlite_vec.metadata.version", return_value=SQLITE_VEC_VERSION),
-            mock.patch("packages.semantic_index.sqlite_vec.import_module", return_value=fake_module),
+            mock.patch(
+                "packages.semantic_index.sqlite_vec.metadata.version",
+                return_value=SQLITE_VEC_VERSION,
+            ),
+            mock.patch(
+                "packages.semantic_index.sqlite_vec.import_module",
+                return_value=fake_module,
+            ),
         ):
             state = load_sqlite_vec_extension(fake_connection)
 
@@ -69,13 +79,20 @@ class SQLiteVecLoadTest(unittest.TestCase):
         fake_module.load.side_effect = RuntimeError("boom")
 
         with (
-            mock.patch("packages.semantic_index.sqlite_vec.metadata.version", return_value=SQLITE_VEC_VERSION),
-            mock.patch("packages.semantic_index.sqlite_vec.import_module", return_value=fake_module),
+            mock.patch(
+                "packages.semantic_index.sqlite_vec.metadata.version",
+                return_value=SQLITE_VEC_VERSION,
+            ),
+            mock.patch(
+                "packages.semantic_index.sqlite_vec.import_module",
+                return_value=fake_module,
+            ),
         ):
             state = load_sqlite_vec_extension(_FakeConnection())
 
         self.assertEqual(state.status, "degraded")
         self.assertEqual(state.metadata["reason"], "RuntimeError")
+
 
 if __name__ == "__main__":
     unittest.main()

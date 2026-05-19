@@ -236,16 +236,10 @@ class GatewayPluginRegistry:
         return registration.factory(app=app, **kwargs)
 
     def adapter_id_map(self) -> dict[str, str]:
-        return {
-            key: registration.descriptor.adapter_id
-            for key, registration in self._adapters.items()
-        }
+        return {key: registration.descriptor.adapter_id for key, registration in self._adapters.items()}
 
     def adapter_setup_payload(self) -> dict[str, dict[str, object]]:
-        return {
-            key: registration.descriptor.summary_payload()
-            for key, registration in self._adapters.items()
-        }
+        return {key: registration.descriptor.summary_payload() for key, registration in self._adapters.items()}
 
     def configured_service_keys(
         self,

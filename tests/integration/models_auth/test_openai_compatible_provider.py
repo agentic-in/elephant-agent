@@ -50,7 +50,10 @@ class _ResponsesStreamBackfillTransport:
         self.stream_payloads.append(dict(payload))
         yield JSONHTTPStreamChunk(
             event="response.output_text.delta",
-            payload={"type": "response.output_text.delta", "delta": "fallback-response-text"},
+            payload={
+                "type": "response.output_text.delta",
+                "delta": "fallback-response-text",
+            },
         )
         yield JSONHTTPStreamChunk(
             event="response.output_item.done",
@@ -142,7 +145,11 @@ class _ResponsesReasoningStreamTransport:
                     "model": str(payload["model"]),
                     "output_text": "The release note draft is ready.",
                     "reasoning": "Inspect the latest release state first.",
-                    "usage": {"input_tokens": 8, "output_tokens": 5, "total_tokens": 13},
+                    "usage": {
+                        "input_tokens": 8,
+                        "output_tokens": 5,
+                        "total_tokens": 13,
+                    },
                 },
             },
         )
@@ -153,7 +160,18 @@ class _ResponsesReasoningStreamTransport:
 
 class _ResponsesFragmentedReasoningStreamTransport:
     def post_json_stream(self, *, url: str, headers, payload):
-        reasoning_deltas = ("先看", "\n", "release", "\n", "notes", "。", "\n", "Then", "\n", "verify")
+        reasoning_deltas = (
+            "先看",
+            "\n",
+            "release",
+            "\n",
+            "notes",
+            "。",
+            "\n",
+            "Then",
+            "\n",
+            "verify",
+        )
         for delta in reasoning_deltas:
             yield JSONHTTPStreamChunk(
                 event="response.reasoning.delta",
@@ -178,7 +196,11 @@ class _ResponsesFragmentedReasoningStreamTransport:
                     "model": str(payload["model"]),
                     "output_text": "结论已经确认。",
                     "reasoning": "先看\nrelease\nnotes。\nThen\nverify",
-                    "usage": {"input_tokens": 10, "output_tokens": 6, "total_tokens": 16},
+                    "usage": {
+                        "input_tokens": 10,
+                        "output_tokens": 6,
+                        "total_tokens": 16,
+                    },
                 },
             },
         )
@@ -189,7 +211,19 @@ class _ResponsesFragmentedReasoningStreamTransport:
 
 class _ResponsesWordFragmentReasoningStreamTransport:
     def post_json_stream(self, *, url: str, headers, payload):
-        reasoning_deltas = ("The", "user", "asked", "about", "X", "un", "zhuo", "in", "Cheng", "du", ".")
+        reasoning_deltas = (
+            "The",
+            "user",
+            "asked",
+            "about",
+            "X",
+            "un",
+            "zhuo",
+            "in",
+            "Cheng",
+            "du",
+            ".",
+        )
         for delta in reasoning_deltas:
             yield JSONHTTPStreamChunk(
                 event="response.reasoning.delta",
@@ -214,7 +248,11 @@ class _ResponsesWordFragmentReasoningStreamTransport:
                     "model": str(payload["model"]),
                     "output_text": "I can answer naturally now.",
                     "reasoning": "The user asked about Xunzhuo in Chengdu.",
-                    "usage": {"input_tokens": 14, "output_tokens": 7, "total_tokens": 21},
+                    "usage": {
+                        "input_tokens": 14,
+                        "output_tokens": 7,
+                        "total_tokens": 21,
+                    },
                 },
             },
         )
@@ -238,7 +276,11 @@ class _ChatTaggedReasoningTransport:
                         }
                     }
                 ],
-                "usage": {"prompt_tokens": 7, "completion_tokens": 4, "total_tokens": 11},
+                "usage": {
+                    "prompt_tokens": 7,
+                    "completion_tokens": 4,
+                    "total_tokens": 11,
+                },
             },
         )
 
@@ -338,7 +380,10 @@ class _ProviderStubServer:
                                                     "index": 0,
                                                     "id": "call-stub",
                                                     "type": "function",
-                                                    "function": {"name": tool_name, "arguments": "{\"query\":"},
+                                                    "function": {
+                                                        "name": tool_name,
+                                                        "arguments": '{"query":',
+                                                    },
                                                 }
                                             ],
                                         }
@@ -354,7 +399,7 @@ class _ProviderStubServer:
                                             "tool_calls": [
                                                 {
                                                     "index": 0,
-                                                    "function": {"arguments": "\"native tools\"}"},
+                                                    "function": {"arguments": '"native tools"}'},
                                                 }
                                             ],
                                         }
@@ -365,7 +410,11 @@ class _ProviderStubServer:
                                 "id": "chatcmpl-stub",
                                 "model": payload["model"],
                                 "choices": [{"delta": {}, "finish_reason": "tool_calls"}],
-                                "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+                                "usage": {
+                                    "prompt_tokens": 7,
+                                    "completion_tokens": 3,
+                                    "total_tokens": 10,
+                                },
                             },
                         )
                         for event in events:
@@ -397,7 +446,11 @@ class _ProviderStubServer:
                                     }
                                 }
                             ],
-                            "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+                            "usage": {
+                                "prompt_tokens": 7,
+                                "completion_tokens": 3,
+                                "total_tokens": 10,
+                            },
                         }
                         encoded = json.dumps(response).encode("utf-8")
                         self.send_response(200)
@@ -428,7 +481,11 @@ class _ProviderStubServer:
                             "id": "chatcmpl-stub",
                             "model": payload["model"],
                             "choices": [{"delta": {}, "finish_reason": "stop"}],
-                            "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+                            "usage": {
+                                "prompt_tokens": 7,
+                                "completion_tokens": 3,
+                                "total_tokens": 10,
+                            },
                         }
                         self.wfile.write(f"data: {json.dumps(final_event)}\n\n".encode("utf-8"))
                         self.wfile.write(b"data: [DONE]\n\n")
@@ -481,7 +538,11 @@ class _ProviderStubServer:
                                             "id": "resp-stub",
                                             "model": payload["model"],
                                             "output": [function_call],
-                                            "usage": {"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+                                            "usage": {
+                                                "input_tokens": 6,
+                                                "output_tokens": 3,
+                                                "total_tokens": 9,
+                                            },
                                         }
                                     },
                                 ),
@@ -490,8 +551,14 @@ class _ProviderStubServer:
                             content = f"live-response:{input_text}"
                             midpoint = max(1, len(content) // 2)
                             events = (
-                                ("response.output_text.delta", {"delta": content[:midpoint]}),
-                                ("response.output_text.delta", {"delta": content[midpoint:]}),
+                                (
+                                    "response.output_text.delta",
+                                    {"delta": content[:midpoint]},
+                                ),
+                                (
+                                    "response.output_text.delta",
+                                    {"delta": content[midpoint:]},
+                                ),
                                 (
                                     "response.completed",
                                     {
@@ -499,7 +566,11 @@ class _ProviderStubServer:
                                             "id": "resp-stub",
                                             "model": payload["model"],
                                             "output_text": content,
-                                            "usage": {"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+                                            "usage": {
+                                                "input_tokens": 6,
+                                                "output_tokens": 3,
+                                                "total_tokens": 9,
+                                            },
                                         }
                                     },
                                 ),
@@ -523,14 +594,22 @@ class _ProviderStubServer:
                                     "arguments": json.dumps({"query": "responses tools"}),
                                 }
                             ],
-                            "usage": {"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+                            "usage": {
+                                "input_tokens": 6,
+                                "output_tokens": 3,
+                                "total_tokens": 9,
+                            },
                         }
                     else:
                         response = {
                             "id": "resp-stub",
                             "model": payload["model"],
                             "output_text": f"live-response:{self._responses_input_text(payload.get('input'))}",
-                            "usage": {"input_tokens": 6, "output_tokens": 3, "total_tokens": 9},
+                            "usage": {
+                                "input_tokens": 6,
+                                "output_tokens": 3,
+                                "total_tokens": 9,
+                            },
                         }
                 else:
                     self.send_response(404)
@@ -565,9 +644,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 extra_headers={"x-tenant": "elephant"},
             ),
             runtime_resolver=ProviderRuntimeResolver.default(),
-            credential_source=_StaticCredentialSource(
-                {"openai-compatible": {"api_key": "sk-test-123"}}
-            ),
+            credential_source=_StaticCredentialSource({"openai-compatible": {"api_key": "sk-test-123"}}),
         )
         request = ModelRequest(
             request_id="request-1",
@@ -591,7 +668,10 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(plan.payload["model"], "openai/gpt-4o-mini")
         self.assertEqual(plan.payload["messages"][0]["role"], "system")
         self.assertIn("### System Layer Contract", plan.payload["messages"][0]["content"])
-        self.assertIn("You are the active elephant identity", plan.payload["messages"][0]["content"])
+        self.assertIn(
+            "You are the active elephant identity",
+            plan.payload["messages"][0]["content"],
+        )
         self.assertIn("### Episode Continuity", plan.payload["messages"][0]["content"])
         self.assertIn("Stay truthful and bounded", plan.payload["messages"][0]["content"])
         self.assertIn("### Loop Execution Board", plan.payload["messages"][0]["content"])
@@ -606,7 +686,9 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertNotIn("sk-test-123", result.content)
         self.assertEqual(self.server.requests[0]["path"], "/v1/chat/completions")
         self.assertEqual(self.server.requests[0]["headers"]["Authorization"], "Bearer sk-test-123")
-        request_headers = {str(key).lower(): str(value) for key, value in dict(self.server.requests[0]["headers"]).items()}
+        request_headers = {
+            str(key).lower(): str(value) for key, value in dict(self.server.requests[0]["headers"]).items()
+        }
         self.assertEqual(request_headers["x-session-id"], "session-1")
         self.assertNotIn("metadata", self.server.requests[0]["payload"])
         self.assertFalse(plan.payload["stream"])
@@ -672,9 +754,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 model_id="openai/gpt-4o-mini",
             ),
             runtime_resolver=ProviderRuntimeResolver.default(),
-            credential_source=_StaticCredentialSource(
-                {"openai-compatible": {"api_key": "sk-test-123"}}
-            ),
+            credential_source=_StaticCredentialSource({"openai-compatible": {"api_key": "sk-test-123"}}),
         )
         request = ModelRequest(
             request_id="request-root-base",
@@ -692,7 +772,9 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(self.server.requests[-1]["path"], "/v1/chat/completions")
         self.assertEqual(result.content, "live-chat:Use the root endpoint.")
 
-    def test_rendered_prompt_is_forwarded_without_provider_guardrail_prepended(self) -> None:
+    def test_rendered_prompt_is_forwarded_without_provider_guardrail_prepended(
+        self,
+    ) -> None:
         adapter = OpenAICompatibleProviderAdapter(
             config=OpenAICompatibleProviderConfig(
                 provider_id="openai-compatible",
@@ -700,9 +782,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 model_id="openai/gpt-4o-mini",
             ),
             runtime_resolver=ProviderRuntimeResolver.default(),
-            credential_source=_StaticCredentialSource(
-                {"openai-compatible": {"api_key": "sk-test-123"}}
-            ),
+            credential_source=_StaticCredentialSource({"openai-compatible": {"api_key": "sk-test-123"}}),
         )
         request = ModelRequest(
             request_id="request-identity",
@@ -713,14 +793,9 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
             prompt="Who are you?",
             context={
                 "frozen_prefix_prompt": (
-                    "## EpisodeFrozenContext\n"
-                    "### System Layer Contract\n"
-                    "You are Aeon, the active elephant identity."
+                    "## EpisodeFrozenContext\n### System Layer Contract\nYou are Aeon, the active elephant identity."
                 ),
-                "session_snapshot_prompt": (
-                    "## StateSnapshot\n"
-                    "- active current work: keep the State exact"
-                ),
+                "session_snapshot_prompt": ("## StateSnapshot\n- active current work: keep the State exact"),
                 "rendered_prompt": "legacy rendered prompt should not be used when structured sections exist",
             },
         )
@@ -730,20 +805,24 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(plan.payload["messages"][0]["role"], "system")
         self.assertEqual(
             plan.payload["messages"][0]["content"],
-            f"{request.context['frozen_prefix_prompt']}\n\n"
-            f"{request.context['session_snapshot_prompt']}",
+            f"{request.context['frozen_prefix_prompt']}\n\n{request.context['session_snapshot_prompt']}",
         )
         self.assertIn("You are Aeon", plan.payload["messages"][0]["content"])
         self.assertNotIn("## LoopContext", plan.payload["messages"][0]["content"])
         self.assertNotIn("OpenAI-compatible provider adapter", plan.payload["messages"][0]["content"])
         self.assertNotIn("credential_keys=", plan.payload["messages"][0]["content"])
-        self.assertEqual(sum(1 for message in plan.payload["messages"] if message["role"] == "system"), 1)
+        self.assertEqual(
+            sum(1 for message in plan.payload["messages"] if message["role"] == "system"),
+            1,
+        )
         self.assertEqual(
             plan.payload["messages"][1]["content"],
             "Who are you?",
         )
 
-    def test_chat_request_flattens_all_system_context_into_one_system_message(self) -> None:
+    def test_chat_request_flattens_all_system_context_into_one_system_message(
+        self,
+    ) -> None:
         adapter = OpenAICompatibleProviderAdapter(
             config=OpenAICompatibleProviderConfig(
                 provider_id="openai-compatible",
@@ -774,7 +853,10 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
 
         plan = adapter.plan_request(request)
 
-        self.assertEqual([message["role"] for message in plan.payload["messages"]], ["system", "assistant", "user"])
+        self.assertEqual(
+            [message["role"] for message in plan.payload["messages"]],
+            ["system", "assistant", "user"],
+        )
         self.assertIn("## EpisodeFrozenContext", plan.payload["messages"][0]["content"])
         self.assertIn("## StateSnapshot", plan.payload["messages"][0]["content"])
         self.assertNotIn("## LoopContext", plan.payload["messages"][0]["content"])
@@ -805,7 +887,11 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                     role="assistant",
                     content="",
                     tool_calls=(
-                        {"id": "call-1", "name": "tool.web.search", "arguments": {"query": "elephant docs"}},
+                        {
+                            "id": "call-1",
+                            "name": "tool.web.search",
+                            "arguments": {"query": "elephant docs"},
+                        },
                     ),
                 ),
                 PromptMessage(
@@ -821,7 +907,10 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                     "function": {
                         "name": "tool.web.search",
                         "description": "Search the web.",
-                        "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                        },
                     },
                 },
             ),
@@ -829,8 +918,14 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
 
         plan = adapter.plan_request(request)
 
-        self.assertEqual([message["role"] for message in plan.payload["messages"][-4:]], ["user", "assistant", "tool", "user"])
-        self.assertEqual(plan.payload["messages"][-3]["tool_calls"][0]["function"]["name"], "tool_web_search")
+        self.assertEqual(
+            [message["role"] for message in plan.payload["messages"][-4:]],
+            ["user", "assistant", "tool", "user"],
+        )
+        self.assertEqual(
+            plan.payload["messages"][-3]["tool_calls"][0]["function"]["name"],
+            "tool_web_search",
+        )
         self.assertEqual(plan.payload["messages"][-2]["tool_call_id"], "call-1")
         self.assertEqual(plan.payload["messages"][-1]["content"], "Use that result.")
 
@@ -842,9 +937,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 model_id="text-embedding-3-small",
             ),
             runtime_resolver=ProviderRuntimeResolver.default(),
-            credential_source=_StaticCredentialSource(
-                {"openai-compatible": {"api_key": "sk-embed-456"}}
-            ),
+            credential_source=_StaticCredentialSource({"openai-compatible": {"api_key": "sk-embed-456"}}),
         )
         request = ModelRequest(
             request_id="request-embed",
@@ -878,9 +971,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 model_id="openai/gpt-4o-mini",
             ),
             runtime_resolver=ProviderRuntimeResolver.default(),
-            credential_source=_StaticCredentialSource(
-                {"openai-compatible": {"api_key": "sk-stream-789"}}
-            ),
+            credential_source=_StaticCredentialSource({"openai-compatible": {"api_key": "sk-stream-789"}}),
             stream_observer=streamed.append,
         )
         request = ModelRequest(
@@ -909,9 +1000,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 model_id="openai/gpt-4o-mini",
             ),
             runtime_resolver=ProviderRuntimeResolver.default(),
-            credential_source=_StaticCredentialSource(
-                {"openai-compatible": {"api_key": "sk-tools-123"}}
-            ),
+            credential_source=_StaticCredentialSource({"openai-compatible": {"api_key": "sk-tools-123"}}),
             stream_observer=streamed.append,
         )
         request = ModelRequest(
@@ -987,7 +1076,9 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         )
         self.assertTrue(bool(transport.stream_payloads[0]["stream"]))
 
-    def test_responses_stream_reasoning_collapses_fragmented_newlines_without_breaking_mixed_language_text(self) -> None:
+    def test_responses_stream_reasoning_collapses_fragmented_newlines_without_breaking_mixed_language_text(
+        self,
+    ) -> None:
         streamed: list[str] = []
         adapter = OpenAICompatibleProviderAdapter(
             config=OpenAICompatibleProviderConfig(
@@ -1018,7 +1109,9 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(streamed_combined.reasoning, "先看release notes。 Then verify")
         self.assertEqual(streamed_combined.content, "结论已经确认。")
 
-    def test_responses_stream_reasoning_prioritizes_spaces_and_uses_completed_reasoning_when_available(self) -> None:
+    def test_responses_stream_reasoning_prioritizes_spaces_and_uses_completed_reasoning_when_available(
+        self,
+    ) -> None:
         streamed: list[str] = []
         adapter = OpenAICompatibleProviderAdapter(
             config=OpenAICompatibleProviderConfig(
@@ -1112,7 +1205,10 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
 
         self.assertEqual(plan.endpoint_path, "/v1/responses")
         self.assertEqual(plan.payload["input"][0]["role"], "user")
-        self.assertEqual(plan.payload["input"][0]["content"][0]["text"], "Use tools through responses.")
+        self.assertEqual(
+            plan.payload["input"][0]["content"][0]["text"],
+            "Use tools through responses.",
+        )
         self.assertEqual(plan.payload["tools"][0]["name"], "tool_web_search")
         self.assertFalse(plan.payload["store"])
         self.assertEqual(result.content, "")
@@ -1177,7 +1273,9 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertNotIn("metadata", self.server.requests[-1]["payload"])
         self.assertEqual(result.content, "live-response:Explain the current runtime status.")
 
-    def test_codex_responses_backfills_completed_response_from_stream_items(self) -> None:
+    def test_codex_responses_backfills_completed_response_from_stream_items(
+        self,
+    ) -> None:
         transport = _ResponsesStreamBackfillTransport()
         adapter = OpenAICompatibleProviderAdapter(
             config=OpenAICompatibleProviderConfig(
@@ -1367,13 +1465,19 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
                 "packages.models.providers.http.request.urlopen",
                 side_effect=error.URLError(ssl.SSLError("WRONG_VERSION_NUMBER")),
             ),
-            mock.patch("packages.models.providers.http.shutil.which", return_value="/usr/bin/curl"),
+            mock.patch(
+                "packages.models.providers.http.shutil.which",
+                return_value="/usr/bin/curl",
+            ),
             mock.patch("packages.models.providers.http.subprocess.run", return_value=completed) as run,
         ):
             response = transport.post_json(
                 url="https://example.test/v1/chat/completions",
                 headers={"Authorization": "Bearer sk-test"},
-                payload={"model": "demo", "messages": [{"role": "user", "content": "hello"}]},
+                payload={
+                    "model": "demo",
+                    "messages": [{"role": "user", "content": "hello"}],
+                },
             )
 
         self.assertEqual(response.status_code, 200)
@@ -1388,11 +1492,7 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
     def test_retries_with_curl_on_tls_unexpected_eof(self) -> None:
         transport = UrllibJSONHTTPTransport()
 
-        self.assertTrue(
-            transport._should_retry_with_curl(
-                error.URLError(ssl.SSLError("UNEXPECTED_EOF_WHILE_READING"))
-            )
-        )
+        self.assertTrue(transport._should_retry_with_curl(error.URLError(ssl.SSLError("UNEXPECTED_EOF_WHILE_READING"))))
 
     def test_stream_retries_with_curl_on_tls_unexpected_eof(self) -> None:
         transport = UrllibJSONHTTPTransport()
@@ -1400,12 +1500,12 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
             args=["curl"],
             returncode=0,
             stdout=(
-                b'event: response.output_text.delta\n'
+                b"event: response.output_text.delta\n"
                 b'data: {"delta":"hello"}\n\n'
-                b'event: response.completed\n'
+                b"event: response.completed\n"
                 b'data: {"response":{"id":"resp-fallback","output_text":"hello"}}\n\n'
-                b'data: [DONE]\n\n'
-                b'__ELEPHANT_STATUS__:200'
+                b"data: [DONE]\n\n"
+                b"__ELEPHANT_STATUS__:200"
             ),
             stderr=b"",
         )
@@ -1414,7 +1514,10 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
                 "packages.models.providers.http.request.urlopen",
                 side_effect=error.URLError(ssl.SSLError("UNEXPECTED_EOF_WHILE_READING")),
             ),
-            mock.patch("packages.models.providers.http.shutil.which", return_value="/usr/bin/curl"),
+            mock.patch(
+                "packages.models.providers.http.shutil.which",
+                return_value="/usr/bin/curl",
+            ),
             mock.patch("packages.models.providers.http.subprocess.run", return_value=completed) as run,
         ):
             chunks = tuple(
@@ -1425,7 +1528,10 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual([chunk.event for chunk in chunks], ["response.output_text.delta", "response.completed"])
+        self.assertEqual(
+            [chunk.event for chunk in chunks],
+            ["response.output_text.delta", "response.completed"],
+        )
         self.assertEqual(chunks[0].payload["delta"], "hello")
         command = run.call_args.args[0]
         self.assertIn("--write-out", command)

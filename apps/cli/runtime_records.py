@@ -5,14 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
-import json
-from pathlib import Path
 import shutil
 from typing import Any
-from uuid import uuid4
 
 from packages.contracts.layers import Episode
-from packages.contracts.runtime import EvidenceRetrievalRequest, EvidenceRetrievalResult, RecallEvidence
+from packages.contracts.runtime import RecallEvidence
 from packages.evidence import (
     UnifiedRecallRequest,
     render_recall_hit,
@@ -25,29 +22,19 @@ from packages.state import (
 )
 from packages.state.canonical import build_canonical_profile_state
 from packages.state.governance import parse_elephant_identity_display_name
-from packages.state.loader import profile_manifest_payload
 from packages.state.persistence import (
     load_persisted_canonical_state,
     resolve_runtime_state,
     sync_canonical_profile_state,
 )
 
-from .runtime_cognition import (
-    _list_scope_recall_evidence,
-    _recall_query_seed,
-    _recall_query_with_relationship,
-    _recall_scope_reason,
-    _recall_scope_session_ids,
-)
 from .runtime_snapshot import load_snapshot_state_focus
 from .runtime_support import (
     EggSummary,
     _PlanningRecallRecovery,
     _elephant_state_id,
-    _coerce_str_tuple,
-    _optional_datetime,
-    _utc_now,
 )
+
 
 def _hidden_elephant_id(elephant_id: str) -> bool:
     return str(elephant_id or "").strip().startswith("learn-live")
@@ -107,7 +94,16 @@ class CliRuntimeRecordsMixin:
                 )
             )
         herd = tuple(herd_items)
-        ordered = tuple(sorted(herd, key=lambda item: (item.updated_at or datetime.min.replace(tzinfo=timezone.utc), item.elephant_id), reverse=True))
+        ordered = tuple(
+            sorted(
+                herd,
+                key=lambda item: (
+                    item.updated_at or datetime.min.replace(tzinfo=timezone.utc),
+                    item.elephant_id,
+                ),
+                reverse=True,
+            )
+        )
         return ordered[:limit]
 
     def latest_session_for_elephant(self, elephant_id: str) -> Episode | None:
@@ -205,9 +201,7 @@ class CliRuntimeRecordsMixin:
         }
         keep_summary = existing.summary if existing.summary not in _seed_summary_markers else ""
         keep_context_note = (
-            existing.current_context_note
-            if existing.current_context_note not in _seed_summary_markers
-            else ""
+            existing.current_context_note if existing.current_context_note not in _seed_summary_markers else ""
         )
         updated = replace(
             existing,
@@ -219,7 +213,10 @@ class CliRuntimeRecordsMixin:
             elephant_identity_text=elephant_identity_text,
             summary=keep_summary,
             current_context_note=keep_context_note,
-            metadata={**dict(existing.metadata), "profile_id": session.personal_model_id},
+            metadata={
+                **dict(existing.metadata),
+                "profile_id": session.personal_model_id,
+            },
         )
         self.repository.upsert_state(updated)
         refreshed = self.repository.load_state(updated.state_id)
@@ -265,7 +262,9 @@ class CliRuntimeRecordsMixin:
         return tuple(profile_ids)
 
     def _delete_elephant_file_dirs(self, elephant_ids: tuple[str, ...]) -> None:
-        cleaned_elephant_ids = tuple(dict.fromkeys(elephant_id.strip() for elephant_id in elephant_ids if elephant_id.strip()))
+        cleaned_elephant_ids = tuple(
+            dict.fromkeys(elephant_id.strip() for elephant_id in elephant_ids if elephant_id.strip())
+        )
         for elephant_id in cleaned_elephant_ids:
             shutil.rmtree(self.paths.elephant_file_path(elephant_id), ignore_errors=True)
 
@@ -274,8 +273,8 @@ class CliRuntimeRecordsMixin:
             return session.elephant_id
         # Infer from state_id: state:milo -> milo (exclude non-elephant states like state:xxx:default)
         state_id = str(getattr(session, "state_id", "") or "").strip()
-        if state_id.startswith("state:") and ":" not in state_id[len("state:"):]:
-            inferred = state_id[len("state:"):]
+        if state_id.startswith("state:") and ":" not in state_id[len("state:") :]:
+            inferred = state_id[len("state:") :]
             if inferred:
                 return inferred
         lineage = self.repository.episode_lineage(session.episode_id)
@@ -354,12 +353,26 @@ class CliRuntimeRecordsMixin:
         no hybrid hit comes back. No record ids are returned.
         """
         normalized_scope = scope.strip().lower() or "all"
-        if normalized_scope not in {"personal_model", "state", "episodes", "episode", "steps", "sources", "all"}:
+        if normalized_scope not in {
+            "personal_model",
+            "state",
+            "episodes",
+            "episode",
+            "steps",
+            "sources",
+            "all",
+        }:
             normalized_scope = "all"
         capped = max(1, min(int(limit or 5), 10))
 
         if normalized_scope == "all":
-            scopes: tuple[str, ...] = ("personal_model", "state", "episodes", "steps", "sources")
+            scopes: tuple[str, ...] = (
+                "personal_model",
+                "state",
+                "episodes",
+                "steps",
+                "sources",
+            )
         else:
             scopes = (normalized_scope,)
 
@@ -408,7 +421,12 @@ class CliRuntimeRecordsMixin:
             profile_loader=self.profile_loader,
         )
         # Merge config.yaml extensions into the manifest so extension data is available
-        from packages.runtime_config import load_extensions_from_config, global_config_path_for_state_dir, load_global_config
+        from packages.runtime_config import (
+            load_extensions_from_config,
+            global_config_path_for_state_dir,
+            load_global_config,
+        )
+
         config_path = global_config_path_for_state_dir(self.paths.state_dir)
         try:
             config = load_global_config(
@@ -440,7 +458,12 @@ class CliRuntimeRecordsMixin:
 
     def _load_profile_manifest(self) -> dict[str, Any]:
         """Load extension manifest data from config.yaml."""
-        from packages.runtime_config import load_extensions_from_config, global_config_path_for_state_dir, load_global_config
+        from packages.runtime_config import (
+            load_extensions_from_config,
+            global_config_path_for_state_dir,
+            load_global_config,
+        )
+
         config_path = global_config_path_for_state_dir(self.paths.state_dir)
         try:
             config = load_global_config(
@@ -456,7 +479,11 @@ class CliRuntimeRecordsMixin:
 
     def _write_profile_manifest(self, manifest: Mapping[str, Any]) -> None:
         """Write extension manifest data to config.yaml."""
-        from packages.runtime_config import save_extensions_to_config, global_config_path_for_state_dir
+        from packages.runtime_config import (
+            save_extensions_to_config,
+            global_config_path_for_state_dir,
+        )
+
         config_path = global_config_path_for_state_dir(self.paths.state_dir)
         save_extensions_to_config(
             config_path,
@@ -475,14 +502,20 @@ class CliRuntimeRecordsMixin:
         resolved_state = resolve_runtime_state(
             self.repository,
             personal_model_id=loaded_profile.state.profile_id,
-            episode_id=(latest_session.episode_id if latest_session is not None and latest_session.personal_model_id == loaded_profile.state.profile_id else None),
+            episode_id=(
+                latest_session.episode_id
+                if latest_session is not None and latest_session.personal_model_id == loaded_profile.state.profile_id
+                else None
+            ),
             required=False,
         )
         # Persist identity to SQLite only; no longer writing profile.json
         self.repository.upsert_personal_model_runtime_state(loaded_profile.state)
         canonical_bundle = build_canonical_profile_state(
             loaded_profile,
-            elephant_id=resolved_state.elephant_id if resolved_state is not None and resolved_state.elephant_id else None,
+            elephant_id=resolved_state.elephant_id
+            if resolved_state is not None and resolved_state.elephant_id
+            else None,
         )
         sync_canonical_profile_state(
             self.repository,
@@ -492,7 +525,11 @@ class CliRuntimeRecordsMixin:
             recall_runtime=self.recall_runtime,
             surface="cli",
             state_id=resolved_state.state_id if resolved_state is not None else None,
-            episode_id=(latest_session.episode_id if latest_session is not None and latest_session.personal_model_id == loaded_profile.state.profile_id else None),
+            episode_id=(
+                latest_session.episode_id
+                if latest_session is not None and latest_session.personal_model_id == loaded_profile.state.profile_id
+                else None
+            ),
         )
         reloaded = self._load_profile(loaded_profile.state.profile_id)
         self.repository.upsert_personal_model_runtime_state(reloaded.state)

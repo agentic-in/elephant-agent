@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .discord_support import *  # noqa: F401,F403
 
+
 @dataclass(frozen=True, slots=True)
 class DiscordPyDeliveryTransport:
     client: object
@@ -48,9 +49,7 @@ class DiscordPyDeliveryTransport:
             if "```" in content
             else DISCORD_MESSAGE_CONTENT_LIMIT
         )
-        content_chunks = _rebalance_discord_fenced_chunks(
-            _split_discord_message_content(content, limit=chunk_limit)
-        )
+        content_chunks = _rebalance_discord_fenced_chunks(_split_discord_message_content(content, limit=chunk_limit))
         message = await self._send_content_chunks(
             channel=channel,
             content_chunks=content_chunks,

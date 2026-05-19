@@ -19,7 +19,9 @@ import packages.models.bootstrap as model_bootstrap
 
 
 class ProviderSelectionPayloadTest(unittest.TestCase):
-    def test_load_provider_profile_reads_provider_profile_from_config_yaml(self) -> None:
+    def test_load_provider_profile_reads_provider_profile_from_config_yaml(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             state_dir = Path(tmpdir) / "state"
             state_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +80,9 @@ class EmbeddingRuntimeLoggingTest(unittest.TestCase):
 
 
 class EmbeddingBootstrapStateTest(unittest.TestCase):
-    def test_resolve_embedding_bootstrap_state_uses_ready_when_root_is_healthy(self) -> None:
+    def test_resolve_embedding_bootstrap_state_uses_ready_when_root_is_healthy(
+        self,
+    ) -> None:
         with mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True):
             state = provider_runtime_support.resolve_embedding_bootstrap_state(
                 Path("/tmp/elephant-bootstrap-state"),
@@ -89,11 +93,16 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
         self.assertEqual(state.state_focus_mode, "embedded")
         self.assertIsNone(state.background_pid)
 
-    def test_resolve_embedding_bootstrap_state_uses_downloading_when_dependencies_exist(self) -> None:
+    def test_resolve_embedding_bootstrap_state_uses_downloading_when_dependencies_exist(
+        self,
+    ) -> None:
         with (
-                mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=False),
-                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=True),
-
+            mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=False),
+            mock.patch.object(
+                model_bootstrap,
+                "sentence_transformers_dependencies_ready",
+                return_value=True,
+            ),
         ):
             state = provider_runtime_support.resolve_embedding_bootstrap_state(
                 Path("/tmp/elephant-bootstrap-state"),
@@ -103,13 +112,19 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
         self.assertEqual(state.status, "downloading")
         self.assertIn("background model acquisition", state.summary)
 
-    def test_trigger_embedding_bootstrap_spawns_background_worker_for_pending_state(self) -> None:
+    def test_trigger_embedding_bootstrap_spawns_background_worker_for_pending_state(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             state_dir = Path(tmpdir)
             fake_process = mock.Mock(pid=43210)
             with (
                 mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=False),
-                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=False),
+                mock.patch.object(
+                    model_bootstrap,
+                    "sentence_transformers_dependencies_ready",
+                    return_value=False,
+                ),
                 mock.patch.object(model_bootstrap.subprocess, "Popen", return_value=fake_process) as popen,
             ):
                 state = provider_runtime_support.trigger_embedding_bootstrap(
@@ -143,7 +158,11 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             )
             with (
                 mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=False),
-                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=False),
+                mock.patch.object(
+                    model_bootstrap,
+                    "sentence_transformers_dependencies_ready",
+                    return_value=False,
+                ),
                 mock.patch.object(model_bootstrap.subprocess, "Popen") as popen,
             ):
                 state = provider_runtime_support.trigger_embedding_bootstrap(
@@ -160,8 +179,16 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             state_dir = Path(tmpdir)
             with (
                 mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=False),
-                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=False),
-                mock.patch.object(model_bootstrap.subprocess, "Popen", side_effect=OSError("spawn failed")),
+                mock.patch.object(
+                    model_bootstrap,
+                    "sentence_transformers_dependencies_ready",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    model_bootstrap.subprocess,
+                    "Popen",
+                    side_effect=OSError("spawn failed"),
+                ),
             ):
                 state = provider_runtime_support.trigger_embedding_bootstrap(
                     state_dir,
@@ -193,7 +220,11 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             fake_process = mock.Mock(pid=54321)
             with (
                 mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=False),
-                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=False),
+                mock.patch.object(
+                    model_bootstrap,
+                    "sentence_transformers_dependencies_ready",
+                    return_value=False,
+                ),
                 mock.patch.object(model_bootstrap.subprocess, "Popen", return_value=fake_process) as popen,
             ):
                 state = provider_runtime_support.trigger_embedding_bootstrap(

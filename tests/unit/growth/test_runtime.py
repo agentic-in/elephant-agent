@@ -4,7 +4,11 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import unittest
 
-from packages.contracts import ExperienceRecord, ProcedureRecord, PersonalModelGrowthState
+from packages.contracts import (
+    ExperienceRecord,
+    ProcedureRecord,
+    PersonalModelGrowthState,
+)
 from packages.growth import (
     GrowthTurnSignals,
     ProgressionProjectionBuilder,
@@ -148,7 +152,9 @@ class GrowthRuntimeTest(unittest.TestCase):
         self.assertGreaterEqual(second_snapshot.state.growth_score, 100)
         self.assertEqual(second.reward_reasons[0].reason_id, "second-turn-promotion")
 
-    def test_personal_model_understanding_signals_outrank_token_heavy_flat_turns(self) -> None:
+    def test_personal_model_understanding_signals_outrank_token_heavy_flat_turns(
+        self,
+    ) -> None:
         now = datetime(2026, 4, 18, tzinfo=timezone.utc)
         current = self._mature_state(now=now)
 
@@ -184,7 +190,12 @@ class GrowthRuntimeTest(unittest.TestCase):
                 artifact_ids=("artifact:patch-note",),
                 promoted_procedure_ids=("procedure:resume-checklist",),
                 personal_model_fact_count=7,
-                personal_model_lens_counts=(("identity", 2), ("world", 2), ("pulse", 2), ("journey", 1)),
+                personal_model_lens_counts=(
+                    ("identity", 2),
+                    ("world", 2),
+                    ("pulse", 2),
+                    ("journey", 1),
+                ),
                 personal_model_topic_count=5,
                 personal_model_new_fact_count=2,
                 personal_model_updated_fact_count=1,
@@ -219,8 +230,14 @@ class GrowthRuntimeTest(unittest.TestCase):
         self.assertIn("understanding-grounding", meaningful_reasons)
         self.assertIn("continuity", meaningful_reasons)
         self.assertIn("tokens-support", flat_reasons)
-        self.assertLess(flat_reasons["tokens-support"].score, meaningful_reasons["understanding-freshness"].score)
-        self.assertLess(flat_reasons["tokens-support"].score, meaningful_reasons["understanding-grounding"].score)
+        self.assertLess(
+            flat_reasons["tokens-support"].score,
+            meaningful_reasons["understanding-freshness"].score,
+        )
+        self.assertLess(
+            flat_reasons["tokens-support"].score,
+            meaningful_reasons["understanding-grounding"].score,
+        )
 
     def test_reward_reasons_keep_pm_freshness_and_grounding_traceable(self) -> None:
         now = datetime(2026, 4, 18, tzinfo=timezone.utc)
@@ -250,7 +267,12 @@ class GrowthRuntimeTest(unittest.TestCase):
                 promoted_procedure_ids=("procedure:resume-checklist",),
                 work_item_evidence_refs=("artifact:brief",),
                 personal_model_fact_count=5,
-                personal_model_lens_counts=(("identity", 1), ("world", 2), ("pulse", 1), ("journey", 1)),
+                personal_model_lens_counts=(
+                    ("identity", 1),
+                    ("world", 2),
+                    ("pulse", 1),
+                    ("journey", 1),
+                ),
                 personal_model_topic_count=4,
                 personal_model_new_fact_count=1,
                 personal_model_updated_fact_count=1,
@@ -305,14 +327,19 @@ class GrowthRuntimeTest(unittest.TestCase):
         self.assertTrue(all(gate.status == "pass" for gate in gates.values()))
 
         comparisons = {comparison.case_id: comparison for comparison in scorecard.comparisons}
-        self.assertGreater(comparisons["meaningful-a"].delta_score, comparisons["trivial-a"].delta_score)
+        self.assertGreater(
+            comparisons["meaningful-a"].delta_score,
+            comparisons["trivial-a"].delta_score,
+        )
         self.assertLess(comparisons["trivial-b"].delta_score, comparisons["trivial-a"].delta_score)
         self.assertIn("token-heavy", comparisons["trivial-b"].anti_grind_flags)
         self.assertTrue(
             any(condition.startswith("fallback to baseline-snapshot mode") for condition in scorecard.stop_conditions)
         )
 
-    def test_progression_rollout_scorecard_falls_back_when_ui_budget_regresses(self) -> None:
+    def test_progression_rollout_scorecard_falls_back_when_ui_budget_regresses(
+        self,
+    ) -> None:
         now = datetime(2026, 4, 18, tzinfo=timezone.utc)
         case = ProgressionReplayCase(
             case_id="meaningful-ui",

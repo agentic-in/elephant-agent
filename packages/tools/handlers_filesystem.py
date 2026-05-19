@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import difflib
 from collections.abc import Mapping
-from contextlib import contextmanager, redirect_stdout
-import io
 import os
 from pathlib import Path
 import select
 import shutil
-import signal
 import subprocess
 import sys
-import threading
 import time
 from typing import Any
 
@@ -151,7 +147,10 @@ def run_terminal_exec(
     command = str(invocation.arguments.get("command") or "").strip()
     if not command:
         raise ValueError("tool.terminal.exec requires a 'command' argument")
-    allowed_roots = (*invocation.context.allowed_roots, *dependencies.additional_allowed_roots)
+    allowed_roots = (
+        *invocation.context.allowed_roots,
+        *dependencies.additional_allowed_roots,
+    )
     local_root = dependencies.resolve_cwd(invocation.session_id)
     cwd = resolve_allowed_path(
         local_root,
@@ -213,7 +212,13 @@ def run_process_action(invocation: ToolInvocation, *, manager: InMemoryProcessMa
     if action == "wait":
         managed = manager.wait(
             process_id,
-            timeout_seconds=max(1, min(coerce_int(invocation.arguments.get("timeout_seconds"), default=20), 120)),
+            timeout_seconds=max(
+                1,
+                min(
+                    coerce_int(invocation.arguments.get("timeout_seconds"), default=20),
+                    120,
+                ),
+            ),
         )
         return tool_summary(invocation, _process_summary(managed), side_effects=("process",))
     if action == "write":
@@ -252,7 +257,13 @@ def run_file_read(
     _ensure_text_readable(path, raw_path=raw_path)
     content = path.read_text(encoding="utf-8", errors="replace")
     offset = max(1, coerce_int(invocation.arguments.get("offset"), default=1))
-    limit = max(1, min(coerce_int(invocation.arguments.get("limit"), default=MAX_FILE_READ_LINES), MAX_FILE_READ_LIMIT))
+    limit = max(
+        1,
+        min(
+            coerce_int(invocation.arguments.get("limit"), default=MAX_FILE_READ_LINES),
+            MAX_FILE_READ_LIMIT,
+        ),
+    )
     lines = content.splitlines()
     end_line = min(len(lines), offset + limit - 1)
     selected = lines[offset - 1 : end_line]
@@ -262,9 +273,7 @@ def run_file_read(
             f"tool.file.read selected {selected_chars:,} characters, above the "
             f"{MAX_FILE_READ_CHARS:,} character limit; use a smaller offset/limit window"
         )
-    numbered = "\n".join(
-        f"{index}|{_truncate_line(line)}" for index, line in enumerate(selected, start=offset)
-    )
+    numbered = "\n".join(f"{index}|{_truncate_line(line)}" for index, line in enumerate(selected, start=offset))
     truncated = end_line < len(lines)
     header = [
         f"path: {path}",
@@ -637,7 +646,12 @@ def _run_v4a_patch(
             diffs.append(_unified_diff(old_content, new_content, path))
         else:
             raise ValueError(f"unsupported patch operation: {op}")
-    lint_lines = tuple(filter(None, (_lint_after_write(path) for path in (*modified, *created) if path.exists())))
+    lint_lines = tuple(
+        filter(
+            None,
+            (_lint_after_write(path) for path in (*modified, *created) if path.exists()),
+        )
+    )
     lines = [
         "mode: patch",
         f"files_modified: {', '.join(str(path) for path in modified) or '<none>'}",
@@ -665,7 +679,12 @@ def _plan_unified_diff_patch(
         is_add = old_path == "/dev/null"
         is_delete = new_path == "/dev/null"
         raw_path = new_path if not is_delete else old_path
-        path = resolve_allowed_path(cwd, _strip_diff_path(raw_path), must_exist=not is_add, allowed_roots=allowed_roots)
+        path = resolve_allowed_path(
+            cwd,
+            _strip_diff_path(raw_path),
+            must_exist=not is_add,
+            allowed_roots=allowed_roots,
+        )
         _ensure_safe_write_path(path)
         if is_add:
             if path.exists():
@@ -713,7 +732,12 @@ def _apply_unified_diff_changes(invocation: ToolInvocation, changes: list[dict[s
             else:
                 modified.append(path)
         diffs.append(_unified_diff(old_content, new_content, path))
-    lint_lines = tuple(filter(None, (_lint_after_write(path) for path in (*modified, *created) if path.exists())))
+    lint_lines = tuple(
+        filter(
+            None,
+            (_lint_after_write(path) for path in (*modified, *created) if path.exists()),
+        )
+    )
     lines = [
         "mode: patch",
         "format: unified-diff",
@@ -863,7 +887,11 @@ def _parse_v4a_patch(patch_text: str) -> list[dict[str, Any]]:
         if line.startswith("*** Add File: "):
             if current is not None:
                 operations.append(current)
-            current = {"op": "add", "path": line.removeprefix("*** Add File: ").strip(), "new_lines": []}
+            current = {
+                "op": "add",
+                "path": line.removeprefix("*** Add File: ").strip(),
+                "new_lines": [],
+            }
             continue
         if line.startswith("*** Delete File: "):
             if current is not None:

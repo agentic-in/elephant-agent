@@ -27,7 +27,9 @@ class _FakeResponse:
 
 
 class DashboardCommandTest(unittest.TestCase):
-    def test_try_daemon_dashboard_url_requires_health_and_dashboard_payload(self) -> None:
+    def test_try_daemon_dashboard_url_requires_health_and_dashboard_payload(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             state_dir = Path(tempdir) / "herd"
             state_dir.mkdir()
@@ -59,7 +61,9 @@ class DashboardCommandTest(unittest.TestCase):
 
         self.assertIsNone(url)
 
-    def test_probe_daemon_dashboard_reports_running_process_when_http_is_unavailable(self) -> None:
+    def test_probe_daemon_dashboard_reports_running_process_when_http_is_unavailable(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             state_dir = Path(tempdir) / "herd"
             state_dir.mkdir()
@@ -207,7 +211,9 @@ class DashboardCommandTest(unittest.TestCase):
             mock.patch.object(
                 dashboard_command,
                 "_probe_daemon_dashboard",
-                return_value=dashboard_command.DaemonDashboardProbe(dashboard_url=None, reason="missing_runtime_record"),
+                return_value=dashboard_command.DaemonDashboardProbe(
+                    dashboard_url=None, reason="missing_runtime_record"
+                ),
             ),
             mock.patch.object(dashboard_command, "_print_cli_card") as print_card,
         ):
@@ -245,7 +251,9 @@ class DashboardCommandTest(unittest.TestCase):
         start_daemon.assert_called_once_with(plan)
         printed.assert_called_once_with("Elephant Agent dashboard URL: http://127.0.0.1:8900/dashboard/")
 
-    def test_run_dashboard_reports_running_daemon_when_dashboard_is_unavailable(self) -> None:
+    def test_run_dashboard_reports_running_daemon_when_dashboard_is_unavailable(
+        self,
+    ) -> None:
         plan = dashboard_command.DashboardLaunchPlan(state_dir=Path("/tmp/elephant-herd"))
 
         with (
@@ -273,7 +281,11 @@ class DashboardCommandTest(unittest.TestCase):
         plan = dashboard_command.DashboardLaunchPlan(state_dir=Path("/tmp/elephant-herd"))
 
         with (
-            mock.patch.object(dashboard_command, "DASHBOARD_DIST_INDEX", Path("/tmp/missing-dashboard-index.html")),
+            mock.patch.object(
+                dashboard_command,
+                "DASHBOARD_DIST_INDEX",
+                Path("/tmp/missing-dashboard-index.html"),
+            ),
             mock.patch.object(dashboard_command, "_ensure_frontend_dist", return_value=False),
             mock.patch.object(dashboard_command, "_probe_daemon_dashboard") as probe,
             mock.patch.object(dashboard_command, "_print_cli_card") as print_card,

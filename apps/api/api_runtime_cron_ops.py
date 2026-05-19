@@ -12,7 +12,10 @@ from .api_runtime_support import _now
 def run_proactive_ask_now(self) -> dict[str, Any]:
     """Run the built-in proactive ask scheduler once on demand."""
     from apps.gateway.cron_service import CONFIGURED_IM_ADAPTERS
-    from apps.gateway.proactive_ask_job import ProactiveAskTickResult, run_proactive_ask_tick
+    from apps.gateway.proactive_ask_job import (
+        ProactiveAskTickResult,
+        run_proactive_ask_tick,
+    )
     from apps.gateway.runtime import build_gateway_app
     from packages.runtime_config import (
         global_config_path_for_state_dir,

@@ -55,9 +55,7 @@ def _append_models(self, args: list[str]) -> None:
     profile = self.runtime.inspect_profile(session.personal_model_id)
     initial_state = provider_setup_defaults(self.runtime, provider_id)
     initial_state.base_url = str(provider.get("base_url") or initial_state.base_url)
-    initial_state.model_id = str(
-        provider.get("model_id") or provider.get("default_model") or initial_state.model_id
-    )
+    initial_state.model_id = str(provider.get("model_id") or provider.get("default_model") or initial_state.model_id)
     initial_state.reasoning_effort = (
         str(provider.get("reasoning_effort")).strip()
         if provider.get("reasoning_effort") is not None

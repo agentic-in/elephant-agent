@@ -53,9 +53,7 @@ def build_episode_continuity_state(
     chain = lineage or (episode,)
     lineage_episode_ids = tuple(node.episode_id for node in chain)
     origin_episode_id = (
-        lineage_episode_ids[0]
-        if lineage_episode_ids
-        else (episode.parent_episode_id or episode.episode_id)
+        lineage_episode_ids[0] if lineage_episode_ids else (episode.parent_episode_id or episode.episode_id)
     )
     inherited_interruption_state = normalize_interruption_state(episode.interruption_state)
     if inherited_interruption_state is None:
@@ -112,7 +110,11 @@ def build_relationship_policy(
     preserve_preferences: bool = True,
     preserve_corrections: bool = True,
     preserve_emotional_context: bool = True,
-    allowed_signal_kinds: tuple[str, ...] = ("relationship", "preference", "continuity"),
+    allowed_signal_kinds: tuple[str, ...] = (
+        "relationship",
+        "preference",
+        "continuity",
+    ),
 ) -> RelationshipPolicy:
     return RelationshipPolicy(
         profile_mode=profile_mode,
@@ -140,11 +142,7 @@ def _strip_generated_suffixes(value: str | None) -> str | None:
         return None
     parts = [part.strip() for part in text.split(";")]
     kept = [part for part in parts[:1] if part]
-    kept.extend(
-        part
-        for part in parts[1:]
-        if part and not part.startswith(_GENERATED_SUFFIX_PREFIXES)
-    )
+    kept.extend(part for part in parts[1:] if part and not part.startswith(_GENERATED_SUFFIX_PREFIXES))
     return _compact_interruption_text("; ".join(kept))
 
 
@@ -156,17 +154,13 @@ def _normalize_interruption_state(value: str | None) -> _NormalizedInterruptionS
             return _NormalizedInterruptionState(None, generated_resume=generated_resume)
         if text.startswith(_RECOVER_INTERRUPTION_PREFIX):
             generated_resume = True
-            text = _strip_generated_suffixes(
-                text.removeprefix(_RECOVER_INTERRUPTION_PREFIX)
-            )
+            text = _strip_generated_suffixes(text.removeprefix(_RECOVER_INTERRUPTION_PREFIX))
             continue
         if text.startswith(_RESUME_SUMMARY_PREFIX):
             generated_resume = True
             if _AFTER_INTERRUPTION_MARKER not in text:
                 return _NormalizedInterruptionState(None, generated_resume=True)
-            text = _strip_generated_suffixes(
-                text.split(_AFTER_INTERRUPTION_MARKER, 1)[1]
-            )
+            text = _strip_generated_suffixes(text.split(_AFTER_INTERRUPTION_MARKER, 1)[1])
             continue
         return _NormalizedInterruptionState(text, generated_resume=generated_resume)
     return _NormalizedInterruptionState(text, generated_resume=True)
@@ -187,12 +181,8 @@ def _continuity_summary(
         summary = f"recover after interruption: {inherited_interruption_state}"
     else:
         summary = (
-            f"resume durable work from episode {origin_episode_id} "
-            f"after interruption: {inherited_interruption_state}"
+            f"resume durable work from episode {origin_episode_id} after interruption: {inherited_interruption_state}"
         )
     if episode.parent_episode_id and episode.parent_episode_id != origin_episode_id:
         summary += f"; immediate parent={episode.parent_episode_id}"
     return summary
-
-
-
