@@ -142,18 +142,30 @@ class AnthropicMessagesRequest:
         if user_id := str(self.metadata.get("user_id") or "").strip():
             payload["metadata"] = {"user_id": user_id}
         if self.system:
-            payload["system"] = self.system
+            if self._supports_cache_control():
+                payload["system"] = [
+                    {"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}},
+                ]
+            else:
+                payload["system"] = self.system
         if self.temperature is not None:
             payload["temperature"] = self.temperature
         if self.stop_sequences:
             payload["stop_sequences"] = self.stop_sequences
         if self.tools:
-            payload["tools"] = [dict(tool) for tool in self.tools]
+            tools_list = [dict(tool) for tool in self.tools]
+            if tools_list and self._supports_cache_control():
+                tools_list[-1] = {**tools_list[-1], "cache_control": {"type": "ephemeral"}}
+            payload["tools"] = tools_list
         if self.thinking:
             payload["thinking"] = dict(self.thinking)
         if self.output_config:
             payload["output_config"] = dict(self.output_config)
         return payload
+
+    def _supports_cache_control(self) -> bool:
+        base = str(self.base_url or "").lower()
+        return self.provider_id == "anthropic" or "api.anthropic.com" in base
 
 
 def _anthropic_wire_content_block(block: AnthropicContentBlock) -> dict[str, object]:

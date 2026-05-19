@@ -13,10 +13,14 @@ summaries are not durable prompt truth.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from typing import Any
 
 from packages.contracts.runtime import ContextBundle, PromptEnvelope
+
+_PREFIX_CACHE_MAX = 32
+_prefix_cache: dict[str, tuple[str, str]] = {}  # episode_id -> (hash, frozen_prefix)
 
 
 def build_context_for_generation(
@@ -107,51 +111,22 @@ def _augment_with_system_layers(
     dynamic_lines = _dynamic_system_layer_lines(storage, request)
     if not (committed_pm_lines or resume_lines or dynamic_lines or skill_index_section):
         return context
-    if committed_pm_lines:
-        frozen_prefix = _strip_prompt_sections(
-            frozen_prefix,
-            "What you know about the user",
-            "What you know about them",
-            "What I know so far",
-            "Their world",
-            "Where they are right now",
-            "How we work together",
-            "Who they are",
-            "How to be with them",
-            "Their journey",
-            "Their pulse",
-            "Identity — who they are",
-            "World — what is around them",
-            "Pulse — how they are right now",
-            "Journey — what they have been through",
+
+    episode_id = getattr(session, "episode_id", "") or getattr(request, "episode_id", "") or ""
+    input_hash = _prefix_input_hash(frozen_prefix, committed_pm_lines, resume_lines, skill_index_section)
+    cached = _prefix_cache.get(episode_id)
+    if cached is not None and cached[0] == input_hash:
+        frozen_prefix = cached[1]
+    else:
+        frozen_prefix = _build_frozen_prefix(
+            frozen_prefix, committed_pm_lines, resume_lines, skill_index_section,
         )
-        frozen_prefix = _insert_prompt_section_after(
-            frozen_prefix,
-            after_heading="Your own voice",
-            heading="What I know so far",
-            lines=committed_pm_lines,
-        )
-    if skill_index_section:
-        frozen_prefix = _append_raw_prompt_section(frozen_prefix, skill_index_section)
-    if resume_lines:
-        # If the frozen_prefix already contains a compress-generated summary
-        # (written by _compact_snapshot_after_high_usage), do NOT overwrite it
-        # with the original episode-open resume note.
-        _existing_resume = _extract_prompt_section_content(frozen_prefix, "Episode resume")
-        _has_compress_resume = bool(_existing_resume and "Reference summary:" in _existing_resume)
-        import logging as _gc_log
-        _gc_log.getLogger("elephant.generation_context").debug(
-            "Episode resume guard: has_compress=%s existing_len=%d resume_lines=%s",
-            _has_compress_resume, len(_existing_resume), resume_lines[0][:60] if resume_lines else "",
-        )
-        if not _has_compress_resume:
-            frozen_prefix = _strip_prompt_sections(frozen_prefix, "Episode resume")
-            frozen_prefix = _append_prompt_section(
-                frozen_prefix,
-                "Episode resume",
-                resume_lines,
-            )
-        # else: keep the compress-generated "Reference summary:" section intact
+        if episode_id:
+            if len(_prefix_cache) >= _PREFIX_CACHE_MAX and episode_id not in _prefix_cache:
+                oldest = next(iter(_prefix_cache))
+                del _prefix_cache[oldest]
+            _prefix_cache[episode_id] = (input_hash, frozen_prefix)
+
     prompt_envelope = PromptEnvelope(
         frozen_prefix=frozen_prefix,
         session_snapshot="",
@@ -225,6 +200,76 @@ def _topic_lens(topic: str, fallback_lens: str) -> str:
     return fallback_lens if fallback_lens in _KNOWN_LENSES else ""
 
 
+def _prefix_input_hash(
+    base_prefix: str,
+    pm_lines: tuple[str, ...],
+    resume_lines: tuple[str, ...],
+    skill_section: str,
+) -> str:
+    h = hashlib.sha256()
+    h.update(base_prefix.encode())
+    h.update(b'\x00')
+    for line in pm_lines:
+        h.update(len(line).to_bytes(4, "big"))
+        h.update(line.encode())
+    h.update(b'\x00')
+    for line in resume_lines:
+        h.update(len(line).to_bytes(4, "big"))
+        h.update(line.encode())
+    h.update(b'\x00')
+    h.update(skill_section.encode())
+    return h.hexdigest()
+
+
+def _build_frozen_prefix(
+    frozen_prefix: str,
+    committed_pm_lines: tuple[str, ...],
+    resume_lines: tuple[str, ...],
+    skill_index_section: str,
+) -> str:
+    if committed_pm_lines:
+        frozen_prefix = _strip_prompt_sections(
+            frozen_prefix,
+            "What you know about the user",
+            "What you know about them",
+            "What I know so far",
+            "Their world",
+            "Where they are right now",
+            "How we work together",
+            "Who they are",
+            "How to be with them",
+            "Their journey",
+            "Their pulse",
+            "Identity — who they are",
+            "World — what is around them",
+            "Pulse — how they are right now",
+            "Journey — what they have been through",
+        )
+        frozen_prefix = _insert_prompt_section_after(
+            frozen_prefix,
+            after_heading="Your own voice",
+            heading="What I know so far",
+            lines=committed_pm_lines,
+        )
+    if skill_index_section:
+        frozen_prefix = _append_raw_prompt_section(frozen_prefix, skill_index_section)
+    if resume_lines:
+        _existing_resume = _extract_prompt_section_content(frozen_prefix, "Episode resume")
+        _has_compress_resume = bool(_existing_resume and "Reference summary:" in _existing_resume)
+        if not _has_compress_resume:
+            frozen_prefix = _strip_prompt_sections(frozen_prefix, "Episode resume")
+            frozen_prefix = _append_prompt_section(
+                frozen_prefix,
+                "Episode resume",
+                resume_lines,
+            )
+    return frozen_prefix
+
+
+def invalidate_prefix_cache(episode_id: str) -> None:
+    _prefix_cache.pop(episode_id, None)
+
+
 def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
     """Render the committed-PM block grouped by lens then facet.
 
@@ -287,7 +332,7 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
         ordered_facets = [f for f in canonical if f in facet_map]
         ordered_facets += sorted(f for f in facet_map if f not in canonical)
         for facet in ordered_facets:
-            facet_facts = sorted(facet_map[facet], key=lambda f: f.confidence, reverse=True)
+            facet_facts = sorted(facet_map[facet], key=lambda f: (-f.confidence, getattr(f, "fact_id", "") or getattr(f, "text", "")))
             lines.append(f"#### {facet}")
             for fact in facet_facts:
                 text = _fact_prompt_text(fact)

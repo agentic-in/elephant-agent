@@ -120,7 +120,9 @@ def compress_epoch(
     from packages.kernel.generation_context import (
         _strip_prompt_sections,
         _append_prompt_section,
+        invalidate_prefix_cache,
     )
+    invalidate_prefix_cache(resolved_session_id)
     updated_prefix = _strip_prompt_sections(updated.frozen_prefix, "Episode resume")
     updated_prefix = _append_prompt_section(
         updated_prefix,

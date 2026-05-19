@@ -159,19 +159,23 @@ def _patch_generate_with_steps() -> None:
             )
 
         elapsed = timer.elapsed()
+        input_tokens = getattr(response, "prompt_tokens", 0) or 0
+        cache_read = getattr(response, "cached_prompt_tokens", 0) or 0
+        cache_creation = getattr(response, "cache_creation_prompt_tokens", 0) or 0
         record_model_metrics(
             provider_id=provider_id,
             model_id=model_id,
-            input_tokens=getattr(response, "prompt_tokens", 0) or 0,
+            input_tokens=input_tokens,
             output_tokens=getattr(response, "completion_tokens", 0) or 0,
             duration_s=elapsed,
         )
+        cache_pct = f"{cache_read / input_tokens * 100:.0f}%" if input_tokens > 0 else "n/a"
         logger.info(
-            "model call completed: provider=%s model=%s tokens=%d/%d duration=%.2fs",
+            "model call completed: provider=%s model=%s tokens=%d/%d cache_read=%d cache_create=%d cache_hit=%s duration=%.2fs",
             provider_id, model_id,
-            getattr(response, "prompt_tokens", 0) or 0,
+            input_tokens,
             getattr(response, "completion_tokens", 0) or 0,
-            elapsed,
+            cache_read, cache_creation, cache_pct, elapsed,
         )
         return response
 

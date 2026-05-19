@@ -395,7 +395,7 @@ class InMemoryToolRegistry:
         return self._definitions.get(tool_id)
 
     def list(self) -> tuple[ToolDefinition, ...]:
-        return tuple(self._definitions.values())
+        return tuple(sorted(self._definitions.values(), key=lambda d: d.tool_id))
 
 
 class InMemoryToolExecutor:
