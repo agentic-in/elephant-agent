@@ -8913,7 +8913,7 @@ struct SurveyOptionCard: View {
                     .padding(12)
             }
         }
-        .frame(maxWidth: .infinity, height: height)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
         .background(selected ? ElephantTheme.accent.opacity(0.12) : Color(nsColor: .controlBackgroundColor).opacity(0.74), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
