@@ -55,6 +55,7 @@ def _dashboard_active_provider(active_provider: dict[str, Any]) -> dict[str, Any
         "source": active_provider.get("source"),
         "status": active_provider.get("status"),
         "model_id": active_provider.get("model_id") or active_provider.get("default_model"),
+        "base_url": active_provider.get("base_url"),
         "context_window_tokens": active_provider.get("context_window_tokens"),
         "context_window_mode": active_provider.get("context_window_mode"),
         "embedding_bootstrap_status": active_provider.get("embedding_bootstrap_status"),

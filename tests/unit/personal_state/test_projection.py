@@ -8,7 +8,7 @@ from packages.state import CompanionSettings
 
 
 class PersonalStateProjectionTest(unittest.TestCase):
-    def test_build_loaded_profile_from_state_preserves_custom_personality_traits(self) -> None:
+    def test_build_loaded_profile_from_state_keeps_elephant_identity_out_of_persona_policy(self) -> None:
         loaded = build_loaded_profile_from_state(
             PersonalModelRuntimeState(
                 profile_id="profile-companion",
@@ -36,7 +36,7 @@ class PersonalStateProjectionTest(unittest.TestCase):
         assert loaded.companion is not None
         self.assertEqual(loaded.companion.personality_preset, "custom")
         self.assertEqual(loaded.companion.personality, ("steady", "direct"))
-        self.assertEqual(loaded.companion.initiative, "proactive")
+        self.assertEqual(loaded.companion.initiative, "gentle")
 
 
 if __name__ == "__main__":

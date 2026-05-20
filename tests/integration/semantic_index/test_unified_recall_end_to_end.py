@@ -65,6 +65,22 @@ class _StubEmbeddingService:
         )
 
 
+class _CountingEmbeddingService:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def embed_text(self, text: str, **_: object) -> EmbeddingVector:
+        self.calls += 1
+        return EmbeddingVector(
+            text_index=0,
+            values=(1.0,),
+            dimensions=1,
+            provider_id="counting",
+            model_id="counting",
+            source_text=text,
+        )
+
+
 class UnifiedRecallEndToEndTest(unittest.TestCase):
     def test_episode_close_then_recall_finds_summary(self) -> None:
         """The main integration loop: producer → consumer consistency."""
@@ -524,6 +540,76 @@ class UnifiedRecallEndToEndTest(unittest.TestCase):
             )
         self.assertTrue(hits)
         self.assertIn("concise", hits[0].content.lower())
+
+    def test_cold_embedding_runtime_does_not_embed_on_hot_path(self) -> None:
+        """Unified recall must not synchronously load local embeddings when cold."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state_dir = root / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+
+            repository = RuntimeStorageRepository(state_dir / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-aa", elephant_name="AA")
+            repository.upsert_episode(
+                Episode(
+                    episode_id="episode-cold",
+                    state_id=state.state_id,
+                    personal_model_id=state.personal_model_id,
+                    entry_surface="test",
+                    status="open",
+                    started_at=_NOW,
+                    updated_at=_NOW,
+                )
+            )
+            repository.upsert_loop(
+                Loop(
+                    loop_id="loop-cold",
+                    episode_id="episode-cold",
+                    state_id=state.state_id,
+                    personal_model_id=state.personal_model_id,
+                    trigger_type="turn.received",
+                    status="closed",
+                    started_at=_NOW,
+                    ended_at=_NOW,
+                )
+            )
+            repository.upsert_step(
+                Step(
+                    step_id="step-cold",
+                    loop_id="loop-cold",
+                    episode_id="episode-cold",
+                    state_id=state.state_id,
+                    personal_model_id=state.personal_model_id,
+                    phase="observation",
+                    action="record_input",
+                    status="completed",
+                    sequence=1,
+                    created_at=_NOW,
+                    summary="Cold recall should use lexical fallback.",
+                    metadata={"user_query": "Cold recall should use lexical fallback."},
+                )
+            )
+
+            bundle = build_semantic_index_bundle(repository=repository, state_dir=state_dir)
+            embedding_service = _CountingEmbeddingService()
+            cold_health = type("_Health", (), {"status": "ready", "metadata": {"runtime_state": "cold"}})()
+            hits = unified_recall(
+                UnifiedRecallRequest(
+                    query="cold lexical",
+                    scopes=("steps",),
+                    personal_model_id=state.personal_model_id,
+                    state_id=state.state_id,
+                    limit=3,
+                ),
+                repository=repository,
+                searcher=bundle.searcher,
+                embedding_service=embedding_service,
+                embedding_health_callable=lambda: cold_health,
+            )
+
+        self.assertEqual(embedding_service.calls, 0)
+        self.assertTrue(hits)
 
 
 if __name__ == "__main__":

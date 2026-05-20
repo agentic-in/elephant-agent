@@ -22,12 +22,12 @@ from .api_runtime_console import (
     _skills,
     _tools,
 )
+from .api_runtime_chat_section import _chat_runtime_traces
 from .api_runtime_internal_methods import (
     _INTERNAL_DASHBOARD_QUERY_CONTRACT,
     _canonical_usage,
     _connection,
     _dashboard_active_provider,
-    _dashboard_step_row,
     _learning_snapshot,
     _personal_model_lens_summaries,
     _now,
@@ -224,9 +224,6 @@ def _state_projection_rows(
             "stage_id": growth.stage.stage_id,
             "progress_percent": growth.progress_percent,
             "score_to_next_level": growth.score_to_next_level,
-            "identity_mode": state.identity_mode,
-            "initiative": state.initiative,
-            "working_style": state.working_style,
             "summary": state.summary,
             "current_context_note": state.current_context_note,
             "elephant_identity_text": state.elephant_identity_text,
@@ -576,7 +573,15 @@ def _fill_reflect(dashboard: dict[str, Any], self) -> None:
 
 def _fill_chat(dashboard: dict[str, Any], self) -> None:
     states, current_state = _state_collections(self)
-    episodes, loops, steps = _runtime_collections(self)
+    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")[:20]
+    loop_rows: list[Any] = []
+    for episode in episodes:
+        loop_rows.extend(self.repository.list_loops(episode_id=episode.episode_id))
+    loops = _sort_items(tuple(loop_rows), id_field="loop_id", time_field="started_at")
+    step_rows: list[Any] = []
+    for loop in loops:
+        step_rows.extend(self.repository.list_steps(loop_id=loop.loop_id))
+    steps = _sort_items(tuple(step_rows), id_field="step_id", time_field="created_at")
     _, loops_by_episode, steps_by_loop = _runtime_maps(states=states, episodes=episodes, loops=loops, steps=steps)
     elephant_rows, state_rows = _state_projection_rows(
         states,
@@ -592,7 +597,7 @@ def _fill_chat(dashboard: dict[str, Any], self) -> None:
     dashboard["herd"] = tuple(elephant_rows)
     dashboard["states"] = tuple(state_rows)
     dashboard["personal_models"] = _basic_personal_model_rows(personal_models, repository=self.repository)
-    dashboard["runtime"] = {**dashboard["runtime"], "episode_traces": _runtime_traces(episodes=episodes, loops_by_episode=loops_by_episode, steps_by_loop=steps_by_loop, source_payloads={})}
+    dashboard["runtime"] = {**dashboard["runtime"], "episode_traces": _chat_runtime_traces(episodes=episodes, loops_by_episode=loops_by_episode, steps_by_loop=steps_by_loop)}
     dashboard["overview"] = {**dashboard["overview"], "current_state_id": current_state.state_id if current_state is not None else None, "current_personal_model_id": current_state.personal_model_id if current_state is not None else DEFAULT_PERSONAL_MODEL_ID}
 
 

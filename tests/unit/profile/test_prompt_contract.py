@@ -212,8 +212,8 @@ class PromptContractTest(unittest.TestCase):
         contract = build_prompt_contract(authored, prompt_mode="full")
         rendered = "\n".join(contract.stable_prefix_refs)
         self.assertIn("You are Jasper, the companion this person keeps coming back to.", rendered)
-        self.assertIn("lightly playful", rendered)
-        self.assertIn("dry little wink", refreshed)
+        self.assertIn("Be concrete when the work needs precision", rendered)
+        self.assertIn("Be concrete when the work needs precision", refreshed)
         self.assertNotIn("continuity-first without losing boundaries", rendered)
 
     def test_generated_elephant_charter_is_not_duplicated_as_custom_note(self) -> None:

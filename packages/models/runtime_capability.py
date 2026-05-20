@@ -380,6 +380,31 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
     def set_stream_observer(self, observer) -> None:
         self._stream_observer = observer
 
+    def _stream_observer_for_request(
+        self,
+        *,
+        request: ModelRequest,
+        model_role: str,
+    ):
+        observer = self._stream_observer
+        if not callable(observer):
+            return None
+        metadata = {
+            "session_id": request.session_id,
+            "request_id": request.request_id,
+            "provider_id": request.provider_id,
+            "model_id": request.model_id,
+            "model_role": model_role,
+        }
+
+        def scoped_stream_observer(delta: str) -> None:
+            try:
+                observer(delta, **metadata)
+            except TypeError:
+                observer(delta)
+
+        return scoped_stream_observer
+
     def _resolved_extra_headers_for(
         self,
         *,
@@ -908,7 +933,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
             runtime_resolver=self.runtime_resolver,
             credentials=credentials,
             adapter_id=f"adapter.models.{active_profile.provider_id}.surface",
-            stream_observer=self._stream_observer,
+            stream_observer=self._stream_observer_for_request(request=request, model_role=model_role),
         )
         if adapter is None:
             return self.fallback.generate(

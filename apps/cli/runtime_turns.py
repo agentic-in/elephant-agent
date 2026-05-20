@@ -24,7 +24,6 @@ from packages.kernel.episode_state_machine import open_next_episode as _open_nex
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
 from packages.state import (
     ensure_elephant_identity_file,
-    is_companion_mode,
 )
 
 if TYPE_CHECKING:
@@ -124,13 +123,10 @@ def create_elephant_session(
         elephant_display_name = resolved_elephant_id.replace("-", " ").title()
     else:
         elephant_display_name = display_name.strip()
-    elephant_mode = mode or source_profile.state.mode
-    elephant_companion = source_profile.companion if is_companion_mode(elephant_mode) else None
+    del mode
     elephant_identity_text = seed_elephant_identity_text(
         source_profile,
         display_name=elephant_display_name,
-        mode=elephant_mode,
-        companion=elephant_companion,
     )
     elephant_file_root = runtime.paths.elephant_file_path(resolved_elephant_id)
     ensure_elephant_identity_file(
@@ -139,8 +135,6 @@ def create_elephant_session(
             source_profile,
             elephant_id=resolved_elephant_id,
             display_name=elephant_display_name,
-            mode=elephant_mode,
-            companion=elephant_companion,
         ),
     )
     profile_state = replace(
@@ -165,8 +159,6 @@ def create_elephant_session(
         session,
         elephant_identity_text=elephant_identity_text,
         elephant_display_name=elephant_display_name,
-        elephant_mode=elephant_mode,
-        elephant_companion=elephant_companion,
     )
     runtime.repository.switch_state(elephant_state.state_id)
     runtime._write_snapshot(

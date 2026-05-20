@@ -78,11 +78,11 @@ def build_elephant_identity_record(
         elephant_id=elephant_id or ids.elephant_id,
         profile_id=profile.state.profile_id,
         display_name=identity.display_name,
-        identity_mode=identity.mode,
-        personality_preset=identity.personality_preset,
-        initiative=identity.initiative,
-        relational_stance=identity.relational_stance,
-        working_style_contract=identity.personality_summary,
+        identity_mode="",
+        personality_preset="",
+        initiative="",
+        relational_stance="",
+        working_style_contract="",
         elephant_identity_text=_strip_or_none(profile.elephant_identity_text),
         governance_flags=_governance_flags(companion),
         source_manifest_path=profile.manifest_path,
@@ -127,18 +127,13 @@ def build_relationship_projection(
 ) -> RenderedRelationshipView:
     ids = canonical_profile_ids(profile.state.profile_id)
     companion = resolved_companion_settings(profile)
-    identity = build_companion_identity_state(profile)
     return RenderedRelationshipView(
         relationship_id=relationship_id or ids.relationship_id,
         profile_id=profile.state.profile_id,
         elephant_id=elephant_id or ids.elephant_id,
         user_profile_id=user_profile_id or ids.user_profile_id,
         interaction_preferences=_interaction_preferences(companion),
-        expectations=(
-            f"initiative:{companion.initiative}",
-            f"relational_stance:{identity.relational_stance}",
-            f"personality_label:{identity.personality_label}",
-        ),
+        expectations=(),
         continuity_notes=tuple(note.strip() for note in companion.notes if note.strip()),
     )
 

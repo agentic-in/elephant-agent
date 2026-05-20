@@ -271,7 +271,7 @@ def load_runtime_profile(
     companion_settings = _companion_settings_from_identity(
         identity_record=persisted.elephant_identity,
         relationship_record=persisted.relationship,
-        fallback_mode=resolved_state.identity_mode or "companion",
+        fallback_mode="companion",
     )
     elephant_identity_text = (resolved_state.elephant_identity_text or "").strip() or None
     if elephant_identity_text is None and persisted.elephant_identity is not None:
@@ -280,7 +280,7 @@ def load_runtime_profile(
     runtime_state = PersonalModelRuntimeState(
         profile_id=canonical_personal_model_id(resolved_state.personal_model_id),
         display_name=companion_name or DEFAULT_PERSONAL_MODEL_DISPLAY_NAME,
-        mode=normalize_profile_mode(resolved_state.identity_mode or "companion"),
+        mode="companion",
         elephant_path=None,
         preferences=(),
         enabled_capabilities=(),
@@ -389,23 +389,13 @@ def _companion_settings_from_identity(
     relationship_record,
     fallback_mode: str,
 ) -> CompanionSettings:
-    if identity_record is None:
-        preset = resolve_personality_preset(None, mode=fallback_mode)
-        notes = relationship_record.continuity_notes if relationship_record is not None else ()
-        return CompanionSettings(
-            personality_preset=preset.preset_id,
-            personality=preset.traits,
-            notes=notes,
-        )
-    governance_flags = set(identity_record.governance_flags or ())
-    preset_id = identity_record.personality_preset or None
-    preset = resolve_personality_preset(preset_id, mode=fallback_mode)
+    governance_flags = set(getattr(identity_record, "governance_flags", ()) or ())
+    preset = resolve_personality_preset(None, mode=fallback_mode)
     notes = relationship_record.continuity_notes if relationship_record is not None else ()
     return CompanionSettings(
         text_first=_flag(governance_flags, positive="text-first", fallback=True),
         personality_preset=preset.preset_id,
         personality=preset.traits,
-        initiative=identity_record.initiative or "gentle",
         preserve_relationship_timeline=_flag(
             governance_flags,
             positive="preserve-relationship-timeline",

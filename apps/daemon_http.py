@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+from urllib.parse import unquote
 
 logger = logging.getLogger("elephant.daemon")
 
@@ -97,6 +99,10 @@ async def _handle_dashboard_api(request: Any) -> Any:
     body = await request.read()
     body_bytes = body if body else None
 
+    stream_episode_id = _stream_loop_episode_id(method, path_info)
+    if stream_episode_id is not None:
+        return await _handle_dashboard_loop_stream(request, api_app, stream_episode_id, body_bytes)
+
     try:
         response = api_app.dispatch(method, path_info, body_bytes)
     except Exception as exc:
@@ -109,6 +115,80 @@ async def _handle_dashboard_api(request: Any) -> Any:
         if header_name.lower() != "content-type":
             resp.headers[header_name] = header_value
     return resp
+
+
+async def _handle_dashboard_loop_stream(
+    request: Any,
+    api_app: Any,
+    episode_id: str,
+    body: bytes | None,
+) -> Any:
+    """Stream a live loop as server-sent events."""
+    from aiohttp import web
+
+    try:
+        payload = json.loads((body or b"{}").decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("request body must be a JSON object")
+        prompt = str(payload["prompt"])
+    except Exception as exc:
+        return web.json_response({"error": "bad_request", "detail": str(exc)}, status=400)
+
+    response = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+    await response.prepare(request)
+
+    iterator = api_app.stream_loop_events(
+        episode_id,
+        prompt=prompt,
+        state_query=payload.get("state_query"),
+        tool_name=payload.get("tool_name"),
+        tool_arguments=payload.get("tool_arguments"),
+        delivery_payload=payload.get("delivery_payload"),
+    )
+    sentinel = object()
+    try:
+        while True:
+            event = await asyncio.to_thread(next, iterator, sentinel)
+            if event is sentinel:
+                break
+            await response.write(_sse_frame(event))
+    except (ConnectionResetError, asyncio.CancelledError):
+        logger.info("dashboard loop stream closed for episode %s", episode_id)
+    except Exception as exc:
+        logger.error("dashboard loop stream failed: %s", exc, exc_info=True)
+        try:
+            await response.write(_sse_frame({"type": "loop.failed", "episode_id": episode_id, "error": str(exc)}))
+        except Exception:
+            pass
+    finally:
+        try:
+            await response.write_eof()
+        except Exception:
+            pass
+    return response
+
+
+def _stream_loop_episode_id(method: str, path_info: str) -> str | None:
+    if method.upper() != "POST":
+        return None
+    parts = tuple(part for part in path_info.strip("/").split("/") if part)
+    if len(parts) == 5 and parts[0] == "v1" and parts[1] == "episodes" and parts[3] == "loops" and parts[4] == "stream":
+        return unquote(parts[2])
+    return None
+
+
+def _sse_frame(event: Mapping[str, Any]) -> bytes:
+    event_type = str(event.get("type") or "message")
+    payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"), default=str)
+    return f"event: {event_type}\ndata: {payload}\n\n".encode("utf-8")
 
 
 # ── Dashboard Static Assets ───────────────────────────────────────

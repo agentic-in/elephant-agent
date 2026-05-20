@@ -20,6 +20,8 @@ from packages.embeddings import (
     OPENAI_COMPATIBLE_EMBED_PROVIDER_ID,
     OPENAI_COMPATIBLE_EMBED_SECRET_REFERENCE_ID,
     default_local_embedding_provider_config,
+    embedding_runtime_is_loaded,
+    embedding_runtime_state,
 )
 from packages.models import SurfaceModelProviderCapability
 from packages.auth import AuthProfile, PersistentAuthProfileStore, SecretReference
@@ -380,6 +382,28 @@ def _stored_api_key_for_active_provider(self, provider_id: str) -> str | None:
     return resolved or None
 
 
+def _embedding_runtime_summary(self) -> dict[str, Any]:
+    embedding_service = getattr(self, "embedding_service", None)
+    if embedding_service is None:
+        evidence_retriever = getattr(getattr(self, "recall_runtime", None), "evidence_retriever", None)
+        embedding_service = getattr(evidence_retriever, "embedding_service", None)
+    health = None
+    if embedding_service is not None:
+        health_fn = getattr(embedding_service, "health", None)
+        if callable(health_fn):
+            try:
+                health = health_fn()
+            except Exception:
+                health = None
+    state = embedding_runtime_state(health)
+    return {
+        "embedding_runtime_status": str(getattr(health, "status", "") or "unknown"),
+        "embedding_runtime_state": state,
+        "embedding_ready": embedding_runtime_is_loaded(health),
+        "embedding_runtime_summary": str(getattr(health, "summary", "") or ""),
+    }
+
+
 def embedding_provider_summary(self) -> dict[str, Any]:
     active_provider = dict(self.model_provider.describe())
     profile = self._active_embedding_provider_profile()
@@ -401,8 +425,13 @@ def embedding_provider_summary(self) -> dict[str, Any]:
             "secret_reference_id": reference_id,
             "embedding_bootstrap_status": "external",
             "embedding_bootstrap_summary": "OpenAI-compatible embeddings do not use the local bootstrap worker.",
+            "embedding_runtime_status": "external",
+            "embedding_runtime_state": "external",
+            "embedding_ready": has_secret,
+            "embedding_runtime_summary": "External embeddings are ready when the API key is stored.",
         }
     local_default = default_local_embedding_provider_config()
+    runtime = _embedding_runtime_summary(self)
     return {
         "source": "local-default",
         "profile_id": "",
@@ -417,6 +446,7 @@ def embedding_provider_summary(self) -> dict[str, Any]:
         "secret_reference_id": "",
         "embedding_bootstrap_status": active_provider.get("embedding_bootstrap_status") or "unknown",
         "embedding_bootstrap_summary": active_provider.get("embedding_bootstrap_summary") or "",
+        **runtime,
     }
 
 

@@ -43,6 +43,7 @@ class ContinuityProjectionService:
         identity_record: ElephantIdentityRecord | None = None,
         relationship_record: RenderedRelationshipView | None = None,
     ) -> ContinuityProjection:
+        del identity_record
         governance = build_companion_governance_state(profile)
         continuity = build_episode_continuity_state(
             session,
@@ -61,7 +62,6 @@ class ContinuityProjectionService:
                 companion.preserve_emotional_context if companion is not None else True
             ),
         )
-        initiative = identity_record.initiative if identity_record is not None else governance.identity.initiative
         continuity_notes = (
             relationship_record.continuity_notes
             if relationship_record is not None
@@ -69,7 +69,6 @@ class ContinuityProjectionService:
         )
         prompt, style = _reengagement_prompt(
             continuity=continuity,
-            initiative=initiative,
             continuity_notes=continuity_notes,
             active_state_focus=active_state_focus,
         )
@@ -77,14 +76,13 @@ class ContinuityProjectionService:
             governance=governance,
             continuity=continuity,
             relationship_policy=relationship_policy,
-            initiative=initiative,
+            initiative="",
             reengagement_style=style,
             reengagement_prompt=prompt,
             user_governed=True,
             voice_identity_binding="voice remains subordinate to the same text-first identity path",
             summary=_continuity_summary(
                 continuity=continuity,
-                initiative=initiative,
                 relationship_policy=relationship_policy,
                 onboarding_ready=governance.onboarding.ready,
                 reengagement_style=style,
@@ -95,32 +93,11 @@ class ContinuityProjectionService:
 def _reengagement_prompt(
     *,
     continuity: EpisodeContinuityState,
-    initiative: str,
     continuity_notes: tuple[str, ...],
     active_state_focus: str | None,
 ) -> tuple[str, str]:
     note_text = ", ".join(continuity_notes) if continuity_notes else "preserve the active elephant without overreaching"
     focus_clause = f" keep active elephant focus visible: {active_state_focus}." if active_state_focus else ""
-    if initiative == "proactive":
-        style = "proactive-check-in"
-        if continuity.requires_recovery:
-            prompt = (
-                f"Re-open the active elephant clearly, recover the durable context, and offer a concrete next step; "
-                f"continuity cues: {note_text}.{focus_clause}"
-            )
-        else:
-            prompt = (
-                f"Stay lightly proactive, surface the next durable step before the active elephant cools; "
-                f"continuity cues: {note_text}.{focus_clause}"
-            )
-        return prompt, style
-    if initiative == "gentle":
-        style = "gentle-presence"
-        prompt = (
-            f"Resume with calm presence, acknowledge prior context, and avoid over-pushing; "
-            f"continuity cues: {note_text}.{focus_clause}"
-        )
-        return prompt, style
     style = "steady-follow-through"
     prompt = (
         f"Preserve continuity explicitly and keep the next step legible; "
@@ -132,13 +109,12 @@ def _reengagement_prompt(
 def _continuity_summary(
     *,
     continuity: EpisodeContinuityState,
-    initiative: str,
     relationship_policy: RelationshipPolicy,
     onboarding_ready: bool,
     reengagement_style: str,
 ) -> str:
     onboarding = "identity-ready" if onboarding_ready else "onboarding-pending"
     return (
-        f"{continuity.summary}; initiative={initiative}; reengagement={reengagement_style}; "
+        f"{continuity.summary}; reengagement={reengagement_style}; "
         f"{onboarding}; relationship_policy={relationship_policy.summary()}"
     )

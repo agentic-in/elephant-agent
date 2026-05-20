@@ -93,6 +93,16 @@
         "reason": "Frontend apps have their own build and typecheck gates."
       }
     ],
+    "desktop-app": [
+      {
+        "path": "docs/agent/repo-map.md",
+        "reason": "Native desktop apps are app surfaces with platform-specific build gates."
+      },
+      {
+        "path": "docs/agent/architecture-guardrails.md",
+        "reason": "Desktop shells must stay thin over packages and API surfaces."
+      }
+    ],
     "storage-infra": [
       {
         "path": "docs/agent/architecture-guardrails.md",
@@ -198,6 +208,9 @@
     ],
     "site": [
       "apps/site/**"
+    ],
+    "macos": [
+      "apps/macos/**"
     ],
     "learning_agents": [
       "apps/reflect/**",
@@ -405,6 +418,20 @@
       {
         "path": "apps/site/AGENTS.md",
         "reason": "Documentation site with its own build pipeline."
+      }
+    ],
+    "macos": [
+      {
+        "path": "apps/macos/AGENTS.md",
+        "reason": "Native macOS app shell rules."
+      },
+      {
+        "path": "docs/agent/repo-map.md",
+        "reason": "Desktop app is a user-facing app surface in the repository map."
+      },
+      {
+        "path": "docs/agent/architecture-guardrails.md",
+        "reason": "Desktop app must orchestrate existing core/API behavior instead of reimplementing it."
       }
     ],
     "learning_agents": [

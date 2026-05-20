@@ -521,8 +521,7 @@ class KernelService:
         mode = (
             str(request.source_payload.get("profile_mode", "")).strip()
             or (existing_profile.mode if existing_profile is not None else "")
-            or state.identity_mode
-            or "default"
+            or "companion"
         )
         return PersonalModelRuntimeState(
             profile_id=profile_id,

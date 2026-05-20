@@ -134,22 +134,14 @@ def _is_legacy_default_identity_text(text: str) -> bool:
 
 def _refreshed_default_identity_text(profile, *, display_name: str) -> str:
     try:
-        from .governance import render_default_elephant_identity, resolved_companion_settings
+        from .governance import render_default_elephant_identity
 
-        companion = resolved_companion_settings(profile)
-        return render_default_elephant_identity(
-            display_name=display_name,
-            personality_preset=companion.personality_preset,
-            initiative=companion.initiative,
-            mode=profile.state.mode,
-        )
+        return render_default_elephant_identity(display_name=display_name)
     except Exception:
         return "\n".join(
             (
                 f"You are {display_name}, this person's companion.",
-                "How you show up: steady, curious, lightly playful, and present without making a performance of it.",
-                "How you sound: clear and warm, with the occasional dry little wink when the moment can carry it.",
-                "How you take initiative: notice loose threads, nudge gently, and make it easy for them to correct your read.",
-                "Stay continuous without faking closeness or certainty.",
+                "Stay recognizable across sessions, use remembered context naturally, and keep uncertainty visible.",
+                "Be useful without performing intimacy or certainty you do not have.",
             )
         )

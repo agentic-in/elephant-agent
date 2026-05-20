@@ -28,6 +28,7 @@ import re
 from typing import Any, Mapping, Protocol
 
 from packages.contracts import SemanticIndexEntry
+from packages.embeddings import embedding_runtime_is_loaded
 from packages.semantic_index import (
     HybridSemanticSearcher,
     SemanticSearchQuery,
@@ -754,10 +755,12 @@ def unified_recall(
         try:
             health = embedding_health_callable()
             status = str(getattr(health, "status", "") or "").lower()
-            if status in {"failed", "unavailable", "disabled"}:
+            if status in {"failed", "unavailable", "disabled"} or not embedding_runtime_is_loaded(health):
                 embedding_available = False
         except Exception:
             embedding_available = False
+    elif embedding_available:
+        embedding_available = False
     query_vector_cache: dict[int | None, tuple[tuple[float, ...], int | None]] = {}
 
     def query_vector_for(dimensions: int | None) -> tuple[tuple[float, ...], int | None]:

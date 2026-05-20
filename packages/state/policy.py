@@ -140,7 +140,6 @@ class CompanionSettings:
     def proactive_summary(self) -> str:
         return "; ".join(
             (
-                f"initiative={self.initiative}",
                 "wake-loop remains explicit",
                 f"continuity_notes={_render_notes(self.notes)}",
             )

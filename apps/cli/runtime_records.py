@@ -152,8 +152,6 @@ class CliRuntimeRecordsMixin:
         *,
         elephant_identity_text: str | None = None,
         elephant_display_name: str | None = None,
-        elephant_mode: str | None = None,
-        elephant_companion=None,
     ):
         elephant_id = self.elephant_id_for_session(session)
         loaded = self._load_profile(session.personal_model_id)
@@ -168,18 +166,6 @@ class CliRuntimeRecordsMixin:
             or elephant_id.replace("-", " ").replace("_", " ").title()
             or loaded.state.display_name
         )
-        effective_mode = elephant_mode or (existing.identity_mode if existing is not None else "") or loaded.state.mode
-        effective_companion = elephant_companion or loaded.companion
-        effective_initiative = (
-            effective_companion.initiative
-            if effective_companion is not None
-            else (existing.initiative if existing is not None else "")
-        )
-        effective_working_style = (
-            effective_companion.personality_preset
-            if effective_companion is not None
-            else (existing.working_style if existing is not None else "")
-        )
         if existing is None:
             # Seed the Elephant State row with empty current context. Real context arrives via real turns.
             elephant_state = self.repository.create_state(
@@ -188,9 +174,6 @@ class CliRuntimeRecordsMixin:
                 elephant_id=elephant_id,
                 state_anchor=f"elephant:{elephant_id}",
                 elephant_name=effective_display_name,
-                identity_mode=effective_mode,
-                initiative=effective_initiative,
-                working_style=effective_working_style,
                 surface_bindings=("cli",),
                 elephant_identity_text=elephant_identity_text,
                 summary="",
@@ -212,9 +195,6 @@ class CliRuntimeRecordsMixin:
         updated = replace(
             existing,
             elephant_name=effective_display_name,
-            identity_mode=effective_mode,
-            initiative=effective_initiative,
-            working_style=effective_working_style,
             surface_bindings=("cli",),
             elephant_identity_text=elephant_identity_text,
             summary=keep_summary,

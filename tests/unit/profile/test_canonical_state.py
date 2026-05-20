@@ -68,8 +68,8 @@ class CanonicalPersonalModelRuntimeStateTest(unittest.TestCase):
 
         self.assertEqual(bundle.elephant_identity.profile_id, "you")
         self.assertEqual(bundle.elephant_identity.display_name, "Aeon")
-        self.assertEqual(bundle.elephant_identity.personality_preset, "companion")
-        self.assertEqual(bundle.elephant_identity.initiative, "proactive")
+        self.assertEqual(bundle.elephant_identity.personality_preset, "")
+        self.assertEqual(bundle.elephant_identity.initiative, "")
         self.assertIn("Protect continuity", bundle.elephant_identity.elephant_identity_text or "")
         self.assertIn("text-first", bundle.elephant_identity.governance_flags)
 
@@ -85,7 +85,7 @@ class CanonicalPersonalModelRuntimeStateTest(unittest.TestCase):
 
         self.assertEqual(bundle.relationship.elephant_id, bundle.elephant_identity.elephant_id)
         self.assertEqual(bundle.relationship.user_profile_id, bundle.user_profile.user_profile_id)
-        self.assertIn("initiative:proactive", bundle.relationship.expectations)
+        self.assertNotIn("initiative:proactive", bundle.relationship.expectations)
         self.assertIn("recover long arcs", bundle.relationship.continuity_notes)
         self.assertNotIn("current_work:Building durable agent systems.", bundle.relationship.expectations)
         self.assertNotIn("Prefer directness over fluff.", bundle.relationship.continuity_notes)

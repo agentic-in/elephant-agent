@@ -5,7 +5,7 @@
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                         apps/                            │
-│  cli    api    gateway    dashboard    site    reflect   │
+│  cli    api    gateway    dashboard    site    macos     │
 └──────┬───┬───────┬──────────┬─────────┬────────┬───────┘
        │   │       │          │         │        │
        ▼   ▼       ▼          │         │        ▼
@@ -92,6 +92,7 @@ Direction: apps → packages (never reversed). Packages integrate through `contr
 | `apps/gateway` | Message gateway (Discord, DingTalk, Lark, etc.). | kernel, gateway_core, auth, models |
 | `apps/dashboard` | Web UI for state inspection. | (frontend, calls API) |
 | `apps/site` | Documentation site. | (frontend, static build) |
+| `apps/macos` | Native macOS desktop shell and platform packaging. | (SwiftUI/AppKit shell, starts and calls API) |
 | `apps/reflect` | Feature-composable background reflect agents. | evidence, tools, storage |
 | `apps/learning_agents` | Backward-compatible background learning worker shim. | reflect, storage |
 

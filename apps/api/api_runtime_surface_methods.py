@@ -72,7 +72,6 @@ def _ensure_episode_state(
             state_anchor=state_anchor,
             elephant_id=elephant_id or f"api:{personal_model_id}",
             elephant_name=personal_model.display_name,
-            identity_mode=personal_model.mode,
             surface_bindings=("api",),
             summary=f"{personal_model.display_name} is ready for API-bound continuity.",
             metadata={"personal_model_id": personal_model.profile_id, "episode_id": episode.episode_id},
@@ -80,8 +79,6 @@ def _ensure_episode_state(
     else:
         state = replace(
             existing,
-            elephant_name=personal_model.display_name,
-            identity_mode=personal_model.mode,
             state_anchor=state_anchor,
             surface_bindings=tuple(sorted({*existing.surface_bindings, "api"})),
             metadata={**dict(existing.metadata), "personal_model_id": personal_model.profile_id, "episode_id": episode.episode_id},
@@ -207,8 +204,6 @@ def update_identity_state(
     episode_id: str | None = None,
     personal_model_id: str | None = None,
     display_name: str | None = None,
-    personality_preset: str | None = None,
-    initiative: str | None = None,
     elephant_identity_text: str | None = None,
     clear_elephant_identity: bool = False,
 ):
@@ -217,8 +212,6 @@ def update_identity_state(
         episode_id=episode_id,
         personal_model_id=personal_model_id,
         display_name=display_name,
-        personality_preset=personality_preset,
-        initiative=initiative,
         elephant_identity_text=elephant_identity_text,
         clear_elephant_identity=clear_elephant_identity,
     )

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import replace
+import json
+from queue import Queue
 import re
 import shutil
+from threading import Lock, Thread
 from typing import Any, Mapping
 from urllib.parse import unquote
 from uuid import uuid4
@@ -15,6 +19,7 @@ from packages.context import (
 from packages.context.epoch_store import FileEpochStore
 from packages.contracts import EventEnvelope
 from packages.kernel import KernelSourceRequest, ReconciliationPipeline, StateReconciler
+from packages.models.reasoning_parser import split_reasoning_and_content
 from packages.operator.runtime import RecallEvidenceOperatorDetail
 from packages.runtime_layout import elephant_file_path
 from packages.state import render_default_elephant_identity, write_elephant_identity_file
@@ -139,6 +144,120 @@ def run_loop(
         latest_loop=record,
         inspection=inspection,
     )
+
+def stream_loop_events(
+    self,
+    episode_id: str,
+    *,
+    prompt: str,
+    state_query: str | None = None,
+    tool_name: str | None = None,
+    tool_arguments: Mapping[str, Any] | None = None,
+    delivery_payload: Mapping[str, Any] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Run a loop while yielding live UI-safe events.
+
+    The CLI chat can render model deltas, kernel stages, and tool lifecycle
+    events because it runs in-process. This generator exposes the same observer
+    surfaces to HTTP callers without changing the synchronous loop contract.
+    """
+    event_queue: Queue[dict[str, Any] | object] = Queue(maxsize=2048)
+    sentinel = object()
+    sequence_lock = Lock()
+    stream_sequence = 0
+
+    def enqueue(event: Mapping[str, Any]) -> None:
+        nonlocal stream_sequence
+        with sequence_lock:
+            stream_sequence += 1
+            sequence = stream_sequence
+        event_queue.put(
+            _jsonable(
+                {
+                    "episode_id": episode_id,
+                    "stream_sequence": sequence,
+                    "stream_emitted_at": _now(),
+                    **dict(event),
+                }
+            )
+        )
+
+    def stream_observer(delta: str, **metadata: Any) -> None:
+        stream_session_id = str(metadata.get("session_id") or "")
+        if stream_session_id and stream_session_id != episode_id:
+            return
+        combined = split_reasoning_and_content(str(delta), streaming=True)
+        if combined.reasoning:
+            enqueue({"type": "assistant.reasoning.delta", "delta": combined.reasoning})
+        if combined.content:
+            enqueue({"type": "assistant.delta", "delta": combined.content})
+
+    def tool_observer(event: Any) -> None:
+        invocation = getattr(event, "invocation", None)
+        if invocation is not None and getattr(invocation, "session_id", episode_id) != episode_id:
+            return
+        enqueue(_tool_lifecycle_stream_event(event))
+
+    def telemetry_observer(event: Mapping[str, Any]) -> None:
+        event_type = str(event.get("event_type") or event.get("type") or "")
+        if event_type != "kernel.stage":
+            return
+        if str(event.get("episode_id") or "") not in {"", episode_id}:
+            return
+        payload = event.get("payload") if isinstance(event.get("payload"), Mapping) else {}
+        enqueue(
+            {
+                "type": "kernel.stage",
+                "event_type": "kernel.stage",
+                "id": str(event.get("event_id") or payload.get("event_id") or uuid4().hex),
+                "stage": str(payload.get("stage") or ""),
+                "detail": str(payload.get("detail") or ""),
+                "status": "running",
+            }
+        )
+
+    def worker() -> None:
+        stream_lock = getattr(self, "_loop_stream_lock", None)
+        set_stream_observer = getattr(self.model_provider, "set_stream_observer", None)
+        previous_stream_observer = getattr(self.model_provider, "_stream_observer", None)
+        unsubscribe_tool = self.tool_runtime.subscribe(tool_observer)
+        unsubscribe_telemetry = self.telemetry.subscribe(telemetry_observer)
+        acquired_stream_lock = False
+        try:
+            enqueue({"type": "loop.started", "message": "Opening a live chat loop"})
+            if stream_lock is not None:
+                stream_lock.acquire()
+                acquired_stream_lock = True
+            if callable(set_stream_observer):
+                set_stream_observer(stream_observer)
+            result = self.run_loop(
+                episode_id,
+                prompt=prompt,
+                state_query=state_query,
+                tool_name=tool_name,
+                tool_arguments=tool_arguments,
+                delivery_payload=delivery_payload,
+            )
+            enqueue(_loop_result_stream_completed_event(result))
+        except Exception as error:
+            enqueue({"type": "loop.failed", "error": str(error)})
+        finally:
+            if callable(set_stream_observer):
+                set_stream_observer(previous_stream_observer)
+            unsubscribe_tool()
+            unsubscribe_telemetry()
+            if acquired_stream_lock and stream_lock is not None:
+                stream_lock.release()
+            event_queue.put(sentinel)
+
+    Thread(target=worker, daemon=True).start()
+
+    while True:
+        event = event_queue.get()
+        if event is sentinel:
+            break
+        yield event  # type: ignore[misc]
+
 def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResponse:
     if method.upper() == "GET" and path == "/healthz":
         return APIResponse(200, {"status": "ok", "service": "elephant-api"})
@@ -184,32 +303,27 @@ def _elephant_state_for_id(self, elephant_id: str):
     if direct is not None:
         return direct
     return next((state for state in self.repository.list_states() if state.elephant_id == target), None)
-def _default_elephant_identity_text(*, elephant_id: str, display_name: str, mode: str) -> str:
+def _default_elephant_identity_text(*, elephant_id: str, display_name: str) -> str:
     """Seed identity text when none is supplied via the API.
 
     Mirrors the CLI's first-person self-introduction template so a
     companion created through the API reads the same way a CLI-created
-    companion does. Internal metadata (id, mode) lives in an HTML
-    comment so it stays out of the prompt.
+    companion does. Internal metadata lives in an HTML comment so it stays
+    out of the prompt.
     """
-    charter = render_default_elephant_identity(
-        display_name=display_name,
-        personality_preset=None,
-        initiative="gentle",
-        mode=mode,
-    )
+    charter = render_default_elephant_identity(display_name=display_name)
     return "\n".join(
         (
-            f"<!-- Internal metadata (not shown to the model). id: {elephant_id}. mode: {mode}. "
+            f"<!-- Internal metadata (not shown to the model). id: {elephant_id}. "
             f"Edit the paragraphs below to reshape how {display_name} introduces themselves. -->",
             "",
             charter,
         )
     )
-def _elephant_identity_text_from_payload(payload: Mapping[str, Any], *, elephant_id: str, display_name: str, mode: str) -> str:
+def _elephant_identity_text_from_payload(payload: Mapping[str, Any], *, elephant_id: str, display_name: str) -> str:
     return (
         _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
-        or _default_elephant_identity_text(elephant_id=elephant_id, display_name=display_name, mode=mode)
+        or _default_elephant_identity_text(elephant_id=elephant_id, display_name=display_name)
     )
 def _write_elephant_identity_file(self, *, elephant_id: str, text: str) -> str:
     path = write_elephant_identity_file(
@@ -228,22 +342,18 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         if raw_elephant_id and _elephant_state_for_id(self, raw_elephant_id) is not None:
             raise ValueError(f"elephant already exists: {raw_elephant_id}")
         elephant_id = raw_elephant_id or _unique_elephant_id(self, display_name)
-        mode = str(payload.get("mode") or "companion").strip() or "companion"
         personal_model_id = str(
             payload.get("personal_model_id")
             or payload.get("profile_id")
             or self.repository.ensure_default_personal_model().personal_model_id
         ).strip()
-        identity_text = _elephant_identity_text_from_payload(payload, elephant_id=elephant_id, display_name=display_name, mode=mode)
+        identity_text = _elephant_identity_text_from_payload(payload, elephant_id=elephant_id, display_name=display_name)
         state = self.repository.create_state(
             personal_model_id=personal_model_id,
             state_id=f"state:{elephant_id}",
             state_anchor=f"elephant:{elephant_id}",
             elephant_id=elephant_id,
             elephant_name=display_name,
-            identity_mode=mode,
-            initiative=_optional_str(payload.get("initiative")) or "",
-            working_style=_optional_str(payload.get("personality_preset") or payload.get("working_style")) or "",
             surface_bindings=("api", "dashboard"),
             elephant_identity_text=identity_text,
             summary=f"{display_name} is ready to continue this elephant line.",
@@ -260,18 +370,10 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
     if normalized_method in {"PATCH", "POST"}:
         payload = _read_json_bytes(body)
         display_name = _optional_str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name"))
-        mode = _optional_str(payload.get("mode"))
         identity_text = _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
         updated = replace(
             state,
             elephant_name=display_name or state.elephant_name,
-            identity_mode=mode or state.identity_mode or "companion",
-            initiative=_optional_str(payload.get("initiative")) if payload.get("initiative") is not None else state.initiative,
-            working_style=(
-                _optional_str(payload.get("personality_preset") or payload.get("working_style"))
-                if payload.get("personality_preset") is not None or payload.get("working_style") is not None
-                else state.working_style
-            ),
             elephant_identity_text=identity_text if identity_text is not None else state.elephant_identity_text,
             summary=f"{display_name or state.elephant_name} is ready to continue this elephant line.",
             metadata={**dict(state.metadata), "profile_id": state.personal_model_id},
@@ -288,13 +390,120 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         shutil.rmtree(elephant_file_path(state.elephant_id, install_root=self.config.install_root), ignore_errors=True)
         return APIResponse(200, _jsonable({"elephant_id": state.elephant_id, "deleted": True, "deleted_sessions": deleted_sessions}))
     return APIResponse(404, {"error": "not_found"})
+
+def _tool_lifecycle_stream_event(event: Any) -> dict[str, Any]:
+    invocation = getattr(event, "invocation", None)
+    approval = getattr(event, "approval", None)
+    execution = getattr(event, "execution", None)
+    phase = str(getattr(event, "phase", "") or "")
+    name = str(getattr(invocation, "tool_id", "") or "tool")
+    arguments = getattr(invocation, "arguments", {}) if invocation is not None else {}
+    result = str(getattr(execution, "summary", "") or "")
+    return {
+        "type": "tool.lifecycle",
+        "event_type": "tool_execute",
+        "id": str(getattr(event, "event_id", "") or uuid4().hex),
+        "invocation_id": str(getattr(invocation, "invocation_id", "") or ""),
+        "name": name,
+        "tool_name": name,
+        "status": _tool_lifecycle_status(phase, execution=execution, approval=approval),
+        "phase": phase,
+        "detail": str(getattr(event, "detail", "") or ""),
+        "arguments": arguments,
+        "tool_arguments": arguments,
+        "result": result,
+        "tool_result": result,
+        "approval": _jsonable(approval) if approval is not None else None,
+        "execution": _jsonable(execution) if execution is not None else None,
+    }
+
+def _tool_lifecycle_status(event_phase: str, *, execution: Any, approval: Any) -> str:
+    if event_phase == "execution.completed":
+        outcome = str(getattr(execution, "outcome", "") or "").lower()
+        return "completed" if outcome in {"", "ok", "success"} else outcome
+    if event_phase == "execution.failed":
+        return "failed"
+    if event_phase == "execution.started":
+        return "running"
+    if event_phase.startswith("approval."):
+        decision = str(getattr(approval, "decision", "") or "").lower()
+        if decision in {"denied", "deferred"}:
+            return decision
+        return "approved"
+    if event_phase in {"requested", "classified"}:
+        return "preparing"
+    return event_phase or "running"
+
+def _loop_result_payload(result: APILoopResult) -> dict[str, Any]:
+    payload = dict(result.to_record())
+    payload["reply_text"] = _loop_reply_text(result)
+    return payload
+
+def _loop_result_stream_completed_event(result: APILoopResult) -> dict[str, Any]:
+    reply_text = _loop_reply_text(result)
+    return {
+        "type": "loop.completed",
+        "reply_text": reply_text,
+        "reply": {
+            "episode_id": str(getattr(getattr(result, "episode", None), "episode_id", "") or ""),
+            "text": reply_text,
+            "tool_events": _loop_result_stream_tool_events(result),
+        },
+    }
+
+def _loop_result_stream_tool_events(result: APILoopResult) -> list[dict[str, str]]:
+    outcome = getattr(result, "outcome", None)
+    steps = tuple(getattr(outcome, "steps", ()) or ())
+    events: list[dict[str, str]] = []
+    for step in steps:
+        action = str(getattr(step, "action", "") or "")
+        if action != "call_tool":
+            continue
+        metadata = getattr(step, "metadata", {}) or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {}
+        tool_name = str(metadata.get("tool_name") or "").strip()
+        if not tool_name:
+            continue
+        status = str(getattr(step, "status", "") or "").strip() or "completed"
+        events.append(
+            {
+                "name": tool_name,
+                "tool_name": tool_name,
+                "status": status,
+                "arguments": _stream_preview(metadata.get("tool_arguments")),
+                "result": _stream_preview(metadata.get("tool_result") or getattr(step, "summary", "") or ""),
+            }
+        )
+    return events[-12:]
+
+def _stream_preview(value: Any, *, limit: int = 700) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}..."
+
+def _loop_reply_text(result: APILoopResult) -> str:
+    outcome = getattr(result, "outcome", None)
+    execution = getattr(outcome, "execution", None)
+    text = str(getattr(execution, "summary", "") or "").strip()
+    if text:
+        return text
+    for message in reversed(tuple(getattr(outcome, "turn_messages", ()) or ())):
+        role = str(getattr(message, "role", "") or "").strip().lower()
+        content = str(getattr(message, "content", "") or "").strip()
+        if role == "assistant" and content:
+            return content
+    return ""
 def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if method.upper() == "POST" and len(parts) == 0:
         payload = _read_json_bytes(body)
         result = self.create_episode(
             personal_model_id=str(payload.get("personal_model_id") or payload["profile_id"]),
             display_name=str(payload["display_name"]),
-            mode=str(payload["mode"]),
+            mode=str(payload.get("mode") or "companion"),
             elephant_id=payload.get("elephant_id"),
             elephant_path=payload.get("elephant_path"),
             preferences=tuple(payload.get("preferences", ())),
@@ -311,7 +520,7 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
     if method.upper() == "POST" and len(parts) == 2 and parts[1] == "interrupt":
         payload = _read_json_bytes(body)
         result = self.interrupt_episode(episode_id, interruption_state=str(payload["interruption_state"]))
-        return APIResponse(200, _jsonable(result.to_record()))
+        return APIResponse(200, _jsonable(_loop_result_payload(result)))
     if method.upper() == "POST" and len(parts) == 2 and parts[1] == "next":
         payload = _read_json_bytes(body)
         result = self.open_next_episode(episode_id, child_episode_id=payload.get("child_episode_id"))
@@ -384,8 +593,6 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
             result = self.update_identity_state(
                 state_id=state_id,
                 display_name=_optional_str(payload.get("display_name") or payload.get("name")),
-                personality_preset=_optional_str(payload.get("personality_preset")),
-                initiative=_optional_str(payload.get("initiative")),
                 elephant_identity_text=_optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content")),
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
             )
@@ -840,15 +1047,88 @@ def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
         }
     }
 
-def __call__(self, environ: Mapping[str, Any], start_response: Any) -> list[bytes]:
+def __call__(self, environ: Mapping[str, Any], start_response: Any) -> Iterator[bytes] | list[bytes]:
     from .api_runtime_support import _json_bytes as encode_json
 
     method = str(environ.get("REQUEST_METHOD", "GET"))
     path = str(environ.get("PATH_INFO", "/"))
     payload = _read_wsgi_body(environ)
+
+    stream_episode_id = _stream_loop_episode_id(method, path)
+    if stream_episode_id is not None:
+        try:
+            body = _read_json_bytes(payload)
+            prompt = str(body["prompt"])
+        except Exception as error:
+            response = APIResponse(400, {"error": "bad_request", "detail": str(error)})
+            start_response(
+                f"{response.status_code} {'OK' if response.status_code < 400 else 'ERROR'}",
+                list(response.headers),
+            )
+            return [encode_json(response.payload)]
+
+        start_response(
+            "200 OK",
+            [
+                ("content-type", "text/event-stream; charset=utf-8"),
+                ("cache-control", "no-cache"),
+                ("x-accel-buffering", "no"),
+            ],
+        )
+        return _wsgi_loop_event_stream(
+            self,
+            stream_episode_id,
+            prompt=prompt,
+            state_query=body.get("state_query"),
+            tool_name=body.get("tool_name"),
+            tool_arguments=body.get("tool_arguments"),
+            delivery_payload=body.get("delivery_payload"),
+        )
+
     response = self.dispatch(method, path, payload)
     start_response(
         f"{response.status_code} {'OK' if response.status_code < 400 else 'ERROR'}",
         list(response.headers),
     )
     return [encode_json(response.payload)]
+
+
+def _wsgi_loop_event_stream(
+    self,
+    episode_id: str,
+    *,
+    prompt: str,
+    state_query: str | None = None,
+    tool_name: str | None = None,
+    tool_arguments: Mapping[str, Any] | None = None,
+    delivery_payload: Mapping[str, Any] | None = None,
+) -> Iterator[bytes]:
+    try:
+        yield from (
+            _sse_frame(event)
+            for event in self.stream_loop_events(
+                episode_id,
+                prompt=prompt,
+                state_query=state_query,
+                tool_name=tool_name,
+                tool_arguments=tool_arguments,
+                delivery_payload=delivery_payload,
+            )
+        )
+    except Exception as error:
+        yield _sse_frame({"type": "loop.failed", "episode_id": episode_id, "error": str(error)})
+
+
+def _stream_loop_episode_id(method: str, path_info: str) -> str | None:
+    if method.upper() != "POST":
+        return None
+    parts = tuple(part for part in path_info.strip("/").split("/") if part)
+    if len(parts) == 5 and parts[0] == "v1" and parts[1] == "episodes" and parts[3] == "loops" and parts[4] == "stream":
+        return unquote(parts[2])
+    return None
+
+
+def _sse_frame(event: Mapping[str, Any]) -> bytes:
+    event_type = str(event.get("type") or "message")
+    payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"), default=str)
+    return f"event: {event_type}\ndata: {payload}\n\n".encode("utf-8")

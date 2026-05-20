@@ -21,7 +21,6 @@ from packages.contracts.runtime import (
 from packages.kernel import KernelOutcome, WakeReconciliationReport
 from packages.skills import SkillDefinition
 from packages.state import (
-    CompanionSettings,
     LoadedProfile,
     companion_display_name,
     render_default_elephant_identity,
@@ -117,15 +116,9 @@ def _default_elephant_identity_text(
     profile: LoadedProfile,
     *,
     display_name: str | None = None,
-    mode: str | None = None,
-    companion: CompanionSettings | None = None,
 ) -> str:
-    effective_companion = companion or profile.companion or CompanionSettings()
     return render_default_elephant_identity(
-        display_name=display_name or profile.state.display_name,
-        personality_preset=effective_companion.personality_preset,
-        initiative=effective_companion.initiative,
-        mode=mode or profile.state.mode,
+        display_name=display_name or profile.state.display_name
     ).strip()
 
 
@@ -134,8 +127,6 @@ def _default_elephant_identity_file_text(
     *,
     elephant_id: str,
     display_name: str | None = None,
-    mode: str | None = None,
-    companion: CompanionSettings | None = None,
 ) -> str:
     """Write a fresh identity file (ELEPHANT.md) for a new elephant.
 
@@ -148,7 +139,7 @@ def _default_elephant_identity_file_text(
     read that and started thinking of itself as a framework object.
 
     The new template is a first-person self-introduction. The human
-    metadata (id, mode) lives in an HTML comment so the human can
+    metadata (id) lives in an HTML comment so the human can
     still edit it but the model never sees it. Everything else reads
     like a note the person themselves wrote to describe who they are.
     """
@@ -158,16 +149,13 @@ def _default_elephant_identity_file_text(
         or elephant_id.replace("-", " ").replace("_", " ").title()
         or companion_display_name(profile)
     )
-    resolved_mode = mode or profile.state.mode
     charter = _default_elephant_identity_text(
         profile,
         display_name=resolved_display_name,
-        mode=resolved_mode,
-        companion=companion,
     )
     return "\n".join(
         (
-            f"<!-- Internal metadata (not shown to the model). id: {elephant_id}. mode: {resolved_mode}. "
+            f"<!-- Internal metadata (not shown to the model). id: {elephant_id}. "
             f"Edit the paragraphs below to reshape how {resolved_display_name} introduces themselves. -->",
             "",
             charter,
@@ -227,16 +215,12 @@ def _seed_elephant_identity_text(
     profile: LoadedProfile,
     *,
     display_name: str | None = None,
-    mode: str | None = None,
-    companion: CompanionSettings | None = None,
 ) -> str:
     current = _current_elephant_identity_text(profile)
     if current is None or _elephant_identity_text_uses_default(profile):
         return _default_elephant_identity_text(
             profile,
             display_name=display_name,
-            mode=mode,
-            companion=companion,
         )
     return current
 

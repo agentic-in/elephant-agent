@@ -1618,10 +1618,7 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
         requested_elephant_identity_text.strip()
         if requested_elephant_identity_text is not None and requested_elephant_identity_text.strip()
         else render_default_elephant_identity(
-            display_name=updated_identity.state.display_name,
-            personality_preset=personality_preset,
-            initiative=initiative,
-            mode=updated_identity.state.mode,
+            display_name=updated_identity.state.display_name
         )
     )
     runtime.update_identity_state(

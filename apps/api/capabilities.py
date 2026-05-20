@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from threading import Lock
+from typing import Any, Callable
 from uuid import uuid4
 
 from packages.capabilities.runtime import (
@@ -58,13 +59,35 @@ class APITelemetrySink(TelemetrySinkCapability):
             metadata={"description": "In-process telemetry sink for API wiring."},
         )
         self._events: list[dict[str, Any]] = []
+        self._observers: list[Callable[[Mapping[str, Any]], None]] = []
+        self._observer_lock = Lock()
 
     @property
     def events(self) -> tuple[dict[str, Any], ...]:
-        return tuple(self._events)
+        with self._observer_lock:
+            return tuple(self._events)
+
+    def subscribe(self, observer: Callable[[Mapping[str, Any]], None]) -> Callable[[], None]:
+        with self._observer_lock:
+            self._observers.append(observer)
+
+        def _unsubscribe() -> None:
+            with self._observer_lock:
+                if observer in self._observers:
+                    self._observers.remove(observer)
+
+        return _unsubscribe
 
     def emit(self, event: Mapping[str, Any]) -> None:
-        self._events.append(dict(event))
+        record = dict(event)
+        with self._observer_lock:
+            self._events.append(record)
+            observers = tuple(self._observers)
+        for observer in observers:
+            try:
+                observer(record)
+            except Exception:
+                continue
 
 
 class APIRecallCapability(RecallCapability):

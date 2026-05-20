@@ -113,23 +113,7 @@ def _render_relationship_from_facts(
     ids = canonical_profile_ids(profile_id)
     elephant_id = str(getattr(identity, "elephant_id", "") or ids.elephant_id)
     interaction_preferences = _tuple_unique(str(item) for item in getattr(identity, "governance_flags", ()) or ())
-    expectations = _tuple_unique(
-        (
-            f"initiative:{value}"
-            for value in (str(getattr(identity, "initiative", "") or "").strip(),)
-            if value
-        ),
-        (
-            f"relational_stance:{value}"
-            for value in (str(getattr(identity, "relational_stance", "") or "").strip(),)
-            if value
-        ),
-        (
-            f"personality_preset:{value}"
-            for value in (str(getattr(identity, "personality_preset", "") or "").strip(),)
-            if value
-        ),
-    )
+    expectations: tuple[str, ...] = ()
     trust_markers: list[str] = []
     repair_history: list[str] = []
     local_corrections: list[str] = []
@@ -456,11 +440,6 @@ def _canonical_component_payload(record: object | None) -> dict[str, object] | N
 def _identity_capture_content(record: ElephantIdentityRecord) -> str:
     parts = [
         f"Display name: {record.display_name}",
-        f"Identity mode: {record.identity_mode}",
-        f"Personality preset: {record.personality_preset}",
-        f"Initiative: {record.initiative}",
-        f"Relational stance: {record.relational_stance}",
-        f"Working style contract: {record.working_style_contract}",
     ]
     if record.elephant_identity_text:
         parts.append(f"Elephant identity text: {record.elephant_identity_text}")
@@ -565,10 +544,6 @@ def _sync_elephant_identity(
             replace(
                 state,
                 elephant_name=identity.display_name,
-                identity_mode=identity.identity_mode,
-                initiative=identity.initiative,
-                posture=identity.relational_stance,
-                working_style=identity.working_style_contract or identity.personality_preset,
                 elephant_identity_text=identity.elephant_identity_text or state.elephant_identity_text,
                 source_manifest=identity.source_manifest_path or state.source_manifest,
                 metadata={**dict(state.metadata), "profile_id": identity.profile_id},

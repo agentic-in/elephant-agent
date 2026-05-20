@@ -246,6 +246,29 @@
       "feature_tests": []
     },
     {
+      "name": "desktop-app",
+      "summary": "Native desktop application shells and platform packaging.",
+      "doc_only": false,
+      "loop_mode": "completion",
+      "execution_plan_policy": "long_horizon",
+      "paths": [
+        "apps/macos/**"
+      ],
+      "read_first": [
+        "apps/AGENTS.md",
+        "apps/macos/AGENTS.md",
+        "docs/agent/repo-map.md",
+        "docs/agent/architecture-guardrails.md"
+      ],
+      "fast_tests": [
+        "make agent-validate"
+      ],
+      "feature_tests": [
+        "swift build --package-path apps/macos",
+        "apps/macos/Scripts/build-app.sh"
+      ]
+    },
+    {
       "name": "storage-infra",
       "summary": "Persistence, model providers, auth, embeddings, and infrastructure packages.",
       "doc_only": false,

@@ -2,6 +2,7 @@
 	site-help site-install site-dev site-preview site-build site-typecheck \
 	dashboard-help dashboard-install dashboard-dev dashboard-build dashboard-typecheck \
 	pipeline-help web-install web-build web-typecheck \
+	macos-help macos-build macos-build-all macos-release-latest \
 	test-e2e test-installed-user-journey test-release-e2e test-release-contracts test-release-scenarios test-integration-scenarios test-design-closure-reset-matrix test-install-surfaces test-live-installed-smoke test-live-provider-smoke \
 	package-build package-verify build-and-test e2e release design-closure
 
@@ -13,6 +14,15 @@ WORKTREE_NAME ?=
 WORKTREE_BRANCH ?=
 WORKTREE_BASE ?= main
 WORKTREE_ROOT ?= .worktrees
+MACOS_TARGET ?=
+MACOS_TARGETS ?= aarch64-apple-darwin x86_64-apple-darwin
+MACOS_APP_VERSION ?=
+MACOS_APP_BUILD_NUMBER ?=
+MACOS_SIGNING_IDENTITY ?=
+MACOS_NOTARIZE ?=
+MACOS_ASSET_DIR ?=
+MACOS_RELEASE_TAG ?= latest
+MACOS_RELEASE_TITLE ?= Elephant Agent latest
 RESET_API_E2E_TARGETS = \
 	tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads \
 	tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state \
@@ -73,6 +83,9 @@ pipeline-help:
 	@echo "  make web-install"
 	@echo "  make web-typecheck"
 	@echo "  make web-build"
+	@echo "  make macos-build [MACOS_TARGET=aarch64-apple-darwin|x86_64-apple-darwin]"
+	@echo "  make macos-build-all"
+	@echo "  make macos-release-latest [MACOS_RELEASE_TAG=latest]"
 	@echo "  make build-and-test [AGENT_BASE_REF=<ref>]"
 	@echo "  make e2e"
 	@echo "  make test-live-provider-smoke"
@@ -86,6 +99,49 @@ web-install: site-install dashboard-install
 web-typecheck: site-typecheck dashboard-typecheck
 
 web-build: site-build dashboard-build
+
+macos-help:
+	@echo "macOS commands:"
+	@echo "  make macos-build"
+	@echo "  make macos-build MACOS_TARGET=aarch64-apple-darwin"
+	@echo "  make macos-build MACOS_TARGET=x86_64-apple-darwin"
+	@echo "  make macos-build-all"
+	@echo "  make macos-release-latest"
+	@echo ""
+	@echo "Signing/notarization variables:"
+	@echo "  MACOS_SIGNING_IDENTITY='Developer ID Application: ...'"
+	@echo "  MACOS_NOTARIZE=1 APPLE_ID=... APPLE_PASSWORD=... APPLE_TEAM_ID=..."
+
+macos-build:
+	@env \
+		MACOS_TARGET="$(MACOS_TARGET)" \
+		MACOS_APP_VERSION="$(MACOS_APP_VERSION)" \
+		MACOS_APP_BUILD_NUMBER="$(MACOS_APP_BUILD_NUMBER)" \
+		MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
+		MACOS_NOTARIZE="$(MACOS_NOTARIZE)" \
+		MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)" \
+		bash apps/macos/Scripts/build-app.sh
+
+macos-build-all:
+	@for target in $(MACOS_TARGETS); do \
+		echo "==> Building macOS $$target"; \
+		env \
+			MACOS_TARGET="$$target" \
+			MACOS_APP_VERSION="$(MACOS_APP_VERSION)" \
+			MACOS_APP_BUILD_NUMBER="$(MACOS_APP_BUILD_NUMBER)" \
+			MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
+			MACOS_NOTARIZE="$(MACOS_NOTARIZE)" \
+			MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)" \
+			bash apps/macos/Scripts/build-app.sh; \
+	done
+
+macos-release-latest: macos-build-all
+	@env \
+		MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)" \
+		MACOS_RELEASE_TAG="$(MACOS_RELEASE_TAG)" \
+		MACOS_RELEASE_TITLE="$(MACOS_RELEASE_TITLE)" \
+		MACOS_RELEASE_VERSION="$(MACOS_APP_VERSION)" \
+		bash apps/macos/Scripts/release-latest.sh
 
 test-e2e:
 	@"$(PYTHON)" -m unittest \

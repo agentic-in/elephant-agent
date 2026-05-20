@@ -39,6 +39,9 @@
       "required_surfaces": [
         "agent_exec"
       ],
+      "conditional_surfaces": [
+        "macos"
+      ],
       "read_first": [
         "docs/agent/governance.md",
         "docs/agent/worktree-parallelism.md"
@@ -243,6 +246,33 @@
         "make web-build"
       ],
       "acceptance_criteria": "Frontend apps typecheck and build cleanly. No backend logic in frontend code."
+    },
+    "desktop-app": {
+      "label": "Desktop App",
+      "priority": 90,
+      "summary": "Native desktop shells and platform packaging.",
+      "selector_paths": [
+        "apps/macos/**"
+      ],
+      "required_surfaces": [
+        "macos"
+      ],
+      "conditional_surfaces": [
+        "agent_exec",
+        "api"
+      ],
+      "read_first": [
+        "apps/AGENTS.md",
+        "apps/macos/AGENTS.md",
+        "docs/agent/repo-map.md",
+        "docs/agent/architecture-guardrails.md"
+      ],
+      "validation": [
+        "make agent-validate",
+        "swift build --package-path apps/macos",
+        "apps/macos/Scripts/build-app.sh"
+      ],
+      "acceptance_criteria": "Desktop apps stay thin over the existing API/core, build a native bundle, and keep platform-specific integration modular."
     },
     "storage-infra": {
       "label": "Storage & Infra",

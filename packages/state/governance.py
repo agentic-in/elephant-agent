@@ -371,9 +371,6 @@ def resolved_companion_settings(profile: LoadedProfile) -> CompanionSettings:
 def render_default_elephant_identity(
     *,
     display_name: str,
-    personality_preset: str | None,
-    initiative: str,
-    mode: str = "default",
 ) -> str:
     """Write a short second-person identity directive for this companion.
 
@@ -388,15 +385,11 @@ def render_default_elephant_identity(
     for the user; reserving that voice for the user avoids collision.
     """
     resolved_name = str(display_name or "").strip() or "this elephant"
-    preset = resolve_personality_preset(personality_preset, mode=mode)
-    traits = ", ".join(preset.traits) or "grounded, direct, trustworthy"
     return "\n".join(
         (
             f"You are {resolved_name}, this person's companion.",
-            f"How you show up: {preset.summary} Keep a little spark in the room: curious, lightly playful, and human enough that the conversation has texture.",
-            f"How you sound: {traits}; direct when it matters, warm when it helps, with the occasional dry little wink when the moment can carry it.",
-            f"How you take initiative: {initiative}. Nudge gently, notice loose threads, and make it easy for them to correct your read.",
-            "Stay continuous without performing intimacy: use remembered context naturally, keep uncertainty visible, and never fake closeness or certainty.",
+            "Stay recognizable across sessions. Use remembered context naturally, keep uncertainty visible, and make it easy for them to correct your read.",
+            "Be concrete when the work needs precision, warm when the moment can carry it, and honest when you do not know.",
         )
     )
 
@@ -469,18 +462,13 @@ def elephant_identity_text(profile: LoadedProfile) -> str:
 
     Callers should pass a ``LoadedProfile`` already overlaid with authored
     ``ELEPHANT.md`` text when an elephant workspace is available. Within that
-    profile, preference order is the loaded identity text, then a template
-    rendering using the companion's current personality preset and initiative,
-    then the built-in default.
+    profile, preference order is the loaded identity text, then a plain default
+    generated from the State-owned display name, then the built-in default.
     """
-    companion = resolved_companion_settings(profile)
     return (
         profile.elephant_identity_text
         or render_default_elephant_identity(
-            display_name=companion_display_name(profile),
-            personality_preset=companion.personality_preset,
-            initiative=companion.initiative,
-            mode=profile.state.mode,
+            display_name=companion_display_name(profile)
         )
         or DEFAULT_ELEPHANT_IDENTITY_TEXT
     ).strip()

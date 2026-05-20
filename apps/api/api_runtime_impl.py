@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 import json
+from threading import Lock
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -110,6 +111,16 @@ def _enabled_overrides(state_dir: Path, section: str) -> dict[str, bool]:
     return overrides
 
 
+def _steady_embedding_runtime(embedding_service: Any) -> None:
+    steady_async = getattr(embedding_service, "steady_async", None)
+    if not callable(steady_async):
+        return
+    try:
+        steady_async()
+    except Exception:
+        return
+
+
 class ElephantAPIApp:
     def __init__(self, config: APIAppConfig) -> None:
         self.config = config
@@ -167,6 +178,8 @@ class ElephantAPIApp:
             profile_dir=install_root,
         )
         _api_embedding_service = self.recall_runtime.evidence_retriever.embedding_service
+        self.embedding_service = _api_embedding_service
+        _steady_embedding_runtime(_api_embedding_service)
         self.semantic_summary_indexer = (
             SemanticSummaryIndexer(
                 semantic_index=self.semantic_index_bundle.service,
@@ -298,6 +311,7 @@ class ElephantAPIApp:
             )
         )
         self._loops: dict[str, list[APILoopRecord]] = {}
+        self._loop_stream_lock = Lock()
 
 ElephantAPIApp.list_providers = _provider_methods.list_providers
 ElephantAPIApp.setup_provider = _provider_methods.setup_provider
@@ -350,6 +364,7 @@ ElephantAPIApp.set_console_item_enabled = _console_methods.set_console_item_enab
 ElephantAPIApp.gateway_action = _console_methods.gateway_action
 ElephantAPIApp.inspect_recall_evidence = _recall_methods.inspect_recall_evidence
 ElephantAPIApp.run_loop = _http_methods.run_loop
+ElephantAPIApp.stream_loop_events = _http_methods.stream_loop_events
 ElephantAPIApp.dispatch = _http_methods.dispatch
 ElephantAPIApp._dispatch_providers = _http_methods._dispatch_providers
 ElephantAPIApp._dispatch_internal = _http_methods._dispatch_internal

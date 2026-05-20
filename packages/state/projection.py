@@ -44,7 +44,6 @@ def overlay_canonical_profile_state(
         state = replace(
             state,
             display_name=identity_record.display_name,
-            mode=identity_record.identity_mode,
         )
     companion = _project_companion_settings(
         profile.companion,
@@ -111,20 +110,12 @@ def _project_companion_settings(
     if identity_record is None and relationship_record is None:
         return resolved_current
     governance_flags = set(identity_record.governance_flags if identity_record is not None else ())
-    preset_id = identity_record.personality_preset if identity_record is not None else resolved_current.personality_preset
-    traits = _project_personality_traits(
-        current=resolved_current,
-        mode=mode,
-        preset_id=preset_id,
-        identity_record=identity_record,
-    )
-    initiative = identity_record.initiative if identity_record is not None else resolved_current.initiative
     notes = relationship_record.continuity_notes if relationship_record is not None else resolved_current.notes
     return CompanionSettings(
         text_first=_flag_enabled(governance_flags, positive="text-first", fallback=resolved_current.text_first),
-        personality_preset=preset_id,
-        personality=traits,
-        initiative=initiative,
+        personality_preset=resolved_current.personality_preset,
+        personality=resolved_current.personality,
+        initiative=resolved_current.initiative,
         preserve_relationship_timeline=_flag_enabled(
             governance_flags,
             positive="preserve-relationship-timeline",
@@ -151,18 +142,6 @@ def _project_companion_settings(
         ),
         notes=notes,
     )
-
-
-def _project_personality_traits(
-    *,
-    current: CompanionSettings,
-    mode: str,
-    preset_id: str,
-    identity_record: ElephantIdentityRecord | None,
-) -> tuple[str, ...]:
-    if current.personality and preset_id == current.personality_preset:
-        return current.personality
-    return resolve_personality_preset(preset_id, mode=mode).traits
 
 
 def _default_companion_settings(mode: str) -> CompanionSettings:

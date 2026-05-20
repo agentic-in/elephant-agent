@@ -47,6 +47,17 @@ _DEFAULT_ELEPHANT_FOCUS_MARKERS = (
 )
 
 
+def _elephant_identity_record_view(record: ElephantIdentityRecord) -> ElephantIdentityRecord:
+    return replace(
+        record,
+        identity_mode="",
+        personality_preset="",
+        initiative="",
+        relational_stance="",
+        working_style_contract="",
+    )
+
+
 def _state_focus_text(state) -> str:
     if state is None:
         return ""
@@ -63,8 +74,8 @@ class CliRuntimeProfileMixin:
         if session is None:
             raise KeyError("latest-session")
         elephant_id = self.elephant_id_for_session(session)
-        # Resolve the session's elephant-bound profile so companion initiative /
-        # preferences reflect the actual bound elephant, not a personal-model stub.
+        # Resolve the session's elephant-bound profile so authored ELEPHANT.md
+        # text reflects the actual bound elephant, not a personal-model stub.
         from packages.state import load_runtime_profile
 
         profile = load_runtime_profile(
@@ -142,11 +153,7 @@ class CliRuntimeProfileMixin:
             identity = replace(
                 identity,
                 display_name=elephant_state.elephant_name or identity.display_name,
-                identity_mode=elephant_state.identity_mode or identity.identity_mode,
-                personality_preset=identity.personality_preset,
-                initiative=elephant_state.initiative or identity.initiative,
                 elephant_identity_text=elephant_state.elephant_identity_text or identity.elephant_identity_text,
-                working_style_contract=elephant_state.elephant_identity_text or identity.working_style_contract,
             )
         return build_profile_operator_surface(
             session_id=session_id,
@@ -160,17 +167,13 @@ class CliRuntimeProfileMixin:
     def patch_profile_surface(self, session_id: str, payload: dict[str, object]):
         if any(
             key in payload
-            for key in {"display_name", "name", "personality_preset", "initiative", "elephant_identity_text", "text", "content", "clear_elephant_identity"}
+            for key in {"display_name", "name", "elephant_identity_text", "text", "content", "clear_elephant_identity"}
         ):
             display_name = str(payload.get("display_name") or payload.get("name") or "").strip() or None
-            personality_preset = str(payload.get("personality_preset") or "").strip() or None
-            initiative = str(payload.get("initiative") or "").strip() or None
             elephant_identity_text = str(payload.get("elephant_identity_text") or payload.get("text") or payload.get("content") or "").strip() or None
             self.update_identity_state(
                 session_id=session_id,
                 display_name=display_name,
-                personality_preset=personality_preset,
-                initiative=initiative,
                 elephant_identity_text=elephant_identity_text,
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
             )
@@ -283,8 +286,8 @@ class CliRuntimeProfileMixin:
         loaded = self._load_profile(resolved_profile_id)
         persisted = load_persisted_canonical_state(self.repository, loaded.state.profile_id).elephant_identity
         if persisted is not None:
-            return persisted
-        return build_canonical_profile_state(loaded).elephant_identity
+            return _elephant_identity_record_view(persisted)
+        return _elephant_identity_record_view(build_canonical_profile_state(loaded).elephant_identity)
 
     def inspect_user(
         self,
@@ -450,8 +453,6 @@ class CliRuntimeProfileMixin:
         session_id: str | None = None,
         profile_id: str | None = None,
         display_name: str | None = None,
-        personality_preset: str | None = None,
-        initiative: str | None = None,
         elephant_identity_text: str | None = None,
         clear_elephant_identity: bool = False,
     ) -> ElephantIdentityRecord:
@@ -461,14 +462,6 @@ class CliRuntimeProfileMixin:
         if display_name is not None:
             self.update_identity(profile_id=resolved_profile_id, display_name=display_name)
         loaded = self._load_profile(resolved_profile_id)
-        if personality_preset is not None or initiative is not None:
-            if loaded.state.mode != "companion":
-                loaded = self.update_identity(profile_id=resolved_profile_id, mode="companion")
-            loaded = self.update_companion_settings(
-                profile_id=resolved_profile_id,
-                personality_preset=personality_preset,
-                initiative=initiative,
-            )
         if clear_elephant_identity or elephant_identity_text is not None:
             self._authorize_write(
                 operation="cli.identity.surface.update",
@@ -480,10 +473,7 @@ class CliRuntimeProfileMixin:
                 elephant_root = self.paths.elephant_file_path(target_elephant_id)
                 next_state_text = (
                     render_default_elephant_identity(
-                        display_name=display_name or loaded.state.display_name,
-                        personality_preset=(loaded.companion.personality_preset if loaded.companion is not None else None),
-                        initiative=(loaded.companion.initiative if loaded.companion is not None else "gentle"),
-                        mode=loaded.state.mode,
+                        display_name=display_name or loaded.state.display_name
                     )
                     if clear_elephant_identity
                     else (_normalized_profile_text(elephant_identity_text) or loaded.elephant_identity_text or "")
@@ -494,24 +484,12 @@ class CliRuntimeProfileMixin:
                     target_session,
                     elephant_identity_text=refreshed_state_text,
                     elephant_display_name=display_name,
-                    elephant_mode=loaded.state.mode,
-                    elephant_companion=loaded.companion,
                 )
                 base_identity = self.inspect_identity(profile_id=resolved_profile_id)
                 return replace(
                     base_identity,
                     display_name=elephant_state.elephant_name or display_name or base_identity.display_name,
-                    identity_mode=elephant_state.identity_mode or loaded.state.mode,
-                    personality_preset=(
-                        elephant_state.working_style
-                        or (loaded.companion.personality_preset if loaded.companion is not None else base_identity.personality_preset)
-                    ),
-                    initiative=(
-                        elephant_state.initiative
-                        or (loaded.companion.initiative if loaded.companion is not None else base_identity.initiative)
-                    ),
                     elephant_identity_text=elephant_state.elephant_identity_text or refreshed_state_text,
-                    working_style_contract=elephant_state.elephant_identity_text or refreshed_state_text,
                 )
             loaded = self._persist_profile(
                 LoadedProfile(
@@ -526,32 +504,18 @@ class CliRuntimeProfileMixin:
                 ),
                 sync_source="identity.state.update",
             )
-        if target_session is not None and target_elephant_id and (
-            display_name is not None or personality_preset is not None or initiative is not None
-        ):
+        if target_session is not None and target_elephant_id and display_name is not None:
             refreshed_state_text = read_elephant_identity_file(self.paths.elephant_file_path(target_elephant_id)) or loaded.elephant_identity_text or ""
             elephant_state = self.ensure_elephant_state(
                 target_session,
                 elephant_identity_text=refreshed_state_text,
                 elephant_display_name=display_name,
-                elephant_mode=loaded.state.mode,
-                elephant_companion=loaded.companion,
             )
             base_identity = self.inspect_identity(profile_id=resolved_profile_id)
             return replace(
                 base_identity,
                 display_name=elephant_state.elephant_name or display_name or base_identity.display_name,
-                identity_mode=elephant_state.identity_mode or loaded.state.mode,
-                personality_preset=(
-                    elephant_state.working_style
-                    or (loaded.companion.personality_preset if loaded.companion is not None else base_identity.personality_preset)
-                ),
-                initiative=(
-                    elephant_state.initiative
-                    or (loaded.companion.initiative if loaded.companion is not None else base_identity.initiative)
-                ),
                 elephant_identity_text=elephant_state.elephant_identity_text or refreshed_state_text,
-                working_style_contract=elephant_state.elephant_identity_text or refreshed_state_text,
             )
         return self.inspect_identity(profile_id=resolved_profile_id)
 
