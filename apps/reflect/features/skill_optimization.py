@@ -24,7 +24,8 @@ FEATURE = Feature(
 - Only apply an approved candidate when the target skill is authored; use tool.skill.manage action=update first, then update the candidate review_status to applied.
 - Preserve rejected candidates for audit and duplicate suppression; do not delete them just to hide them.""",
     constraints="""\
-- Only create optimization candidates from supplied signals with confidence >= 0.6.
+- Only create or update optimization candidates that appear in the authoritative Optimization Candidate Records section of the evidence packet and have confidence >= 0.6.
+- Raw trajectory signals are supporting context only; never invent extra candidates from raw signals, user conversation text, assistant prose, or tool arguments.
 - Never include user conversation text, assistant prose, or tool arguments in candidate summaries.
 - topic MUST follow one of these formats:
   - world.skills.optimization.<skill_index_id>.<candidate_key>

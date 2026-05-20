@@ -74,6 +74,7 @@ class SkillOptimizationFeatureTest(unittest.TestCase):
 
         self.assertIn("world.skills.optimization.<scope>.<candidate_key>", prompt)
         self.assertIn("tool.skill.manage", prompt)
+        self.assertIn("authoritative Optimization Candidate Records section", prompt)
 
     def test_skill_review_evidence_contains_trajectory_sections(self) -> None:
         runtime = SimpleNamespace(

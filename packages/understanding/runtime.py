@@ -18,21 +18,13 @@ from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID, canon
 from .semantic_search_support import fallback_pm_search, keyword_boost, rank_facts_by_semantic_queries
 from .temporal_policy import freshness_score
 from .personal_model_governance import (
-    claim_payload,
-    ensure_valid_topic_key,
-    inheritable_recall_metadata,
-    is_protected_topic,
-    is_single_active_topic,
-    is_skill_optimization_topic,
-    normalize_skill_optimization_candidate_metadata,
-    personal_model_health_report,
-    protected_topic_metadata,
-    narrowing_suggestions,
-    related_claims_for_selection,
+    claim_payload, ensure_valid_topic_key, inheritable_recall_metadata,
+    is_protected_topic, is_single_active_topic, is_skill_optimization_topic,
+    narrowing_suggestions, normalize_skill_optimization_candidate_metadata,
+    personal_model_health_report, protected_topic_metadata,
+    related_claims_for_selection, similar_topic_payloads,
+    skill_optimization_candidate_confidence, topic_rows, topic_tree,
     valid_topic_key,
-    similar_topic_payloads,
-    topic_rows,
-    topic_tree,
 )
 _ALLOWED_ACTIONS = frozenset({"remember", "correct", "forget", "dispute", "restore"})
 _ALLOWED_SOURCES = frozenset({"user_said", "user_corrected", "learned"})
@@ -934,12 +926,18 @@ class PersonalModelUnderstandingSurface:
             metadata=base_metadata,
             now=now,
         ).metadata
+        fact_confidence = 0.72 if resolved_source == "learned" else 1.0
+        if is_skill_optimization_topic(resolved_topic):
+            fact_confidence = skill_optimization_candidate_confidence(
+                lifecycle_metadata,
+                default=fact_confidence,
+            )
         fact = Fact(
             fact_id=_fact_ref(pm_id, resolved_lens, resolved_topic, resolved_text),
             personal_model_id=pm_id,
             lens=resolved_lens,
             text=resolved_text,
-            confidence=0.72 if resolved_source == "learned" else 1.0,
+            confidence=fact_confidence,
             committed_at=now,
             source=fact_source,
             source_episode_ids=(self._episode_id(session_id),),

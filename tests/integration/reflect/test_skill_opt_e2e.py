@@ -239,6 +239,9 @@ class SkillOptimizationEndToEndTest(unittest.TestCase):
 
         self.assertIn("## Trajectory Signals", evidence)
         self.assertIn("## Optimization Candidates", evidence)
+        self.assertIn("## Optimization Candidate Records", evidence)
+        self.assertIn('"review_status": "pending"', evidence)
+        self.assertIn('"target_scope": "python_development"', evidence)
         self.assertNotIn("别把对话内容写进候选里", evidence)
         self.assertGreaterEqual(len(signals), 1)
         self.assertEqual(candidate.optimization_type, "update_procedure")

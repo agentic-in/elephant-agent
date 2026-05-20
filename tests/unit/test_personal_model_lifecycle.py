@@ -10,7 +10,7 @@ import unittest
 from packages.contracts import Step
 from packages.evidence import recall_time_range_from_payload
 from packages.storage import RuntimeStorageRepository
-from packages.tools.handlers_personal_model import run_personal_model_update
+from packages.tools.handlers_personal_model import run_personal_model_search, run_personal_model_update
 from packages.tools.runtime import ToolInvocation, ToolRuntimeContext
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.understanding.personal_model_governance import protected_topic_metadata
@@ -795,6 +795,65 @@ class PersonalModelLifecycleTest(unittest.TestCase):
         self.assertEqual(len(active), 1)
         self.assertEqual(second["retired"], (first["ref"],))
         self.assertEqual(tuple(retired.get("claims") or ())[0]["status"], "retired")
+
+    def test_skill_optimization_claim_payload_and_search_surface_expose_candidate_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+
+            claim = surface.update_personal_model(
+                "session-life",
+                action="remember",
+                lens="world",
+                topic="world.skills.optimization.python_development.update_procedure_ab12cd34",
+                text="将 tool.terminal.exec → tool.file.read 编码为稳定流程。",
+                reason="reflect candidate draft",
+                source="user_said",
+                personal_model_id=state.personal_model_id,
+                metadata={
+                    "review_status": "new",
+                    "confidence": "0.84",
+                    "optimization_type": "update_procedure",
+                    "signal_type": "recurring_sequence",
+                    "occurrence_count": "5",
+                    "suggested_action": "Update python-development to encode the repeated tool sequence tool.terminal.exec -> tool.file.read.",
+                    "skill_id": "python-development",
+                },
+            )["claim"]
+            fact = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")[0]
+            search = run_personal_model_search(
+                ToolInvocation(
+                    invocation_id="invoke:search-skillopt-claim",
+                    tool_id="tool.personal_model.search",
+                    session_id="session-life",
+                    context=ToolRuntimeContext(cwd=Path(tmpdir), personal_model_id=state.personal_model_id),
+                    arguments={
+                        "lens": "world",
+                        "topic": "world.skills.optimization.python_development.update_procedure_ab12cd34",
+                        "personal_model_id": state.personal_model_id,
+                    },
+                ),
+                surface=surface,
+            )
+
+        self.assertEqual(claim["candidate_key"], "update_procedure_ab12cd34")
+        self.assertEqual(claim["candidate_id"], "skillopt_update_procedure_ab12cd34")
+        self.assertEqual(claim["target_scope"], "python_development")
+        self.assertEqual(claim["index_id"], "python_development")
+        self.assertEqual(claim["skill_id"], "python-development")
+        self.assertEqual(claim["optimization_type"], "update_procedure")
+        self.assertEqual(claim["signal_type"], "recurring_sequence")
+        self.assertEqual(claim["occurrence_count"], "5")
+        self.assertEqual(claim["review_status"], "pending")
+        self.assertEqual(claim["confidence"], 0.84)
+        self.assertEqual(fact.confidence, 0.84)
+        self.assertIn("candidate_key=update_procedure_ab12cd34", search["summary"])
+        self.assertIn("review_status=pending", search["summary"])
+        self.assertIn("target_scope=python_development", search["summary"])
+        self.assertIn("confidence=0.84", search["summary"])
+        self.assertIn("suggested_action: Update python-development to encode the repeated tool sequence", search["summary"])
 
     def test_skill_optimization_topics_are_normalized_at_write_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

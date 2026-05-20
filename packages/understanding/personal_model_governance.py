@@ -323,6 +323,19 @@ def canonical_skill_optimization_review_status(value: object, *, default: str = 
     return fallback if fallback in _ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES else "pending"
 
 
+def skill_optimization_candidate_confidence(
+    metadata: Mapping[str, object] | None = None,
+    *,
+    default: float = 0.72,
+) -> float:
+    raw = clean((metadata or {}).get("confidence")) if isinstance(metadata, Mapping) else ""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return max(0.0, min(1.0, float(default)))
+    return max(0.0, min(1.0, value))
+
+
 def normalize_skill_optimization_candidate_metadata(
     topic: object,
     metadata: Mapping[str, object] | None = None,
@@ -482,13 +495,16 @@ def claim_payload(fact: Fact) -> dict[str, Any]:
     metadata = dict(fact.metadata or {})
     topic = clean(metadata.get("topic"))
     protection = protected_topic_policy(topic, metadata)
-    return {
+    confidence = float(getattr(fact, "confidence", 0.0) or 0.0)
+    if is_skill_optimization_topic(topic):
+        confidence = skill_optimization_candidate_confidence(metadata, default=confidence)
+    payload = {
         "ref": fact.fact_id,
         "lens": fact.lens,
         "topic": topic,
         "text": fact.text,
         "status": fact.status,
-        "confidence": fact.confidence,
+        "confidence": confidence,
         "source": metadata.get("source_kind", fact.source),
         "updated_at": fact.committed_at.isoformat(),
         "reason": metadata.get("reason", ""),
@@ -501,6 +517,23 @@ def claim_payload(fact: Fact) -> dict[str, Any]:
         "projection_policy": metadata.get("projection_policy", protection.projection_policy if protection is not None else ""),
         "facet": metadata.get("facet", protection.facet if protection is not None else ""),
     }
+    if is_skill_optimization_topic(topic):
+        scope = skill_optimization_scope(topic)
+        payload.update(
+            {
+                "candidate_id": metadata.get("candidate_id", ""),
+                "candidate_key": metadata.get("candidate_key", skill_optimization_candidate_key(topic)),
+                "index_id": metadata.get("index_id", ""),
+                "target_scope": metadata.get("target_scope", "" if scope == "new" else scope),
+                "skill_id": metadata.get("skill_id", ""),
+                "optimization_type": metadata.get("optimization_type", ""),
+                "signal_type": metadata.get("signal_type", ""),
+                "occurrence_count": metadata.get("occurrence_count", ""),
+                "review_status": canonical_skill_optimization_review_status(metadata.get("review_status"), default="pending"),
+                "suggested_action": metadata.get("suggested_action", ""),
+            }
+        )
+    return payload
 
 
 def topic_tree(facts: tuple[Fact, ...]) -> dict[str, dict[str, dict[str, list[str]]]]:

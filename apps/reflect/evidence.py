@@ -7,11 +7,17 @@ the job, the user, and what happened in the episode.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 import re
 from typing import Any
 
 from packages.contracts.runtime import LearningJob
-from packages.reflect import aggregate_signals, extract_trajectory_signals
+from packages.reflect import (
+    aggregate_signals,
+    extract_trajectory_signals,
+    optimization_candidate_metadata,
+    optimization_candidate_topic,
+)
 
 from .features.types import Feature
 
@@ -63,6 +69,45 @@ def _skill_catalog(runtime: Any) -> tuple[Any, ...]:
             except Exception:
                 return ()
     return ()
+
+
+def _skill_optimization_candidate_record(candidate: Any) -> dict[str, object]:
+    metadata = optimization_candidate_metadata(candidate)
+    return {
+        "candidate_id": metadata.get("candidate_id", ""),
+        "candidate_key": metadata.get("candidate_key", ""),
+        "confidence": metadata.get("confidence", f"{getattr(candidate, 'confidence', 0.0):.2f}"),
+        "index_id": metadata.get("index_id", ""),
+        "occurrence_count": metadata.get("occurrence_count", "0"),
+        "optimization_type": metadata.get("optimization_type", ""),
+        "review_status": metadata.get("review_status", "pending"),
+        "signal_type": metadata.get("signal_type", ""),
+        "skill_id": metadata.get("skill_id", ""),
+        "suggested_action": getattr(candidate, "suggested_action", ""),
+        "summary": getattr(candidate, "summary", ""),
+        "supporting_signals": list(getattr(candidate, "supporting_signals", ()) or ()),
+        "target_scope": metadata.get("target_scope", "new"),
+        "topic": optimization_candidate_topic(candidate),
+    }
+
+
+def _skill_optimization_candidate_lines(candidates: tuple[Any, ...]) -> tuple[str, ...]:
+    lines = [
+        "## Optimization Candidate Records",
+        "authoritative: only the pre-aggregated records below may be persisted or applied",
+        f"candidate_records: {len(candidates)}",
+    ]
+    if not candidates:
+        return tuple(lines + ["(none)"])
+    lines.extend(
+        json.dumps(
+            _skill_optimization_candidate_record(candidate),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        for candidate in candidates[:10]
+    )
+    return tuple(lines)
 
 
 def _basic_user_anchor_lines(facts: tuple[Any, ...]) -> tuple[str, ...]:
@@ -360,11 +405,17 @@ def build_evidence(
             "",
             "## Trajectory Signals",
             f"signals: {len(signals)}",
-            *(f"- [{signal.signal_type}] {signal.summary} (confidence={signal.confidence:.2f}, count={signal.occurrence_count})" for signal in signals[:15]),
+            *(
+                f"- [{signal.signal_type}] id={signal.signal_id} {signal.summary} "
+                f"(confidence={signal.confidence:.2f}, count={signal.occurrence_count})"
+                for signal in signals[:15]
+            ),
             "",
             "## Optimization Candidates",
             f"candidates: {len(candidates)}",
             *(f"- [{candidate.optimization_type}] {candidate.suggested_action} (confidence={candidate.confidence:.2f})" for candidate in candidates[:5]),
+            "",
+            *_skill_optimization_candidate_lines(candidates),
         ])
 
     # Episode evidence for features that learn from the supplied close packet.
