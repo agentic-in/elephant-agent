@@ -14,7 +14,6 @@ enum AppSection: String, CaseIterable, Identifiable {
     case usage
     case cron
     case learn
-    case sources
     case provider
     case settings
 
@@ -31,8 +30,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         .herd,
         .usage,
         .cron,
-        .learn,
-        .sources
+        .learn
     ]
 
     var title: String {
@@ -48,7 +46,6 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .usage: return "Usage"
         case .cron: return "Calendar"
         case .learn: return "Learn"
-        case .sources: return "Sources"
         case .provider: return "Provider"
         case .settings: return "Settings"
         }
@@ -67,7 +64,6 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .usage: return "Tokens"
         case .cron: return "Reminders"
         case .learn: return "Reflect"
-        case .sources: return "Evidence"
         case .provider: return "Model"
         case .settings: return "System"
         }
@@ -86,7 +82,6 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .usage: return "chart.xyaxis.line"
         case .cron: return "calendar"
         case .learn: return "brain.head.profile"
-        case .sources: return "folder.badge.plus"
         case .provider: return "cpu"
         case .settings: return "gearshape"
         }
@@ -105,7 +100,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .usage: return "8"
         case .cron: return "9"
         case .learn: return "0"
-        case .sources, .provider, .settings: return nil
+        case .provider, .settings: return nil
         }
     }
 }
@@ -124,18 +119,6 @@ enum CorePhase: Equatable {
         case .failed: return "needs attention"
         }
     }
-}
-
-struct SourceScan: Identifiable, Equatable {
-    var id = UUID()
-    var rootPath: String
-    var scanned: Int
-    var admitted: Int
-    var skipped: Int
-    var samples: [String]
-    var skippedReasons: [String: Int]
-
-    static let empty = SourceScan(rootPath: "", scanned: 0, admitted: 0, skipped: 0, samples: [], skippedReasons: [:])
 }
 
 struct ToolUseEvent: Identifiable, Equatable {
@@ -470,32 +453,50 @@ final class ElephantAppModel: ObservableObject {
     @Published var selectedSection: AppSection = .home
     @Published var corePhase: CorePhase = .idle
     @Published var snapshot: DashboardSnapshot = .empty
-    @Published var stagedSources: [SourceScan] = []
     @Published var messages: [ChatMessage] = [
         ChatMessage(role: .system, text: "Start a short conversation. Elephant will keep useful facts and open questions reviewable.")
     ]
     @Published var chatScrollRevision = 0
     @Published var wakeDraft = ""
     @Published var onboardingName = "Elephant"
-    @Published var onboardingPurpose = "Help me remember context, reflect on evidence, and keep useful questions alive."
+    @Published var onboardingPurpose = "Be warm, precise, curious, and direct. Protect continuity, ask useful questions, and keep the user's Personal Model correctable."
     @Published var onboardingPreferredName = ""
     @Published var onboardingOccupation = ""
+    @Published var onboardingSchool = ""
     @Published var onboardingCity = ""
     @Published var onboardingGender = ""
     @Published var onboardingBirthDate = ""
     @Published var onboardingMBTI = ""
     @Published var onboardingHobbies = ""
-    @Published var onboardingRelationshipMode = ""
-    @Published var onboardingCommunicationPreference = ""
+    @Published var onboardingDream = ""
+    @Published var onboardingCreativeHobby = ""
+    @Published var onboardingMediaHobby = ""
+    @Published var onboardingMovementHobby = ""
     @Published var onboardingSafetyBoundaries = ""
+    @Published var onboardingFoodAllergies = ""
+    @Published var onboardingMedicationAllergies = ""
+    @Published var onboardingChronicConditions = ""
+    @Published var onboardingPrivateSafetyNote = ""
     @Published var onboardingFirstLanguage = "en"
-    @Published var onboardingLearningIntensity = "medium"
+    @Published var onboardingBlogURL = ""
+    @Published var onboardingLinkedInURL = ""
+    @Published var onboardingTwitterURL = ""
+    @Published var onboardingInnerLandscape = ""
+    @Published var onboardingValueAnchor = ""
+    @Published var onboardingPressurePattern = ""
+    @Published var onboardingRecoveryStyle = ""
+    @Published var onboardingDecisionCompass = ""
     @Published var onboardingProviderID = "openai-compatible"
     @Published var onboardingBaseURL = ""
     @Published var onboardingModelID = ""
     @Published var onboardingAPIKey = ""
     @Published var onboardingContextWindow = ""
     @Published var onboardingStep = 0
+    @Published var onboardingFinalizationStarted = false
+    @Published var onboardingFinalizationComplete = false
+    @Published var onboardingFinalizationFailed = false
+    @Published var onboardingFinalizationStatus = ""
+    @Published var onboardingInitReflectJobID = ""
     @Published var showingOnboarding = false
     @Published var showingCommandPalette = false
     @Published var lastError = ""
@@ -514,13 +515,24 @@ final class ElephantAppModel: ObservableObject {
     @Published var userAvatarPath = UserDefaults.standard.string(forKey: ElephantAppModel.userAvatarPathKey) ?? ""
     @Published var herdAvatarPaths: [String: String] = UserDefaults.standard.dictionary(forKey: ElephantAppModel.herdAvatarPathsKey) as? [String: String] ?? [:]
     @Published var hiddenEpisodeIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ElephantAppModel.hiddenEpisodeIDsKey) ?? [])
+    @Published var isSleepDisplayPresented = false
+    @Published var sleepDisplayReason = "manual"
+    @Published var sleepIdleMinutes = ElephantAppModel.persistedSleepIdleMinutes()
+    @Published var lastInteractionDate = Date()
+    @Published var isResettingData = false
+    @Published var resetDataResult = ""
 
     private let runner = CoreRunner()
     private var client = APIClient(baseURL: nil)
     private var readinessPollTask: Task<Void, Never>?
+    private var sleepIdleMonitorTask: Task<Void, Never>?
+    private var onboardingCreatedStateID = ""
+    private static let onboardingCompleteKey = "elephant.mac.onboardingComplete"
     private static let userAvatarPathKey = "elephant.mac.userAvatarImagePath"
     private static let herdAvatarPathsKey = "elephant.mac.herdAvatarImagePaths"
     private static let hiddenEpisodeIDsKey = "elephant.mac.hiddenEpisodeIDs"
+    private static let sleepIdleMinutesKey = "elephant.mac.sleepIdleMinutes"
+    private static let defaultSleepIdleMinutes = 10
 
     var userDisplayName: String {
         if let name = snapshot.profileFacts.first(where: { $0.label == "Name" })?.value,
@@ -538,7 +550,24 @@ final class ElephantAppModel: ObservableObject {
         return URL(fileURLWithPath: path)
     }
 
+    var onboardingElephantMarkdown: String {
+        let name = onboardingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Elephant"
+            : onboardingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let vibe = onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Be warm, precise, curious, and direct."
+            : onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
+        return """
+        # \(name)
+
+        ## Vibe
+
+        \(vibe)
+        """
+    }
+
     func launch() async {
+        startSleepIdleMonitorIfNeeded()
         guard corePhase != .ready && corePhase != .starting else { return }
         corePhase = .starting
         do {
@@ -619,45 +648,180 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    func resetAllData() async {
+        guard !isResettingData else { return }
+        isResettingData = true
+        resetDataResult = ""
+        lastError = ""
+        corePhase = .starting
+        readinessPollTask?.cancel()
+        readinessPollTask = nil
+        do {
+            let runtime = try await runner.resetLocalData()
+            try resetLocalMacStateForFreshInstall()
+            resetOnboardingDrafts()
+            client = APIClient(baseURL: runtime.baseURL)
+            snapshot = .empty
+            snapshot.apiURL = runtime.baseURL.absoluteString
+            snapshot.databasePath = runtime.databasePath.path
+            activeEpisodeID = ""
+            messages = [
+                ChatMessage(role: .system, text: "Set up Elephant to start a new local conversation.")
+            ]
+            chatScrollRevision += 1
+            try await refreshDashboard()
+            corePhase = .ready
+            selectedSection = .home
+            showingOnboarding = true
+            resetDataResult = "Reset complete. Set up Elephant again."
+        } catch {
+            corePhase = .failed(error.localizedDescription)
+            lastError = error.localizedDescription
+        }
+        isResettingData = false
+    }
+
+    private var onboardingCareSummary: String {
+        let rows: [(String, String)] = [
+            ("boundaries", onboardingSafetyBoundaries),
+            ("food_allergies", onboardingFoodAllergies),
+            ("medication_allergies", onboardingMedicationAllergies),
+            ("chronic_conditions", onboardingChronicConditions),
+            ("private_safety_note", onboardingPrivateSafetyNote)
+        ]
+        return rows.compactMap { key, value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : "\(key): \(trimmed)"
+        }
+        .joined(separator: "; ")
+    }
+
+    @discardableResult
+    private func createElephantProfileFromOnboarding() async throws -> String {
+        if client.baseURL == nil {
+            _ = try await runner.start()
+            client = APIClient(baseURL: runner.baseURL)
+        }
+        let canReuseCurrentProvider = onboardingProviderID == snapshot.providerID
+            && (onboardingModelID.isEmpty || onboardingModelID == snapshot.providerModelID)
+            && onboardingBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && onboardingAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !canReuseCurrentProvider {
+            try await client.configureProvider(
+                providerID: onboardingProviderID,
+                baseURL: onboardingBaseURL,
+                modelID: onboardingModelID,
+                apiKey: onboardingAPIKey,
+                contextWindow: onboardingContextWindow
+            )
+        }
+        let stateID: String
+        if onboardingCreatedStateID.isEmpty {
+            stateID = try await client.createElephant(name: onboardingName, identityText: onboardingElephantMarkdown)
+            onboardingCreatedStateID = stateID
+        } else {
+            stateID = onboardingCreatedStateID
+        }
+        try await client.updateUserProfile(
+            stateID: stateID,
+            preferredName: onboardingPreferredName,
+            occupation: onboardingOccupation,
+            school: onboardingSchool,
+            city: onboardingCity,
+            gender: onboardingGender,
+            birthDate: onboardingBirthDate,
+            mbti: onboardingMBTI,
+            hobbies: onboardingHobbies,
+            dream: onboardingDream,
+            creativeHobby: onboardingCreativeHobby,
+            mediaHobby: onboardingMediaHobby,
+            movementHobby: onboardingMovementHobby,
+            safetyBoundaries: onboardingCareSummary,
+            firstLanguage: onboardingFirstLanguage,
+            blogURL: onboardingBlogURL,
+            linkedInURL: onboardingLinkedInURL,
+            twitterURL: onboardingTwitterURL,
+            personalLogoPath: userAvatarPath,
+            innerLandscape: onboardingInnerLandscape,
+            valueAnchor: onboardingValueAnchor,
+            pressurePattern: onboardingPressurePattern,
+            recoveryStyle: onboardingRecoveryStyle,
+            decisionCompass: onboardingDecisionCompass
+        )
+        return stateID
+    }
+
     func createElephantFromOnboarding() async {
         do {
-            if client.baseURL == nil {
-                _ = try await runner.start()
-                client = APIClient(baseURL: runner.baseURL)
-            }
-            let canReuseCurrentProvider = onboardingProviderID == snapshot.providerID
-                && (onboardingModelID.isEmpty || onboardingModelID == snapshot.providerModelID)
-                && onboardingBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && onboardingAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            if !canReuseCurrentProvider {
-                try await client.configureProvider(
-                    providerID: onboardingProviderID,
-                    baseURL: onboardingBaseURL,
-                    modelID: onboardingModelID,
-                    apiKey: onboardingAPIKey,
-                    contextWindow: onboardingContextWindow
-                )
-            }
-            let stateID = try await client.createElephant(name: onboardingName, purpose: onboardingPurpose)
-            try await client.updateUserProfile(
-                stateID: stateID,
-                preferredName: onboardingPreferredName,
-                occupation: onboardingOccupation,
-                city: onboardingCity,
-                gender: onboardingGender,
-                birthDate: onboardingBirthDate,
-                mbti: onboardingMBTI,
-                hobbies: onboardingHobbies,
-                relationshipMode: onboardingRelationshipMode,
-                communicationPreference: onboardingCommunicationPreference,
-                safetyBoundaries: onboardingSafetyBoundaries,
-                firstLanguage: onboardingFirstLanguage
-            )
-            try await client.configureLearningIntensity(onboardingLearningIntensity)
+            _ = try await createElephantProfileFromOnboarding()
             try await refreshDashboard()
             onboardingStep = max(onboardingStep, 1)
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    func startOnboardingFinalization() async {
+        guard !onboardingFinalizationStarted else { return }
+        onboardingFinalizationStarted = true
+        onboardingFinalizationComplete = false
+        onboardingFinalizationFailed = false
+        onboardingFinalizationStatus = "Creating your local Personal Model"
+        onboardingInitReflectJobID = ""
+        lastError = ""
+        do {
+            let stateID = try await createElephantProfileFromOnboarding()
+            onboardingFinalizationStatus = "Opening the first local episode"
+            try await refreshDashboard()
+            let resolvedStateID = snapshot.currentStateID.isEmpty ? stateID : snapshot.currentStateID
+            let episodeID = try await client.ensureWakeEpisode(
+                personalModelID: snapshot.currentPersonalModelID,
+                elephantID: resolvedStateID,
+                activeEpisodeID: ""
+            )
+            activeEpisodeID = episodeID
+            onboardingFinalizationStatus = "Starting the first learning pass"
+            let jobID = try await client.runReflect(trigger: "init_profile")
+            onboardingInitReflectJobID = jobID
+            try await pollOnboardingInitReflectJob(jobID: jobID)
+        } catch {
+            onboardingFinalizationFailed = true
+            onboardingFinalizationStarted = false
+            onboardingFinalizationStatus = "Setup needs attention"
+            lastError = error.localizedDescription
+        }
+    }
+
+    private func pollOnboardingInitReflectJob(jobID: String) async throws {
+        let maxAttempts = 120
+        for attempt in 0..<maxAttempts {
+            if Task.isCancelled { return }
+            onboardingFinalizationStatus = attempt < 2 ? "Learning from your setup answers" : "Finishing the first reflection"
+            try await refreshDashboard()
+            if let job = onboardingInitReflectJob(jobID: jobID) {
+                let status = job.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if status.contains("completed") || status.contains("succeeded") || status == "success" {
+                    onboardingFinalizationStatus = "Everything is ready"
+                    onboardingFinalizationComplete = true
+                    onboardingStep = 17
+                    return
+                }
+                if status.contains("failed") || status.contains("cancel") || status.contains("error") {
+                    throw APIClientError.badStatus(job.detail.isEmpty ? "The init learning job did not complete." : job.detail)
+                }
+            }
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+        throw APIClientError.badStatus("The init learning job is still running. You can enter Elephant and review the learning queue later.")
+    }
+
+    private func onboardingInitReflectJob(jobID: String) -> LearningJobItem? {
+        if !jobID.isEmpty {
+            return snapshot.learningItems.first { $0.id == jobID }
+        }
+        return snapshot.learningItems.first {
+            let trigger = $0.trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return trigger == "init" || trigger.contains("init")
         }
     }
 
@@ -669,7 +833,7 @@ final class ElephantAppModel: ObservableObject {
     func startNewChat() {
         activeEpisodeID = ""
         messages = [
-            ChatMessage(role: .system, text: "New conversation ready. Keep it short, add sources when useful, and review what Elephant learns.")
+            ChatMessage(role: .system, text: "New conversation ready. Keep it short and review what Elephant learns.")
         ]
         selectedSection = .wake
         focusComposer()
@@ -697,14 +861,36 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
-    func pickSources() async {
-        guard let urls = OpenPanelBridge.pickSourceURLs() else { return }
-        let scans = SourceScanner.scan(urls: urls)
-        stagedSources.append(contentsOf: scans)
-        selectedSection = .sources
-        if onboardingStep == 2 {
-            onboardingStep = 3
+    func beginSleepDisplay(reason: String = "manual") {
+        sleepDisplayReason = reason
+        isSleepDisplayPresented = true
+    }
+
+    func dismissSleepDisplay() {
+        guard isSleepDisplayPresented else {
+            lastInteractionDate = Date()
+            return
         }
+        isSleepDisplayPresented = false
+        lastInteractionDate = Date()
+    }
+
+    func registerUserActivity() {
+        if isSleepDisplayPresented {
+            dismissSleepDisplay()
+            return
+        }
+        let now = Date()
+        if now.timeIntervalSince(lastInteractionDate) > 0.35 {
+            lastInteractionDate = now
+        }
+    }
+
+    func updateSleepIdleMinutes(_ value: Int) {
+        let clamped = min(120, max(1, value))
+        sleepIdleMinutes = clamped
+        UserDefaults.standard.set(clamped, forKey: Self.sleepIdleMinutesKey)
+        lastInteractionDate = Date()
     }
 
     func pickUserAvatar() {
@@ -737,11 +923,6 @@ final class ElephantAppModel: ObservableObject {
         guard !snapshot.databasePath.isEmpty else { return }
         let url = URL(fileURLWithPath: snapshot.databasePath)
         NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    func revealSource(_ scan: SourceScan) {
-        guard !scan.rootPath.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: scan.rootPath)])
     }
 
     private func persistUserAvatar(from sourceURL: URL) throws -> URL {
@@ -1461,7 +1642,157 @@ final class ElephantAppModel: ObservableObject {
         )
     }
 
+    private func resetOnboardingDrafts() {
+        onboardingName = "Elephant"
+        onboardingPurpose = "Be warm, precise, curious, and direct. Protect continuity, ask useful questions, and keep the user's Personal Model correctable."
+        onboardingPreferredName = ""
+        onboardingOccupation = ""
+        onboardingSchool = ""
+        onboardingCity = ""
+        onboardingGender = ""
+        onboardingBirthDate = ""
+        onboardingMBTI = ""
+        onboardingHobbies = ""
+        onboardingDream = ""
+        onboardingCreativeHobby = ""
+        onboardingMediaHobby = ""
+        onboardingMovementHobby = ""
+        onboardingSafetyBoundaries = ""
+        onboardingFoodAllergies = ""
+        onboardingMedicationAllergies = ""
+        onboardingChronicConditions = ""
+        onboardingPrivateSafetyNote = ""
+        onboardingFirstLanguage = "en"
+        onboardingBlogURL = ""
+        onboardingLinkedInURL = ""
+        onboardingTwitterURL = ""
+        onboardingInnerLandscape = ""
+        onboardingValueAnchor = ""
+        onboardingPressurePattern = ""
+        onboardingRecoveryStyle = ""
+        onboardingDecisionCompass = ""
+        onboardingProviderID = "openai-compatible"
+        onboardingBaseURL = ""
+        onboardingModelID = ""
+        onboardingAPIKey = ""
+        onboardingContextWindow = ""
+        onboardingStep = 0
+        onboardingFinalizationStarted = false
+        onboardingFinalizationComplete = false
+        onboardingFinalizationFailed = false
+        onboardingFinalizationStatus = ""
+        onboardingInitReflectJobID = ""
+        onboardingCreatedStateID = ""
+    }
+
+    private func resetLocalMacStateForFreshInstall() throws {
+        let avatarPaths = [userAvatarPath] + herdAvatarPaths.values.map { $0 }
+        try removeLocalAvatarFilesForReset(paths: avatarPaths)
+
+        wakeDraft = ""
+        providerTestResult = ""
+        gatewayActionResult = ""
+        gatewaySecretDrafts.removeAll()
+        gatewayQR = GatewayQRState()
+        cronActionResult = ""
+        diaryActionResult = ""
+        factActionResult = ""
+        configActionResult = ""
+        isReflecting = false
+        isWakeRunning = false
+        isSleepDisplayPresented = false
+        sleepDisplayReason = "manual"
+        sleepIdleMinutes = Self.defaultSleepIdleMinutes
+        hiddenEpisodeIDs.removeAll()
+        userAvatarPath = ""
+        herdAvatarPaths.removeAll()
+
+        let defaults = UserDefaults.standard
+        [
+            Self.onboardingCompleteKey,
+            Self.userAvatarPathKey,
+            Self.herdAvatarPathsKey,
+            Self.hiddenEpisodeIDsKey,
+            Self.sleepIdleMinutesKey
+        ].forEach { defaults.removeObject(forKey: $0) }
+    }
+
+    private func removeLocalAvatarFilesForReset(paths: [String]) throws {
+        let fileManager = FileManager.default
+        for path in paths {
+            let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let url = URL(fileURLWithPath: trimmed)
+            if fileManager.fileExists(atPath: url.path) {
+                try? fileManager.removeItem(at: url)
+            }
+        }
+
+        let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+        let directory = root.appendingPathComponent("Elephant Agent", isDirectory: true)
+        let userAvatars = (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for file in userAvatars where file.lastPathComponent.hasPrefix("user-avatar.") {
+            try fileManager.removeItem(at: file)
+        }
+
+        let herdAvatarDirectory = directory.appendingPathComponent("Herd Avatars", isDirectory: true)
+        if fileManager.fileExists(atPath: herdAvatarDirectory.path) {
+            try fileManager.removeItem(at: herdAvatarDirectory)
+        }
+    }
+
+    private func startSleepIdleMonitorIfNeeded() {
+        guard sleepIdleMonitorTask == nil else { return }
+        sleepIdleMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard let self else { return }
+                self.evaluateSleepIdleTimeout()
+            }
+        }
+    }
+
+    private func evaluateSleepIdleTimeout() {
+        guard !isSleepDisplayPresented,
+              !showingOnboarding,
+              !isWakeRunning,
+              sleepIdleMinutes > 0 else { return }
+
+        let localIdleSeconds = Date().timeIntervalSince(lastInteractionDate)
+        let systemIdleSeconds = Self.systemIdleSeconds()
+        let observedIdleSeconds = min(localIdleSeconds, systemIdleSeconds)
+        if observedIdleSeconds >= TimeInterval(sleepIdleMinutes * 60) {
+            beginSleepDisplay(reason: "idle")
+        }
+    }
+
+    private static func persistedSleepIdleMinutes() -> Int {
+        let value = UserDefaults.standard.integer(forKey: sleepIdleMinutesKey)
+        return value > 0 ? min(120, max(1, value)) : defaultSleepIdleMinutes
+    }
+
+    private static func systemIdleSeconds() -> TimeInterval {
+        let eventTypes: [CGEventType] = [
+            .keyDown,
+            .leftMouseDown,
+            .rightMouseDown,
+            .otherMouseDown,
+            .mouseMoved,
+            .scrollWheel,
+            .leftMouseDragged,
+            .rightMouseDragged,
+            .otherMouseDragged
+        ]
+        let intervals = eventTypes.map {
+            CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0)
+        }
+        return intervals.min() ?? 0
+    }
+
     func shutdownSync() {
+        sleepIdleMonitorTask?.cancel()
+        sleepIdleMonitorTask = nil
         runner.stop()
     }
 }

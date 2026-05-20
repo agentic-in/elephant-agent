@@ -134,19 +134,13 @@ struct APIClient {
         }
     }
 
-    func createElephant(name: String, purpose: String) async throws -> String {
-        let identity = """
-        \(name) is the local Elephant companion for this desktop.
-
-        Purpose:
-        \(purpose)
-        """
+    func createElephant(name: String, identityText: String) async throws -> String {
         let json = try await request(
             path: "/v1/herd",
             method: "POST",
             body: [
                 "display_name": name,
-                "elephant_identity_text": identity
+                "elephant_identity_text": identityText
             ]
         )
         if let elephant = json["elephant"] as? [String: Any] {
@@ -199,33 +193,63 @@ struct APIClient {
         stateID: String,
         preferredName: String,
         occupation: String,
+        school: String = "",
         city: String,
         gender: String,
         birthDate: String,
         mbti: String,
         hobbies: String,
-        relationshipMode: String,
-        communicationPreference: String,
+        dream: String = "",
+        creativeHobby: String = "",
+        mediaHobby: String = "",
+        movementHobby: String = "",
         safetyBoundaries: String,
-        firstLanguage: String
+        firstLanguage: String,
+        blogURL: String = "",
+        linkedInURL: String = "",
+        twitterURL: String = "",
+        personalLogoPath: String = "",
+        innerLandscape: String = "",
+        valueAnchor: String = "",
+        pressurePattern: String = "",
+        recoveryStyle: String = "",
+        decisionCompass: String = ""
     ) async throws {
         guard !stateID.isEmpty else { return }
         let fields: [String: String] = [
             "preferred_name": preferredName,
             "current_work": occupation,
+            "school": school,
             "current_city": city,
             "gender": gender,
             "birth_date": birthDate,
             "mbti": mbti,
             "hobbies": hobbies,
-            "relationship_mode": relationshipMode,
-            "communication_preference": communicationPreference,
+            "dream": dream,
+            "creative_hobby": creativeHobby,
+            "media_hobby": mediaHobby,
+            "movement_hobby": movementHobby,
+            "boundaries": safetyBoundaries,
             "safety_boundaries": safetyBoundaries,
             "first_language": firstLanguage
         ].filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-        guard !fields.isEmpty else { return }
-        let lines = fields.map { "\($0.key): \($0.value)" }.sorted().joined(separator: "\n")
+        let durableNotes: [String: String] = [
+            "blog": blogURL,
+            "linkedin": linkedInURL,
+            "twitter": twitterURL,
+            "personal_logo": personalLogoPath,
+            "inner_landscape": innerLandscape,
+            "value_anchor": valueAnchor,
+            "pressure_pattern": pressurePattern,
+            "recovery_style": recoveryStyle,
+            "decision_compass": decisionCompass
+        ].filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        guard !fields.isEmpty || !durableNotes.isEmpty else { return }
+        let lines = (fields.map { "\($0.key): \($0.value)" } + durableNotes.map { "\($0.key): \($0.value)" })
+            .sorted()
+            .joined(separator: "\n")
         _ = try await request(
             path: "/v1/states/\(stateID)/user",
             method: "POST",
@@ -278,16 +302,18 @@ struct APIClient {
         )
     }
 
-    func runReflect(trigger: String, features: String? = nil) async throws {
+    @discardableResult
+    func runReflect(trigger: String, features: String? = nil) async throws -> String {
         var body: [String: Any] = ["trigger": trigger]
         if let features, !features.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             body["features"] = features
         }
-        _ = try await request(
+        let json = try await request(
             path: "/v1/internal/reflect/run",
             method: "POST",
             body: body
         )
+        return SnapshotParser.findString(in: json, keys: ["job_id", "jobId", "id"]) ?? ""
     }
 
     func writeDiary(targetDate: String) async throws {
@@ -774,6 +800,8 @@ enum APIClientError: LocalizedError {
 }
 
 enum SnapshotParser {
+    private static let chatTimelineStepLimit = 120
+
     static func parse(dashboards: [String: [String: Any]], apiURL: String) -> DashboardSnapshot {
         var snapshot = DashboardSnapshot.empty
         snapshot.apiURL = apiURL
@@ -1680,7 +1708,10 @@ enum SnapshotParser {
         let id = string(row["episode_id"] ?? row["episodeId"] ?? row["id"])
         guard !id.isEmpty else { return nil }
 
-        let timeline = row["timeline"] as? [[String: Any]] ?? []
+        let rawTimeline = row["timeline"] as? [[String: Any]] ?? []
+        let timeline = rawTimeline.count > chatTimelineStepLimit
+            ? Array(rawTimeline.suffix(chatTimelineStepLimit))
+            : rawTimeline
         let messages = chatMessages(from: timeline)
         let firstUserMessage = messages.first { $0.role == .user }?.text ?? ""
         let summary = string(row["exit_summary"] ?? row["summary"])
@@ -1756,7 +1787,7 @@ enum SnapshotParser {
     ) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !toolEvents.isEmpty else { return }
-        let key = "\(role)-\(trimmed)"
+        let key = "\(role)-\(trimmed.count)-\(trimmed.prefix(512))-\(toolEvents.map(\.invocationID).joined(separator: ","))"
         guard !seen.contains(key) else { return }
         seen.insert(key)
         result.append(ChatMessage(role: role, text: trimmed, toolEvents: toolEvents))

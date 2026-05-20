@@ -269,8 +269,7 @@
       ],
       "validation": [
         "make agent-validate",
-        "swift build --package-path apps/macos",
-        "apps/macos/Scripts/build-app.sh"
+        "make macos-build"
       ],
       "acceptance_criteria": "Desktop apps stay thin over the existing API/core, build a native bundle, and keep platform-specific integration modular."
     },

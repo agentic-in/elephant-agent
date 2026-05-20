@@ -77,11 +77,6 @@ struct ElephantCommands: Commands {
             }
             .keyboardShortcut("n")
 
-            Button("Import Sources...") {
-                Task { await model.pickSources() }
-            }
-            .keyboardShortcut("o")
-
             Button("Run Reflect") {
                 Task { await model.runReflect(trigger: "manual") }
             }
@@ -121,6 +116,11 @@ struct ElephantCommands: Commands {
                 Task { await model.runReflect(trigger: "manual") }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
+
+            Button("Sleep Display") {
+                model.beginSleepDisplay(reason: "manual")
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
 
             Button("Reveal Database") {
                 model.revealDatabase()

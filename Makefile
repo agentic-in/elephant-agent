@@ -102,7 +102,7 @@ web-build: site-build dashboard-build
 
 macos-help:
 	@echo "macOS commands:"
-	@echo "  make macos-build"
+	@echo "  make macos-build  # canonical local app build; prints absolute output paths"
 	@echo "  make macos-build MACOS_TARGET=aarch64-apple-darwin"
 	@echo "  make macos-build MACOS_TARGET=x86_64-apple-darwin"
 	@echo "  make macos-build-all"
@@ -113,6 +113,7 @@ macos-help:
 	@echo "  MACOS_NOTARIZE=1 APPLE_ID=... APPLE_PASSWORD=... APPLE_TEAM_ID=..."
 
 macos-build:
+	@echo "==> Building macOS app via make macos-build"
 	@env \
 		MACOS_TARGET="$(MACOS_TARGET)" \
 		MACOS_APP_VERSION="$(MACOS_APP_VERSION)" \
@@ -125,14 +126,13 @@ macos-build:
 macos-build-all:
 	@for target in $(MACOS_TARGETS); do \
 		echo "==> Building macOS $$target"; \
-		env \
+		$(MAKE) macos-build \
 			MACOS_TARGET="$$target" \
 			MACOS_APP_VERSION="$(MACOS_APP_VERSION)" \
 			MACOS_APP_BUILD_NUMBER="$(MACOS_APP_BUILD_NUMBER)" \
 			MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
 			MACOS_NOTARIZE="$(MACOS_NOTARIZE)" \
-			MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)" \
-			bash apps/macos/Scripts/build-app.sh; \
+			MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)"; \
 	done
 
 macos-release-latest: macos-build-all

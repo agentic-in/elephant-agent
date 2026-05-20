@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 extension Notification.Name {
     static let elephantToggleSidebar = Notification.Name("ElephantAgent.ToggleSidebar")
     static let elephantNewChat = Notification.Name("ElephantAgent.NewChat")
+    static let elephantEnterSleepDisplay = Notification.Name("ElephantAgent.EnterSleepDisplay")
     static let elephantSelectSection = Notification.Name("ElephantAgent.SelectSection")
 }
 
@@ -72,9 +73,16 @@ struct WindowConfigurator: NSViewRepresentable {
         ) {
             NotificationCenter.default.post(name: .elephantNewChat, object: nil)
         })
+        stack.addArrangedSubview(TitlebarIconButton(
+            symbolName: "moon.zzz",
+            fallbackSymbolName: "moon",
+            help: "Sleep Display"
+        ) {
+            NotificationCenter.default.post(name: .elephantEnterSleepDisplay, object: nil)
+        })
         stack.addArrangedSubview(TitlebarIdentityMenuButton())
 
-        let wrapper = NSView(frame: NSRect(x: 0, y: 0, width: 204, height: 26))
+        let wrapper = NSView(frame: NSRect(x: 0, y: 0, width: 244, height: 26))
         wrapper.identifier = accessoryID
         wrapper.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -197,18 +205,6 @@ private final class TitlebarIdentityMenuButton: NSPopUpButton {
 }
 
 enum OpenPanelBridge {
-    static func pickSourceURLs() -> [URL]? {
-        let panel = NSOpenPanel()
-        panel.title = "Choose local evidence"
-        panel.message = "Pick a project, repository, notes folder, Markdown file, text file, or config file."
-        panel.prompt = "Add Sources"
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = true
-        panel.resolvesAliases = true
-        return panel.runModal() == .OK ? panel.urls : nil
-    }
-
     static func pickAvatarImageURL() -> URL? {
         let panel = NSOpenPanel()
         panel.title = "Choose your photo"
@@ -284,94 +280,5 @@ enum BundleAssets {
     private static func split(_ name: String) -> (base: String, ext: String) {
         let url = URL(fileURLWithPath: name)
         return (url.deletingPathExtension().lastPathComponent, url.pathExtension)
-    }
-}
-
-enum SourceScanner {
-    private static let skippedDirectories = Set([
-        ".git", "node_modules", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".turbo", ".cache"
-    ])
-    private static let admittedExtensions = Set([
-        "md", "mdx", "txt", "rst", "py", "swift", "ts", "tsx", "js", "jsx", "json", "yaml", "yml", "toml",
-        "ini", "env.example", "gitignore", "dockerfile", "sql", "html", "css", "scss", "sh", "rb", "go", "rs"
-    ])
-    private static let binaryExtensions = Set([
-        "png", "jpg", "jpeg", "gif", "webp", "pdf", "zip", "gz", "tar", "sqlite", "db", "dmg", "mp4", "mov"
-    ])
-
-    static func scan(urls: [URL]) -> [SourceScan] {
-        urls.map { scan(url: $0) }
-    }
-
-    private static func scan(url: URL) -> SourceScan {
-        let fileManager = FileManager.default
-        var scanned = 0
-        var admitted = 0
-        var skipped = 0
-        var samples: [String] = []
-        var reasons: [String: Int] = [:]
-
-        func skip(_ reason: String) {
-            skipped += 1
-            reasons[reason, default: 0] += 1
-        }
-
-        func consider(_ file: URL) {
-            scanned += 1
-            let name = file.lastPathComponent.lowercased()
-            let ext = file.pathExtension.lowercased()
-            if binaryExtensions.contains(ext) {
-                skip("binary")
-                return
-            }
-            if name.contains("secret") || name.contains("credential") || name == ".env" {
-                skip("secret-like")
-                return
-            }
-            let values = try? file.resourceValues(forKeys: [.fileSizeKey])
-            if (values?.fileSize ?? 0) > 1_000_000 {
-                skip("large")
-                return
-            }
-            if admittedExtensions.contains(ext) || admittedExtensions.contains(name) || ext.isEmpty {
-                admitted += 1
-                if samples.count < 8 {
-                    samples.append(file.lastPathComponent)
-                }
-            } else {
-                skip("unsupported")
-            }
-        }
-
-        var isDirectory: ObjCBool = false
-        if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            let enumerator = fileManager.enumerator(
-                at: url,
-                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-                options: [.skipsHiddenFiles]
-            )
-            while let item = enumerator?.nextObject() as? URL, scanned < 1200 {
-                let values = try? item.resourceValues(forKeys: [.isDirectoryKey])
-                if values?.isDirectory == true {
-                    if skippedDirectories.contains(item.lastPathComponent) {
-                        enumerator?.skipDescendants()
-                        skip("ignored directory")
-                    }
-                } else {
-                    consider(item)
-                }
-            }
-        } else {
-            consider(url)
-        }
-
-        return SourceScan(
-            rootPath: url.path,
-            scanned: scanned,
-            admitted: admitted,
-            skipped: skipped,
-            samples: samples,
-            skippedReasons: reasons
-        )
     }
 }

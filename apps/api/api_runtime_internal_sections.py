@@ -335,7 +335,10 @@ def _runtime_maps(
     steps: tuple[Any, ...],
 ) -> tuple[dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]]]:
     episodes_by_state = {state.state_id: tuple(episode for episode in episodes if episode.state_id == state.state_id) for state in states}
-    loops_by_episode = {episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id) for episode in episodes}
+    loops_by_episode = {
+        episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id)
+        for episode in episodes
+    }
     steps_by_loop = {loop.loop_id: tuple(step for step in steps if step.loop_id == loop.loop_id) for loop in loops}
     return episodes_by_state, loops_by_episode, steps_by_loop
 
@@ -573,16 +576,13 @@ def _fill_reflect(dashboard: dict[str, Any], self) -> None:
 
 def _fill_chat(dashboard: dict[str, Any], self) -> None:
     states, current_state = _state_collections(self)
-    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")[:20]
+    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")[:10]
     loop_rows: list[Any] = []
     for episode in episodes:
         loop_rows.extend(self.repository.list_loops(episode_id=episode.episode_id))
     loops = _sort_items(tuple(loop_rows), id_field="loop_id", time_field="started_at")
-    step_rows: list[Any] = []
-    for loop in loops:
-        step_rows.extend(self.repository.list_steps(loop_id=loop.loop_id))
-    steps = _sort_items(tuple(step_rows), id_field="step_id", time_field="created_at")
-    _, loops_by_episode, steps_by_loop = _runtime_maps(states=states, episodes=episodes, loops=loops, steps=steps)
+    loops_by_episode = {episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id) for episode in episodes}
+    steps_by_loop = {loop.loop_id: self.repository.list_steps(loop_id=loop.loop_id) for loop in loops}
     elephant_rows, state_rows = _state_projection_rows(
         states,
         current_state=current_state,

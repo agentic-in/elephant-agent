@@ -17,7 +17,7 @@
 
 ## Information Architecture
 
-- The sidebar exposes core user concerns that are frequent, user-facing, or operationally important: Home, Chat, You, Diary, Skills, Messaging, Herd, Usage, Calendar, Learn, Sources, Settings.
+- The sidebar exposes core user concerns that are frequent, user-facing, or operationally important: Home, Chat, You, Diary, Skills, Messaging, Herd, Usage, Calendar, Learn, Settings.
 - Keep provider internals, tool pagination, curiosity cadence, logs, diagnostics, database paths, and runtime controls in Settings. Settings should stay real and actionable, not a museum of mock rows.
 - Settings must include an editable global runtime config surface backed by `/v1/operator/config`; do not strand config changes in dashboard-only flows or terminal-only workflows.
 - Dashboard route mapping for the app is intentional: `You`, `Diary`, `Chat`, `Herd`, `Skills`, `Usage`, `Messaging`, `Cron` as `Calendar`, and `Reflect/Learn` become sidebar destinations; `Models`, `Tools`, `Curiosity`, `History`, diagnostics, and low-frequency runtime controls remain expandable Settings sections.
@@ -39,7 +39,7 @@
 - Calendar owns scheduled cron prompt jobs from the app, agents, and system learning schedules. It should expose Week, Month, and Year views before raw job rows, and keep create/run/pause/delete job controls visible beside the calendar instead of burying them below the fold. Learn owns reflect/dream/diary learning runs and their history.
 - Calendar event marks should stay dense: show scheduled jobs as thin horizontal bars with small labels in the grid, and reveal schedule/detail/status in an inspector only after selection. Avoid large event cards inside day cells because cron-heavy calendars must stay readable.
 - Usage should make token spend legible with charts before raw rows.
-- Sources is for knowledge vaults and evidence staging. Avoid implying imported sources are already Personal Model truth.
+- Do not expose local source import or evidence-staging surfaces until Elephant can actually learn from them. Prefer explicit conversations, profile links, diary, and reflect jobs for current Personal Model learning.
 - Herd rows default to expanded for editability, but never expose hidden metadata comments or internal scaffolding text in user-facing fields.
 - Skills Library must support search and pagination so large installed skill sets remain usable without turning Settings into a long static dump.
 - Skills Affinity belongs on the Skills surface only. Do not repeat affinity summaries at the bottom of Settings skill-library sections.
@@ -58,7 +58,7 @@
 ## Mac Citizen Requirements
 
 - Keep the standard macOS menu bar useful: App/File/Edit/View/Navigate/Actions/Window/Help plus Settings via the Settings scene and Cmd-comma behavior.
-- Every primary command must exist in the menu system or toolbar: New Chat, Add Sources, Reflect, Refresh, Reveal Database, Restart Core.
+- Every primary command must exist in the menu system or toolbar: New Chat, Reflect, Refresh, Reveal Database, Restart Core.
 - Toolbar actions must stay few and high-frequency. Demote secondary or diagnostic actions to Actions or Settings.
 - When the sidebar is visible, sidebar visibility belongs inside the left navigation rail, directly above Settings. When the sidebar is hidden, remove the rail entirely and expose a small restore control in the titlebar cluster near the traffic-light controls.
 - Preserve native window behavior: resize, fullscreen, minimize, and tabbing where possible. When using a transparent full-size titlebar, keep the main content clear of traffic-light controls and avoid leaving a narrow collapsed sidebar stub.
@@ -67,5 +67,5 @@
 
 ## Validation
 
-- Run `apps/macos/Scripts/build-app.sh` for desktop UI work. SwiftPM may fail on some local CommandLineTools installs; the script's direct `swiftc` fallback is the packaging gate.
-- When a screenshot-driven visual change is made, open the built app and inspect Home, Chat, You, Diary, Sources, Settings at the current window size and fullscreen.
+- Run `make macos-build` for desktop UI work. This is the canonical local app build target and prints the absolute `.app`, `.dmg`, and release artifact paths. Do not call `swift build` or `apps/macos/Scripts/build-app.sh` directly unless debugging the target itself.
+- When a screenshot-driven visual change is made, open the built app and inspect Home, Chat, You, Diary, Learn, Settings at the current window size and fullscreen.

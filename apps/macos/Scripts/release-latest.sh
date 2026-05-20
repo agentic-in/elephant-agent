@@ -12,6 +12,7 @@ SHA="${GITHUB_SHA:-$(git -C "${REPO_ROOT}" rev-parse HEAD)}"
 TITLE="${MACOS_RELEASE_TITLE:-Elephant Agent latest}"
 SERVER_URL="${GITHUB_SERVER_URL:-https://github.com}"
 DRY_RUN="${MACOS_RELEASE_DRY_RUN:-0}"
+SIGNING_MODE="${MACOS_RELEASE_SIGNING_MODE:-unknown}"
 
 project_version() {
   python3 - "${REPO_ROOT}/pyproject.toml" <<'PY'
@@ -69,7 +70,7 @@ if [[ ! -d "${ASSET_DIR}" ]]; then
 fi
 
 MANIFEST="${ASSET_DIR}/latest.json"
-python3 - "${ASSET_DIR}" "${TAG}" "${REPOSITORY}" "${SHA}" "${VERSION}" "${SERVER_URL}" <<'PY'
+python3 - "${ASSET_DIR}" "${TAG}" "${REPOSITORY}" "${SHA}" "${VERSION}" "${SERVER_URL}" "${SIGNING_MODE}" <<'PY'
 import datetime as dt
 import hashlib
 import json
@@ -83,6 +84,7 @@ repository = sys.argv[3]
 sha = sys.argv[4]
 version = sys.argv[5]
 server_url = sys.argv[6].rstrip("/")
+signing_mode = sys.argv[7]
 base_url = f"{server_url}/{repository}/releases/download/{tag}"
 
 platform_map = {
@@ -112,6 +114,7 @@ payload = {
     "version": version,
     "tag": tag,
     "commit": sha,
+    "signing_mode": signing_mode,
     "pub_date": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     "platforms": platforms,
 }
@@ -132,6 +135,10 @@ NOTES_FILE="$(mktemp)"
 {
   printf 'Automated latest macOS build for `%s`.\n\n' "${SHA}"
   printf 'This release is intentionally replaced on each push to `main`.\n\n'
+  printf 'Signing mode: `%s`.\n\n' "${SIGNING_MODE}"
+  if [[ "${SIGNING_MODE}" == "ad-hoc" ]]; then
+    printf 'These artifacts are uploaded directly from CI without Apple Developer ID notarization. They are useful for testing and GitHub artifact distribution, but macOS Gatekeeper may require the user to right-click Open or remove quarantine.\n\n'
+  fi
   printf 'Artifacts:\n'
   for asset in "${ASSETS[@]}"; do
     printf -- '- `%s`\n' "$(basename "${asset}")"

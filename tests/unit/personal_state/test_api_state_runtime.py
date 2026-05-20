@@ -149,6 +149,78 @@ class APIStateServiceTest(unittest.TestCase):
         self.assertEqual(str(canonical_facts[0].metadata.get("surface") or ""), "api")
         self.assertEqual(canonical_facts[0].source_episode_ids, (episode.episode_id,))
 
+    def test_update_user_state_captures_full_onboarding_profile_as_fact(self) -> None:
+        tmpdir, repository, personal_model, state, episode, runtime = self._bootstrap()
+        self.addCleanup(tmpdir.cleanup)
+
+        fields = {
+            "preferred_name": "Bit",
+            "current_work": "Building durable agent systems.",
+            "school": "Agentic University",
+            "current_city": "Asia/Shanghai",
+            "gender": "self-described",
+            "birth_date": "1990-01-02",
+            "mbti": "INTJ",
+            "hobbies": "writing, design, AI",
+            "dream": "Build a long-term personal AI.",
+            "safety_boundaries": "boundaries: ask before advising; food_allergies: peanuts; chronic_conditions: migraines",
+            "first_language": "zh",
+        }
+        durable_notes = {
+            "blog": "https://example.com/blog",
+            "linkedin": "https://linkedin.com/in/bit",
+            "twitter": "https://x.com/bit",
+            "personal_logo": "/tmp/bit.png",
+            "inner_landscape": "Clear but busy",
+            "value_anchor": "Long-term creativity",
+            "pressure_pattern": "Check details repeatedly",
+            "recovery_style": "Solitude and sleep",
+            "decision_compass": "It expands future options",
+        }
+        text = "\n".join(f"{key}: {value}" for key, value in {**fields, **durable_notes}.items())
+
+        updated = runtime.update_user_state(
+            state_id=state.state_id,
+            episode_id=episode.episode_id,
+            fields=fields,
+            text=text,
+            append=True,
+        )
+
+        self.assertEqual(updated.preferred_name, "Bit")
+        canonical_facts = self._canonical_facts(
+            repository,
+            personal_model_id=personal_model.profile_id,
+            sync_source="api.user.update",
+        )
+        self.assertEqual(len(canonical_facts), 1)
+        fact_text = canonical_facts[0].text
+        for expected in (
+            "Bit",
+            "Building durable agent systems.",
+            "Agentic University",
+            "Asia/Shanghai",
+            "self-described",
+            "1990-01-02",
+            "INTJ",
+            "writing, design, AI",
+            "Build a long-term personal AI.",
+            "ask before advising",
+            "peanuts",
+            "migraines",
+            "zh",
+            "https://example.com/blog",
+            "https://linkedin.com/in/bit",
+            "https://x.com/bit",
+            "/tmp/bit.png",
+            "Clear but busy",
+            "Long-term creativity",
+            "Check details repeatedly",
+            "Solitude and sleep",
+            "It expands future options",
+        ):
+            self.assertIn(expected, fact_text)
+
     def test_update_relationship_state_adds_one_governed_memory_capture(self) -> None:
         tmpdir, repository, personal_model, state, episode, runtime = self._bootstrap()
         self.addCleanup(tmpdir.cleanup)

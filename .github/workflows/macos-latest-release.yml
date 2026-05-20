@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       allow_unsigned:
-        description: "Allow ad-hoc signed macOS artifacts for manual debugging only"
+        description: "Allow ad-hoc signed macOS artifacts when Apple signing secrets are unavailable"
         required: false
-        default: "false"
+        default: "true"
         type: choice
         options:
-          - "false"
           - "true"
+          - "false"
 
 permissions:
   contents: write
@@ -26,6 +26,8 @@ jobs:
   build-macos:
     name: Build macOS ${{ matrix.target }}
     runs-on: macos-latest
+    outputs:
+      signing_mode: ${{ steps.prepare-signing.outputs.signing_mode }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +35,7 @@ jobs:
           - aarch64-apple-darwin
           - x86_64-apple-darwin
     env:
-      ALLOW_UNSIGNED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_unsigned || 'false' }}
+      ALLOW_UNSIGNED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_unsigned || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +48,7 @@ jobs:
           python-version: "3.12"
 
       - name: Prepare Apple signing
+        id: prepare-signing
         shell: bash
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
@@ -71,10 +74,12 @@ jobs:
 
           if [ "${#missing[@]}" -gt 0 ]; then
             if [ "${ALLOW_UNSIGNED}" = "true" ]; then
-              echo "::warning::Apple signing secrets are missing; building ad-hoc signed artifacts."
+              echo "::warning::Apple signing secrets are missing; publishing ad-hoc signed artifacts. These are useful for CI artifacts but are not Gatekeeper-smooth for general users."
               printf 'Missing: %s\n' "${missing[*]}"
               echo "MACOS_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
               echo "MACOS_NOTARIZE=0" >> "$GITHUB_ENV"
+              echo "MACOS_RELEASE_SIGNING_MODE=ad-hoc" >> "$GITHUB_ENV"
+              echo "signing_mode=ad-hoc" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "::error::Apple signing/notarization secrets are required for automatic latest releases."
@@ -102,6 +107,8 @@ jobs:
 
           echo "MACOS_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY}" >> "$GITHUB_ENV"
           echo "MACOS_NOTARIZE=1" >> "$GITHUB_ENV"
+          echo "MACOS_RELEASE_SIGNING_MODE=developer-id-notarized" >> "$GITHUB_ENV"
+          echo "signing_mode=developer-id-notarized" >> "$GITHUB_OUTPUT"
           echo "APPLE_ID=${APPLE_ID}" >> "$GITHUB_ENV"
           echo "APPLE_PASSWORD=${notary_password}" >> "$GITHUB_ENV"
           echo "APPLE_TEAM_ID=${APPLE_TEAM_ID}" >> "$GITHUB_ENV"
@@ -147,5 +154,6 @@ jobs:
           MACOS_ASSET_DIR: ${{ github.workspace }}/release-assets
           MACOS_RELEASE_TAG: latest
           MACOS_RELEASE_TITLE: Elephant Agent latest
+          MACOS_RELEASE_SIGNING_MODE: ${{ needs.build-macos.outputs.signing_mode || 'unknown' }}
         run: |
           bash apps/macos/Scripts/release-latest.sh

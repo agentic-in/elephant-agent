@@ -13,8 +13,8 @@ This is the working UX bar for the native Mac app. Each visual iteration should 
 
 - Visual language: Living Glass, a light macOS material system with soft mosaic motion, radial signal glows, and thin glass cards.
 - Brand personality: precise like OpenAI-style tools, warmer and younger through rounded SF typography, small colorful signals, and evidence-map motion.
-- Information architecture: Home, Wake, You, Sources, Reflect, Jobs, Skills, Settings. Setup is an init flow, not a top-level tab.
-- Daily workflow: Wake first, import evidence when needed, review questions, run Reflect, keep scheduled work visible.
+- Information architecture: Home, Wake, You, Reflect, Jobs, Skills, Settings. Setup is an init flow, not a top-level tab.
+- Daily workflow: Wake first, review questions, run Reflect, keep scheduled work visible.
 
 ## Critical Checks
 

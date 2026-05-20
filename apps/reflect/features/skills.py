@@ -19,13 +19,13 @@ FEATURE = Feature(
   lens=world, topic=world.skills.affinity.{skill_index_id}
   Include metadata: skill_id=<skill_id>, index_id=<skill_index_id>, projection_policy=skill_shelf_candidate
   Text should explain WHY this skill matches the user (one sentence, grounded in evidence).
-- When trigger=init_profile, treat explicit init answers and bootstrapped
+- When trigger=init or trigger=init_profile, treat explicit init answers and bootstrapped
   Personal Model facts as valid evidence for early skill affinity.
 - Match user interests, tools, projects, and working style to available skills.""",
     constraints="""\
 - Only write affinity claims when there is clear evidence of relevance from the supplied evidence.
 - Do not guess skill preferences from sparse or ambiguous data.
-- For trigger=init_profile, sparse conversation history is expected; do not
+- For trigger=init or trigger=init_profile, sparse conversation history is expected; do not
   require conversation turns if init answers or bootstrapped PM facts clearly
   match a skill.
 - topic MUST follow the format: world.skills.affinity.{skill_index_id}

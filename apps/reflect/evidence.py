@@ -7,11 +7,16 @@ the job, the user, and what happened in the episode.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import re
 from typing import Any
 
 from packages.contracts.runtime import LearningJob
 
 from .features.types import Feature
+
+
+_INIT_TRIGGERS = frozenset({"init", "init_profile"})
+_URL_PATTERN = re.compile(r"https?://[^\s<>)\"']+", re.IGNORECASE)
 
 
 def _compact(value: object, *, limit: int = 500) -> str:
@@ -87,13 +92,22 @@ def _init_profile_answer_lines(metadata: Mapping[str, Any]) -> tuple[str, ...]:
         "learning_intensity",
         "preferred_name",
         "occupation",
+        "school",
         "gender",
         "birth_date",
         "city",
         "mbti",
         "hobbies",
+        "dream",
+        "creative_hobby",
+        "media_hobby",
+        "movement_hobby",
         "relationship_mode",
         "safety_boundaries",
+        "blog",
+        "linkedin",
+        "twitter",
+        "personal_logo",
         "starter_answers",
     )
     lines: list[str] = []
@@ -102,6 +116,36 @@ def _init_profile_answer_lines(metadata: Mapping[str, Any]) -> tuple[str, ...]:
         if value:
             lines.append(f"- {field}: {value}")
     return tuple(lines)
+
+
+def _urls_from_text(text: object, *, limit: int = 12) -> tuple[str, ...]:
+    urls: list[str] = []
+    for match in _URL_PATTERN.finditer(str(text or "")):
+        url = match.group(0).rstrip(".,;]")
+        if url and url not in urls:
+            urls.append(url)
+        if len(urls) >= limit:
+            break
+    return tuple(urls)
+
+
+def _init_profile_link_lines(metadata: Mapping[str, Any], facts: tuple[Any, ...]) -> tuple[str, ...]:
+    values: list[str] = []
+    for key, value in metadata.items():
+        key_text = str(key or "").lower()
+        if key_text.startswith("init_") and any(marker in key_text for marker in ("blog", "link", "linkedin", "twitter", "url")):
+            values.append(str(value or ""))
+    for fact in facts:
+        text = str(getattr(fact, "text", "") or "")
+        if text:
+            values.append(text)
+
+    links: list[str] = []
+    for value in values:
+        for url in _urls_from_text(value):
+            if url not in links:
+                links.append(url)
+    return tuple(f"- {url}" for url in links[:12])
 
 
 def _build_compress_evidence(metadata: dict[str, Any]) -> str:
@@ -250,13 +294,17 @@ def build_evidence(
         *(anchors or ("(none)",)),
     ]
 
-    if str(job.trigger or "").strip().lower() == "init_profile":
+    if str(job.trigger or "").strip().lower() in _INIT_TRIGGERS:
         init_answers = _init_profile_answer_lines(metadata)
+        init_links = _init_profile_link_lines(metadata, active_facts)
         portrait = _pm_portrait_lines(active_facts)
         lines.extend([
             "",
             "## Init profile answers",
             *(init_answers or ("(none)",)),
+            "",
+            "## User-provided links",
+            *(init_links or ("(none)",)),
             "",
             "## Bootstrapped Personal Model facts",
             *(portrait or ("(no facts yet)",)),
@@ -282,7 +330,7 @@ def build_evidence(
     # Dream is a scheduled consolidation mode and intentionally receives no
     # episode-close packet, even when paired with question/skill maintenance.
     if (
-        str(job.trigger or "").strip().lower() != "init_profile"
+        str(job.trigger or "").strip().lower() not in _INIT_TRIGGERS
         and "dream" not in feature_ids
         and feature_ids & {"pm", "questions", "skills"}
     ):

@@ -13,10 +13,11 @@ from .diary import FEATURE as DIARY
 from .skills import FEATURE as SKILLS
 from .compress import FEATURE as COMPRESS
 from .dream import FEATURE as DREAM
+from .init_links import FEATURE as INIT_LINKS
 
 
 ALL_FEATURES: dict[str, Feature] = {
-    f.feature_id: f for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM)
+    f.feature_id: f for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM, INIT_LINKS)
 }
 
 # Trigger → default feature set mapping
@@ -25,8 +26,14 @@ TRIGGER_FEATURES: dict[str, tuple[str, ...]] = {
     "manual": ("pm", "questions", "recall", "skills"),
     "diary": ("diary",),
     "dream": ("dream", "questions", "skills", "diary"),
-    "init_profile": ("pm", "questions", "skills"),
+    "init": ("pm", "questions", "skills", "init_links"),
+    "init_profile": ("pm", "questions", "skills", "init_links"),
     "context_compaction": ("compress",),
+}
+
+FEATURE_ALIASES: dict[str, tuple[str, ...]] = {
+    "profile": ("pm", "questions", "skills", "init_links"),
+    "init_profile": ("pm", "questions", "skills", "init_links"),
 }
 
 # Conservatism levels per trigger (affects system prompt tone)
@@ -35,6 +42,7 @@ TRIGGER_CONSERVATISM: dict[str, str] = {
     "manual": "low",
     "diary": "creative",
     "dream": "medium",
+    "init": "low",
     "init_profile": "low",
     "context_compaction": "high",
 }
@@ -51,7 +59,14 @@ def resolve_features(
     instead of the trigger's default mapping.
     """
     if explicit_features:
-        feature_ids = explicit_features
+        expanded: list[str] = []
+        for feature_id in explicit_features:
+            alias = FEATURE_ALIASES.get(feature_id)
+            if alias is not None:
+                expanded.extend(alias)
+            else:
+                expanded.append(feature_id)
+        feature_ids = tuple(dict.fromkeys(expanded))
         if "dream" in feature_ids:
             feature_ids = tuple(fid for fid in ("dream", "questions", "skills", "diary") if fid in feature_ids)
             if trigger == "dream":

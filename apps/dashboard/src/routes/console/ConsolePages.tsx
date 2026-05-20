@@ -1,5 +1,33 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import Alibaba from "@lobehub/icons/es/Alibaba/components/Color";
+import Anthropic from "@lobehub/icons/es/Anthropic/components/Mono";
+import Claude from "@lobehub/icons/es/Claude/components/Color";
+import ClaudeCode from "@lobehub/icons/es/ClaudeCode/components/Color";
+import DeepSeek from "@lobehub/icons/es/DeepSeek/components/Color";
+import Fireworks from "@lobehub/icons/es/Fireworks/components/Color";
+import Gemini from "@lobehub/icons/es/Gemini/components/Color";
+import GeminiCLI from "@lobehub/icons/es/GeminiCLI/components/Color";
+import GithubCopilot from "@lobehub/icons/es/GithubCopilot/components/Mono";
+import Google from "@lobehub/icons/es/Google/components/Color";
+import Groq from "@lobehub/icons/es/Groq/components/Mono";
+import HuggingFace from "@lobehub/icons/es/HuggingFace/components/Color";
+import KiloCode from "@lobehub/icons/es/KiloCode/components/Mono";
+import LobeHub from "@lobehub/icons/es/LobeHub/components/Color";
+import Minimax from "@lobehub/icons/es/Minimax/components/Color";
+import Mistral from "@lobehub/icons/es/Mistral/components/Color";
+import Moonshot from "@lobehub/icons/es/Moonshot/components/Mono";
+import Ollama from "@lobehub/icons/es/Ollama/components/Mono";
+import OpenAI from "@lobehub/icons/es/OpenAI/components/Mono";
+import OpenCode from "@lobehub/icons/es/OpenCode/components/Mono";
+import OpenRouter from "@lobehub/icons/es/OpenRouter/components/Mono";
+import Qwen from "@lobehub/icons/es/Qwen/components/Color";
+import Together from "@lobehub/icons/es/Together/components/Color";
+import Vllm from "@lobehub/icons/es/Vllm/components/Color";
+import XAI from "@lobehub/icons/es/XAI/components/Mono";
+import XiaomiMiMo from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
+import ZAI from "@lobehub/icons/es/ZAI/components/Mono";
+import Zhipu from "@lobehub/icons/es/Zhipu/components/Color";
 
 import elephantLogo from "../../assets/brand/elephant-logo.png";
 
@@ -27,6 +55,7 @@ import {
   discoverCustomMcpTools,
   dismissPersonalModelQuestion,
   forgetPersonalModelClaim,
+  loadProviderCatalog,
   loadProviderSetup,
   loadProviderModels,
   runCronJob,
@@ -551,6 +580,7 @@ function FloatingFormModal({
   onClose,
   children,
   footer,
+  panelClassName,
 }: {
   open: boolean;
   title: string;
@@ -558,6 +588,7 @@ function FloatingFormModal({
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  panelClassName?: string;
 }): React.JSX.Element | null {
   React.useEffect(() => {
     if (!open) {
@@ -586,7 +617,7 @@ function FloatingFormModal({
       <section
         aria-label={title}
         aria-modal="true"
-        className={styles.consoleModalPanel}
+        className={cx(styles.consoleModalPanel, panelClassName)}
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -3073,14 +3104,66 @@ type EmbeddingDraft = {
   apiKey: string;
 };
 
-type ProviderSection = {
-  id: string;
-  title: string;
-  detail: string;
-  providers: DashboardRow[];
+type LobeProviderIcon = React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+
+const PROVIDER_LOGO_ALIASES: Record<string, string> = {
+  "claude-code": "claudecode",
+  "copilot-acp": "githubcopilot",
+  copilot: "githubcopilot",
+  fireworks: "fireworks",
+  "google-gemini-cli": "geminicli",
+  groq: "groq",
+  kilocode: "kilocode",
+  "minimax-cn": "minimax",
+  "moonshot-cn": "moonshot",
+  opencode: "opencode",
+  "opencode-go": "opencode",
+  "opencode-zen": "opencode",
+  "openai-codex": "openai",
+  "openai-compatible": "openai",
+  "qwen-oauth": "qwen",
+  together: "together",
+  xiaomi: "xiaomimimo",
+  zai: "zai",
 };
 
-const OAUTH_PROVIDER_IDS = new Set(["openai-codex", "qwen-oauth", "claude-code", "anthropic", "copilot"]);
+const PROVIDER_LOGO_COMPONENTS: Record<string, LobeProviderIcon> = {
+  alibaba: Alibaba,
+  anthropic: Anthropic,
+  claude: Claude,
+  claudecode: ClaudeCode,
+  deepseek: DeepSeek,
+  fireworks: Fireworks,
+  gemini: Gemini,
+  geminicli: GeminiCLI,
+  githubcopilot: GithubCopilot,
+  google: Google,
+  groq: Groq,
+  huggingface: HuggingFace,
+  kilocode: KiloCode,
+  minimax: Minimax,
+  mistral: Mistral,
+  moonshot: Moonshot,
+  ollama: Ollama,
+  opencode: OpenCode,
+  openai: OpenAI,
+  openrouter: OpenRouter,
+  qwen: Qwen,
+  together: Together,
+  vllm: Vllm,
+  xai: XAI,
+  xiaomimimo: XiaomiMiMo,
+  zai: ZAI,
+  zhipu: Zhipu,
+};
+
+type ProviderConnectionInfo = {
+  label: string;
+  detail: string;
+  meta: string;
+  tone: HealthTone;
+  cardClass?: string;
+};
 
 function providerId(provider: DashboardRow): string {
   return readString(provider, ["provider_id", "providerId", "id", "source"], "provider");
@@ -3088,6 +3171,53 @@ function providerId(provider: DashboardRow): string {
 
 function providerDisplayName(provider: DashboardRow): string {
   return readString(provider, ["display_name", "displayName", "name", "provider_id"], providerId(provider));
+}
+
+function mergeProviderCatalogRows(snapshotProviders: DashboardRow[], catalogProviders: DashboardRow[]): DashboardRow[] {
+  const rowsById = new Map<string, DashboardRow>();
+  const orderedIds: string[] = [];
+  const remember = (provider: DashboardRow, overlay = false) => {
+    const id = providerId(provider);
+    if (!rowsById.has(id)) {
+      orderedIds.push(id);
+      rowsById.set(id, provider);
+      return;
+    }
+    if (overlay) {
+      rowsById.set(id, { ...rowsById.get(id), ...provider });
+    }
+  };
+  catalogProviders.forEach((provider) => remember(provider));
+  snapshotProviders.forEach((provider) => remember(provider, true));
+  return orderedIds.map((id) => rowsById.get(id)).filter((provider): provider is DashboardRow => Boolean(provider));
+}
+
+function providerLogoKey(provider: DashboardRow): string {
+  const id = providerId(provider).toLowerCase();
+  const display = providerDisplayName(provider).toLowerCase();
+  if (PROVIDER_LOGO_ALIASES[id]) {
+    return PROVIDER_LOGO_ALIASES[id];
+  }
+  if (display.includes("claude")) return "claude";
+  if (display.includes("codex") || display.includes("openai")) return "openai";
+  if (display.includes("copilot")) return "githubcopilot";
+  if (display.includes("gemini") || display.includes("google")) return "gemini";
+  if (display.includes("groq")) return "groq";
+  if (display.includes("kilo")) return "kilocode";
+  if (display.includes("kimi") || display.includes("moonshot")) return "moonshot";
+  if (display.includes("qwen") || display.includes("dashscope") || display.includes("alibaba")) return "qwen";
+  if (display.includes("xiaomi")) return "xiaomimimo";
+  return id;
+}
+
+function ProviderLogo({ provider, size = 38 }: { provider: DashboardRow; size?: number }): React.JSX.Element {
+  const logoKey = providerLogoKey(provider);
+  const Icon = PROVIDER_LOGO_COMPONENTS[logoKey.toLowerCase()] ?? LobeHub;
+  return (
+    <span className={styles.providerLogoFrame} aria-hidden="true">
+      <Icon size={size} />
+    </span>
+  );
 }
 
 function providerSecretRefs(provider: DashboardRow): DashboardRow[] {
@@ -3120,34 +3250,6 @@ function providerKeyRows(provider: DashboardRow, keys: DashboardRow[]): Dashboar
 function providerHasRuntimeAuth(provider: DashboardRow): boolean {
   const status = valueOf(provider, "status", "").toLowerCase();
   return ["authenticated", "configured", "available"].some((item) => status.includes(item));
-}
-
-function providerSectionId(provider: DashboardRow): "oauth" | "api-key" {
-  const id = providerId(provider);
-  const authMethod = valueOf(provider, "auth_method", valueOf(provider, "auth_type", "")).toLowerCase();
-  if (OAUTH_PROVIDER_IDS.has(id) || authMethod.includes("oauth")) {
-    return "oauth";
-  }
-  return "api-key";
-}
-
-function providerSections(providers: DashboardRow[]): ProviderSection[] {
-  const oauthProviders = providers.filter((provider) => providerSectionId(provider) === "oauth");
-  const apiKeyProviders = providers.filter((provider) => providerSectionId(provider) === "api-key");
-  return [
-    {
-      id: "oauth",
-      title: "OAuth providers",
-      detail: "Local CLI-token and OAuth-backed providers such as Codex, Copilot, Qwen, Claude Code, and Anthropic.",
-      providers: oauthProviders,
-    },
-    {
-      id: "api-key",
-      title: "API key providers",
-      detail: "Direct API keys, OpenAI-compatible endpoints, and local or self-hosted model providers.",
-      providers: apiKeyProviders,
-    },
-  ].filter((section) => section.providers.length);
 }
 
 function providerModelOptions(provider: DashboardRow, discovered: DashboardRow[] | undefined): DashboardRow[] {
@@ -3385,15 +3487,35 @@ function ProviderModelControls({
 }): React.JSX.Element {
   const models = jsonObject(dashboard.operations.models);
   const activeProvider = jsonObject(models.activeProvider);
-  const providers = asRows(models.providers);
+  const snapshotProviders = asRows(models.providers);
   const keys = asRows(models.keys);
-  const [expandedProvider, setExpandedProvider] = React.useState<string | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = React.useState<string | null>(null);
   const [status, setStatus] = React.useState<string | null>(null);
+  const [catalogProviders, setCatalogProviders] = React.useState<DashboardRow[]>([]);
   const [setupGuides, setSetupGuides] = React.useState<Record<string, unknown>>({});
   const [testResults, setTestResults] = React.useState<Record<string, unknown>>({});
   const [modelOptions, setModelOptions] = React.useState<Record<string, DashboardRow[]>>({});
   const [keyDrafts, setKeyDrafts] = React.useState<Record<string, string>>({});
   const [drafts, setDrafts] = React.useState<Record<string, ProviderDraft>>({});
+  const providers = mergeProviderCatalogRows(snapshotProviders, catalogProviders);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void loadProviderCatalog()
+      .then((result) => {
+        if (!cancelled) {
+          setCatalogProviders(asRows(result.providers as DashboardJson));
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setStatus((current) => current ?? (error instanceof Error ? error.message : "Provider catalog load failed."));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const updateDraft = (id: string, patch: Partial<ProviderDraft>) => {
     setDrafts((current) => ({ ...current, [id]: { ...(current[id] ?? {}), ...patch } }));
@@ -3428,11 +3550,10 @@ function ProviderModelControls({
     }
   };
 
-  const toggleProvider = (provider: DashboardRow, draft: ProviderDraft, shouldAutoLoadModels: boolean) => {
+  const openProvider = (provider: DashboardRow, draft: ProviderDraft, shouldAutoLoadModels: boolean) => {
     const id = providerId(provider);
-    const shouldExpand = expandedProvider !== id;
-    setExpandedProvider(shouldExpand ? id : null);
-    if (shouldExpand && shouldAutoLoadModels && modelOptions[id] === undefined) {
+    setSelectedProviderId(id);
+    if (shouldAutoLoadModels && modelOptions[id] === undefined) {
       void loadModels(provider, draft);
     }
   };
@@ -3496,12 +3617,167 @@ function ProviderModelControls({
   };
 
   const activeProviderId = valueOf(activeProvider, "provider_id");
+  const providerConnectionInfo = (provider: DashboardRow): ProviderConnectionInfo => {
+    const id = providerId(provider);
+    const providerKeys = providerKeyRows(provider, keys);
+    const storedKeyCount = providerKeys.filter((key) => key.hasValue === true).length;
+    const hasRuntimeAuth = providerHasRuntimeAuth(provider);
+    const providerStatus = valueOf(provider, "status", "");
+    const providerSource = valueOf(provider, "source", "");
+    if (id === activeProviderId) {
+      return {
+        label: "In use",
+        detail: valueOf(activeProvider, "model_id", valueOf(activeProvider, "default_model", valueOf(provider, "default_model_id", "model selected"))),
+        meta: providerStatus || providerSource || valueOf(activeProvider, "source", "active"),
+        tone: "healthy",
+        cardClass: styles.providerFactoryCardInUse,
+      };
+    }
+    if (hasRuntimeAuth) {
+      return {
+        label: "Connected",
+        detail: "Runtime auth ready",
+        meta: providerStatus || providerSource || valueOf(provider, "auth_method", "authenticated"),
+        tone: "healthy",
+        cardClass: styles.providerFactoryCardConnected,
+      };
+    }
+    if (storedKeyCount) {
+      return {
+        label: "Configured",
+        detail: `${storedKeyCount} stored key${storedKeyCount === 1 ? "" : "s"}`,
+        meta: providerStatus || valueOf(provider, "auth_method", "api_key"),
+        tone: "neutral",
+        cardClass: styles.providerFactoryCardConfigured,
+      };
+    }
+    return {
+      label: "Needs setup",
+      detail: valueOf(provider, "auth_method", "api_key"),
+      meta: valueOf(provider, "provider_kind", "provider"),
+      tone: "attention",
+    };
+  };
   const configuredCount = providers.filter((provider) =>
     providerId(provider) === activeProviderId
     || providerHasRuntimeAuth(provider)
     || providerKeyRows(provider, keys).some((key) => key.hasValue === true),
   ).length;
-  const sections = providerSections(providers);
+  const selectedProvider = selectedProviderId
+    ? providers.find((provider) => providerId(provider) === selectedProviderId) ?? null
+    : null;
+
+  const renderProviderConfig = (provider: DashboardRow): React.JSX.Element => {
+    const id = providerId(provider);
+    const draft = providerDraft(provider, activeProvider, drafts);
+    const providerKeys = providerKeyRows(provider, keys);
+    const storedKeyCount = providerKeys.filter((key) => key.hasValue === true).length;
+    const secretRefs = providerSecretRefs(provider);
+    const modelRows = providerModelOptions(provider, modelOptions[id]);
+    const connection = providerConnectionInfo(provider);
+    return (
+      <div className={styles.providerExpanded}>
+        <header className={styles.providerDialogHero}>
+          <ProviderLogo provider={provider} size={46} />
+          <div>
+            <span>{id}</span>
+            <strong>{providerDisplayName(provider)}</strong>
+            <p>{valueOf(provider, "catalog_summary", "Provider from the runtime catalog.")}</p>
+          </div>
+          <StatusBadge tone={connection.tone}>{connection.label}</StatusBadge>
+        </header>
+        <div className={styles.compactInfoGrid}>
+          <div><span>Transport</span><strong>{valueOf(provider, "transport_id")}</strong></div>
+          <div><span>Default model</span><strong>{valueOf(provider, "default_model_id")}</strong></div>
+          <div><span>Base URL</span><strong>{valueOf(provider, "default_base_url", valueOf(activeProvider, "base_url"))}</strong></div>
+          <div><span>Env aliases</span><strong>{asTextList(provider.env_var_names ?? provider.envVarNames).join(", ") || "n/a"}</strong></div>
+        </div>
+        <section className={styles.providerConfigGrid}>
+          <label className={styles.fieldStack}>
+            <span>Model</span>
+            <select value={draft.modelId ?? ""} onChange={(event) => updateDraft(id, { modelId: event.target.value })}>
+              {modelRows.map((model) => (
+                <option key={valueOf(model, "model_id")} value={valueOf(model, "model_id")}>
+                  {valueOf(model, "label", valueOf(model, "model_id"))}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.fieldStack}>
+            <span>Base URL</span>
+            <input value={draft.baseUrl ?? ""} onChange={(event) => updateDraft(id, { baseUrl: event.target.value })} />
+          </label>
+        </section>
+        {secretRefs.length ? (
+          <section className={styles.providerSecretPanel}>
+            <label className={styles.fieldStack}>
+              <span>API key</span>
+              <input
+                type="password"
+                value={draft.apiKey ?? ""}
+                placeholder={storedKeyCount ? "stored locally" : "paste once to store locally"}
+                onChange={(event) => updateDraft(id, { apiKey: event.target.value })}
+              />
+            </label>
+            <p>The API key is stored locally and reused by this provider profile. OAuth providers skip this secret field.</p>
+          </section>
+        ) : (
+          <EmptyPanel title="OAuth or local auth provider" detail="No API key field is required for this provider. Use setup to confirm the local auth path." />
+        )}
+        {providerKeys.length ? (
+          <details className={styles.inlineDetails}>
+            <summary>Stored key records</summary>
+            <div className={styles.providerInlineSection}>
+              {providerKeys.map((key) => {
+                const referenceId = valueOf(key, "referenceId", valueOf(key, "reference_id"));
+                const draftKey = keyDrafts[referenceId] ?? "";
+                return (
+                  <article key={referenceId} className={styles.providerKeyRow}>
+                    <div>
+                      <span>{valueOf(key, "profileId", valueOf(key, "profile_id"))}</span>
+                      <strong>{valueOf(key, "secretKey", valueOf(key, "secret_key", "api_key"))}</strong>
+                    </div>
+                    <StatusBadge tone={key.hasValue ? "healthy" : "attention"}>{key.hasValue ? "stored" : "missing"}</StatusBadge>
+                    <input
+                      type="password"
+                      placeholder="replace stored value"
+                      value={draftKey}
+                      onChange={(event) => setKeyDrafts((current) => ({ ...current, [referenceId]: event.target.value }))}
+                    />
+                    <ActionButton variant="ghost" onClick={() => void saveExistingKey(referenceId, draftKey)}>Save</ActionButton>
+                    <ActionButton variant="ghost" onClick={() => void clearKey(referenceId)}>Remove</ActionButton>
+                  </article>
+                );
+              })}
+            </div>
+          </details>
+        ) : null}
+        <label className={styles.fieldStack}>
+          <span>Runtime test prompt</span>
+          <textarea rows={3} value={draft.testPrompt ?? ""} onChange={(event) => updateDraft(id, { testPrompt: event.target.value })} />
+        </label>
+        <div className={styles.controlToolbar}>
+          <ActionButton onClick={() => void saveProvider(provider, draft)}>Save as default</ActionButton>
+          <ActionButton variant="ghost" onClick={() => void loadModels(provider, draft)}>Load models</ActionButton>
+          <ActionButton variant="ghost" onClick={() => void loadSetup(provider)}>Load setup</ActionButton>
+          <ActionButton variant="ghost" onClick={() => void runTest(provider, draft)}>Run active test</ActionButton>
+          <ViewButton title={`${providerDisplayName(provider)} payload`} items={[{ label: "provider_profile", value: <JsonBlock value={providerProfilePayload(provider, draft)} /> }]} />
+        </div>
+        {setupGuides[id] ? (
+          <details className={styles.inlineDetails} open>
+            <summary>Setup guide</summary>
+            <JsonBlock value={setupGuides[id]} />
+          </details>
+        ) : null}
+        {testResults[id] ? (
+          <details className={styles.inlineDetails} open>
+            <summary>Runtime test result</summary>
+            <JsonBlock value={testResults[id]} />
+          </details>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -3517,163 +3793,62 @@ function ProviderModelControls({
             <span>{status}</span>
           </div>
         ) : null}
-        {sections.length ? (
+        {providers.length ? (
           <div className={styles.providerSections}>
-            {sections.map((section) => (
-              <section key={section.id} className={styles.providerSection}>
-                <header className={styles.providerSectionHeader}>
-                  <div>
-                    <strong>{section.title}</strong>
-                    <span>{section.detail}</span>
-                  </div>
-                  <small>{section.providers.length} provider{section.providers.length === 1 ? "" : "s"}</small>
-                </header>
-                <div className={styles.providerList}>
-                  {section.providers.map((provider) => {
-                    const id = providerId(provider);
-                    const draft = providerDraft(provider, activeProvider, drafts);
-                    const isExpanded = expandedProvider === id;
-                    const isActive = id === activeProviderId;
-                    const providerKeys = providerKeyRows(provider, keys);
-                    const storedKeyCount = providerKeys.filter((key) => key.hasValue === true).length;
-                    const hasRuntimeAuth = providerHasRuntimeAuth(provider);
-                    const providerStatus = valueOf(provider, "status", "");
-                    const providerSource = valueOf(provider, "source", "");
-                    const providerConnectionLabel = isActive
-                      ? "In use"
-                      : hasRuntimeAuth
-                        ? "Connected"
-                        : storedKeyCount
-                          ? "Configured"
-                          : "Needs setup";
-                    const providerCardStatusClass = isActive
-                      ? styles.providerCardActive
-                      : hasRuntimeAuth
-                        ? styles.providerCardConnected
-                        : undefined;
-                    const secretRefs = providerSecretRefs(provider);
-                    const modelRows = providerModelOptions(provider, modelOptions[id]);
-                    const canAutoLoadModels = isActive || hasRuntimeAuth || storedKeyCount > 0 || Boolean(draft.apiKey?.trim());
-                    return (
-                      <article key={id} className={cx(styles.providerCard, providerCardStatusClass, isExpanded && styles.providerCardOpen)}>
-                        <button className={styles.providerCardHeader} type="button" onClick={() => toggleProvider(provider, draft, canAutoLoadModels)}>
-                          <RowIcon kind="models" />
-                          <div className={styles.providerCardTitle}>
-                            <span>{id}</span>
-                            <strong>{providerDisplayName(provider)}</strong>
-                            <p>{valueOf(provider, "catalog_summary", "Provider from the runtime catalog.")}</p>
-                          </div>
-                          <div className={styles.providerCardState}>
-                            <span>{providerConnectionLabel}</span>
-                            <strong>{storedKeyCount ? `${storedKeyCount} stored key${storedKeyCount === 1 ? "" : "s"}` : providerSource || "No key stored"}</strong>
-                            {providerStatus ? <small>{providerStatus}</small> : <small>{valueOf(provider, "auth_method", "auth n/a")}</small>}
-                          </div>
-                        </button>
-                        {isExpanded ? (
-                          <div className={styles.providerExpanded}>
-                            <div className={styles.compactInfoGrid}>
-                              <div><span>Transport</span><strong>{valueOf(provider, "transport_id")}</strong></div>
-                              <div><span>Default model</span><strong>{valueOf(provider, "default_model_id")}</strong></div>
-                              <div><span>Base URL</span><strong>{valueOf(provider, "default_base_url", valueOf(activeProvider, "base_url"))}</strong></div>
-                              <div><span>Env aliases</span><strong>{asTextList(provider.env_var_names ?? provider.envVarNames).join(", ") || "n/a"}</strong></div>
-                            </div>
-                            <section className={styles.providerConfigGrid}>
-                              <label className={styles.fieldStack}>
-                                <span>Model</span>
-                                <select value={draft.modelId ?? ""} onChange={(event) => updateDraft(id, { modelId: event.target.value })}>
-                                  {modelRows.map((model) => (
-                                    <option key={valueOf(model, "model_id")} value={valueOf(model, "model_id")}>
-                                      {valueOf(model, "label", valueOf(model, "model_id"))}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className={styles.fieldStack}>
-                                <span>Base URL</span>
-                                <input value={draft.baseUrl ?? ""} onChange={(event) => updateDraft(id, { baseUrl: event.target.value })} />
-                              </label>
-                            </section>
-                            {secretRefs.length ? (
-                              <section className={styles.providerSecretPanel}>
-                                <label className={styles.fieldStack}>
-                                  <span>API key</span>
-                                  <input
-                                    type="password"
-                                    value={draft.apiKey ?? ""}
-                                    placeholder={storedKeyCount ? "stored locally" : "paste once to store locally"}
-                                    onChange={(event) => updateDraft(id, { apiKey: event.target.value })}
-                                  />
-                                </label>
-                                <p>The API key is stored locally and reused by this provider profile. OAuth providers skip this secret field.</p>
-                              </section>
-                            ) : (
-                              <EmptyPanel title="OAuth or local auth provider" detail="No API key field is required for this provider. Use setup to confirm the local auth path." />
-                            )}
-                            {providerKeys.length ? (
-                              <details className={styles.inlineDetails}>
-                                <summary>Stored key records</summary>
-                                <div className={styles.providerInlineSection}>
-                                  {providerKeys.map((key) => {
-                                    const referenceId = valueOf(key, "referenceId", valueOf(key, "reference_id"));
-                                    const draftKey = keyDrafts[referenceId] ?? "";
-                                    return (
-                                      <article key={referenceId} className={styles.providerKeyRow}>
-                                        <div>
-                                          <span>{valueOf(key, "profileId", valueOf(key, "profile_id"))}</span>
-                                          <strong>{valueOf(key, "secretKey", valueOf(key, "secret_key", "api_key"))}</strong>
-                                        </div>
-                                        <StatusBadge tone={key.hasValue ? "healthy" : "attention"}>{key.hasValue ? "stored" : "missing"}</StatusBadge>
-                                        <input
-                                          type="password"
-                                          placeholder="replace stored value"
-                                          value={draftKey}
-                                          onChange={(event) => setKeyDrafts((current) => ({ ...current, [referenceId]: event.target.value }))}
-                                        />
-                                        <ActionButton variant="ghost" onClick={() => void saveExistingKey(referenceId, draftKey)}>Save</ActionButton>
-                                        <ActionButton variant="ghost" onClick={() => void clearKey(referenceId)}>Remove</ActionButton>
-                                      </article>
-                                    );
-                                  })}
-                                </div>
-                              </details>
-                            ) : null}
-                            <label className={styles.fieldStack}>
-                              <span>Runtime test prompt</span>
-                              <textarea rows={3} value={draft.testPrompt ?? ""} onChange={(event) => updateDraft(id, { testPrompt: event.target.value })} />
-                            </label>
-                            <div className={styles.controlToolbar}>
-                              <ActionButton onClick={() => void saveProvider(provider, draft)}>Save as default</ActionButton>
-                              <ActionButton variant="ghost" onClick={() => void loadModels(provider, draft)}>Load models</ActionButton>
-                              <ActionButton variant="ghost" onClick={() => void loadSetup(provider)}>Load setup</ActionButton>
-                              <ActionButton variant="ghost" onClick={() => void runTest(provider, draft)}>Run active test</ActionButton>
-                              <ViewButton title={`${providerDisplayName(provider)} payload`} items={[{ label: "provider_profile", value: <JsonBlock value={providerProfilePayload(provider, draft)} /> }]} />
-                            </div>
-                            {setupGuides[id] ? (
-                              <details className={styles.inlineDetails} open>
-                                <summary>Setup guide</summary>
-                                <JsonBlock value={setupGuides[id]} />
-                              </details>
-                            ) : null}
-                            {testResults[id] ? (
-                              <details className={styles.inlineDetails} open>
-                                <summary>Runtime test result</summary>
-                                <JsonBlock value={testResults[id]} />
-                              </details>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </article>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
+            <header className={styles.providerSectionHeader}>
+              <div>
+                <strong>Provider factory</strong>
+                <span>Full runtime catalog: OAuth, API-key, routed, local, and self-hosted providers in one grid.</span>
+              </div>
+              <small>{providers.length} providers</small>
+            </header>
+            <div className={styles.providerFactoryGrid}>
+              {providers.map((provider) => {
+                const id = providerId(provider);
+                const draft = providerDraft(provider, activeProvider, drafts);
+                const providerKeys = providerKeyRows(provider, keys);
+                const storedKeyCount = providerKeys.filter((key) => key.hasValue === true).length;
+                const hasRuntimeAuth = providerHasRuntimeAuth(provider);
+                const isActive = id === activeProviderId;
+                const canAutoLoadModels = isActive || hasRuntimeAuth || storedKeyCount > 0 || Boolean(draft.apiKey?.trim());
+                const connection = providerConnectionInfo(provider);
+                return (
+                  <button
+                    key={id}
+                    aria-label={`Open ${providerDisplayName(provider)} provider settings`}
+                    className={cx(styles.providerFactoryCard, connection.cardClass)}
+                    type="button"
+                    onClick={() => openProvider(provider, draft, canAutoLoadModels)}
+                  >
+                    <ProviderLogo provider={provider} />
+                    <span className={styles.providerFactoryCopy}>
+                      <span>{id}</span>
+                      <strong>{providerDisplayName(provider)}</strong>
+                    </span>
+                    <span className={styles.providerFactoryState}>
+                      <span>{connection.label}</span>
+                      <strong>{connection.detail}</strong>
+                      <small>{connection.meta}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <EmptyPanel title="No providers yet" detail="Providers will appear here once Elephant Agent has any set up." />
         )}
       </Panel>
 
+      <FloatingFormModal
+        open={Boolean(selectedProvider)}
+        title={selectedProvider ? providerDisplayName(selectedProvider) : "Provider"}
+        subtitle="Model provider"
+        panelClassName={styles.providerModalPanel}
+        onClose={() => setSelectedProviderId(null)}
+      >
+        {selectedProvider ? renderProviderConfig(selectedProvider) : null}
+      </FloatingFormModal>
     </>
   );
 }

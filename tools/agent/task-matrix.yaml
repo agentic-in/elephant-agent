@@ -264,8 +264,7 @@
         "make agent-validate"
       ],
       "feature_tests": [
-        "swift build --package-path apps/macos",
-        "apps/macos/Scripts/build-app.sh"
+        "make macos-build"
       ]
     },
     {

@@ -24,6 +24,28 @@ final class CoreRunner {
 
         let root = Self.findRepoRoot()
         let data = try Self.resolveDataPaths(preferUserInstall: root == nil)
+        return try await startResolved(root: root, data: data)
+    }
+
+    func resetLocalData() async throws -> CoreRuntime {
+        let root = Self.findRepoRoot()
+        let data = try Self.resolveDataPaths(preferUserInstall: root == nil)
+        stop()
+        Self.cleanupStaleManagedProcess(home: data.home, database: data.database)
+        Self.cleanupOrphanedManagedAPIs(database: data.database)
+        Self.cleanupManagedStateProcesses(stateDir: data.herd)
+        try Self.removeLocalRuntimeData(data: data)
+        return try await startResolved(root: root, data: data)
+    }
+
+    private func startResolved(
+        root: URL?,
+        data: (home: URL, herd: URL, database: URL)
+    ) async throws -> CoreRuntime {
+        if let process, process.isRunning, let baseURL, let databasePath {
+            return CoreRuntime(baseURL: baseURL, databasePath: databasePath, repoRoot: repoRoot)
+        }
+
         Self.cleanupStaleManagedProcess(home: data.home, database: data.database)
         Self.cleanupOrphanedManagedAPIs(database: data.database)
         let pythonRuntime = try await Self.resolvePythonRuntime(repoRoot: root, data: data)
@@ -197,6 +219,26 @@ final class CoreRunner {
         return (support, herd, herd.appendingPathComponent("elephant.sqlite3"))
     }
 
+    private static func removeLocalRuntimeData(data: (home: URL, herd: URL, database: URL)) throws {
+        let fileManager = FileManager.default
+        let resetTargets = [
+            data.herd,
+            data.home.appendingPathComponent("config.yaml"),
+            data.home.appendingPathComponent("cron", isDirectory: true),
+            data.home.appendingPathComponent("pairing", isDirectory: true),
+            data.home.appendingPathComponent("skills", isDirectory: true),
+            data.home.appendingPathComponent("workspaces", isDirectory: true),
+            managedPIDFile(home: data.home)
+        ]
+
+        for target in resetTargets {
+            if fileManager.fileExists(atPath: target.path) {
+                try fileManager.removeItem(at: target)
+            }
+        }
+        try fileManager.createDirectory(at: data.herd, withIntermediateDirectories: true)
+    }
+
     private static func managedPIDFile(home: URL) -> URL {
         home.appendingPathComponent("mac-api.pid")
     }
@@ -293,6 +335,55 @@ final class CoreRunner {
             }
             .map(\.pid)
         terminatePIDs(stalePIDs)
+    }
+
+    private static func cleanupManagedStateProcesses(stateDir: URL) {
+        let fileManager = FileManager.default
+        let files = (try? fileManager.contentsOfDirectory(
+            at: stateDir,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        for file in files where file.lastPathComponent.hasSuffix(".runtime.json") {
+            guard let pid = readPIDFromRuntimeRecord(file) else { continue }
+            terminateStateManagedPID(pid, stateDir: stateDir)
+        }
+
+        for file in files where file.pathExtension == "pid" {
+            guard let raw = try? String(contentsOf: file, encoding: .utf8),
+                  let pid = Int32(raw.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
+            terminateStateManagedPID(pid, stateDir: stateDir)
+        }
+    }
+
+    private static func readPIDFromRuntimeRecord(_ file: URL) -> Int32? {
+        guard let data = try? Data(contentsOf: file),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let value = object["pid"]
+        if let pid = value as? Int {
+            return Int32(pid)
+        }
+        if let raw = value as? String {
+            return Int32(raw)
+        }
+        return nil
+    }
+
+    private static func terminateStateManagedPID(_ pid: Int32, stateDir: URL) {
+        guard pid > 1, isProcessAlive(pid) else { return }
+        let command = commandLine(for: pid)
+        guard command.contains(stateDir.path) else { return }
+        let managedMarkers = [
+            "apps.api",
+            "apps.daemon_command",
+            "apps.gateway",
+            "apps.learning_worker_command"
+        ]
+        guard managedMarkers.contains(where: { command.contains($0) }) else { return }
+        terminatePID(pid)
     }
 
     private struct ProcessRow {

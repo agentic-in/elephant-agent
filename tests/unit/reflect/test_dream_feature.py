@@ -36,17 +36,27 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills"))
         self.assertNotIn("tool.conversation.search", _compose_tools(features))
 
-    def test_init_profile_resolves_without_diary_and_uses_bootstrap_prompt_rules(self) -> None:
+    def test_init_profile_resolves_with_link_tools_and_uses_bootstrap_prompt_rules(self) -> None:
         features = resolve_features("init_profile")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills", "init_links"))
 
         prompt = _assemble_system_prompt(features, conservatism="low")
 
         self.assertIn("seed the first question bank more actively", prompt)
         self.assertIn("create 3-6 high-value questions", prompt)
         self.assertIn("explicit init answers and bootstrapped", prompt)
+        self.assertIn("tool.web.extract", prompt)
+        self.assertIn("tool.browser.navigate", prompt)
+        self.assertIn("If the init evidence contains public links", prompt)
         self.assertNotIn("tool.diary.write", prompt)
+
+    def test_init_profile_alias_from_macos_resolves_to_link_learning_bundle(self) -> None:
+        features = resolve_features("init", explicit_features=("profile",))
+
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills", "init_links"))
+        self.assertIn("tool.web.read", _compose_tools(features))
+        self.assertIn("tool.browser.snapshot", _compose_tools(features))
 
     def test_init_profile_evidence_omits_empty_episode_and_diary_sections(self) -> None:
         class Repository:
@@ -57,7 +67,7 @@ class DreamFeatureTest(unittest.TestCase):
                 return (
                     SimpleNamespace(
                         lens="identity",
-                        text="用户喜欢技术创造。",
+                        text="用户喜欢技术创造。\nRemember: linkedin: https://www.linkedin.com/in/example",
                         metadata={"topic": "identity.style.hobbies.personal"},
                     ),
                 )
@@ -75,6 +85,7 @@ class DreamFeatureTest(unittest.TestCase):
                 "init_first_language": "zh",
                 "init_learning_intensity": "high",
                 "init_hobbies": "技术/创造",
+                "init_blog": "https://example.com/blog",
             },
         )
 
@@ -82,6 +93,9 @@ class DreamFeatureTest(unittest.TestCase):
 
         self.assertIn("## Init profile answers", evidence)
         self.assertIn("- learning_intensity: high", evidence)
+        self.assertIn("## User-provided links", evidence)
+        self.assertIn("- https://example.com/blog", evidence)
+        self.assertIn("- https://www.linkedin.com/in/example", evidence)
         self.assertIn("## Bootstrapped Personal Model facts", evidence)
         self.assertIn("[identity] 用户喜欢技术创造。", evidence)
         self.assertNotIn("## Episode summary", evidence)
