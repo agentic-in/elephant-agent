@@ -3,17 +3,41 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import os
 import signal
 import sys
 import time
 import warnings
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+_apps_module = sys.modules.get("apps")
+if _apps_module is not None:
+    _apps_paths = [Path(path).resolve() for path in getattr(_apps_module, "__path__", ())]
+    if (ROOT / "apps") not in _apps_paths:
+        del sys.modules["apps"]
+
+
+@pytest.fixture(autouse=True)
+def _prefer_repo_apps_package() -> None:
+    if str(ROOT) in sys.path:
+        sys.path.remove(str(ROOT))
+    unit_tests_path = str(Path(__file__).resolve().parent)
+    while unit_tests_path in sys.path:
+        sys.path.remove(unit_tests_path)
+    sys.path.insert(0, str(ROOT))
+    for module_name in list(sys.modules):
+        if module_name == "apps" or module_name.startswith("apps."):
+            del sys.modules[module_name]
 
 
 # ── daemon_command public API tests ──────────────────────────────
@@ -150,6 +174,60 @@ class TestStopDaemon:
             mock_kill.side_effect = ProcessLookupError
             result = stop_daemon(tmp_path)
             assert result == 0
+
+
+class TestDaemonLogsCommand:
+    """Tests for daemon log CLI behavior."""
+
+    def test_logs_help_advertises_follow_short_flag(self, tmp_path: Path) -> None:
+        from apps.daemon_command import command_main
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = command_main(["logs", "--help"], default_state_dir=tmp_path)
+
+        assert result == 0
+        rendered = output.getvalue()
+        assert "-f" in rendered
+        assert "--follow" in rendered
+
+    def test_logs_missing_file_returns_actionable_message(self, tmp_path: Path) -> None:
+        from apps.daemon_command import command_main
+
+        output = io.StringIO()
+        error = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(error):
+            result = command_main(["logs"], default_state_dir=tmp_path)
+
+        assert result == 1
+        assert output.getvalue() == ""
+        rendered = error.getvalue()
+        assert str(tmp_path / "daemon.log") in rendered
+        assert "elephant daemon start --detach" in rendered
+        assert "elephant daemon logs --path" in rendered
+
+    def test_logs_short_follow_streams_appended_output(self, tmp_path: Path) -> None:
+        from apps.daemon_command import command_main
+
+        log_path = tmp_path / "daemon.log"
+        log_path.write_text("existing line\n", encoding="utf-8")
+        sleeps = 0
+
+        def fake_sleep(_seconds: float) -> None:
+            nonlocal sleeps
+            sleeps += 1
+            if sleeps == 1:
+                with log_path.open("a", encoding="utf-8") as log_file:
+                    log_file.write("followed line\n")
+                return
+            raise KeyboardInterrupt
+
+        output = io.StringIO()
+        with patch("apps.daemon_command.time.sleep", side_effect=fake_sleep), redirect_stdout(output):
+            result = command_main(["logs", "-f"], default_state_dir=tmp_path)
+
+        assert result == 0
+        assert output.getvalue().splitlines() == ["existing line", "followed line"]
 
 
 # ── daemon task guard tests ──────────────────────────────────────
