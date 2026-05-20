@@ -208,6 +208,7 @@ class SubAgentsSurface(Protocol):
         skills: tuple[str, ...] = (),
         allowed_tools: tuple[str, ...] = (),
         system_prompt: str = "",
+        child_metadata: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any] | ExecutionResult:
         """Run one bounded sub-agent task and return its final result."""
 

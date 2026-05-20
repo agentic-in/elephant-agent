@@ -14,10 +14,11 @@ from packages.reflect.trajectory_signals import (
 
 
 class _Repository:
-    def __init__(self, *, episodes, loops, steps) -> None:
+    def __init__(self, *, episodes, loops, steps, facts=()) -> None:
         self._episodes = tuple(episodes)
         self._loops = tuple(loops)
         self._steps = tuple(steps)
+        self._facts = tuple(facts)
 
     def list_episodes(self):
         return self._episodes
@@ -31,6 +32,9 @@ class _Repository:
         if loop_id is None:
             return self._steps
         return tuple(step for step in self._steps if step.loop_id == loop_id)
+
+    def list_personal_model_facts(self, **_: object):
+        return self._facts
 
 
 class TrajectorySignalsTest(unittest.TestCase):
@@ -58,7 +62,20 @@ class TrajectorySignalsTest(unittest.TestCase):
             SimpleNamespace(loop_id="loop-new", action="call_tool", status="completed", sequence=2, created_at=now, metadata={"tool_name": "tool.file.read"}),
             SimpleNamespace(loop_id="loop-open", action="call_tool", status="completed", sequence=1, created_at=now, metadata={"tool_name": "tool.web.search"}),
         )
-        self.repository = _Repository(episodes=self.episodes, loops=self.loops, steps=self.steps)
+        self.repository = _Repository(
+            episodes=self.episodes,
+            loops=self.loops,
+            steps=self.steps,
+            facts=(
+                SimpleNamespace(
+                    metadata={
+                        "topic": "world.skills.affinity.workflow_gap",
+                        "skill_id": "workflow-gap",
+                        "index_id": "workflow_gap",
+                    }
+                ),
+            ),
+        )
 
     def test_load_recent_closed_episodes_filters_by_personal_model_and_status(self) -> None:
         episodes = load_recent_closed_episodes(self.repository, personal_model_id="pm", lookback_episodes=2)

@@ -10,6 +10,12 @@ from .lifecycle import load_candidates, should_suppress_candidate
 from .types import SkillOptimizationCandidate, ToolTrajectorySignal
 
 
+def _metadata_map(raw: object) -> Mapping[str, str]:
+    if not isinstance(raw, Mapping):
+        return {}
+    return {str(key): str(value) for key, value in raw.items() if _text(value)}
+
+
 def _text(value: object) -> str:
     return str(value or "").strip()
 
@@ -86,6 +92,12 @@ def _resolve_target_skill(
     affinity_map: Mapping[str, tuple[str, str]],
     skills: Sequence[Any],
 ) -> tuple[str | None, str | None]:
+    signal_metadata = _metadata_map(signal.metadata)
+    metadata_skill_id = _text(signal_metadata.get("skill_id"))
+    metadata_index_id = _text(signal_metadata.get("index_id") or signal_metadata.get("target_scope"))
+    if metadata_skill_id or metadata_index_id:
+        return metadata_skill_id or metadata_index_id, metadata_index_id or _normalized_token(metadata_skill_id)
+
     best_match: tuple[float, str | None, str | None] = (0.0, None, None)
     for skill in skills:
         skill_id = _text(getattr(skill, "skill_id", ""))

@@ -91,23 +91,44 @@ def _skill_optimization_candidate_record(candidate: Any) -> dict[str, object]:
     }
 
 
+def skill_optimization_candidate_records(candidates: tuple[Any, ...]) -> tuple[dict[str, object], ...]:
+    return tuple(_skill_optimization_candidate_record(candidate) for candidate in candidates)
+
+
 def _skill_optimization_candidate_lines(candidates: tuple[Any, ...]) -> tuple[str, ...]:
+    records = skill_optimization_candidate_records(candidates)
     lines = [
         "## Optimization Candidate Records",
         "authoritative: only the pre-aggregated records below may be persisted or applied",
-        f"candidate_records: {len(candidates)}",
+        f"candidate_records: {len(records)}",
     ]
-    if not candidates:
+    if not records:
         return tuple(lines + ["(none)"])
     lines.extend(
         json.dumps(
-            _skill_optimization_candidate_record(candidate),
+            record,
             ensure_ascii=False,
             sort_keys=True,
         )
-        for candidate in candidates[:10]
+        for record in records[:10]
     )
     return tuple(lines)
+
+
+def build_skill_optimization_context(runtime: Any, job: LearningJob) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[dict[str, object], ...]]:
+    skills = _skill_catalog(runtime)
+    signals = extract_trajectory_signals(
+        runtime.repository,
+        personal_model_id=job.personal_model_id,
+        skills=skills,
+    )
+    candidates = aggregate_signals(
+        signals,
+        runtime.repository,
+        personal_model_id=job.personal_model_id,
+        skills=skills,
+    )
+    return signals, candidates, skill_optimization_candidate_records(candidates)
 
 
 def _basic_user_anchor_lines(facts: tuple[Any, ...]) -> tuple[str, ...]:
@@ -391,16 +412,7 @@ def build_evidence(
         ])
 
     if "skill_optimization" in feature_ids:
-        signals = extract_trajectory_signals(
-            runtime.repository,
-            personal_model_id=job.personal_model_id,
-        )
-        candidates = aggregate_signals(
-            signals,
-            runtime.repository,
-            personal_model_id=job.personal_model_id,
-            skills=_skill_catalog(runtime),
-        )
+        signals, candidates, _ = build_skill_optimization_context(runtime, job)
         lines.extend([
             "",
             "## Trajectory Signals",

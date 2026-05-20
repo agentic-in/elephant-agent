@@ -18,7 +18,8 @@ from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID, canon
 from .semantic_search_support import fallback_pm_search, keyword_boost, rank_facts_by_semantic_queries
 from .temporal_policy import freshness_score
 from .personal_model_governance import (
-    claim_payload, ensure_valid_topic_key, inheritable_recall_metadata,
+    claim_payload, enforce_authoritative_skill_optimization_candidate,
+    ensure_valid_topic_key, inheritable_recall_metadata,
     is_protected_topic, is_single_active_topic, is_skill_optimization_topic,
     narrowing_suggestions, normalize_skill_optimization_candidate_metadata,
     personal_model_health_report, protected_topic_metadata,
@@ -215,14 +216,12 @@ class PersonalModelUnderstandingSurface:
         )
         self._questions = CuriosityQuestionManagementSurface(repository=repository)
     def _personal_model_id(self, session_id: str, explicit: str = "") -> str:
-        pm_id = _clean(explicit)
-        if not pm_id:
-            load_episode = getattr(self.repository, "load_episode_state", None)
-            episode = load_episode(session_id) if callable(load_episode) else None
-            pm_id = _clean(getattr(episode, "personal_model_id", ""))
+        load_episode = getattr(self.repository, "load_episode_state", None)
+        pm_id = _clean(explicit) or _clean(
+            getattr(load_episode(session_id) if callable(load_episode) else None, "personal_model_id", "")
+        )
         pm_id = canonical_personal_model_id(pm_id or DEFAULT_PERSONAL_MODEL_ID)
-        ensure = getattr(self.repository, "ensure_default_personal_model", None)
-        if callable(ensure):
+        if callable(ensure := getattr(self.repository, "ensure_default_personal_model", None)):
             ensure(personal_model_id=pm_id)
         return pm_id
     def _episode_id(self, session_id: str) -> str:
@@ -397,7 +396,6 @@ class PersonalModelUnderstandingSurface:
         claims = []
         for fact in selected:
             claims.append(claim_payload(fact))
-
         # Track access for temporal policy (non-blocking side effect)
         if selected:
             touch = getattr(self.repository, "touch_fact_access", None)
@@ -406,7 +404,6 @@ class PersonalModelUnderstandingSurface:
                     touch(tuple(fact.fact_id for fact in selected))
                 except Exception:
                     pass
-
         result: dict[str, Any] = {
             "personal_model_id": pm_id,
             "match_status": match_status,
@@ -895,6 +892,11 @@ class PersonalModelUnderstandingSurface:
         caller_metadata = {str(key): str(value) for key, value in dict(metadata or {}).items() if str(value).strip()}
         if is_skill_optimization_topic(resolved_topic):
             current_candidate_metadata = dict(targets[0].metadata or {}) if targets else {}
+            resolved_text, caller_metadata = enforce_authoritative_skill_optimization_candidate(
+                self.repository, session_id=session_id, topic=resolved_topic, action=resolved_action,
+                ref=resolved_ref, text=resolved_text, incoming_metadata=caller_metadata,
+                current_metadata=current_candidate_metadata,
+            )
             caller_metadata = normalize_skill_optimization_candidate_metadata(
                 resolved_topic,
                 caller_metadata,

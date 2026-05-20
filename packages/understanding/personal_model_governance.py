@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from enum import StrEnum
+import json
 import re
 import unicodedata
 from typing import Any
@@ -334,6 +335,96 @@ def skill_optimization_candidate_confidence(
     except (TypeError, ValueError):
         return max(0.0, min(1.0, float(default)))
     return max(0.0, min(1.0, value))
+
+
+def skill_optimization_candidate_text_from_record(record: Mapping[str, object] | None = None) -> str:
+    metadata = _string_metadata(record)
+    subject = clean(metadata.get("skill_id")) or "a new skill"
+    occurrence_count = clean(metadata.get("occurrence_count")) or "0"
+    confidence = clean(metadata.get("confidence")) or "0.72"
+    summary = clean(metadata.get("summary")) or "repeatable optimization opportunity detected"
+    suggested_action = clean(metadata.get("suggested_action")) or summary
+    return (
+        f"{subject} shows a repeatable optimization opportunity. "
+        f"Evidence: {summary}. "
+        f"Observed in {occurrence_count} closed episodes with confidence {confidence}. "
+        f"Suggested action: {suggested_action}"
+    ).strip()
+
+
+def authoritative_skill_optimization_candidate_records(repository: Any, session_id: str) -> tuple[dict[str, str], ...]:
+    load_episode = getattr(repository, "load_episode", None)
+    if not callable(load_episode):
+        return ()
+    visited: set[str] = set()
+    current_episode_id = clean(session_id)
+    while current_episode_id and current_episode_id not in visited:
+        visited.add(current_episode_id)
+        episode = load_episode(current_episode_id)
+        if episode is None:
+            break
+        metadata = dict(getattr(episode, "metadata", {}) or {})
+        raw_records = clean(metadata.get("authoritative_skill_optimization_candidates_json"))
+        if raw_records:
+            try:
+                decoded = json.loads(raw_records)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                decoded = ()
+            records: list[dict[str, str]] = []
+            if isinstance(decoded, list):
+                for item in decoded:
+                    if not isinstance(item, Mapping):
+                        continue
+                    record = {str(key): str(value) for key, value in item.items() if clean(value)}
+                    if clean(record.get("topic")):
+                        records.append(record)
+            if records:
+                return tuple(records)
+        current_episode_id = clean(getattr(episode, "parent_episode_id", ""))
+    return ()
+
+
+def enforce_authoritative_skill_optimization_candidate(
+    repository: Any,
+    *,
+    session_id: str,
+    topic: str,
+    action: str,
+    ref: str = "",
+    text: str,
+    incoming_metadata: Mapping[str, object] | None = None,
+    current_metadata: Mapping[str, object] | None = None,
+) -> tuple[str, dict[str, str]]:
+    caller_metadata = _string_metadata(incoming_metadata)
+    authoritative_records = authoritative_skill_optimization_candidate_records(repository, session_id)
+    requested_review_status = canonical_skill_optimization_review_status(
+        caller_metadata.get("review_status"),
+        default=_string_metadata(current_metadata).get("review_status", "pending"),
+    )
+    enforce_authoritative_record = bool(authoritative_records) and not (
+        clean(action).lower() == "correct"
+        and clean(ref)
+        and requested_review_status in {"approved", "applied", "rejected"}
+    )
+    if not enforce_authoritative_record:
+        return text, caller_metadata
+    authoritative_record = next(
+        (item for item in authoritative_records if clean(item.get("topic")) == clean(topic)),
+        None,
+    )
+    if authoritative_record is None:
+        raise ValueError(
+            "skill optimization candidate writes in learning-agent sessions must use an exact topic from the authoritative Optimization Candidate Records section"
+        )
+    merged_metadata = {
+        **caller_metadata,
+        **{
+            key: value
+            for key, value in authoritative_record.items()
+            if key not in {"summary", "supporting_signals"}
+        },
+    }
+    return skill_optimization_candidate_text_from_record(authoritative_record), merged_metadata
 
 
 def normalize_skill_optimization_candidate_metadata(
