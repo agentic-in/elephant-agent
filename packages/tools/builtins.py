@@ -18,6 +18,7 @@ from .handlers_personal_model import (
     run_personal_model_update,
 )
 from .handlers_diary import run_diary_list, run_diary_write
+from .builtins_operator import operator_tool_definitions, operator_tool_handler
 from .builtins_skills import skill_tool_definitions, skill_tool_handler
 from .builtins_sub_agents import sub_agents_tool_definitions, sub_agents_tool_handler
 from .handlers_code_execution import SAFE_CODE_IMPORTS, run_code_execute
@@ -55,6 +56,7 @@ _BUILTIN_TOOL_ORDER = (
     "code_execution",
     "messaging",
     "todo",
+    "operator",
     "skills",
     "sub_agents",
     "continuity-native",
@@ -103,6 +105,9 @@ def builtin_tool_definitions(
     diary_reason = None
     if dependencies is None or dependencies.diary_surface is None:
         diary_reason = "Diary surface is not configured on this Elephant Agent surface."
+    operator_reason = None
+    if dependencies is None or dependencies.operator_surface is None:
+        operator_reason = "Operator management is not configured on this Elephant Agent surface."
 
     definitions = (
         _builtin_tool(
@@ -677,6 +682,7 @@ def builtin_tool_definitions(
                 notes="Tracks short-horizon execution decomposition separately from canonical state continuity.",
             ),
         ),
+        *operator_tool_definitions(reason=operator_reason),
         *skill_tool_definitions(reason=skill_reason),
     )
     return tuple(
@@ -848,6 +854,7 @@ def _docs_builtin_tool_definitions() -> tuple[ToolDefinition, ...]:
             personal_model_understanding=object(),  # type: ignore[arg-type]
             skill_management=object(),  # type: ignore[arg-type]
             sub_agents_surface=object(),  # type: ignore[arg-type]
+            operator_surface=object(),  # type: ignore[arg-type]
             browser_backend=object(),  # type: ignore[arg-type]
         ),
     )
@@ -969,6 +976,9 @@ def _handler_for_tool(
     skill_handler = skill_tool_handler(tool_id, dependencies=dependencies)
     if skill_handler is not None:
         return skill_handler
+    operator_handler = operator_tool_handler(tool_id, dependencies=dependencies)
+    if operator_handler is not None:
+        return operator_handler
     sub_agents_handler = sub_agents_tool_handler(tool_id, dependencies=dependencies)
     if sub_agents_handler is not None:
         return sub_agents_handler

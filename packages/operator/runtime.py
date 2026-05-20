@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Literal
 
 from packages.contracts import (
     ElephantIdentityRecord,
@@ -10,6 +13,239 @@ from packages.contracts import (
 )
 from packages.contracts.runtime import RecallEvidence
 from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
+
+
+OperatorHealthState = Literal[
+    "ok",
+    "degraded",
+    "stopped",
+    "stale",
+    "misconfigured",
+    "unauthorized",
+    "unknown",
+]
+OperatorFreshness = Literal["cached", "probed", "synthetic", "unknown"]
+OperatorIssueSeverity = Literal["info", "warning", "error"]
+OperatorApprovalClass = Literal["none", "standard", "strict"]
+OperatorActionResult = Literal["planned", "applied", "blocked", "failed"]
+
+
+_SECRET_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "auth",
+    "credential",
+    "password",
+    "secret",
+    "token",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorDiagnosticIssue:
+    code: str
+    severity: OperatorIssueSeverity
+    message: str
+    hint: str = ""
+    repair_action_id: str = ""
+    evidence: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorComponentStatus:
+    component: str
+    state: OperatorHealthState
+    summary: str
+    details: Mapping[str, Any] = field(default_factory=dict)
+    issues: tuple[OperatorDiagnosticIssue, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorStatusReport:
+    status: OperatorHealthState
+    generated_at: datetime
+    freshness: OperatorFreshness
+    scope: str
+    snapshot_id: str
+    components: tuple[OperatorComponentStatus, ...] = ()
+    issues: tuple[OperatorDiagnosticIssue, ...] = ()
+    redactions_applied: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorActionPlan:
+    plan_id: str
+    action: str
+    base_snapshot_id: str
+    required_approval: OperatorApprovalClass
+    expected_changes: tuple[str, ...]
+    risks: tuple[str, ...] = ()
+    rollback: tuple[str, ...] = ()
+    expires_at: datetime | None = None
+    parameters: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorActionReceipt:
+    receipt_id: str
+    plan_id: str
+    action: str
+    result: OperatorActionResult
+    started_at: datetime
+    finished_at: datetime
+    changes_applied: tuple[str, ...] = ()
+    verification: Mapping[str, Any] = field(default_factory=dict)
+    rollback_hint: str = ""
+    redactions_applied: tuple[str, ...] = ()
+
+
+def build_operator_status_report(
+    *,
+    scope: str = "summary",
+    freshness: OperatorFreshness = "cached",
+    components: tuple[OperatorComponentStatus, ...] = (),
+    issues: tuple[OperatorDiagnosticIssue, ...] = (),
+    generated_at: datetime | None = None,
+    snapshot_id: str = "",
+) -> OperatorStatusReport:
+    generated = generated_at or datetime.now(timezone.utc)
+    resolved_snapshot = snapshot_id or f"operator-snapshot:{generated.isoformat()}"
+    return OperatorStatusReport(
+        status=_rollup_operator_state(components, issues),
+        generated_at=generated,
+        freshness=freshness,
+        scope=scope,
+        snapshot_id=resolved_snapshot,
+        components=components,
+        issues=issues,
+        redactions_applied=("secret-like keys",),
+    )
+
+
+def operator_status_report_record(report: OperatorStatusReport) -> dict[str, Any]:
+    return {
+        "status": report.status,
+        "generatedAt": report.generated_at.isoformat(),
+        "freshness": report.freshness,
+        "scope": report.scope,
+        "snapshotId": report.snapshot_id,
+        "components": [
+            {
+                "component": component.component,
+                "state": component.state,
+                "summary": component.summary,
+                "details": redact_operator_value(component.details),
+                "issues": [_operator_issue_record(issue) for issue in component.issues],
+            }
+            for component in report.components
+        ],
+        "issues": [_operator_issue_record(issue) for issue in report.issues],
+        "redactionsApplied": list(report.redactions_applied),
+    }
+
+
+def operator_action_plan_record(plan: OperatorActionPlan) -> dict[str, Any]:
+    return {
+        "planId": plan.plan_id,
+        "action": plan.action,
+        "baseSnapshotId": plan.base_snapshot_id,
+        "requiredApproval": plan.required_approval,
+        "expectedChanges": list(plan.expected_changes),
+        "risks": list(plan.risks),
+        "rollback": list(plan.rollback),
+        "expiresAt": plan.expires_at.isoformat() if plan.expires_at else None,
+        "parameters": redact_operator_value(plan.parameters),
+    }
+
+
+def operator_action_receipt_record(receipt: OperatorActionReceipt) -> dict[str, Any]:
+    return {
+        "receiptId": receipt.receipt_id,
+        "planId": receipt.plan_id,
+        "action": receipt.action,
+        "result": receipt.result,
+        "startedAt": receipt.started_at.isoformat(),
+        "finishedAt": receipt.finished_at.isoformat(),
+        "changesApplied": list(receipt.changes_applied),
+        "verification": redact_operator_value(receipt.verification),
+        "rollbackHint": receipt.rollback_hint,
+        "redactionsApplied": list(receipt.redactions_applied),
+    }
+
+
+def operator_error_envelope(
+    *,
+    code: str,
+    message: str,
+    hint: str = "",
+    retryable: bool = False,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": message,
+            "hint": hint,
+            "retryable": retryable,
+        },
+    }
+
+
+def redact_operator_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if _is_secret_key(key_text):
+                redacted[key_text] = "<redacted>"
+            else:
+                redacted[key_text] = redact_operator_value(item)
+        return redacted
+    if isinstance(value, tuple):
+        return tuple(redact_operator_value(item) for item in value)
+    if isinstance(value, list):
+        return [redact_operator_value(item) for item in value]
+    return value
+
+
+def _operator_issue_record(issue: OperatorDiagnosticIssue) -> dict[str, Any]:
+    return {
+        "code": issue.code,
+        "severity": issue.severity,
+        "message": issue.message,
+        "hint": issue.hint,
+        "repairActionId": issue.repair_action_id,
+        "evidence": redact_operator_value(issue.evidence),
+    }
+
+
+def _rollup_operator_state(
+    components: tuple[OperatorComponentStatus, ...],
+    issues: tuple[OperatorDiagnosticIssue, ...],
+) -> OperatorHealthState:
+    if any(issue.severity == "error" for issue in issues):
+        return "degraded"
+    states = {component.state for component in components}
+    if not states:
+        return "unknown"
+    if states == {"ok"}:
+        return "ok"
+    if "unauthorized" in states:
+        return "unauthorized"
+    if "misconfigured" in states:
+        return "misconfigured"
+    if "stale" in states:
+        return "stale"
+    if "stopped" in states:
+        return "stopped"
+    if "degraded" in states:
+        return "degraded"
+    return "unknown"
+
+
+def _is_secret_key(key: str) -> bool:
+    normalized = key.strip().lower().replace("-", "_")
+    return any(part in normalized for part in _SECRET_KEY_PARTS)
 
 
 @dataclass(frozen=True, slots=True)

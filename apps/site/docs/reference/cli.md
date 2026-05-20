@@ -91,10 +91,11 @@ The built-in runtime already exposes this curated tool catalog:
 - `browser`: `tool.browser.navigate`, `tool.browser.snapshot`, `tool.browser.click`, `tool.browser.type`, `tool.browser.scroll`, `tool.browser.back`, `tool.browser.press`, `tool.browser.images`, `tool.browser.vision`, `tool.browser.console`
 - `clarify`: `tool.clarify`
 - `cron`: `tool.cron.manage`
+- `personal_model`: `tool.personal_model.search`, `tool.conversation.search`, `tool.personal_model.update`, `tool.personal_model.questions`
 - `code_execution`: `tool.code.execute`
-- `personal_model`: `tool.personal_model.search`, `tool.personal_model.update`, `tool.personal_model.questions`
 - `messaging`: `tool.message.send`
 - `todo`: `tool.todo.manage`
+- `operator`: `tool.operator.inspect`, `tool.operator.manage`
 - `skills`: `tool.skill.list`, `tool.skill.view`, `tool.skill.manage`
 - `sub_agents`: `tool.sub_agents`
 <!-- END:GENERATED_BUILTIN_TOOL_SUMMARY -->

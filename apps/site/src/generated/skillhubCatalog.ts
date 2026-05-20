@@ -66,17 +66,17 @@ export type SkillHubCatalogData = {
 };
 
 export const skillHubCatalog: SkillHubCatalogData = {
-  "generated_at": "2026-05-15T07:57:52Z",
+  "generated_at": "2026-05-20T07:03:51Z",
   "headline": "Browse the skills that ship with Elephant Agent.",
   "summary": "Packaged Elephant Agent skills and the external source lanes the CLI can install from.",
   "builtin_posture": "Bundled skills already ship with Elephant Agent. Use `elephant skills install <skill-id>` only when you want an explicit local materialization record for one packaged skill.",
   "curated_origin_posture": "Bundled entries come from the packaged Elephant Agent catalog. External skills stay separate until the operator chooses a source and reference.",
   "operator_install_posture": "External skills stay explicit CLI actions: use `elephant skills search <query>` to browse and `elephant skills install <source:reference>` to materialize one.",
   "stats": {
-    "entry_count": 91,
+    "entry_count": 92,
     "section_count": 20,
     "external_source_count": 6,
-    "default_enabled_count": 84
+    "default_enabled_count": 85
   },
   "external_sources": [
     {
@@ -139,8 +139,62 @@ export const skillHubCatalog: SkillHubCatalogData = {
       "section_id": "runtime",
       "display_name": "Runtime",
       "summary": "Core shell, search, and scheduling guides that shape the default Elephant Agent runtime posture.",
-      "entry_count": 4,
+      "entry_count": 5,
       "entries": [
+        {
+          "skill_id": "elephant-operator",
+          "slug": "elephant-operator",
+          "display_name": "Elephant Operator",
+          "summary": "Safely inspect and operate the current Elephant Agent runtime through governed operator tools.",
+          "reference": "elephant-operator",
+          "section_id": "runtime",
+          "section_display_name": "Runtime",
+          "detail_doc_id": "skillhub/library/elephant-operator",
+          "detail_path": "/skillhub/library/elephant-operator/",
+          "source_id": "builtin",
+          "source_label": "Built In",
+          "source_kind": "elephant-builtin",
+          "storage_tier": "builtin",
+          "default_enabled": true,
+          "default_enabled_label": "Enabled by default",
+          "source_reference": "elephant-operator",
+          "install_reference": "elephant-operator",
+          "install_command": "elephant skills install elephant-operator",
+          "trust_level": "builtin",
+          "packaging_posture": "Bundled with the packaged Elephant Agent CLI as a built-in procedural skill.",
+          "install_posture": "Already ships inside the packaged Elephant Agent bundle. Use `elephant skills install elephant-operator` only when you want an explicit local materialization record.",
+          "operator_install_posture": "External skills stay explicit CLI actions: use `elephant skills search <query>` to browse and `elephant skills install <source:reference>` to materialize one.",
+          "source_detail_url": "",
+          "source_repo_url": "",
+          "aliases": [
+            "operator",
+            "runtime operator",
+            "elephant self-management",
+            "self management",
+            "runtime health"
+          ],
+          "trigger_phrases": [
+            "inspect elephant runtime",
+            "check elephant health",
+            "what model are you using",
+            "switch elephant model",
+            "restart elephant daemon"
+          ],
+          "keywords": [
+            "operator",
+            "runtime",
+            "health",
+            "provider",
+            "model",
+            "daemon",
+            "skills",
+            "tools"
+          ],
+          "platforms": [],
+          "requires_tools": [],
+          "requires_toolsets": [],
+          "required_environment_variables": []
+        },
         {
           "skill_id": "shell-execution",
           "slug": "shell-execution",
@@ -4233,6 +4287,60 @@ export const skillHubCatalog: SkillHubCatalogData = {
         "continuity",
         "personal model",
         "skills"
+      ],
+      "platforms": [],
+      "requires_tools": [],
+      "requires_toolsets": [],
+      "required_environment_variables": []
+    },
+    {
+      "skill_id": "elephant-operator",
+      "slug": "elephant-operator",
+      "display_name": "Elephant Operator",
+      "summary": "Safely inspect and operate the current Elephant Agent runtime through governed operator tools.",
+      "reference": "elephant-operator",
+      "section_id": "runtime",
+      "section_display_name": "Runtime",
+      "detail_doc_id": "skillhub/library/elephant-operator",
+      "detail_path": "/skillhub/library/elephant-operator/",
+      "source_id": "builtin",
+      "source_label": "Built In",
+      "source_kind": "elephant-builtin",
+      "storage_tier": "builtin",
+      "default_enabled": true,
+      "default_enabled_label": "Enabled by default",
+      "source_reference": "elephant-operator",
+      "install_reference": "elephant-operator",
+      "install_command": "elephant skills install elephant-operator",
+      "trust_level": "builtin",
+      "packaging_posture": "Bundled with the packaged Elephant Agent CLI as a built-in procedural skill.",
+      "install_posture": "Already ships inside the packaged Elephant Agent bundle. Use `elephant skills install elephant-operator` only when you want an explicit local materialization record.",
+      "operator_install_posture": "External skills stay explicit CLI actions: use `elephant skills search <query>` to browse and `elephant skills install <source:reference>` to materialize one.",
+      "source_detail_url": "",
+      "source_repo_url": "",
+      "aliases": [
+        "operator",
+        "runtime operator",
+        "elephant self-management",
+        "self management",
+        "runtime health"
+      ],
+      "trigger_phrases": [
+        "inspect elephant runtime",
+        "check elephant health",
+        "what model are you using",
+        "switch elephant model",
+        "restart elephant daemon"
+      ],
+      "keywords": [
+        "operator",
+        "runtime",
+        "health",
+        "provider",
+        "model",
+        "daemon",
+        "skills",
+        "tools"
       ],
       "platforms": [],
       "requires_tools": [],

@@ -37,7 +37,7 @@ from .runtime import (
     ToolRuntime,
     ToolSideEffectMetadata,
 )
-from .surfaces import BrowserVisionAnalyzer, BuiltinToolDependencies, InMemorySessionTodoStore
+from .surfaces import BrowserVisionAnalyzer, BuiltinToolDependencies, InMemorySessionTodoStore, OperatorManagementSurface
 
 __all__ = [
     "ApprovalGateway",
@@ -47,6 +47,7 @@ __all__ = [
     "BuiltinToolDependencies",
     "custom_mcp_runtime_entries",
     "InMemorySessionTodoStore",
+    "OperatorManagementSurface",
     "InMemoryToolExecutor",
     "InMemoryToolRegistry",
     "mcp_runtime_tool_id",

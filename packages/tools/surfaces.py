@@ -310,6 +310,38 @@ class SkillManagementSurface(Protocol):
         """Delete one installed or authored skill package."""
 
 
+class OperatorManagementSurface(Protocol):
+    def inspect_operator(
+        self,
+        session_id: str,
+        *,
+        scope: str = "summary",
+        probe: bool = False,
+        include: tuple[str, ...] = (),
+    ) -> Mapping[str, Any] | ExecutionResult:
+        """Inspect Elephant Agent runtime state through an operator-safe read surface."""
+
+    def plan_operator_action(
+        self,
+        session_id: str,
+        *,
+        action: str,
+        base_snapshot_id: str = "",
+        parameters: Mapping[str, Any] | None = None,
+    ) -> Mapping[str, Any] | ExecutionResult:
+        """Build a non-mutating plan for one self-management action."""
+
+    def apply_operator_action(
+        self,
+        session_id: str,
+        *,
+        plan_id: str,
+        confirmation_token: str = "",
+        parameters: Mapping[str, Any] | None = None,
+    ) -> Mapping[str, Any] | ExecutionResult:
+        """Apply a previously confirmed self-management action and verify the result."""
+
+
 @dataclass(frozen=True, slots=True)
 class TodoItem:
     item_id: str
@@ -538,6 +570,7 @@ class BuiltinToolDependencies:
     learning_result_surface: LearningResultSurface | None = None
     diary_surface: DiarySurface | None = None
     sub_agents_surface: SubAgentsSurface | None = None
+    operator_surface: OperatorManagementSurface | None = None
     process_manager: InMemoryProcessManager = field(default_factory=InMemoryProcessManager)
     todo_store: InMemorySessionTodoStore = field(default_factory=InMemorySessionTodoStore)
     additional_allowed_roots: tuple[Path, ...] = field(default_factory=default_local_allowed_roots)
