@@ -1134,60 +1134,12 @@ enum SnapshotParser {
         }
         let providerRows = models["providers"] as? [[String: Any]] ?? []
         let providerKeyRows = models["keys"] as? [[String: Any]] ?? []
-        snapshot.providerOptions = providerRows.compactMap { row in
-            let id = string(row["provider_id"] ?? row["providerId"] ?? row["id"])
-            guard !id.isEmpty else { return nil }
-            let discovered = row["discovered_state"] as? [String: Any] ?? [:]
-            let isActive = id == snapshot.providerID
-            let storedKeyCount = providerKeyRows.filter { key in
-                string(key["providerId"] ?? key["provider_id"]) == id && bool(key["hasValue"] ?? key["has_value"])
-            }.count
-            let status = string(discovered["status"] ?? row["status"])
-            let source = string(discovered["source"] ?? row["source"])
-            let defaultModel = string(
-                discovered["default_model"]
-                    ?? row["default_model"]
-                    ?? row["default_model_id"]
-                    ?? row["model_id"]
-            )
-            let discoveredModels = (discovered["models"] as? [[String: Any]])
-                ?? (row["models"] as? [[String: Any]])
-                ?? (discovered["model_options"] as? [[String: Any]])
-                ?? []
-            let activeModel = isActive ? snapshot.providerModelID : ""
-            let modelRows = providerModelOptions(
-                fromDiscoveredRows: discoveredModels,
-                providerRow: row,
-                defaultModel: activeModel.isEmpty ? defaultModel : activeModel
-            )
-            let runtimeConnected = ["authenticated", "configured", "available", "ready"].contains { status.lowercased().contains($0) }
-            return ProviderOption(
-                id: id,
-                displayName: string(row["display_name"] ?? row["displayName"] ?? row["name"], fallback: id),
-                defaultModel: activeModel.isEmpty ? defaultModel : activeModel,
-                defaultBaseURL: string(
-                    discovered["base_url"]
-                        ?? discovered["baseUrl"]
-                        ?? discovered["default_base_url"]
-                        ?? discovered["defaultBaseURL"]
-                        ?? discovered["endpoint"]
-                        ?? row["default_base_url"]
-                        ?? row["defaultBaseURL"]
-                        ?? row["base_url"]
-                        ?? row["baseUrl"]
-                        ?? row["endpoint"]
-                        ?? row["url"]
-                ),
-                status: status,
-                source: source,
-                authKind: string(row["auth_method"] ?? row["auth_type"] ?? row["auth_kind"] ?? row["authKind"] ?? row["credential_kind"] ?? row["credentialKind"]),
-                summary: string(row["catalog_summary"] ?? row["onboarding_hint"] ?? row["transport_display_name"]),
-                connected: isActive || runtimeConnected || storedKeyCount > 0,
-                active: isActive,
-                storedKeyCount: storedKeyCount,
-                models: modelRows
-            )
-        }
+        snapshot.providerOptions = providerOptions(
+            from: providerRows,
+            providerKeyRows: providerKeyRows,
+            activeProviderID: snapshot.providerID,
+            activeProviderModelID: snapshot.providerModelID
+        )
         if snapshot.providerBaseURL.isEmpty,
            let activeOption = snapshot.providerOptions.first(where: { $0.id == snapshot.providerID }),
            !activeOption.defaultBaseURL.isEmpty {
@@ -1324,6 +1276,127 @@ enum SnapshotParser {
         }
 
         return snapshot
+    }
+
+    private static func providerOptions(
+        from providerRows: [[String: Any]],
+        providerKeyRows: [[String: Any]],
+        activeProviderID: String,
+        activeProviderModelID: String
+    ) -> [ProviderOption] {
+        providerRows.compactMap { row in
+            providerOption(
+                from: row,
+                providerKeyRows: providerKeyRows,
+                activeProviderID: activeProviderID,
+                activeProviderModelID: activeProviderModelID
+            )
+        }
+    }
+
+    private static func providerOption(
+        from row: [String: Any],
+        providerKeyRows: [[String: Any]],
+        activeProviderID: String,
+        activeProviderModelID: String
+    ) -> ProviderOption? {
+        let id = string(row["provider_id"] ?? row["providerId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+
+        let discovered = row["discovered_state"] as? [String: Any] ?? [:]
+        let isActive = id == activeProviderID
+        let storedKeyCount = storedProviderKeyCount(for: id, in: providerKeyRows)
+        let status = providerStatus(discovered: discovered, row: row)
+        let defaultModel = providerDefaultModel(discovered: discovered, row: row)
+        let activeModel = isActive ? activeProviderModelID : ""
+        let resolvedModel = activeModel.isEmpty ? defaultModel : activeModel
+        let modelRows = providerModelOptions(
+            fromDiscoveredRows: providerDiscoveredModels(discovered: discovered, row: row),
+            providerRow: row,
+            defaultModel: resolvedModel
+        )
+
+        return ProviderOption(
+            id: id,
+            displayName: providerDisplayName(row: row, fallback: id),
+            defaultModel: resolvedModel,
+            defaultBaseURL: providerBaseURL(discovered: discovered, row: row),
+            status: status,
+            source: string(discovered["source"] ?? row["source"]),
+            authKind: providerAuthKind(row),
+            summary: providerSummary(row),
+            connected: isActive || providerRuntimeConnected(status) || storedKeyCount > 0,
+            active: isActive,
+            storedKeyCount: storedKeyCount,
+            models: modelRows
+        )
+    }
+
+    private static func storedProviderKeyCount(for providerID: String, in providerKeyRows: [[String: Any]]) -> Int {
+        providerKeyRows.filter { key in
+            string(key["providerId"] ?? key["provider_id"]) == providerID
+                && bool(key["hasValue"] ?? key["has_value"])
+        }.count
+    }
+
+    private static func providerStatus(discovered: [String: Any], row: [String: Any]) -> String {
+        string(discovered["status"] ?? row["status"])
+    }
+
+    private static func providerDefaultModel(discovered: [String: Any], row: [String: Any]) -> String {
+        string(
+            discovered["default_model"]
+                ?? row["default_model"]
+                ?? row["default_model_id"]
+                ?? row["model_id"]
+        )
+    }
+
+    private static func providerDiscoveredModels(discovered: [String: Any], row: [String: Any]) -> [[String: Any]] {
+        if let rows = discovered["models"] as? [[String: Any]] { return rows }
+        if let rows = row["models"] as? [[String: Any]] { return rows }
+        if let rows = discovered["model_options"] as? [[String: Any]] { return rows }
+        return []
+    }
+
+    private static func providerBaseURL(discovered: [String: Any], row: [String: Any]) -> String {
+        string(
+            discovered["base_url"]
+                ?? discovered["baseUrl"]
+                ?? discovered["default_base_url"]
+                ?? discovered["defaultBaseURL"]
+                ?? discovered["endpoint"]
+                ?? row["default_base_url"]
+                ?? row["defaultBaseURL"]
+                ?? row["base_url"]
+                ?? row["baseUrl"]
+                ?? row["endpoint"]
+                ?? row["url"]
+        )
+    }
+
+    private static func providerDisplayName(row: [String: Any], fallback: String) -> String {
+        string(row["display_name"] ?? row["displayName"] ?? row["name"], fallback: fallback)
+    }
+
+    private static func providerAuthKind(_ row: [String: Any]) -> String {
+        string(
+            row["auth_method"]
+                ?? row["auth_type"]
+                ?? row["auth_kind"]
+                ?? row["authKind"]
+                ?? row["credential_kind"]
+                ?? row["credentialKind"]
+        )
+    }
+
+    private static func providerSummary(_ row: [String: Any]) -> String {
+        string(row["catalog_summary"] ?? row["onboarding_hint"] ?? row["transport_display_name"])
+    }
+
+    private static func providerRuntimeConnected(_ status: String) -> Bool {
+        let normalized = status.lowercased()
+        return ["authenticated", "configured", "available", "ready"].contains { normalized.contains($0) }
     }
 
     static func providerModelOptions(

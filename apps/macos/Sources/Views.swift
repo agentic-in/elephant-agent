@@ -935,7 +935,7 @@ struct HomeKnowledgeOverview: View {
                     HomeLensColumn(
                         title: localizedLensTitle("identity", language: model.appLanguage),
                         symbol: "person.crop.circle",
-                        tint: ElephantTheme.accent,
+                        tint: PersonalModelMapPalette.identity,
                         facts: facts(for: "identity"),
                         language: model.appLanguage,
                         summary: localizedYouText(
@@ -956,7 +956,7 @@ struct HomeKnowledgeOverview: View {
                     HomeLensColumn(
                         title: localizedLensTitle("world", language: model.appLanguage),
                         symbol: "globe",
-                        tint: ElephantTheme.green,
+                        tint: PersonalModelMapPalette.world,
                         facts: facts(for: "world"),
                         language: model.appLanguage,
                         summary: localizedYouText(
@@ -977,7 +977,7 @@ struct HomeKnowledgeOverview: View {
                     HomeLensColumn(
                         title: localizedLensTitle("pulse", language: model.appLanguage),
                         symbol: "waveform.path.ecg",
-                        tint: ElephantTheme.orange,
+                        tint: PersonalModelMapPalette.pulse,
                         facts: facts(for: "pulse"),
                         language: model.appLanguage,
                         summary: localizedYouText(
@@ -998,7 +998,7 @@ struct HomeKnowledgeOverview: View {
                     HomeLensColumn(
                         title: localizedLensTitle("journey", language: model.appLanguage),
                         symbol: "map",
-                        tint: ElephantTheme.accent.opacity(0.82),
+                        tint: PersonalModelMapPalette.journey,
                         facts: facts(for: "journey"),
                         language: model.appLanguage,
                         summary: localizedYouText(
@@ -2669,31 +2669,42 @@ struct ToolUseStack: View {
     var isLive = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 7) {
                 Image(systemName: "wrench.and.screwdriver")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 18, height: 18)
+                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Text("Tool activity")
                     .font(.caption.weight(.semibold))
-                Text(events.count == 1 ? "Tool" : "\(events.count) tools")
-                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink.opacity(0.78))
+                Text("\(events.count)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.74), in: Capsule())
                 if isLive && hasRunningEvent {
-                    StatusDot(tint: ElephantTheme.accent)
+                    Circle()
+                        .fill(ElephantTheme.accent)
+                        .frame(width: 5, height: 5)
                     Text("live")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.accent)
                 }
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(ElephantTheme.muted)
 
             ForEach(events.suffix(6)) { event in
                 ToolUseEventRow(event: event)
             }
         }
-        .padding(8)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.76), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(7)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.66), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(ElephantTheme.line, lineWidth: 1)
+                .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
         )
     }
 
@@ -2741,37 +2752,99 @@ struct ElephantThinkingMark: View {
 
 struct ToolUseEventRow: View {
     var event: ToolUseEvent
+    @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                StatusDot(tint: statusTint)
-                Text(event.name)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.ink)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text(event.status)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(1)
-            }
+        VStack(alignment: .leading, spacing: 5) {
+            header
 
-            if !event.arguments.isEmpty {
-                Text(event.arguments)
-                    .font(.caption)
-                    .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            if !event.result.isEmpty {
-                Text(event.result)
-                    .font(.caption)
-                    .foregroundStyle(ElephantTheme.faint)
-                    .lineLimit(2)
+            if expanded && hasDetails {
+                VStack(alignment: .leading, spacing: 5) {
+                    if !argumentsText.isEmpty {
+                        ToolUseDetailBlock(title: "Input", text: argumentsText, tint: ElephantTheme.accent)
+                    }
+                    if !resultText.isEmpty {
+                        ToolUseDetailBlock(title: "Result", text: resultText, tint: ElephantTheme.green)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.38), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.42), lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.16), value: expanded)
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if hasDetails {
+            Button {
+                expanded.toggle()
+            } label: {
+                headerContent
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .help(expanded ? "Hide tool details" : "Show tool details")
+            .accessibilityLabel("\(displayName), \(statusText), \(expanded ? "expanded" : "collapsed")")
+        } else {
+            headerContent
+        }
+    }
+
+    private var headerContent: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(statusTint)
+                .frame(width: 6, height: 6)
+            Text(displayName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.ink)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+            Text(statusText)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(statusTint)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(statusTint.opacity(0.10), in: Capsule())
+            if hasDetails {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .frame(width: 10)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var displayName: String {
+        let value = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "tool" : value
+    }
+
+    private var statusText: String {
+        let value = event.status.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "done" : value
+    }
+
+    private var argumentsText: String {
+        event.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var resultText: String {
+        event.result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasDetails: Bool {
+        !argumentsText.isEmpty || !resultText.isEmpty
     }
 
     private var statusTint: Color {
@@ -2783,6 +2856,35 @@ struct ToolUseEventRow: View {
             return ElephantTheme.accent
         }
         return ElephantTheme.green
+    }
+}
+
+private struct ToolUseDetailBlock: View {
+    var title: String
+    var text: String
+    var tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.caption2.monospaced())
+                .foregroundStyle(ElephantTheme.muted)
+                .lineLimit(8)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background(tint.opacity(0.055), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(tint.opacity(0.16), lineWidth: 1)
+        )
     }
 }
 
@@ -2802,10 +2904,7 @@ struct YouView: View {
             }
 
             VStack(spacing: 14) {
-                PersonalModelSummaryPanel()
-                HomeKnowledgeOverview()
                 PersonalModelMapPanel()
-                QuestionFieldPanel()
                 VStack(alignment: .leading, spacing: 10) {
                     SectionLabel(
                         title: localizedYouText(
@@ -2823,13 +2922,30 @@ struct YouView: View {
                             de: "Wähle einen Bereich. Die ausgewählte Ablage öffnet sich darunter."
                         )
                     )
-                    LensPartitionGrid(selectedLens: $selectedLens)
+                    LensPartitionGrid(selectedLens: activeLensBinding)
                 }
-                if let selectedLens {
-                    LensFactsPager(lens: selectedLens)
-                }
+                LensFactsPager(lens: activeLens)
+                QuestionFieldPanel()
             }
         }
+    }
+
+    private var activeLens: String {
+        selectedLens ?? defaultLens
+    }
+
+    private var activeLensBinding: Binding<String?> {
+        Binding(
+            get: { selectedLens ?? defaultLens },
+            set: { selectedLens = $0 }
+        )
+    }
+
+    private var defaultLens: String {
+        ["identity", "world", "pulse", "journey"]
+            .max { left, right in
+                (model.snapshot.lensCoverage[left] ?? 0) < (model.snapshot.lensCoverage[right] ?? 0)
+            } ?? "identity"
     }
 }
 
@@ -2946,7 +3062,7 @@ struct PersonalModelMapPanel: View {
                     )
                 )
                 PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, animated: true)
-                    .frame(height: 560)
+                    .frame(height: 500)
                 if let selectedNode {
                     PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
                 }
@@ -3263,6 +3379,13 @@ struct PersonalGraphSelection: Identifiable, Equatable {
     }
 }
 
+private enum PersonalModelMapPalette {
+    static let identity = ElephantTheme.accent
+    static let world = ElephantTheme.green
+    static let pulse = Color(red: 0.90, green: 0.65, blue: 0.14)
+    static let journey = Color(red: 0.86, green: 0.24, blue: 0.24)
+}
+
 struct PersonalModelDotMapCanvas: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var userName: String
@@ -3452,28 +3575,28 @@ struct PersonalModelDotMapCanvas: View {
                 id: "identity",
                 title: "Identity",
                 description: "Stable preferences, identity anchors, names, profile links, and self-description.",
-                tint: ElephantTheme.accent,
+                tint: PersonalModelMapPalette.identity,
                 angle: -.pi * 0.22
             ),
             PersonalDotMapBranchSpec(
                 id: "world",
                 title: "World",
                 description: "People, projects, places, organizations, and external context.",
-                tint: ElephantTheme.green,
+                tint: PersonalModelMapPalette.world,
                 angle: -.pi * 0.78
             ),
             PersonalDotMapBranchSpec(
                 id: "pulse",
                 title: "Pulse",
                 description: "Current state, open loops, live needs, blockers, and questions to revisit.",
-                tint: ElephantTheme.orange,
+                tint: PersonalModelMapPalette.pulse,
                 angle: .pi * 0.22
             ),
             PersonalDotMapBranchSpec(
                 id: "journey",
                 title: "Journey",
                 description: "Long-term direction, milestones, narratives, and evolving goals.",
-                tint: ElephantTheme.accent.opacity(0.82),
+                tint: PersonalModelMapPalette.journey,
                 angle: .pi * 0.78
             )
         ]
@@ -4056,7 +4179,7 @@ struct PersonalModelMapCanvas: View {
                 id: "identity",
                 title: "Identity",
                 symbol: "person.crop.circle",
-                tint: ElephantTheme.accent,
+                tint: PersonalModelMapPalette.identity,
                 lensX: 0.65,
                 lensY: 0.28,
                 categoryX: 0.78,
@@ -4067,7 +4190,7 @@ struct PersonalModelMapCanvas: View {
                 id: "world",
                 title: "World",
                 symbol: "globe",
-                tint: ElephantTheme.green,
+                tint: PersonalModelMapPalette.world,
                 lensX: 0.35,
                 lensY: 0.28,
                 categoryX: 0.22,
@@ -4078,7 +4201,7 @@ struct PersonalModelMapCanvas: View {
                 id: "pulse",
                 title: "Pulse",
                 symbol: "waveform.path.ecg",
-                tint: ElephantTheme.orange,
+                tint: PersonalModelMapPalette.pulse,
                 lensX: 0.65,
                 lensY: 0.72,
                 categoryX: 0.78,
@@ -4089,7 +4212,7 @@ struct PersonalModelMapCanvas: View {
                 id: "journey",
                 title: "Journey",
                 symbol: "map",
-                tint: ElephantTheme.accent.opacity(0.82),
+                tint: PersonalModelMapPalette.journey,
                 lensX: 0.35,
                 lensY: 0.72,
                 categoryX: 0.22,
@@ -4483,7 +4606,7 @@ struct LensPartitionGrid: View {
                     de: "Stabile Vorlieben, Rollen und Selbstwissen."
                 ),
                 symbol: "person.crop.circle",
-                tint: ElephantTheme.accent,
+                tint: PersonalModelMapPalette.identity,
                 helpText: localizedYouText(model.appLanguage, en: "Show identity memories", zh: "查看身份记忆", fr: "Afficher les souvenirs d'identité", de: "Identitätserinnerungen anzeigen")
             ),
             LensPartition(
@@ -4498,7 +4621,7 @@ struct LensPartitionGrid: View {
                     de: "Menschen, Projekte, Orte und äußerer Kontext."
                 ),
                 symbol: "globe",
-                tint: ElephantTheme.green,
+                tint: PersonalModelMapPalette.world,
                 helpText: localizedYouText(model.appLanguage, en: "Show world memories", zh: "查看世界记忆", fr: "Afficher les souvenirs du monde", de: "Welterinnerungen anzeigen")
             ),
             LensPartition(
@@ -4513,7 +4636,7 @@ struct LensPartitionGrid: View {
                     de: "Aktueller Zustand, offene Fäden und spätere Fragen."
                 ),
                 symbol: "waveform.path.ecg",
-                tint: ElephantTheme.orange,
+                tint: PersonalModelMapPalette.pulse,
                 helpText: localizedYouText(model.appLanguage, en: "Show current-state memories", zh: "查看近况记忆", fr: "Afficher les souvenirs du présent", de: "Aktuelle Erinnerungen anzeigen")
             ),
             LensPartition(
@@ -4528,7 +4651,7 @@ struct LensPartitionGrid: View {
                     de: "Lehren, Muster und Entscheidungen über die Zeit."
                 ),
                 symbol: "map",
-                tint: ElephantTheme.accent.opacity(0.82),
+                tint: PersonalModelMapPalette.journey,
                 helpText: localizedYouText(model.appLanguage, en: "Show journey memories", zh: "查看旅程记忆", fr: "Afficher les souvenirs de parcours", de: "Wegerinnerungen anzeigen")
             )
         ]
@@ -4880,10 +5003,10 @@ struct FactDisclosureRow: View {
 
     private var tint: Color {
         let lens = fact.lens.lowercased()
-        if lens.contains("pulse") { return ElephantTheme.orange }
-        if lens.contains("world") { return ElephantTheme.green }
-        if lens.contains("journey") { return ElephantTheme.accent.opacity(0.82) }
-        return ElephantTheme.accent
+        if lens.contains("pulse") { return PersonalModelMapPalette.pulse }
+        if lens.contains("world") { return PersonalModelMapPalette.world }
+        if lens.contains("journey") { return PersonalModelMapPalette.journey }
+        return PersonalModelMapPalette.identity
     }
 }
 

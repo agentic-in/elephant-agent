@@ -522,7 +522,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var userAvatarPath = UserDefaults.standard.string(forKey: ElephantAppModel.userAvatarPathKey) ?? ""
     @Published var herdAvatarPaths: [String: String] = UserDefaults.standard.dictionary(forKey: ElephantAppModel.herdAvatarPathsKey) as? [String: String] ?? [:]
     @Published var hiddenEpisodeIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ElephantAppModel.hiddenEpisodeIDsKey) ?? [])
-    @Published var isSleepDisplayPresented = false
+    @Published var isSleepDisplayPresented = ElephantAppModel.storedAppLockPasswordRecord() != nil
     @Published var sleepDisplayReason = "manual"
     @Published var sleepUnlockPassword = ""
     @Published var sleepUnlockError = ""
@@ -1555,6 +1555,9 @@ final class ElephantAppModel: ObservableObject {
             currentAssistantTextMessageID = appendLiveAssistantMessage()
 
             streamLoop: for try await event in client.streamWakeLoop(text, episodeID: episodeID) {
+                if event.type == "stream.heartbeat" {
+                    continue
+                }
                 receivedStreamEvent = true
                 switch event.type {
                 case "assistant.delta":

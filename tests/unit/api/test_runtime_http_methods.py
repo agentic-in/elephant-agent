@@ -5,8 +5,10 @@ from io import BytesIO
 import json
 from pathlib import Path
 from threading import Lock
+import time
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 from apps.api.api_runtime_http_methods import __call__ as wsgi_call
 from apps.api.api_runtime_http_methods import _dispatch_internal, _dispatch_operator, stream_loop_events
@@ -250,6 +252,30 @@ class LoopEventStreamTest(unittest.TestCase):
         self.assertEqual(events[-1]["reply"]["text"], "stream complete")
         self.assertNotIn("inspection", events[-1]["reply"])
         self.assertNotIn("outcome", events[-1]["reply"])
+
+    def test_stream_loop_events_emits_heartbeat_while_loop_is_quiet(self) -> None:
+        model_provider = _StreamModelProvider()
+        tool_runtime = _StreamToolRuntime()
+        telemetry = APITelemetrySink()
+
+        def run_loop(_episode_id: str, **_kwargs):
+            time.sleep(0.03)
+            return _LoopResult()
+
+        app = SimpleNamespace(
+            model_provider=model_provider,
+            tool_runtime=tool_runtime,
+            telemetry=telemetry,
+            run_loop=run_loop,
+            _loop_stream_lock=Lock(),
+        )
+
+        with mock.patch("apps.api.api_runtime_http_methods._STREAM_KEEPALIVE_SECONDS", 0.01):
+            events = list(stream_loop_events(app, "session-stream", prompt="hello"))
+
+        event_types = [event["type"] for event in events]
+        self.assertIn("stream.heartbeat", event_types)
+        self.assertEqual(events[-1]["type"], "loop.completed")
 
     def test_wsgi_call_streams_sse_for_loop_endpoint(self) -> None:
         app = SimpleNamespace()

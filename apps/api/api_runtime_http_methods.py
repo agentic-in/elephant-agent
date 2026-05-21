@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import replace
 import json
-from queue import Queue
+from queue import Empty, Queue
 import re
 import shutil
 from threading import Lock, Thread
@@ -42,6 +42,8 @@ from .api_runtime_http_dispatch_helpers import (
     _cron_job_record,
     _read_wsgi_body,
 )
+
+_STREAM_KEEPALIVE_SECONDS = 15.0
 
 def run_loop(
     self,
@@ -166,21 +168,22 @@ def stream_loop_events(
     sequence_lock = Lock()
     stream_sequence = 0
 
-    def enqueue(event: Mapping[str, Any]) -> None:
+    def envelope(event: Mapping[str, Any]) -> dict[str, Any]:
         nonlocal stream_sequence
         with sequence_lock:
             stream_sequence += 1
             sequence = stream_sequence
-        event_queue.put(
-            _jsonable(
-                {
-                    "episode_id": episode_id,
-                    "stream_sequence": sequence,
-                    "stream_emitted_at": _now(),
-                    **dict(event),
-                }
-            )
+        return _jsonable(
+            {
+                "episode_id": episode_id,
+                "stream_sequence": sequence,
+                "stream_emitted_at": _now(),
+                **dict(event),
+            }
         )
+
+    def enqueue(event: Mapping[str, Any]) -> None:
+        event_queue.put(envelope(event))
 
     def stream_observer(delta: str, **metadata: Any) -> None:
         stream_session_id = str(metadata.get("session_id") or "")
@@ -253,7 +256,11 @@ def stream_loop_events(
     Thread(target=worker, daemon=True).start()
 
     while True:
-        event = event_queue.get()
+        try:
+            event = event_queue.get(timeout=_STREAM_KEEPALIVE_SECONDS)
+        except Empty:
+            yield envelope({"type": "stream.heartbeat"})
+            continue
         if event is sentinel:
             break
         yield event  # type: ignore[misc]
