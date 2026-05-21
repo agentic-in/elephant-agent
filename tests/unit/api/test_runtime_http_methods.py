@@ -179,6 +179,7 @@ class APIContextCompressionTest(unittest.TestCase):
             self.assertTrue(
                 any(
                     event.get("event_type") == "kernel.stage"
+                    and event.get("episode_id") == episode_id
                     and (event.get("payload") or {}).get("stage") == "context-compact"
                     and "reason=usage"
                     in str((event.get("payload") or {}).get("detail") or "")

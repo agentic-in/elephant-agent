@@ -69,6 +69,7 @@ def compact_context_after_usage(app: Any, episode_id: str, outcome: Any) -> Any:
             {
                 "event_id": f"telemetry:{episode_id}:context-compact:{uuid4().hex}",
                 "event_type": "kernel.stage",
+                "episode_id": episode_id,
                 "session_id": episode_id,
                 "source": "api",
                 "payload": {
