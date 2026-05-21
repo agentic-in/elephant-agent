@@ -79,6 +79,7 @@ from .api_runtime_support import (
     APIEpisodeTransitionResult,
     APILoopRecord,
     APILoopResult,
+    GatewayRuntimeBridge,
 )
 from . import api_runtime_provider_methods as _provider_methods
 from . import api_runtime_surface_methods as _surface_methods
@@ -124,6 +125,7 @@ def _steady_embedding_runtime(embedding_service: Any) -> None:
 class ElephantAPIApp:
     def __init__(self, config: APIAppConfig) -> None:
         self.config = config
+        self.gateway_runtime_bridge = config.gateway_runtime_bridge
         self.repository = RuntimeStorageRepository(config.database_path)
         self.repository.bootstrap()
         runtime_state_dir = self.repository.database_path.parent
@@ -381,6 +383,7 @@ def create_app(
     install_root: str | Path | None = None,
     instruction_refs: tuple[str, ...] = ("apps/api",),
     total_tokens: int = 2048,
+    gateway_runtime_bridge: GatewayRuntimeBridge | None = None,
 ) -> ElephantAPIApp:
     return ElephantAPIApp(
         APIAppConfig(
@@ -388,6 +391,7 @@ def create_app(
             install_root=Path(install_root) if install_root is not None else None,
             instruction_refs=instruction_refs,
             total_tokens=total_tokens,
+            gateway_runtime_bridge=gateway_runtime_bridge,
         )
     )
 

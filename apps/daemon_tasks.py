@@ -14,6 +14,12 @@ from packages.storage import RuntimeStorageRepository
 logger = logging.getLogger("elephant.daemon")
 
 
+def _format_idle_seconds(idle_seconds: float | None) -> str:
+    if idle_seconds is None:
+        return "unbounded"
+    return f"{idle_seconds:g}s"
+
+
 # ── Cron Scheduler ─────────────────────────────────────────────
 
 async def cron_scheduler_loop(
@@ -184,7 +190,7 @@ async def learning_worker_loop(
     worker_id = f"daemon-learning-worker:{os.getpid()}:{uuid4().hex[:8]}"
     started_at = datetime.now(UTC).isoformat()
 
-    logger.info("learning worker started (idle_seconds=%gs)", idle_seconds)
+    logger.info("learning worker started (idle_seconds=%s)", _format_idle_seconds(idle_seconds))
 
     _write_learning_worker_record(
         state_dir,
@@ -200,7 +206,7 @@ async def learning_worker_loop(
             job = repository.claim_learning_job(worker_id=worker_id)
             if job is None:
                 if idle_seconds is not None and time.monotonic() - last_activity >= max(1.0, idle_seconds):
-                    logger.info("learning worker idle timeout (%gs, %d job(s) completed), exiting", idle_seconds, jobs_completed)
+                    logger.info("learning worker idle timeout (%s, %d job(s) completed), exiting", _format_idle_seconds(idle_seconds), jobs_completed)
                     break
                 _write_learning_worker_record(
                     state_dir, pid=os.getpid(), status="idle", started_at=started_at,

@@ -228,7 +228,10 @@ class ServiceDaemon:
             from apps.api import create_app
 
             database_path = self.cli_state_dir / "elephant.sqlite3"
-            self._dashboard_api_app = create_app(database_path=database_path)
+            self._dashboard_api_app = create_app(
+                database_path=database_path,
+                gateway_runtime_bridge=self,
+            )
             self._service_statuses["dashboard_api"] = DaemonServiceStatus(
                 name="dashboard_api", status="running", started_at=datetime.now(UTC).isoformat()
             )
@@ -534,6 +537,52 @@ class ServiceDaemon:
             return
         for path in service.http_paths:
             register_event_route(self._http_app, path, service, key)
+
+    def _gateway_service_keys(self) -> tuple[str, ...]:
+        app = self._gateway_app
+        registry = getattr(app, "plugin_registry", None)
+        if registry is not None and hasattr(registry, "service_keys"):
+            try:
+                return tuple(str(key) for key in registry.service_keys())
+            except Exception:
+                pass
+        internal_keys = {"gateway_app", "dashboard_api", "http", "cron", "supervisor", "learning_worker"}
+        inferred = set(self._daemon_services) | set(self._http_services)
+        inferred.update(key for key in self._service_statuses if key not in internal_keys)
+        return tuple(sorted(str(key) for key in inferred))
+
+    def gateway_runtime_snapshot(self) -> dict[str, Any]:
+        generated_at = datetime.now(UTC).isoformat()
+        services: dict[str, dict[str, Any]] = {}
+        for key in self._gateway_service_keys():
+            status = self._service_statuses.get(key)
+            status_text = status.status if status is not None else ("stopped" if self._shutdown.is_set() else "idle")
+            row: dict[str, Any] = {
+                "service": key,
+                "status": status_text,
+                "startedAt": status.started_at if status is not None else None,
+                "lastError": status.last_error if status is not None else None,
+                "runtimeSource": "daemon",
+            }
+            service = self._daemon_services.get(key) or self._http_services.get(key)
+            if service is not None and hasattr(service, "describe") and callable(service.describe):
+                try:
+                    details = service.describe()
+                    if isinstance(details, dict):
+                        row["details"] = details
+                except Exception as exc:
+                    if not row.get("lastError"):
+                        row["lastError"] = str(exc)
+            services[key] = row
+        return {
+            "daemon": {
+                "status": "stopping" if self._shutdown.is_set() else "running",
+                "pid": _pid(),
+                "startedAt": self._started_at,
+                "generatedAt": generated_at,
+            },
+            "services": services,
+        }
 
     # ── Status ─────────────────────────────────────────────────
 

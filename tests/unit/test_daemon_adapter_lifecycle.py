@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -316,6 +317,36 @@ class TestDaemonStopAdapter:
 
 
 # ── DaemonService protocol test ──────────────────────────────────
+
+
+class TestDaemonGatewayRuntimeSnapshot(unittest.TestCase):
+    """Test daemon-provided gateway runtime snapshots for dashboard bridge consumers."""
+
+    def test_snapshot_only_exposes_gateway_services(self) -> None:
+        from apps.daemon import ServiceDaemon, DaemonServiceStatus
+
+        daemon = ServiceDaemon(
+            state_dir=Path("/tmp/test-daemon"),
+            cli_state_dir=Path("/tmp/test-cli"),
+        )
+        service = MagicMock()
+        service.describe.return_value = {"transport": "ilink", "account_id": "wx-test"}
+        daemon._daemon_services["weixin"] = service
+        daemon._service_statuses["weixin"] = DaemonServiceStatus(
+            name="weixin",
+            status="running",
+            started_at="2026-05-21T12:00:00+00:00",
+        )
+        daemon._service_statuses["http"] = DaemonServiceStatus(name="http", status="running")
+
+        snapshot = daemon.gateway_runtime_snapshot()
+
+        assert snapshot["daemon"]["status"] == "running"
+        assert "weixin" in snapshot["services"]
+        assert "http" not in snapshot["services"]
+        assert snapshot["services"]["weixin"]["status"] == "running"
+        assert snapshot["services"]["weixin"]["runtimeSource"] == "daemon"
+        assert snapshot["services"]["weixin"]["details"] == {"transport": "ilink", "account_id": "wx-test"}
 
 
 class TestDaemonServiceProtocol:

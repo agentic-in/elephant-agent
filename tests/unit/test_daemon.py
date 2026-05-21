@@ -406,6 +406,13 @@ class TestDaemonTasksImports:
 class TestLearningWorkerLoop:
     """Tests for daemon learning worker event-loop behavior."""
 
+    def test_format_idle_seconds_handles_none(self) -> None:
+        from apps.daemon_tasks import _format_idle_seconds
+
+        assert _format_idle_seconds(None) == "unbounded"
+        assert _format_idle_seconds(20.0) == "20s"
+        assert _format_idle_seconds(0.5) == "0.5s"
+
     def test_learning_worker_does_not_idle_exit_by_default(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from apps import daemon_tasks
 
