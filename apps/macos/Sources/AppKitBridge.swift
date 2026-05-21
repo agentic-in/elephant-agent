@@ -11,41 +11,58 @@ extension Notification.Name {
 }
 
 struct WindowConfigurator: NSViewRepresentable {
+    var language: AppLanguage
+    private static var configuredWindowIDs = Set<ObjectIdentifier>()
+    private static var titlebarLanguageByWindowID: [ObjectIdentifier: AppLanguage] = [:]
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            Self.configure(window)
+            Self.configure(window, language: language)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                Self.configure(window)
+                Self.configure(window, language: language)
             }
         }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
-
-    private static func configure(_ window: NSWindow) {
-        window.title = "Elephant Agent"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
-        window.toolbar = nil
-        window.toolbar?.isVisible = false
-        if #available(macOS 11.0, *) {
-            window.titlebarSeparatorStyle = .none
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            Self.configure(window, language: language)
         }
-        installTitlebarActions(on: window)
-        window.isMovableByWindowBackground = true
-        window.backgroundColor = .windowBackgroundColor
-        window.appearance = NSAppearance(named: .aqua)
-        window.minSize = NSSize(width: 980, height: 700)
-        window.setFrameAutosaveName("ElephantAgentMainWindow")
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
-    private static func installTitlebarActions(on window: NSWindow) {
+    private static func configure(_ window: NSWindow, language: AppLanguage) {
+        let windowID = ObjectIdentifier(window)
+        if !configuredWindowIDs.contains(windowID) {
+            window.title = "Elephant Agent"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.styleMask.insert(.fullSizeContentView)
+            window.toolbar = nil
+            window.toolbar?.isVisible = false
+            if #available(macOS 11.0, *) {
+                window.titlebarSeparatorStyle = .none
+            }
+            window.isMovableByWindowBackground = true
+            window.backgroundColor = .windowBackgroundColor
+            window.appearance = NSAppearance(named: .aqua)
+            window.minSize = NSSize(width: 980, height: 700)
+            window.setFrameAutosaveName("ElephantAgentMainWindow")
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            configuredWindowIDs.insert(windowID)
+        }
+
+        if titlebarLanguageByWindowID[windowID] != language {
+            installTitlebarActions(on: window, language: language)
+            titlebarLanguageByWindowID[windowID] = language
+        }
+    }
+
+    private static func installTitlebarActions(on window: NSWindow, language: AppLanguage) {
         let accessoryID = NSUserInterfaceItemIdentifier("ElephantTitlebarActions")
         window.titlebarAccessoryViewControllers
             .filter { $0.view.identifier == accessoryID }
@@ -62,25 +79,25 @@ struct WindowConfigurator: NSViewRepresentable {
         stack.addArrangedSubview(TitlebarIconButton(
             symbolName: "sidebar.left",
             fallbackSymbolName: "rectangle.split.1x2",
-            help: "Show or Hide Sidebar"
+            help: AppText.toggleSidebar.text(language)
         ) {
             NotificationCenter.default.post(name: .elephantToggleSidebar, object: nil)
         })
         stack.addArrangedSubview(TitlebarIconButton(
             symbolName: "plus.bubble",
             fallbackSymbolName: "bubble.left",
-            help: "New Chat"
+            help: AppText.newChat.text(language)
         ) {
             NotificationCenter.default.post(name: .elephantNewChat, object: nil)
         })
         stack.addArrangedSubview(TitlebarIconButton(
             symbolName: "moon.zzz",
             fallbackSymbolName: "moon",
-            help: "Sleep Display"
+            help: AppText.sleepDisplay.text(language)
         ) {
             NotificationCenter.default.post(name: .elephantEnterSleepDisplay, object: nil)
         })
-        stack.addArrangedSubview(TitlebarIdentityMenuButton())
+        stack.addArrangedSubview(TitlebarIdentityMenuButton(language: language))
 
         let wrapper = NSView(frame: NSRect(x: 0, y: 0, width: 244, height: 26))
         wrapper.identifier = accessoryID
@@ -150,23 +167,23 @@ private final class TitlebarIconButton: NSButton {
 }
 
 private final class TitlebarIdentityMenuButton: NSPopUpButton {
-    init() {
+    init(language: AppLanguage) {
         super.init(frame: NSRect(x: 0, y: 0, width: 104, height: 26), pullsDown: true)
         isBordered = false
         controlSize = .small
         font = .systemFont(ofSize: 13, weight: .semibold)
         imagePosition = .imageLeading
         contentTintColor = .labelColor
-        toolTip = "Elephant menu"
+        toolTip = AppText.elephantMenu.text(language)
         addTitleItem()
         menu?.addItem(.separator())
-        addMenuItem(title: "Home", section: .home)
-        addMenuItem(title: "Chat", section: .wake)
-        addMenuItem(title: "Tools", section: .tools)
-        addMenuItem(title: "Herd", section: .herd)
-        addMenuItem(title: "Provider", section: .provider)
+        addMenuItem(title: AppSection.home.title(language: language), section: .home)
+        addMenuItem(title: AppSection.wake.title(language: language), section: .wake)
+        addMenuItem(title: AppSection.tools.title(language: language), section: .tools)
+        addMenuItem(title: AppSection.herd.title(language: language), section: .herd)
+        addMenuItem(title: AppSection.provider.title(language: language), section: .provider)
         menu?.addItem(.separator())
-        addMenuItem(title: "Settings", section: .settings)
+        addMenuItem(title: AppSection.settings.title(language: language), section: .settings)
         target = self
         action = #selector(handleSelection)
         translatesAutoresizingMaskIntoConstraints = false
@@ -205,11 +222,11 @@ private final class TitlebarIdentityMenuButton: NSPopUpButton {
 }
 
 enum OpenPanelBridge {
-    static func pickAvatarImageURL() -> URL? {
+    static func pickAvatarImageURL(language: AppLanguage) -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Choose your photo"
-        panel.message = "Pick a local image for your Elephant Agent profile."
-        panel.prompt = "Use Photo"
+        panel.title = AppText.imagePickerTitle.text(language)
+        panel.message = AppText.imagePickerMessage.text(language)
+        panel.prompt = AppText.imagePickerPrompt.text(language)
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false

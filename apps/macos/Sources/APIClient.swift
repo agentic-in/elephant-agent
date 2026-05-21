@@ -2011,6 +2011,7 @@ enum SnapshotParser {
         ("symbolic_shorthand", "Symbol"),
         ("relationship_mode", "Relationship mode"),
         ("communication_preference", "Communication"),
+        ("first_language", "Speaks"),
         ("locale", "Speaks"),
         ("timezone", "Timezone"),
         ("school", "School"),

@@ -181,9 +181,9 @@ struct StatusDot: View {
 struct PageHeader: View {
     var title: String
     var subtitle: String
-    var actionTitle: String?
-    var actionSymbol: String?
-    var action: (() -> Void)?
+    var actionTitle: String? = nil
+    var actionSymbol: String? = nil
+    var action: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 16) {

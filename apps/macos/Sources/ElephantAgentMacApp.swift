@@ -16,13 +16,15 @@ struct ElephantAgentMacApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
-                .frame(minWidth: 980, minHeight: 700)
-                .background(WindowConfigurator())
+                .frame(minWidth: 980, idealWidth: 1420, maxWidth: .infinity, minHeight: 700, idealHeight: 900, maxHeight: .infinity)
+                .background(WindowConfigurator(language: model.appLanguage))
                 .preferredColorScheme(.light)
                 .task {
                     await model.launch()
                 }
         }
+        .defaultSize(width: 1420, height: 900)
+        .windowResizability(.contentMinSize)
         .commands {
             ElephantCommands(model: model)
         }
@@ -72,64 +74,64 @@ struct ElephantCommands: Commands {
         SidebarCommands()
 
         CommandGroup(after: .newItem) {
-            Button("New Chat") {
+            Button(model.text(.newChat)) {
                 model.startNewChat()
             }
             .keyboardShortcut("n")
 
-            Button("Run Reflect") {
+            Button(model.text(.reflect)) {
                 Task { await model.runReflect(trigger: "manual") }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
         }
 
-        CommandMenu("Navigate") {
+        CommandMenu(Text(model.text(.menuNavigate))) {
             ForEach(AppSection.primary) { section in
                 if let shortcut = section.shortcut {
-                    Button(section.title) {
+                    Button(section.title(language: model.appLanguage)) {
                         model.selectedSection = section
                     }
                     .keyboardShortcut(shortcut, modifiers: [.command])
                 } else {
-                    Button(section.title) {
+                    Button(section.title(language: model.appLanguage)) {
                         model.selectedSection = section
                     }
                 }
             }
             Divider()
-            Button(AppSection.provider.title) {
+            Button(AppSection.provider.title(language: model.appLanguage)) {
                 model.selectedSection = .provider
             }
-            Button(AppSection.settings.title) {
+            Button(AppSection.settings.title(language: model.appLanguage)) {
                 model.selectedSection = .settings
             }
             .keyboardShortcut(",", modifiers: [.command])
         }
 
-        CommandMenu("Actions") {
-            Button("Refresh Dashboard") {
+        CommandMenu(Text(model.text(.menuActions))) {
+            Button(model.text(.refresh)) {
                 Task { try? await model.refreshDashboard() }
             }
             .keyboardShortcut("r")
 
-            Button("Run Reflect") {
+            Button(model.text(.reflect)) {
                 Task { await model.runReflect(trigger: "manual") }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
-            Button("Sleep Display") {
+            Button(model.text(.sleepDisplay)) {
                 model.beginSleepDisplay(reason: "manual")
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
 
-            Button("Reveal Database") {
+            Button(model.text(.revealDatabase)) {
                 model.revealDatabase()
             }
             .disabled(model.snapshot.databasePath.isEmpty)
 
             Divider()
 
-            Button("Restart Local Core") {
+            Button(model.text(.restartCore)) {
                 Task { await model.restartCore() }
             }
         }

@@ -254,6 +254,13 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
 <dict>
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>zh-Hans</string>
+    <string>fr</string>
+    <string>de</string>
+  </array>
   <key>CFBundleExecutable</key>
   <string>${APP_NAME}</string>
   <key>CFBundleIconFile</key>

@@ -73,76 +73,131 @@ struct AppActivityMonitor: NSViewRepresentable {
 struct SleepDisplayView: View {
     @EnvironmentObject private var model: ElephantAppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var passwordFocused: Bool
 
     var body: some View {
         GeometryReader { proxy in
             let shortest = min(proxy.size.width, proxy.size.height)
-            let mascotSize = min(520, max(330, shortest * 0.48))
+            let clockSize = min(92, max(64, shortest * 0.082))
+            let avatarSize = min(132, max(94, shortest * 0.13))
 
             ZStack {
                 AppBackground()
-                    .blur(radius: reduceMotion ? 0 : 14)
-                    .saturation(1.06)
-                    .opacity(0.92)
+                    .blur(radius: reduceMotion ? 0 : 20)
+                    .saturation(1.14)
+                    .brightness(-0.05)
+                    .opacity(0.96)
+
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.18),
+                        ElephantTheme.accent.opacity(0.16),
+                        Color.black.opacity(0.22)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
                 Rectangle()
-                    .fill(.ultraThinMaterial)
+                    .fill(.thinMaterial)
                     .overlay(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.30),
-                                ElephantTheme.accent.opacity(0.055),
-                                ElephantTheme.mint.opacity(0.070),
-                                Color.white.opacity(0.24)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+                        Color.white.opacity(0.10)
                     )
                     .ignoresSafeArea()
 
                 SleepAmbientGlass(paused: reduceMotion)
-                    .opacity(0.90)
+                    .opacity(0.74)
                     .allowsHitTesting(false)
 
-                VStack(spacing: 18) {
-                    ElephantMascotView(
-                        mood: .sleeping,
-                        size: mascotSize,
-                        showsMemoryField: true,
-                        animated: true,
-                        energy: 1.25
-                    )
-                    .accessibilityHidden(true)
-                    .padding(.bottom, -12)
-
-                    VStack(spacing: 8) {
-                        Text("Elephant Agent")
-                            .font(.system(size: min(54, max(38, shortest * 0.052)), weight: .semibold, design: .rounded))
-                            .foregroundStyle(ElephantTheme.ink)
-                        Text("Quietly remembering. Ready when you return.")
-                            .font(.system(size: min(20, max(15, shortest * 0.020)), weight: .medium))
-                            .foregroundStyle(ElephantTheme.muted)
+                VStack(spacing: 0) {
+                    VStack(spacing: 4) {
+                        Text(dateLine)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.80))
+                        Text(timeLine)
+                            .font(.system(size: clockSize, weight: .thin, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.86))
                     }
-                    .padding(.horizontal, 34)
-                    .padding(.vertical, 22)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .stroke(.white.opacity(0.50), lineWidth: 1)
-                    )
-                    .shadow(color: ElephantTheme.accent.opacity(0.08), radius: 26, y: 12)
+                    .padding(.top, max(42, proxy.size.height * 0.07))
+
+                    Spacer()
+
+                    VStack(spacing: 13) {
+                        UserAvatarImage(size: avatarSize, name: model.userDisplayName, url: model.userAvatarURL)
+                            .shadow(color: .black.opacity(0.20), radius: 18, y: 8)
+
+                        Text(model.userDisplayName)
+                            .font(.system(size: 22, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+
+                        if model.hasAppLockPassword {
+                            HStack(spacing: 8) {
+                                SecureField(model.text(.sleepPasswordPlaceholder), text: $model.sleepUnlockPassword)
+                                    .textFieldStyle(.plain)
+                                    .focused($passwordFocused)
+                                    .onSubmit {
+                                        model.verifySleepUnlock()
+                                    }
+
+                                Button {
+                                    model.verifySleepUnlock()
+                                } label: {
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .font(.system(size: 22, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.92))
+                                }
+                                .buttonStyle(.plain)
+                                .help(model.text(.sleepUnlock))
+                            }
+                            .padding(.horizontal, 13)
+                            .frame(width: min(360, proxy.size.width * 0.42), height: 42)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(Capsule().stroke(.white.opacity(0.26), lineWidth: 1))
+
+                            Text(model.sleepUnlockError.isEmpty ? model.text(.sleepLockSubtitle) : model.sleepUnlockError)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(model.sleepUnlockError.isEmpty ? .white.opacity(0.66) : ElephantTheme.ember)
+                        } else {
+                            Button {
+                                model.dismissSleepDisplay()
+                            } label: {
+                                Text(model.text(.sleepNoPassword))
+                                    .font(.callout.weight(.semibold))
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 9)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .tint(ElephantTheme.accent)
+                        }
+                    }
+                    .padding(.bottom, max(46, proxy.size.height * 0.10))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(40)
+                .padding(.horizontal, 34)
             }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                model.dismissSleepDisplay()
+            .onAppear {
+                passwordFocused = true
             }
         }
         .ignoresSafeArea()
         .accessibilityLabel("Elephant Agent sleep display")
+    }
+
+    private var timeLine: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: Date())
+    }
+
+    private var dateLine: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
+        formatter.setLocalizedDateFormatFromTemplate("MMMMdEEEE")
+        return formatter.string(from: Date())
     }
 }
 
