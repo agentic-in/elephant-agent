@@ -15,6 +15,11 @@ from types import SimpleNamespace
 
 import typer
 
+from packages.cron import (
+    ensure_dream_cron as _ensure_dream_cron_row,
+    ensure_nightly_learning_crons as _ensure_nightly_learning_cron_rows,
+    remove_former_diary_crons as _remove_former_diary_cron_rows,
+)
 from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity, render_user_profile_text
 
 from .runtime import CliRuntime
@@ -2503,40 +2508,17 @@ def _run_learn(runtime: CliRuntime, args: argparse.Namespace) -> int:
 
 
 def _remove_former_diary_crons(runtime: CliRuntime) -> None:
-    """Remove the former built-in diary cron; diary now runs inside Dream."""
-    for job in runtime.cron_runtime.list_jobs():
-        if job.action_kind != "learning":
-            continue
-        if job.payload.get("trigger") != "diary":
-            continue
-        name = str(getattr(job, "name", "") or "").strip().lower()
-        summary = str(job.payload.get("summary") or "").strip().lower()
-        if name == "daily diary" or summary == "daily diary entry for yesterday":
-            runtime.cron_runtime.remove_job(job.job_id)
+    _remove_former_diary_cron_rows(runtime.cron_runtime)
 
 
 def _ensure_dream_cron(runtime: CliRuntime) -> None:
-    """Create the nightly dream consolidation cron job if it doesn't already exist."""
-    _remove_former_diary_crons(runtime)
-    existing = runtime.cron_runtime.list_jobs()
-    for job in existing:
-        if job.payload.get("trigger") == "dream" and job.action_kind == "learning":
-            return
-    runtime.cron_runtime.create_job(
-        name="Nightly dream",
-        schedule_text="every day at 1am",
-        payload={
-            "action_kind": "learning",
-            "trigger": "dream",
-            "summary": "nightly Personal Model, question, skill, and diary maintenance",
-            "metadata": {"features": "dream,questions,skills,diary"},
-        },
-    )
+    """Create the nightly Dream consolidation cron job if it does not exist."""
+    _ensure_dream_cron_row(runtime.cron_runtime)
 
 
 def _ensure_nightly_learning_crons(runtime: CliRuntime) -> None:
     """Create the single built-in nightly learning cron job."""
-    _ensure_dream_cron(runtime)
+    _ensure_nightly_learning_cron_rows(runtime.cron_runtime)
 
 
 def _run_grow(runtime: CliRuntime, args: argparse.Namespace) -> int:

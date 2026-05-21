@@ -233,6 +233,11 @@ if [[ -d "${SITE_RESOURCES_DIR}" ]]; then
   copy_if_exists "${SITE_RESOURCES_DIR}/paper-2.png" "${RESOURCES}/Resources/paper-2.png"
 fi
 
+MACOS_RESOURCES_DIR="${APP_DIR}/Sources/Resources"
+if [[ -d "${MACOS_RESOURCES_DIR}" ]]; then
+  ditto "${MACOS_RESOURCES_DIR}" "${RESOURCES}"
+fi
+
 ICON_SOURCE="${RESOURCES}/Brand/favicon.png"
 ICONSET="${RESOURCES}/AppIcon.iconset"
 if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1 && [[ -f "${ICON_SOURCE}" ]]; then
@@ -254,6 +259,13 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
 <dict>
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>zh-Hans</string>
+    <string>fr</string>
+    <string>de</string>
+  </array>
   <key>CFBundleExecutable</key>
   <string>${APP_NAME}</string>
   <key>CFBundleIconFile</key>

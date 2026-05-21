@@ -19,7 +19,8 @@ struct RootView: View {
                 DetailView(section: model.selectedSection)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityHidden(model.isSleepDisplayPresented)
+            .allowsHitTesting(!model.showingOnboarding)
+            .accessibilityHidden(model.isSleepDisplayPresented || model.showingOnboarding)
             .animation(.easeInOut(duration: 0.18), value: sidebarVisible)
 
             if model.isSleepDisplayPresented {
@@ -42,6 +43,7 @@ struct RootView: View {
         .background(AppActivityMonitor {
             model.registerUserActivity()
         })
+        .environment(\.locale, Locale(identifier: model.appLanguage.localeIdentifier))
         .animation(.spring(response: 0.42, dampingFraction: 0.86), value: model.isSleepDisplayPresented)
         .animation(.easeInOut(duration: 0.24), value: model.showingOnboarding)
         .onChange(of: model.snapshot.hasElephant) { hasElephant in
@@ -73,7 +75,6 @@ struct RootView: View {
 struct SidebarView: View {
     @EnvironmentObject private var model: ElephantAppModel
     private let glassWidth: CGFloat = 76
-    private let brandHitSize: CGFloat = 52
     private let iconHitSize: CGFloat = 48
     private let navSpacing: CGFloat = 8
     private let glassVerticalPadding: CGFloat = 14
@@ -97,12 +98,14 @@ struct SidebarView: View {
                         .help(statusLine)
                     SidebarIconButton(
                         section: .provider,
+                        language: model.appLanguage,
                         selected: model.selectedSection == .provider
                     ) {
                         model.selectedSection = .provider
                     }
                     SidebarIconButton(
                         section: .settings,
+                        language: model.appLanguage,
                         selected: model.selectedSection == .settings
                     ) {
                         model.selectedSection = .settings
@@ -119,21 +122,11 @@ struct SidebarView: View {
     private var navigationContentHeight: CGFloat {
         let buttonCount = CGFloat(AppSection.primary.count)
         let buttonsHeight = buttonCount * iconHitSize + max(0, buttonCount - 1) * navSpacing
-        return glassVerticalPadding * 2 + brandHitSize + 12 + 4 + buttonsHeight
+        return glassVerticalPadding * 2 + buttonsHeight + 4
     }
 
     private func navigationGlass(height: CGFloat, scrolls: Bool) -> some View {
-        VStack(spacing: 12) {
-            Button {
-                model.selectedSection = .home
-            } label: {
-                BrandMark(size: 34)
-                    .frame(width: brandHitSize, height: brandHitSize)
-                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .buttonStyle(PressablePlainButtonStyle())
-            .help("Home")
-
+        VStack(spacing: navSpacing) {
             if scrolls {
                 ScrollView(.vertical, showsIndicators: false) {
                     navigationButtons
@@ -158,6 +151,7 @@ struct SidebarView: View {
             ForEach(AppSection.primary) { section in
                 SidebarIconButton(
                     section: section,
+                    language: model.appLanguage,
                     selected: model.selectedSection == section
                 ) {
                     model.selectedSection = section
@@ -242,6 +236,7 @@ struct TitlebarSidebarButton: View {
 
 struct SidebarIconButton: View {
     var section: AppSection
+    var language: AppLanguage
     var selected: Bool
     var action: () -> Void
     @State private var hovering = false
@@ -264,8 +259,8 @@ struct SidebarIconButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(PressablePlainButtonStyle())
-        .help(section.title)
-        .accessibilityLabel(section.title)
+        .help(section.title(language: language))
+        .accessibilityLabel(section.title(language: language))
         .onHover { hovering = $0 }
     }
 
@@ -349,39 +344,37 @@ struct HomeView: View {
             PageHeader(
                 title: model.userDisplayName,
                 subtitle: homeSubtitle,
-                actionTitle: "Chat",
+                actionTitle: AppSection.wake.title(language: model.appLanguage),
                 actionSymbol: "bubble.left.and.bubble.right"
             ) {
                 model.selectedSection = .wake
                 model.focusComposer()
             }
 
-            CommandCenterPanel(phaseTint: phaseTint, connectionText: connectionText)
+            HomeFirstLookPanel(phaseTint: phaseTint, connectionText: connectionText)
 
             HomeReadinessStrip()
             HomeContinuityPanel()
-            HomeKnowledgeOverview()
-            PersonalModelMapPanel()
         }
     }
 
     private var homeSubtitle: String {
         if model.snapshot.hasElephant {
-            return "Your local Personal Model with visible memory, questions, and evidence."
+            return model.text(.homeReadySubtitle)
         }
-        return "Create a local Personal Model, then start with a focused conversation."
+        return model.text(.homeSetupSubtitle)
     }
 
     private var connectionText: String {
         switch model.corePhase {
         case .ready:
             if model.snapshot.readyForInteraction {
-                return model.snapshot.hasElephant ? "Connected to Elephant" : "Ready for first chat"
+                return model.snapshot.hasElephant ? model.text(.connectedToElephant) : model.text(.readyForFirstChat)
             }
-            return "Warming model"
-        case .starting: return "Starting Elephant"
-        case .failed: return "Needs attention"
-        case .idle: return "Idle"
+            return model.text(.warmingModel)
+        case .starting: return model.text(.startingElephant)
+        case .failed: return model.text(.needsAttention)
+        case .idle: return model.text(.idle)
         }
     }
 
@@ -391,6 +384,124 @@ struct HomeView: View {
         case .starting: return ElephantTheme.accent
         case .failed: return ElephantTheme.orange
         case .idle: return ElephantTheme.faint
+        }
+    }
+}
+
+struct HomeFirstLookPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var phaseTint: Color
+    var connectionText: String
+    @State private var selectedNode: PersonalGraphSelection?
+
+    var body: some View {
+        NativePanel {
+            HStack(alignment: .top, spacing: 22) {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .center, spacing: 14) {
+                        Button {
+                            model.pickUserAvatar()
+                        } label: {
+                            UserAvatarOrbitView(size: 122, editable: true)
+                        }
+                        .buttonStyle(PressablePlainButtonStyle())
+                        .help(model.text(.changeProfilePhoto))
+                        .accessibilityLabel(model.text(.changeProfilePhoto))
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(model.userDisplayName)
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(ElephantTheme.ink)
+                                .lineLimit(1)
+                            HStack(spacing: 8) {
+                                StatusDot(tint: phaseTint)
+                                Text(connectionText)
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(phaseTint)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text(model.text(.homeHeroTitle))
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                        Text(model.text(.homeHeroSubtitle))
+                            .font(.callout)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        model.selectedSection = .wake
+                        model.focusComposer()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                            Text(AppSection.wake.title(language: model.appLanguage))
+                            Spacer(minLength: 0)
+                            Image(systemName: "arrow.right")
+                        }
+                        .font(.headline.weight(.semibold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(ElephantTheme.accent)
+
+                    VStack(spacing: 9) {
+                        TodaySignalRow(value: "\(model.snapshot.facts)", label: model.text(.reviewedFactsLabel), symbol: "checkmark.seal")
+                        TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: model.text(.questionsWaitingLabel), symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+                        TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: model.text(.evidencePointsLabel), symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
+                    }
+                    .padding(.top, 2)
+
+                    HStack(spacing: 10) {
+                        TodayCommand(title: model.text(.reviewQuestions), symbol: "questionmark.bubble") {
+                            model.selectedSection = .you
+                        }
+                        TodayCommand(title: model.text(.reflect), symbol: "brain.head.profile") {
+                            Task { await model.runReflect(trigger: "home") }
+                        }
+                    }
+                }
+                .frame(width: 334, alignment: .topLeading)
+
+                Divider()
+                    .frame(height: 438)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionLabel(
+                            title: model.text(.personalModelMapTitle),
+                            subtitle: model.text(.homeMapSubtitle)
+                        )
+                        Spacer(minLength: 0)
+                        Pill(
+                            text: String(
+                                format: model.text(.mapNodeCountFormat),
+                                "\(model.snapshot.personalModelFacts.filter { $0.status.lowercased() != "deleted" }.count)"
+                            ),
+                            symbol: "point.3.connected.trianglepath.dotted",
+                            tint: ElephantTheme.accent
+                        )
+                    }
+
+                    PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode)
+                        .frame(height: 360)
+
+                    if let selectedNode {
+                        PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
+                    } else {
+                        EmptyLine(symbol: "circle.hexagongrid", text: model.text(.mapClickHint))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(minHeight: 438, alignment: .top)
         }
     }
 }
@@ -421,15 +532,15 @@ struct HomeReadinessStrip: View {
 
     private var providerItem: HomeReadinessItem {
         let hasProvider = !model.snapshot.providerID.isEmpty
-        let modelName = model.snapshot.providerModelID.isEmpty ? "choose a model" : model.snapshot.providerModelID
+        let modelName = model.snapshot.providerModelID.isEmpty ? model.text(.chooseModel) : model.snapshot.providerModelID
         let status = !hasProvider
-            ? "setup"
+            ? model.text(.statusSetup)
             : model.snapshot.readyForInteraction
-                ? "ready"
-                : model.snapshot.providerReady ? "warming" : providerStatusLabel
+                ? model.text(.ready)
+                : model.snapshot.providerReady ? model.text(.statusWarming) : localizedStatus(providerStatusLabel)
         return HomeReadinessItem(
-            title: "Model",
-            detail: hasProvider ? modelName : "provider setup",
+            title: model.text(.homeReadinessModel),
+            detail: hasProvider ? modelName : model.text(.providerSetup),
             status: status,
             symbol: "cpu",
             tint: providerTint,
@@ -441,9 +552,13 @@ struct HomeReadinessStrip: View {
         let indexed = model.snapshot.semanticEntries > 0 || model.snapshot.semanticStatus.lowercased().contains("ready")
         let healthy = indexed && model.snapshot.localModelWarm
         return HomeReadinessItem(
-            title: "Memory",
-            detail: "\(model.snapshot.facts) facts · \(model.snapshot.semanticEntries) evidence",
-            status: healthy ? "ready" : "warming",
+            title: model.text(.homeReadinessMemory),
+            detail: String(
+                format: model.text(.memorySummaryFormat),
+                "\(model.snapshot.facts)",
+                "\(model.snapshot.semanticEntries)"
+            ),
+            status: healthy ? model.text(.ready) : model.text(.statusWarming),
             symbol: "point.3.connected.trianglepath.dotted",
             tint: healthy ? ElephantTheme.green : ElephantTheme.orange,
             target: .you
@@ -455,10 +570,15 @@ struct HomeReadinessStrip: View {
         let configured = model.snapshot.gatewayConfigured
         let total = max(model.snapshot.gatewayServices, model.snapshot.gatewayItems.count)
         let tint = running > 0 ? ElephantTheme.green : configured > 0 ? ElephantTheme.green : ElephantTheme.orange
-        let status = running > 0 ? "live" : configured > 0 ? "configured" : "setup"
+        let status = running > 0 ? model.text(.statusLive) : configured > 0 ? model.text(.statusConfigured) : model.text(.statusSetup)
         return HomeReadinessItem(
-            title: "Messaging",
-            detail: "\(running) live · \(configured)/\(total) configured",
+            title: model.text(.homeReadinessMessaging),
+            detail: String(
+                format: model.text(.messagingSummaryFormat),
+                "\(running)",
+                "\(configured)",
+                "\(total)"
+            ),
             status: status,
             symbol: "message.badge",
             tint: tint,
@@ -473,10 +593,12 @@ struct HomeReadinessStrip: View {
             return !status.contains("completed") && !status.contains("failed") && !status.contains("cancel")
         }.count
         let tint = active > 0 ? ElephantTheme.accent : worker.lowercased().contains("stopped") ? ElephantTheme.orange : ElephantTheme.green
+        let activeJobs = String(format: model.text(.activeJobsFormat), "\(active)")
+        let workerLabel = localizedStatus(worker)
         return HomeReadinessItem(
-            title: "Learn",
-            detail: active > 0 ? "\(active) active jobs" : worker,
-            status: active > 0 ? "running" : worker,
+            title: model.text(.homeReadinessLearn),
+            detail: active > 0 ? activeJobs : workerLabel,
+            status: active > 0 ? model.text(.statusRunning) : workerLabel,
             symbol: "brain.head.profile",
             tint: tint,
             target: .learn
@@ -503,6 +625,36 @@ struct HomeReadinessStrip: View {
         }
         return ElephantTheme.green
     }
+
+    private func localizedStatus(_ rawStatus: String) -> String {
+        let value = rawStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = value.lowercased()
+        if value.isEmpty || normalized == "unknown" {
+            return model.text(.statusUnknown)
+        }
+        if normalized.contains("setup") || normalized.contains("missing") || normalized.contains("needed") {
+            return model.text(.statusSetup)
+        }
+        if normalized.contains("configured") {
+            return model.text(.statusConfigured)
+        }
+        if normalized.contains("ready") {
+            return model.text(.ready)
+        }
+        if normalized.contains("running") || normalized.contains("active") {
+            return model.text(.statusRunning)
+        }
+        if normalized.contains("warming") || normalized.contains("warm") || normalized.contains("starting") {
+            return model.text(.statusWarming)
+        }
+        if normalized.contains("stopped") || normalized.contains("stop") {
+            return model.text(.statusStopped)
+        }
+        if normalized.contains("idle") {
+            return model.text(.idle)
+        }
+        return value
+    }
 }
 
 private struct HomeReadinessItem {
@@ -517,6 +669,7 @@ private struct HomeReadinessItem {
 private struct HomeReadinessButton: View {
     @EnvironmentObject private var model: ElephantAppModel
     var item: HomeReadinessItem
+    @State private var hovering = false
 
     var body: some View {
         Button {
@@ -549,18 +702,24 @@ private struct HomeReadinessButton: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.faint)
+                    .foregroundStyle(hovering ? item.tint : ElephantTheme.faint)
+                    .opacity(hovering ? 1 : 0.62)
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.92 : 1))
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(item.tint.opacity(0.18), lineWidth: 1)
+                    .stroke(item.tint.opacity(hovering ? 0.34 : 0.18), lineWidth: 1)
             )
+            .shadow(color: item.tint.opacity(hovering ? 0.10 : 0), radius: 10, y: 5)
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
         .help("\(item.title): \(item.status)")
         .accessibilityLabel("\(item.title), \(item.status)")
     }
@@ -574,8 +733,20 @@ struct HomeContinuityPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(
-                        title: "Carry into the next reply",
-                        subtitle: "The personal context Elephant should keep warm before it answers."
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Carry into the next reply",
+                            zh: "下次回复会用到",
+                            fr: "À garder pour la prochaine réponse",
+                            de: "In die nächste Antwort mitnehmen"
+                        ),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "The personal context Elephant should keep warm before it answers.",
+                            zh: "这些上下文会帮助 Elephant 接上话题。",
+                            fr: "Le contexte personnel qu'Elephant doit garder prêt avant de répondre.",
+                            de: "Persönlicher Kontext, den Elephant vor der Antwort bereithalten soll."
+                        )
                     )
                     Spacer(minLength: 0)
                     if let question = nextQuestion {
@@ -585,21 +756,21 @@ struct HomeContinuityPanel: View {
 
                 HStack(alignment: .top, spacing: 0) {
                     HomeContinuityColumn(
-                        title: "Alive now",
+                        title: localizedYouText(model.appLanguage, en: "Alive now", zh: "当前重点", fr: "En ce moment", de: "Gerade aktiv"),
                         symbol: "waveform.path.ecg",
                         tint: ElephantTheme.orange,
                         text: aliveNow
                     )
                     VerticalHairline()
                     HomeContinuityColumn(
-                        title: "How to be with you",
+                        title: localizedYouText(model.appLanguage, en: "How to be with you", zh: "相处偏好", fr: "Comment être avec vous", de: "Wie mit dir sein"),
                         symbol: "person.wave.2",
                         tint: ElephantTheme.accent,
                         text: relationshipMode
                     )
                     VerticalHairline()
                     HomeContinuityColumn(
-                        title: "Care to remember",
+                        title: localizedYouText(model.appLanguage, en: "Care to remember", zh: "注意事项", fr: "Soin à retenir", de: "Wichtige Fürsorge"),
                         symbol: "lock.shield",
                         tint: ElephantTheme.green,
                         text: careBoundary
@@ -614,7 +785,16 @@ struct HomeContinuityPanel: View {
                 if let question = nextQuestion {
                     HomeContinuityQuestionRow(question: question)
                 } else {
-                    EmptyLine(symbol: "questionmark.bubble", text: "No open question is waiting for review.")
+                    EmptyLine(
+                        symbol: "questionmark.bubble",
+                        text: localizedYouText(
+                            model.appLanguage,
+                            en: "No open question is waiting for review.",
+                            zh: "现在没有待回看的问题。",
+                            fr: "Aucune question ouverte n'attend une revue.",
+                            de: "Keine offene Frage wartet auf Prüfung."
+                        )
+                    )
                 }
             }
         }
@@ -623,19 +803,37 @@ struct HomeContinuityPanel: View {
     private var aliveNow: String {
         firstProfileValue(["Working on", "Current focus", "Now"])
             ?? firstFactText(lens: "pulse")
-            ?? "No current focus yet. Start a chat or diary entry and Elephant will keep the thread visible."
+            ?? localizedYouText(
+                model.appLanguage,
+                en: "No current focus yet. Start a chat or diary entry and Elephant will keep the thread visible.",
+                zh: "还没有当前重点。聊一聊或写篇日记后，这里会自动整理线索。",
+                fr: "Aucun focus actuel. Lancez un chat ou un journal, et Elephant gardera le fil visible.",
+                de: "Noch kein aktueller Fokus. Starte Chat oder Tagebuch, dann hält Elephant den Faden sichtbar."
+            )
     }
 
     private var relationshipMode: String {
         firstProfileValue(["Relationship mode", "Communication", "Speaks"])
             ?? firstFactText(lens: "identity", topicContains: ["style", "companion", "language"])
-            ?? "Be specific, calm, and easy to correct."
+            ?? localizedYouText(
+                model.appLanguage,
+                en: "Be specific, calm, and easy to correct.",
+                zh: "说具体一点，语气放轻，也方便你随时纠正。",
+                fr: "Être précis, calme et facile à corriger.",
+                de: "Konkret, ruhig und leicht korrigierbar sein."
+            )
     }
 
     private var careBoundary: String {
         firstProfileValue(["Safety boundaries", "Care context", "Medication allergies", "Health notes", "Food allergies"])
             ?? firstFactText(lens: "identity", topicContains: ["boundary", "care", "allergy", "health"])
-            ?? "No care boundary has been written yet."
+            ?? localizedYouText(
+                model.appLanguage,
+                en: "No care boundary has been written yet.",
+                zh: "还没记录需要特别注意的边界。",
+                fr: "Aucune limite de soin n'a encore été écrite.",
+                de: "Noch keine Fürsorgegrenze notiert."
+            )
     }
 
     private var nextQuestion: PersonalModelQuestionItem? {
@@ -720,7 +918,7 @@ private struct HomeContinuityQuestionRow: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Next useful question")
+                Text(localizedYouText(model.appLanguage, en: "Next useful question", zh: "接下来可以问", fr: "Prochaine question utile", de: "Nächste nützliche Frage"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                 Text(question.text)
@@ -732,7 +930,7 @@ private struct HomeContinuityQuestionRow: View {
 
             Spacer(minLength: 0)
 
-            Button("Review") {
+            Button(localizedYouText(model.appLanguage, en: "Review", zh: "回看", fr: "Revoir", de: "Prüfen")) {
                 model.selectedSection = .you
             }
             .controlSize(.small)
@@ -756,42 +954,106 @@ struct HomeKnowledgeOverview: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 18) {
                 SectionLabel(
-                    title: "What I know so far",
-                    subtitle: "Drawn directly from Personal Model claims and profile anchors. Update a claim and this view updates too."
+                    title: localizedYouText(
+                        model.appLanguage,
+                        en: "Memory shape",
+                        zh: "记忆结构",
+                        fr: "Structure mémoire",
+                        de: "Erinnerungsstruktur"
+                    ),
+                    subtitle: localizedYouText(
+                        model.appLanguage,
+                        en: "A private overview, not a profile page. Choose a shelf only when you want detail.",
+                        zh: "这里不是资料页，只显示记忆结构；需要细节时再点开。",
+                        fr: "Un aperçu privé, pas une page de profil. Ouvrez un espace seulement si vous voulez le détail.",
+                        de: "Eine private Übersicht, keine Profilseite. Details erst öffnen, wenn du sie brauchst."
+                    )
                 )
-
-                ProfileFactsTable(facts: profileFacts)
-
-                Divider()
 
                 LazyVGrid(columns: columns, spacing: 12) {
                     HomeLensColumn(
-                        title: "Identity",
+                        title: localizedLensTitle("identity", language: model.appLanguage),
                         symbol: "person.crop.circle",
-                        tint: ElephantTheme.accent,
+                        tint: PersonalModelMapPalette.identity,
                         facts: facts(for: "identity"),
-                        empty: "No stable identity facts yet."
+                        language: model.appLanguage,
+                        summary: localizedYouText(
+                            model.appLanguage,
+                            en: "How Elephant should recognize your stable preferences and boundaries.",
+                            zh: "Elephant 如何理解你的稳定偏好和边界。",
+                            fr: "Comment Elephant reconnaît vos préférences et limites stables.",
+                            de: "Wie Elephant stabile Vorlieben und Grenzen erkennt."
+                        ),
+                        empty: localizedYouText(
+                            model.appLanguage,
+                            en: "No stable identity memories yet.",
+                            zh: "还没有稳定的身份记忆。",
+                            fr: "Pas encore de souvenirs d'identité stables.",
+                            de: "Noch keine stabilen Identitätserinnerungen."
+                        )
                     )
                     HomeLensColumn(
-                        title: "World",
+                        title: localizedLensTitle("world", language: model.appLanguage),
                         symbol: "globe",
-                        tint: ElephantTheme.green,
+                        tint: PersonalModelMapPalette.world,
                         facts: facts(for: "world"),
-                        empty: "No people, places, or project facts yet."
+                        language: model.appLanguage,
+                        summary: localizedYouText(
+                            model.appLanguage,
+                            en: "People, projects, places, and context that may matter later.",
+                            zh: "之后可能有用的人、项目、地点和语境。",
+                            fr: "Personnes, projets, lieux et contexte qui peuvent compter plus tard.",
+                            de: "Menschen, Projekte, Orte und Kontext, die später zählen können."
+                        ),
+                        empty: localizedYouText(
+                            model.appLanguage,
+                            en: "No people, places, or project memories yet.",
+                            zh: "还没有关于人、地点或项目的记忆。",
+                            fr: "Pas encore de souvenirs sur les personnes, lieux ou projets.",
+                            de: "Noch keine Erinnerungen zu Menschen, Orten oder Projekten."
+                        )
                     )
                     HomeLensColumn(
-                        title: "Pulse",
+                        title: localizedLensTitle("pulse", language: model.appLanguage),
                         symbol: "waveform.path.ecg",
-                        tint: ElephantTheme.orange,
+                        tint: PersonalModelMapPalette.pulse,
                         facts: facts(for: "pulse"),
-                        empty: "No current-state facts yet."
+                        language: model.appLanguage,
+                        summary: localizedYouText(
+                            model.appLanguage,
+                            en: "Current threads that should stay fresh without becoming identity.",
+                            zh: "需要保持新鲜、但不该变成身份标签的近况。",
+                            fr: "Fils actuels à garder frais sans devenir une identité.",
+                            de: "Aktuelle Fäden, die frisch bleiben sollen, ohne Identität zu werden."
+                        ),
+                        empty: localizedYouText(
+                            model.appLanguage,
+                            en: "No current-state memories yet.",
+                            zh: "还没有关于近况的记忆。",
+                            fr: "Pas encore de souvenirs sur l'état actuel.",
+                            de: "Noch keine Erinnerungen zum aktuellen Zustand."
+                        )
                     )
                     HomeLensColumn(
-                        title: "Journey",
+                        title: localizedLensTitle("journey", language: model.appLanguage),
                         symbol: "map",
-                        tint: ElephantTheme.accent.opacity(0.82),
+                        tint: PersonalModelMapPalette.journey,
                         facts: facts(for: "journey"),
-                        empty: "No journey facts yet."
+                        language: model.appLanguage,
+                        summary: localizedYouText(
+                            model.appLanguage,
+                            en: "Longer arcs, decisions, and patterns that accumulate over time.",
+                            zh: "长期积累下来的方向、决定和模式。",
+                            fr: "Arcs longs, décisions et motifs qui s'accumulent.",
+                            de: "Längere Bögen, Entscheidungen und Muster über die Zeit."
+                        ),
+                        empty: localizedYouText(
+                            model.appLanguage,
+                            en: "No journey memories yet.",
+                            zh: "还没有关于长期旅程的记忆。",
+                            fr: "Pas encore de souvenirs de parcours.",
+                            de: "Noch keine Erinnerungen zum Weg."
+                        )
                     )
                 }
             }
@@ -876,6 +1138,134 @@ private struct ProfileFactRow: Identifiable {
     var left: ProfileFact
     var right: ProfileFact?
     var full: Bool = false
+}
+
+private struct ProfileMemorySnapshot: View {
+    var facts: [ProfileFact]
+    var language: AppLanguage
+
+    var body: some View {
+        if facts.isEmpty {
+            EmptyLine(
+                symbol: "sparkles",
+                text: localizedYouText(
+                    language,
+                    en: "No personal memories yet. Start a few specific conversations and Reflect will surface them here.",
+                    zh: "还没有个人记忆。先聊几段具体的事，Reflect 会把有用线索放到这里。",
+                    fr: "Pas encore de souvenirs personnels. Lancez quelques conversations précises et Reflect les fera remonter ici.",
+                    de: "Noch keine persönlichen Erinnerungen. Nach einigen konkreten Gesprächen zeigt Reflect sie hier."
+                )
+            )
+        } else {
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(Array(facts.prefix(8))) { fact in
+                    ProfileMemoryChip(fact: fact, language: language)
+                }
+            }
+        }
+    }
+
+    private var columns: [GridItem] {
+        [
+            GridItem(.adaptive(minimum: 230), spacing: 10)
+        ]
+    }
+}
+
+private struct ProfileMemoryChip: View {
+    var fact: ProfileFact
+    var language: AppLanguage
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(tint.opacity(0.12))
+                Image(systemName: symbol)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizedProfileLabel(fact.label, language: language))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(1)
+                Text(fact.value.isEmpty ? fallbackValue : fact.value)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(fact.full ? 3 : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .background(tint.opacity(0.055), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tint.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private var fallbackValue: String {
+        localizedYouText(language, en: "Not set", zh: "未设置", fr: "Non défini", de: "Nicht festgelegt")
+    }
+
+    private var symbol: String {
+        let key = fact.label.lowercased()
+        if key.contains("name") { return "person.crop.circle" }
+        if key.contains("gender") { return "person.2" }
+        if key.contains("city") { return "location" }
+        if key.contains("birth") { return "calendar" }
+        if key.contains("speak") || key.contains("language") { return "character.bubble" }
+        if key.contains("work") { return "briefcase" }
+        if key.contains("hobbies") { return "sparkles" }
+        if key.contains("health") || key.contains("allerg") || key.contains("medication") { return "cross.case" }
+        if key.contains("boundary") || key.contains("safety") || key.contains("care") { return "hand.raised" }
+        return "smallcircle.filled.circle"
+    }
+
+    private var tint: Color {
+        let key = fact.label.lowercased()
+        if key.contains("city") || key.contains("work") { return ElephantTheme.green }
+        if key.contains("health") || key.contains("allerg") || key.contains("boundary") || key.contains("safety") { return ElephantTheme.orange }
+        return ElephantTheme.accent
+    }
+}
+
+private func localizedProfileLabel(_ label: String, language: AppLanguage) -> String {
+    switch label.lowercased() {
+    case "name":
+        return localizedYouText(language, en: "Name", zh: "称呼", fr: "Nom", de: "Name")
+    case "gender":
+        return localizedYouText(language, en: "Gender", zh: "性别", fr: "Genre", de: "Geschlecht")
+    case "city":
+        return localizedYouText(language, en: "City", zh: "城市", fr: "Ville", de: "Stadt")
+    case "birth date":
+        return localizedYouText(language, en: "Birth date", zh: "生日", fr: "Date de naissance", de: "Geburtstag")
+    case "speaks":
+        return localizedYouText(language, en: "Speaks", zh: "语言", fr: "Langue", de: "Sprache")
+    case "working on":
+        return localizedYouText(language, en: "Working on", zh: "正在做", fr: "Travaille sur", de: "Arbeitet an")
+    case "hobbies":
+        return localizedYouText(language, en: "Hobbies", zh: "兴趣", fr: "Centres d'intérêt", de: "Interessen")
+    case "relationship mode":
+        return localizedYouText(language, en: "Relationship mode", zh: "相处方式", fr: "Mode relationnel", de: "Beziehungsmodus")
+    case "medication allergies":
+        return localizedYouText(language, en: "Medication allergies", zh: "药物过敏", fr: "Allergies médicamenteuses", de: "Medikamentenallergien")
+    case "health notes":
+        return localizedYouText(language, en: "Health notes", zh: "健康备注", fr: "Notes santé", de: "Gesundheitshinweise")
+    case "food allergies":
+        return localizedYouText(language, en: "Food allergies", zh: "食物过敏", fr: "Allergies alimentaires", de: "Lebensmittelallergien")
+    case "care context":
+        return localizedYouText(language, en: "Care context", zh: "照顾语境", fr: "Contexte de soin", de: "Fürsorgekontext")
+    case "safety boundaries":
+        return localizedYouText(language, en: "Safety boundaries", zh: "安全边界", fr: "Limites de sécurité", de: "Sicherheitsgrenzen")
+    default:
+        return label
+    }
 }
 
 private struct ProfileFactsTable: View {
@@ -963,8 +1353,10 @@ struct HomeLensColumn: View {
     var symbol: String
     var tint: Color
     var facts: [PersonalModelFact]
+    var language: AppLanguage
+    var summary: String
     var empty: String
-    private let cardHeight: CGFloat = 196
+    private let cardHeight: CGFloat = 142
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -988,28 +1380,25 @@ struct HomeLensColumn: View {
                         .foregroundStyle(ElephantTheme.muted)
                 }
 
-                if facts.isEmpty {
-                    Text(empty)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(facts.isEmpty ? empty : summary)
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(facts) { fact in
-                            HStack(alignment: .top, spacing: 8) {
-                                Circle()
-                                    .fill(tint)
-                                    .frame(width: 5, height: 5)
-                                    .padding(.top, 7)
-                                Text(fact.text)
-                                    .font(.callout)
-                                    .foregroundStyle(ElephantTheme.ink)
-                                    .lineLimit(2)
-                            }
-                        }
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !facts.isEmpty {
+                        Text(localizedYouText(
+                            language,
+                            en: "Click below to inspect details.",
+                            zh: "需要细节时，在下方点开查看。",
+                            fr: "Ouvrez ci-dessous pour voir les détails.",
+                            de: "Unten öffnen, um Details zu prüfen."
+                        ))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(tint)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1018,6 +1407,76 @@ struct HomeLensColumn: View {
         .frame(maxWidth: .infinity)
         .frame(height: cardHeight)
     }
+}
+
+private func friendlyMemoryPreview(_ text: String, language: AppLanguage) -> String {
+    let lines = text
+        .components(separatedBy: .newlines)
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+
+    let cleaned = lines.compactMap { friendlyMemoryLine($0, language: language) }
+    if !cleaned.isEmpty {
+        return cleaned.prefix(2).joined(separator: language == .zh ? "；" : " · ")
+    }
+    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func friendlyMemoryLine(_ line: String, language: AppLanguage) -> String? {
+    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    guard let separator = trimmed.firstIndex(where: { $0 == ":" || $0 == "：" }) else {
+        return trimmed
+    }
+
+    let key = String(trimmed[..<separator])
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .replacingOccurrences(of: "_", with: " ")
+    let value = String(trimmed[trimmed.index(after: separator)...])
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else { return nil }
+
+    if key.contains("personal logo") { return nil }
+    if key.contains("preferred name") {
+        return localizedYouText(language, en: "Prefers \(value)", zh: "称呼是 \(value)", fr: "Préfère \(value)", de: "Bevorzugt \(value)")
+    }
+    if key.contains("current work") {
+        return localizedYouText(language, en: "Working on \(value)", zh: "正在做 \(value)", fr: "Travaille sur \(value)", de: "Arbeitet an \(value)")
+    }
+    if key.contains("current city") {
+        return localizedYouText(language, en: "Based around \(value)", zh: "当前城市或时区是 \(value)", fr: "Basé autour de \(value)", de: "Rund um \(value)")
+    }
+    if key.contains("personal hobbies") {
+        return localizedYouText(language, en: "Interested in \(value)", zh: "兴趣包括 \(value)", fr: "S'intéresse à \(value)", de: "Interessiert an \(value)")
+    }
+    if key.contains("first language") {
+        let languageName = value.lowercased() == "zh" ? localizedYouText(language, en: "Chinese", zh: "中文", fr: "chinois", de: "Chinesisch") : value
+        return localizedYouText(language, en: "First language is \(languageName)", zh: "第一语言是 \(languageName)", fr: "Première langue : \(languageName)", de: "Erste Sprache ist \(languageName)")
+    }
+    if key.contains("decision compass") {
+        return localizedYouText(language, en: "Decisions favor \(value)", zh: "决策时看重 \(value)", fr: "Les décisions privilégient \(value)", de: "Entscheidungen bevorzugen \(value)")
+    }
+    if key.contains("inner landscape") {
+        return localizedYouText(language, en: "Inner state: \(value)", zh: "内在状态：\(value)", fr: "État intérieur : \(value)", de: "Innerer Zustand: \(value)")
+    }
+    if key.contains("pressure pattern") {
+        return localizedYouText(language, en: "Under pressure: \(value)", zh: "有压力时会 \(value)", fr: "Sous pression : \(value)", de: "Unter Druck: \(value)")
+    }
+    if key.contains("recovery style") {
+        return localizedYouText(language, en: "Recovers through \(value)", zh: "恢复状态主要靠 \(value)", fr: "Récupère par \(value)", de: "Erholt sich durch \(value)")
+    }
+    if key.contains("value anchor") {
+        return localizedYouText(language, en: "Values \(value)", zh: "重视 \(value)", fr: "Valorise \(value)", de: "Schätzt \(value)")
+    }
+    if key.contains("boundary") || key.contains("safety") || key.contains("private safety note") {
+        return localizedYouText(language, en: "Care boundary: \(value)", zh: "需要注意的边界：\(value)", fr: "Limite de soin : \(value)", de: "Sorgfaltsgrenze: \(value)")
+    }
+    if key.contains("blog") || value.hasPrefix("http") {
+        return localizedYouText(language, en: "Homepage: \(value)", zh: "个人主页：\(value)", fr: "Page personnelle : \(value)", de: "Homepage: \(value)")
+    }
+    return value
 }
 
 struct CommandCenterPanel: View {
@@ -1035,8 +1494,8 @@ struct CommandCenterPanel: View {
                         UserAvatarOrbitView(size: 138, editable: true)
                     }
                     .buttonStyle(PressablePlainButtonStyle())
-                    .help("Change profile photo")
-                    .accessibilityLabel("Change profile photo")
+                    .help(model.text(.changeProfilePhoto))
+                    .accessibilityLabel(model.text(.changeProfilePhoto))
 
                     Text(model.userDisplayName)
                         .font(.system(size: 25, weight: .semibold))
@@ -1044,7 +1503,7 @@ struct CommandCenterPanel: View {
                         .lineLimit(1)
                         .help(model.userDisplayName)
 
-                    Text("Personal Model")
+                    Text(model.text(.personalModelMapTitle))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                         .textCase(.uppercase)
@@ -1060,9 +1519,9 @@ struct CommandCenterPanel: View {
                         .padding(.top, 4)
 
                     VStack(spacing: 9) {
-                        TodaySignalRow(value: "\(model.snapshot.facts)", label: "Reviewed facts", symbol: "checkmark.seal")
-                        TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: "Questions waiting", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                        TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: "Evidence points", symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
+                        TodaySignalRow(value: "\(model.snapshot.facts)", label: model.text(.reviewedFactsLabel), symbol: "checkmark.seal")
+                        TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: model.text(.questionsWaitingLabel), symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+                        TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: model.text(.evidencePointsLabel), symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
                     }
                 }
                 .frame(width: 250)
@@ -1081,6 +1540,7 @@ struct UserAvatarOrbitView: View {
     @EnvironmentObject private var model: ElephantAppModel
     var size: CGFloat = 138
     var editable = false
+    @State private var hovering = false
 
     var body: some View {
         ZStack {
@@ -1118,9 +1578,9 @@ struct UserAvatarOrbitView: View {
                     .opacity(0.72)
             }
 
-            UserAvatarImage(size: size * 0.54, name: model.userDisplayName, url: model.userAvatarURL)
+            UserAvatarImage(size: size * 0.68, name: model.userDisplayName, url: model.userAvatarURL)
 
-            if editable {
+            if editable && hovering {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
@@ -1128,9 +1588,13 @@ struct UserAvatarOrbitView: View {
                     .background(ElephantTheme.accent, in: Circle())
                     .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
                     .offset(x: size * 0.25, y: size * 0.25)
+                    .transition(.opacity.combined(with: .scale(scale: 0.86)))
             }
         }
         .frame(width: size, height: size)
+        .contentShape(Circle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.14), value: hovering)
     }
 }
 
@@ -1245,16 +1709,16 @@ struct PromptStagePanel: View {
             HStack {
                 Pill(text: "Local-first", symbol: "lock.shield", tint: phaseTint)
                 Spacer()
-                Text(model.snapshot.latestCompletedAt.isEmpty ? "Reflect when ready" : "Last reflect complete")
+                Text(model.snapshot.latestCompletedAt.isEmpty ? localizedYouText(model.appLanguage, en: "Reflect when ready", zh: "准备好后整理记忆", fr: "Reflect quand prêt", de: "Reflect, wenn bereit") : localizedYouText(model.appLanguage, en: "Last reflect complete", zh: "上次整理已完成", fr: "Dernier Reflect terminé", de: "Letzter Reflect abgeschlossen"))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Ask, remember, reflect.")
+                Text(model.text(.homeHeroTitle))
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text("Elephant keeps working memory visible: what it knows, what it is unsure about, and where the evidence came from.")
+                Text(model.text(.homeHeroSubtitle))
                     .font(.body)
                     .foregroundStyle(ElephantTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1265,7 +1729,7 @@ struct PromptStagePanel: View {
                 model.focusComposer()
             } label: {
                 HStack {
-                    Text("Ask your assistant anything...")
+                    Text(model.text(.typeMessagePlaceholder))
                         .font(.headline.weight(.semibold))
                     Spacer()
                     Image(systemName: "arrow.right")
@@ -1280,10 +1744,10 @@ struct PromptStagePanel: View {
             .tint(ElephantTheme.accent)
 
             HStack(spacing: 12) {
-                TodayCommand(title: "Review questions", symbol: "questionmark.bubble") {
+                TodayCommand(title: model.text(.reviewQuestions), symbol: "questionmark.bubble") {
                     model.selectedSection = .you
                 }
-                TodayCommand(title: "Run reflect", symbol: "brain.head.profile") {
+                TodayCommand(title: model.text(.reflect), symbol: "brain.head.profile") {
                     Task { await model.runReflect(trigger: "home") }
                 }
             }
@@ -1339,7 +1803,10 @@ struct ReviewQueuePanel: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    SectionLabel(title: "Respond Queue", subtitle: "\(model.snapshot.waitingQuestions) open")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Respond Queue", zh: "待回答的问题", fr: "File de réponse", de: "Antwort-Warteschlange"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d open", zh: "%d 个待回答", fr: "%d ouvertes", de: "%d offen", model.snapshot.waitingQuestions)
+                    )
                     Spacer()
                     Button {
                         model.selectedSection = .you
@@ -1350,7 +1817,7 @@ struct ReviewQueuePanel: View {
                 }
 
                 if model.snapshot.sampleQuestions.isEmpty {
-                    EmptyLine(symbol: "questionmark.bubble", text: "No questions waiting right now.")
+                    EmptyLine(symbol: "questionmark.bubble", text: localizedYouText(model.appLanguage, en: "No questions waiting right now.", zh: "现在没有待回答的问题。", fr: "Aucune question en attente.", de: "Gerade keine wartenden Fragen."))
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(model.snapshot.sampleQuestions.prefix(3), id: \.self) { question in
@@ -1373,12 +1840,12 @@ struct NextActionsPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title: "Next", subtitle: "High-signal actions")
-                NextActionRow(symbol: "bubble.left.and.bubble.right", title: "Chat", detail: "Continue the current thread") {
+                SectionLabel(title: localizedYouText(model.appLanguage, en: "Next", zh: "下一步", fr: "Suivant", de: "Nächstes"), subtitle: localizedYouText(model.appLanguage, en: "High-signal actions", zh: "现在最值得做", fr: "Actions les plus utiles", de: "Wichtige Aktionen"))
+                NextActionRow(symbol: "bubble.left.and.bubble.right", title: AppSection.wake.title(language: model.appLanguage), detail: localizedYouText(model.appLanguage, en: "Continue the current thread", zh: "继续当前对话", fr: "Continuer le fil actuel", de: "Aktuellen Thread fortsetzen")) {
                     model.selectedSection = .wake
                     model.focusComposer()
                 }
-                NextActionRow(symbol: "brain.head.profile", title: "Reflect", detail: model.isReflecting ? "Running" : "Update the queue") {
+                NextActionRow(symbol: "brain.head.profile", title: model.text(.reflect), detail: model.isReflecting ? model.text(.statusRunning) : localizedYouText(model.appLanguage, en: "Update the queue", zh: "更新队列", fr: "Mettre la file à jour", de: "Warteschlange aktualisieren")) {
                     Task { await model.runReflect(trigger: "next") }
                 }
             }
@@ -1423,10 +1890,10 @@ struct RuntimeMiniPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title: "Quiet System", subtitle: "Details live in Settings")
-                SettingsRow(label: "Core", value: model.corePhase.label)
-                SettingsRow(label: "Provider", value: model.snapshot.providerStatus)
-                SettingsRow(label: "Worker", value: model.snapshot.workerStatus)
+                SectionLabel(title: localizedYouText(model.appLanguage, en: "Quiet System", zh: "后台状态", fr: "Système discret", de: "Ruhiges System"), subtitle: localizedYouText(model.appLanguage, en: "Details live in Settings", zh: "更多细节在设置里", fr: "Détails dans Réglages", de: "Details in Einstellungen"))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Core", zh: "核心", fr: "Noyau", de: "Kern"), value: model.corePhase.label)
+                SettingsRow(label: model.text(.providerTitle), value: localizedRuntimeStatus(model.snapshot.providerStatus, language: model.appLanguage))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: localizedRuntimeStatus(model.snapshot.workerStatus, language: model.appLanguage))
             }
         }
         .frame(width: 340)
@@ -1435,26 +1902,31 @@ struct RuntimeMiniPanel: View {
 
 struct WakeView: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @AppStorage("elephant.mac.chatHistoryVisible") private var chatHistoryVisible = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Chat",
-                subtitle: model.activeEpisodeID.isEmpty ? "New chat" : "Conversation open",
-                actionTitle: model.isReflecting ? "Reflecting" : "Reflect",
+                title: AppSection.wake.title(language: model.appLanguage),
+                subtitle: model.activeEpisodeID.isEmpty ? model.text(.newChat) : model.text(.conversationOpen),
+                actionTitle: model.isReflecting ? model.text(.reflecting) : model.text(.reflect),
                 actionSymbol: "brain.head.profile"
             ) {
                 Task { await model.runReflect(trigger: "wake") }
             }
 
             HStack(alignment: .top, spacing: 14) {
-                ThreadRailPanel()
-                    .frame(width: 286)
-                    .frame(maxHeight: .infinity)
-                WakeComposerPanel()
+                if chatHistoryVisible {
+                    ThreadRailPanel()
+                        .frame(width: 286)
+                        .frame(maxHeight: .infinity)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+                WakeComposerPanel(historyVisible: $chatHistoryVisible)
                     .frame(maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.18), value: chatHistoryVisible)
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -1468,7 +1940,7 @@ struct ThreadRailPanel: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    SectionLabel(title: "Threads", subtitle: "Conversation history")
+                    SectionLabel(title: model.text(.threads), subtitle: model.text(.conversationHistory))
                     Spacer()
                     Button {
                         model.startNewChat()
@@ -1476,7 +1948,7 @@ struct ThreadRailPanel: View {
                         Image(systemName: "plus")
                     }
                     .buttonStyle(.borderless)
-                    .help("New Chat")
+                    .help(model.text(.newChat))
                 }
 
                 VStack(spacing: 0) {
@@ -1484,8 +1956,8 @@ struct ThreadRailPanel: View {
                         model.startNewChat()
                     } label: {
                         ThreadRow(
-                            title: "New Chat",
-                            subtitle: model.activeEpisodeID.isEmpty ? "Ready" : "Start another conversation",
+                            title: model.text(.newChat),
+                            subtitle: model.activeEpisodeID.isEmpty ? model.text(.ready) : model.text(.startAnotherConversation),
                             selected: model.activeEpisodeID.isEmpty
                         )
                     }
@@ -1498,13 +1970,13 @@ struct ThreadRailPanel: View {
                             } label: {
                                 ThreadRow(
                                     title: readableTitle(thread.title),
-                                    subtitle: thread.subtitle.isEmpty ? "Conversation" : thread.subtitle,
+                                    subtitle: thread.subtitle.isEmpty ? model.text(.conversation) : thread.subtitle,
                                     selected: thread.id == model.activeEpisodeID
                                 )
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                Button("Delete Conversation", role: .destructive) {
+                                Button(model.text(.deleteConversation), role: .destructive) {
                                     deleteCandidate = thread
                                 }
                             }
@@ -1518,39 +1990,39 @@ struct ThreadRailPanel: View {
                                     .frame(width: 28, height: 28)
                             }
                             .buttonStyle(PressablePlainButtonStyle())
-                            .help("Delete Conversation")
-                            .accessibilityLabel("Delete \(readableTitle(thread.title))")
+                            .help(model.text(.deleteConversation))
+                            .accessibilityLabel("\(model.text(.deleteConversation)): \(readableTitle(thread.title))")
                         }
                     }
 
                     if chatThreads.isEmpty {
-                        EmptyLine(symbol: "bubble.left", text: "No saved chats yet.")
+                        EmptyLine(symbol: "bubble.left", text: model.text(.noSavedChatsYet))
                     }
                 }
 
                 Spacer(minLength: 0)
 
                 Divider()
-                TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: "questions", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: "evidence", symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
+                TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: model.text(.questionsShort), symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+                TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: model.text(.evidenceShort), symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
             }
             .frame(minHeight: 620, maxHeight: .infinity, alignment: .top)
         }
         .confirmationDialog(
-            "Delete \(readableTitle(deleteCandidate?.title ?? "conversation"))?",
+            String(format: model.text(.deleteConversationPrompt), readableTitle(deleteCandidate?.title ?? model.text(.conversation))),
             isPresented: Binding(
                 get: { deleteCandidate != nil },
                 set: { if !$0 { deleteCandidate = nil } }
             )
         ) {
-            Button("Delete Conversation", role: .destructive) {
+            Button(model.text(.deleteConversation), role: .destructive) {
                 if let deleteCandidate {
                     model.deleteEpisodeThread(deleteCandidate)
                 }
                 deleteCandidate = nil
             }
         } message: {
-            Text("This removes the conversation from the desktop history. Personal Model facts and evidence are not deleted.")
+            Text(model.text(.deleteConversationMessage))
         }
     }
 
@@ -1567,7 +2039,7 @@ struct ThreadRailPanel: View {
     private func readableTitle(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let meaningfulScalars = trimmed.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }
-        return meaningfulScalars.count < 2 ? "Untitled chat" : trimmed
+        return meaningfulScalars.count < 2 ? model.text(.untitledChat) : trimmed
     }
 }
 
@@ -1602,14 +2074,27 @@ struct ThreadRow: View {
 
 struct WakeComposerPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @Binding var historyVisible: Bool
     @StateObject private var speech = SpeechInputController()
     @FocusState private var focused: Bool
+    private let chatBottomSpacerID = "chat-active-response-spacer"
 
     var body: some View {
         NativePanel {
             VStack(spacing: 0) {
                 HStack {
-                    Text(model.activeEpisodeID.isEmpty ? "New conversation" : "Conversation")
+                    Button {
+                        historyVisible.toggle()
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .help(model.text(historyVisible ? .hideChatHistory : .showChatHistory))
+                    .accessibilityLabel(model.text(historyVisible ? .hideChatHistory : .showChatHistory))
+
+                    Text(model.activeEpisodeID.isEmpty ? model.text(.newConversation) : model.text(.conversation))
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
                     Spacer()
@@ -1624,24 +2109,33 @@ struct WakeComposerPanel: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                                 .padding(.horizontal, 28)
                         } else {
-                            ScrollView {
-                                LazyVStack(alignment: .leading, spacing: 4) {
-                                    ForEach(visibleMessages) { message in
-                                        MessageBubble(message: message)
-                                            .equatable()
-                                            .id(message.id)
+                            GeometryReader { geometry in
+                                ScrollView {
+                                    LazyVStack(alignment: .leading, spacing: 4) {
+                                        ForEach(visibleMessages) { message in
+                                            MessageBubble(message: message)
+                                                .equatable()
+                                                .id(message.id)
+                                        }
+                                        Color.clear
+                                            .frame(height: activeResponseBottomSpacing(in: geometry.size.height))
+                                            .id(chatBottomSpacerID)
                                     }
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 24)
+                                    .frame(maxWidth: .infinity, alignment: .top)
                                 }
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 24)
-                                .frame(maxWidth: .infinity, alignment: .top)
                             }
                         }
                     }
                     .frame(minHeight: 320, maxHeight: .infinity)
                     .onChange(of: model.chatScrollRevision) { _ in
-                        if let last = visibleMessages.last {
-                            proxy.scrollTo(last.id, anchor: .bottom)
+                        withAnimation(.easeOut(duration: 0.20)) {
+                            if model.isWakeRunning {
+                                proxy.scrollTo(chatBottomSpacerID, anchor: .bottom)
+                            } else if let last = visibleMessages.last {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
                         }
                     }
                 }
@@ -1661,9 +2155,9 @@ struct WakeComposerPanel: View {
                                 .foregroundStyle(speech.isRecording ? ElephantTheme.accent : ElephantTheme.muted)
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help(speech.isRecording ? "Stop voice input" : "Voice input")
+                        .help(speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput))
 
-                        TextField("Type a message...", text: $model.wakeDraft, axis: .vertical)
+                        TextField(model.text(.typeMessagePlaceholder), text: $model.wakeDraft, axis: .vertical)
                             .textFieldStyle(.plain)
                             .font(.body)
                             .lineLimit(1...4)
@@ -1687,7 +2181,7 @@ struct WakeComposerPanel: View {
                         .controlSize(.regular)
                         .tint(ElephantTheme.accent)
                         .disabled(model.isWakeRunning || model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .help("Send")
+                        .help(model.text(.send))
                     }
 
                     if speech.isRecording || !speech.statusText.isEmpty {
@@ -1728,11 +2222,16 @@ struct WakeComposerPanel: View {
         if !model.snapshot.providerModelID.isEmpty {
             return model.snapshot.providerModelID
         }
-        return model.snapshot.providerStatus == "unknown" ? "provider setup" : model.snapshot.providerStatus
+        return model.snapshot.providerStatus == "unknown" ? model.text(.providerSetup) : model.snapshot.providerStatus
     }
 
     private var visibleMessages: [ChatMessage] {
         model.messages.filter { $0.role != .system }
+    }
+
+    private func activeResponseBottomSpacing(in transcriptHeight: CGFloat) -> CGFloat {
+        guard model.isWakeRunning else { return 12 }
+        return min(max(transcriptHeight * 0.54, 260), 560)
     }
 }
 
@@ -1750,26 +2249,26 @@ struct ChatEmptyState: View {
                 )
                     .accessibilityHidden(true)
                     .padding(.bottom, -8)
-                Text("Ask Elephant")
+                Text(model.text(.askElephant))
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text("Short, specific chats become reviewable memory, questions, and evidence.")
+                Text(model.text(.chatEmptySubtitle))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
             }
             HStack(spacing: 10) {
-                QuickPromptButton(title: "Capture", symbol: "sparkles") {
-                    model.wakeDraft = "Remember this:"
+                QuickPromptButton(title: model.text(.quickCapture), symbol: "sparkles") {
+                    model.wakeDraft = model.text(.quickCaptureDraft)
                     model.focusComposer()
                 }
-                QuickPromptButton(title: "Think", symbol: "bubble.left.and.text.bubble.right") {
-                    model.wakeDraft = "Help me think through"
+                QuickPromptButton(title: model.text(.quickThink), symbol: "bubble.left.and.text.bubble.right") {
+                    model.wakeDraft = model.text(.quickThinkDraft)
                     model.focusComposer()
                 }
-                QuickPromptButton(title: "Review", symbol: "checklist") {
-                    model.wakeDraft = "What should I review from today?"
+                QuickPromptButton(title: model.text(.quickReview), symbol: "checklist") {
+                    model.wakeDraft = model.text(.quickReviewDraft)
                     model.focusComposer()
                 }
             }
@@ -1803,6 +2302,10 @@ private struct MarkdownBlock: Identifiable {
         case heading
         case bulletList
         case numberedList
+        case taskList
+        case quote
+        case table
+        case rule
         case code
     }
 
@@ -1810,6 +2313,18 @@ private struct MarkdownBlock: Identifiable {
     var kind: Kind
     var text: String
     var items: [String] = []
+    var table: MarkdownTable?
+}
+
+private struct MarkdownTable: Equatable {
+    var headers: [String]
+    var rows: [[String]]
+}
+
+private struct MarkdownTaskItem: Identifiable, Equatable {
+    var id: String { "\(checked)-\(text)" }
+    var checked: Bool
+    var text: String
 }
 
 struct MarkdownBody: View {
@@ -1847,6 +2362,35 @@ struct MarkdownBody: View {
                             }
                         }
                     }
+                case .taskList:
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(taskItems(from: block.items)) { item in
+                            HStack(alignment: .top, spacing: 7) {
+                                Image(systemName: item.checked ? "checkmark.square.fill" : "square")
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(item.checked ? ElephantTheme.accent : color.opacity(0.56))
+                                    .frame(width: 18)
+                                InlineMarkdownText(text: item.text, font: font, color: color)
+                            }
+                        }
+                    }
+                case .quote:
+                    InlineMarkdownText(text: block.text, font: font, color: color.opacity(0.86))
+                        .padding(.leading, 10)
+                        .overlay(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(ElephantTheme.accent.opacity(0.40))
+                                .frame(width: 3)
+                        }
+                case .table:
+                    if let table = block.table {
+                        MarkdownTableView(table: table, font: font, color: color)
+                    }
+                case .rule:
+                    Rectangle()
+                        .fill(ElephantTheme.line.opacity(0.78))
+                        .frame(height: 1)
+                        .padding(.vertical, 5)
                 case .code:
                     Text(block.text)
                         .font(.system(.callout, design: .monospaced))
@@ -1862,13 +2406,31 @@ struct MarkdownBody: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    private func taskItems(from values: [String]) -> [MarkdownTaskItem] {
+        values.map { value in
+            let checked = value.hasPrefix("[x] ") || value.hasPrefix("[X] ")
+            let text = value.replacingOccurrences(of: #"^\[[ xX]\]\s+"#, with: "", options: .regularExpression)
+            return MarkdownTaskItem(checked: checked, text: text)
+        }
+    }
+
     private var blocks: [MarkdownBlock] {
         var result: [MarkdownBlock] = []
         var paragraph: [String] = []
         var bullets: [String] = []
         var numbers: [String] = []
+        var tasks: [String] = []
+        var quotes: [String] = []
         var code: [String] = []
         var inCode = false
+
+        func flushInlineBlocks() {
+            flushParagraph()
+            flushBullets()
+            flushNumbers()
+            flushTasks()
+            flushQuotes()
+        }
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
@@ -1888,65 +2450,310 @@ struct MarkdownBody: View {
             numbers.removeAll()
         }
 
+        func flushTasks() {
+            guard !tasks.isEmpty else { return }
+            result.append(MarkdownBlock(id: result.count, kind: .taskList, text: "", items: tasks))
+            tasks.removeAll()
+        }
+
+        func flushQuotes() {
+            guard !quotes.isEmpty else { return }
+            result.append(MarkdownBlock(id: result.count, kind: .quote, text: quotes.joined(separator: "\n")))
+            quotes.removeAll()
+        }
+
         func flushCode() {
             guard !code.isEmpty else { return }
             result.append(MarkdownBlock(id: result.count, kind: .code, text: code.joined(separator: "\n")))
             code.removeAll()
         }
 
-        for rawLine in text.components(separatedBy: .newlines) {
+        let lines = text.components(separatedBy: .newlines)
+        var index = 0
+        while index < lines.count {
+            let rawLine = lines[index]
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("```") {
                 if inCode {
                     inCode = false
                     flushCode()
                 } else {
-                    flushParagraph()
-                    flushBullets()
-                    flushNumbers()
+                    flushInlineBlocks()
                     inCode = true
                 }
+                index += 1
                 continue
             }
             if inCode {
                 code.append(rawLine)
+                index += 1
                 continue
             }
             if line.isEmpty {
-                flushParagraph()
-                flushBullets()
-                flushNumbers()
+                flushInlineBlocks()
+                index += 1
+                continue
+            }
+            if isMarkdownRule(line) {
+                flushInlineBlocks()
+                result.append(MarkdownBlock(id: result.count, kind: .rule, text: ""))
+                index += 1
+                continue
+            }
+            if let table = parseTable(startingAt: index, lines: lines) {
+                flushInlineBlocks()
+                result.append(MarkdownBlock(id: result.count, kind: .table, text: "", table: table.value))
+                index = table.nextIndex
                 continue
             }
             if line.hasPrefix("### ") || line.hasPrefix("## ") || line.hasPrefix("# ") {
+                flushInlineBlocks()
+                result.append(MarkdownBlock(id: result.count, kind: .heading, text: line.replacingOccurrences(of: #"^#{1,3}\s+"#, with: "", options: .regularExpression)))
+                index += 1
+                continue
+            }
+            if line.hasPrefix(">") {
                 flushParagraph()
                 flushBullets()
                 flushNumbers()
-                result.append(MarkdownBlock(id: result.count, kind: .heading, text: line.replacingOccurrences(of: #"^#{1,3}\s+"#, with: "", options: .regularExpression)))
+                flushTasks()
+                quotes.append(line.replacingOccurrences(of: #"^>\s?"#, with: "", options: .regularExpression))
+                index += 1
+                continue
+            }
+            if let range = line.range(of: #"^[-*]\s+\[[ xX]\]\s+"#, options: .regularExpression) {
+                flushParagraph()
+                flushBullets()
+                flushNumbers()
+                flushQuotes()
+                let checkedPrefix = line.range(of: #"^[-*]\s+\[[xX]\]"#, options: .regularExpression) == nil ? "[ ] " : "[x] "
+                tasks.append(checkedPrefix + String(line[range.upperBound...]))
+                index += 1
                 continue
             }
             if line.hasPrefix("- ") || line.hasPrefix("* ") {
                 flushParagraph()
                 flushNumbers()
+                flushTasks()
+                flushQuotes()
                 bullets.append(String(line.dropFirst(2)))
+                index += 1
                 continue
             }
             if let range = line.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
                 flushParagraph()
                 flushBullets()
+                flushTasks()
+                flushQuotes()
                 numbers.append(String(line[range.upperBound...]))
+                index += 1
                 continue
             }
             flushBullets()
             flushNumbers()
+            flushTasks()
+            flushQuotes()
             paragraph.append(rawLine)
+            index += 1
         }
 
-        flushParagraph()
-        flushBullets()
-        flushNumbers()
+        flushInlineBlocks()
         flushCode()
         return result.isEmpty ? [MarkdownBlock(id: 0, kind: .paragraph, text: text)] : result
+    }
+
+    private func isMarkdownRule(_ line: String) -> Bool {
+        line.range(of: #"^(\*\s*){3,}$|^(-\s*){3,}$|^(_\s*){3,}$"#, options: .regularExpression) != nil
+    }
+
+    private func parseTable(startingAt index: Int, lines: [String]) -> (value: MarkdownTable, nextIndex: Int)? {
+        guard index + 1 < lines.count else { return nil }
+        let headerLine = lines[index].trimmingCharacters(in: .whitespaces)
+        let separatorLine = lines[index + 1].trimmingCharacters(in: .whitespaces)
+        guard headerLine.contains("|"), isMarkdownTableSeparator(separatorLine) else { return nil }
+        let headers = splitMarkdownTableRow(headerLine)
+        guard headers.count > 1 else { return nil }
+        var rows: [[String]] = []
+        var cursor = index + 2
+        while cursor < lines.count {
+            let candidate = lines[cursor].trimmingCharacters(in: .whitespaces)
+            guard candidate.contains("|"), !candidate.isEmpty else { break }
+            let row = splitMarkdownTableRow(candidate)
+            guard !row.isEmpty else { break }
+            rows.append(row)
+            cursor += 1
+        }
+        return (MarkdownTable(headers: headers, rows: rows), cursor)
+    }
+
+    private func isMarkdownTableSeparator(_ line: String) -> Bool {
+        let cells = splitMarkdownTableRow(line)
+        guard cells.count > 1 else { return false }
+        return cells.allSatisfy { cell in
+            cell.range(of: #"^:?-{3,}:?$"#, options: .regularExpression) != nil
+        }
+    }
+
+    private func splitMarkdownTableRow(_ line: String) -> [String] {
+        var trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("|") { trimmed.removeFirst() }
+        if trimmed.hasSuffix("|") { trimmed.removeLast() }
+        return trimmed.split(separator: "|", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+}
+
+private struct MarkdownTableView: View {
+    var table: MarkdownTable
+    var font: Font
+    var color: Color
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                markdownRow(table.headers, header: true)
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { index, row in
+                    markdownRow(normalized(row), header: false)
+                        .background(index.isMultiple(of: 2) ? Color.clear : ElephantTheme.line.opacity(0.08))
+                }
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.46))
+            .overlay(Rectangle().stroke(ElephantTheme.line.opacity(0.78), lineWidth: 1))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func markdownRow(_ values: [String], header: Bool) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(normalized(values).enumerated()), id: \.offset) { index, value in
+                MarkdownTableCell(
+                    value: displayValue(value, at: index, header: header),
+                    font: header ? .callout.weight(.semibold) : font,
+                    color: header ? color : color.opacity(0.94),
+                    width: columnWidth(at: index),
+                    header: header
+                )
+                    .overlay(alignment: .trailing) {
+                        if index < columnCount - 1 {
+                            Rectangle()
+                                .fill(ElephantTheme.line.opacity(0.64))
+                                .frame(width: 1)
+                        }
+                    }
+            }
+        }
+        .background(header ? Color(nsColor: .controlBackgroundColor).opacity(0.72) : Color.clear)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ElephantTheme.line.opacity(header ? 0.72 : 0.34))
+                .frame(height: 1)
+        }
+    }
+
+    private func normalized(_ values: [String]) -> [String] {
+        let count = columnCount
+        if values.count >= count { return values }
+        return values + Array(repeating: "", count: count - values.count)
+    }
+
+    private var columnCount: Int {
+        max(table.headers.count, table.rows.map(\.count).max() ?? 0)
+    }
+
+    private func displayValue(_ value: String, at index: Int, header: Bool) -> String {
+        if header && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isIndexColumn(index) {
+            return "#"
+        }
+        return value
+    }
+
+    private func columnWidth(at index: Int) -> CGFloat {
+        if isIndexColumn(index) {
+            return 46
+        }
+        let header = normalizedHeader(at: index)
+        if header.contains("result")
+            || header.contains("output")
+            || header.contains("return")
+            || header.contains("detail")
+            || header.contains("结果")
+            || header.contains("返回")
+            || header.contains("详情")
+            || header.contains("résultat")
+            || header.contains("ergebnis") {
+            return 420
+        }
+        if header.contains("query")
+            || header.contains("mode")
+            || header.contains("查询")
+            || header.contains("模式") {
+            return 300
+        }
+        let maxLength = maxContentLength(at: index)
+        if maxLength > 80 {
+            return 360
+        }
+        if maxLength > 40 {
+            return 300
+        }
+        if maxLength > 20 {
+            return 240
+        }
+        if header.count <= 3 {
+            return 150
+        }
+        return 210
+    }
+
+    private func isIndexColumn(_ index: Int) -> Bool {
+        guard index == 0 else {
+            return false
+        }
+        let header = normalizedHeader(at: index)
+        let headerLooksLikeIndex = header.isEmpty || ["#", "no", "number", "index", "序号", "编号"].contains(header)
+        guard headerLooksLikeIndex else { return false }
+        return table.rows.allSatisfy { row in
+            guard let value = row.first.map(normalizedTableText), !value.isEmpty else {
+                return true
+            }
+            return Int(value) != nil
+        }
+    }
+
+    private func normalizedHeader(at index: Int) -> String {
+        guard index < table.headers.count else { return "" }
+        return normalizedTableText(table.headers[index]).lowercased()
+    }
+
+    private func normalizedTableText(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func maxContentLength(at index: Int) -> Int {
+        let headerLength = index < table.headers.count ? normalizedTableText(table.headers[index]).count : 0
+        let rowLength = table.rows
+            .map { row in index < row.count ? normalizedTableText(row[index]).count : 0 }
+            .max() ?? 0
+        return max(headerLength, rowLength)
+    }
+}
+
+private struct MarkdownTableCell: View {
+    var value: String
+    var font: Font
+    var color: Color
+    var width: CGFloat
+    var header: Bool
+
+    var body: some View {
+        InlineMarkdownText(text: value, font: font, color: color)
+            .padding(.horizontal, header ? 12 : 10)
+            .padding(.vertical, header ? 9 : 8)
+        .frame(width: width, alignment: .leading)
+        .frame(minHeight: header ? 38 : 36, alignment: .topLeading)
     }
 }
 
@@ -1954,19 +2761,23 @@ struct InlineMarkdownText: View {
     var text: String
     var font: Font
     var color: Color
+    var fixedHorizontal = false
+    var lineLimit: Int?
 
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
                 .font(font)
                 .foregroundStyle(color)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
         } else {
             Text(text)
                 .font(font)
                 .foregroundStyle(color)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
         }
     }
@@ -2041,6 +2852,7 @@ struct MessageBubble: View, Equatable {
 }
 
 struct ToolUseStack: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var events: [ToolUseEvent]
     var isLive = false
 
@@ -2048,28 +2860,40 @@ struct ToolUseStack: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "wrench.and.screwdriver")
-                    .font(.caption.weight(.semibold))
-                Text(events.count == 1 ? "Tool" : "\(events.count) tools")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 16, height: 16)
+                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                Text(model.text(.toolActivity))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink.opacity(0.72))
+                Text("\(events.count)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.74), in: Capsule())
                 if isLive && hasRunningEvent {
-                    StatusDot(tint: ElephantTheme.accent)
-                    Text("live")
+                    Circle()
+                        .fill(ElephantTheme.accent)
+                        .frame(width: 5, height: 5)
+                    Text(model.text(.live))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.accent)
                 }
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(ElephantTheme.muted)
 
-            ForEach(events.suffix(6)) { event in
+            ForEach(events.suffix(5)) { event in
                 ToolUseEventRow(event: event)
             }
         }
-        .padding(8)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.76), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(6)
+        .frame(maxWidth: 480, alignment: .leading)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.66), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(ElephantTheme.line, lineWidth: 1)
+                .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
         )
     }
 
@@ -2086,12 +2910,14 @@ struct ToolUseStack: View {
 }
 
 struct ToolTraceWaitingView: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
     var body: some View {
         ElephantThinkingMark()
             .padding(.horizontal, 2)
             .padding(.vertical, 2)
             .fixedSize()
-            .accessibilityLabel("Assistant is thinking")
+            .accessibilityLabel(model.text(.assistantThinking))
     }
 }
 
@@ -2116,38 +2942,105 @@ struct ElephantThinkingMark: View {
 }
 
 struct ToolUseEventRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var event: ToolUseEvent
+    @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                StatusDot(tint: statusTint)
-                Text(event.name)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.ink)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text(event.status)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(1)
-            }
+            header
 
-            if !event.arguments.isEmpty {
-                Text(event.arguments)
-                    .font(.caption)
-                    .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            if !event.result.isEmpty {
-                Text(event.result)
-                    .font(.caption)
-                    .foregroundStyle(ElephantTheme.faint)
-                    .lineLimit(2)
+            if expanded && hasDetails {
+                VStack(alignment: .leading, spacing: 5) {
+                    if !argumentsText.isEmpty {
+                        ToolUseDetailBlock(title: model.text(.toolInput), text: argumentsText, tint: ElephantTheme.accent)
+                    }
+                    if !resultText.isEmpty {
+                        ToolUseDetailBlock(title: model.text(.toolResult), text: resultText, tint: ElephantTheme.green)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.30), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.34), lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.16), value: expanded)
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if hasDetails {
+            Button {
+                expanded.toggle()
+            } label: {
+                headerContent
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .help(expanded ? model.text(.hideToolDetails) : model.text(.showToolDetails))
+            .accessibilityLabel("\(displayName), \(statusText), \(expanded ? model.text(.hideToolDetails) : model.text(.showToolDetails))")
+        } else {
+            headerContent
+        }
+    }
+
+    private var headerContent: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusTint)
+                .frame(width: 5, height: 5)
+            Text(displayName)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(ElephantTheme.ink)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+            Text(statusText)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(statusTint)
+                .lineLimit(1)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(statusTint.opacity(0.10), in: Capsule())
+            if hasDetails {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .frame(width: 10)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var displayName: String {
+        let value = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return model.text(.toolFallback) }
+        if value.hasPrefix("tool.") {
+            return String(value.dropFirst("tool.".count))
+        }
+        return value
+    }
+
+    private var statusText: String {
+        let value = event.status.trimmingCharacters(in: .whitespacesAndNewlines)
+        return localizedToolStatus(value.isEmpty ? "completed" : value, language: model.appLanguage)
+    }
+
+    private var argumentsText: String {
+        event.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var resultText: String {
+        event.result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasDetails: Bool {
+        !argumentsText.isEmpty || !resultText.isEmpty
     }
 
     private var statusTint: Color {
@@ -2162,39 +3055,199 @@ struct ToolUseEventRow: View {
     }
 }
 
+private struct ToolUseDetailBlock: View {
+    var title: String
+    var text: String
+    var tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.caption2.monospaced())
+                .foregroundStyle(ElephantTheme.muted)
+                .lineLimit(8)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background(tint.opacity(0.055), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(tint.opacity(0.16), lineWidth: 1)
+        )
+    }
+}
+
 struct YouView: View {
     @EnvironmentObject private var model: ElephantAppModel
-    @State private var selectedLens = "identity"
+    @State private var selectedLens: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "You",
-                subtitle: "Personal Model facts and questions stay reviewable.",
-                actionTitle: "Reflect",
+                title: AppSection.you.title(language: model.appLanguage),
+                subtitle: model.text(.youPageSubtitle),
+                actionTitle: model.text(.reflect),
                 actionSymbol: "brain.head.profile"
             ) {
                 Task { await model.runReflect(trigger: "manual") }
             }
 
-            Picker("Lens", selection: $selectedLens) {
-                Text("Identity").tag("identity")
-                Text("World").tag("world")
-                Text("Pulse").tag("pulse")
-                Text("Journey").tag("journey")
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 430)
-
             VStack(spacing: 14) {
-                PersonalModelSummaryPanel()
                 PersonalModelMapPanel()
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel(
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Browse what Elephant carries forward",
+                            zh: "看看 Elephant 会带走什么",
+                            fr: "Parcourir ce qu'Elephant garde",
+                            de: "Durchsehen, was Elephant mitnimmt"
+                        ),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Choose an area to inspect. The selected shelf opens below.",
+                            zh: "选择一个区域查看，下面会展开对应的记忆。",
+                            fr: "Choisissez une zone à inspecter. L'espace sélectionné s'ouvre dessous.",
+                            de: "Wähle einen Bereich. Die ausgewählte Ablage öffnet sich darunter."
+                        )
+                    )
+                    LensPartitionGrid(selectedLens: activeLensBinding)
+                }
+                LensFactsPager(lens: activeLens)
                 QuestionFieldPanel()
-                LensPartitionGrid(selectedLens: $selectedLens)
-                LensFactsPager(lens: selectedLens)
             }
         }
     }
+
+    private var activeLens: String {
+        selectedLens ?? defaultLens
+    }
+
+    private var activeLensBinding: Binding<String?> {
+        Binding(
+            get: { selectedLens ?? defaultLens },
+            set: { selectedLens = $0 }
+        )
+    }
+
+    private var defaultLens: String {
+        ["identity", "world", "pulse", "journey"]
+            .max { left, right in
+                (model.snapshot.lensCoverage[left] ?? 0) < (model.snapshot.lensCoverage[right] ?? 0)
+            } ?? "identity"
+    }
+}
+
+private func localizedYouText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String) -> String {
+    switch language {
+    case .zh: return zh
+    case .fr: return fr
+    case .de: return de
+    case .en: return en
+    }
+}
+
+private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
+    String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
+}
+
+private func localizedLensTitle(_ lens: String, language: AppLanguage) -> String {
+    switch lens {
+    case "world":
+        return localizedYouText(language, en: "World", zh: "世界", fr: "Monde", de: "Welt")
+    case "pulse":
+        return localizedYouText(language, en: "Pulse", zh: "近况", fr: "Présent", de: "Puls")
+    case "journey":
+        return localizedYouText(language, en: "Journey", zh: "旅程", fr: "Parcours", de: "Weg")
+    default:
+        return localizedYouText(language, en: "Identity", zh: "身份", fr: "Identité", de: "Identität")
+    }
+}
+
+private func localizedToolStatus(_ rawValue: String, language: AppLanguage) -> String {
+    let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if value.contains("fail") || value.contains("error") {
+        return localizedYouText(language, en: "fail", zh: "失败", fr: "échec", de: "Fehler")
+    }
+    if value.contains("run") || value.contains("start") || value.contains("prepar") || value.contains("request") || value.contains("classif") {
+        return localizedYouText(language, en: "run", zh: "运行", fr: "actif", de: "läuft")
+    }
+    if value.contains("cancel") || value.contains("stop") {
+        return localizedYouText(language, en: "stop", zh: "停止", fr: "arrêt", de: "Stopp")
+    }
+    return localizedYouText(language, en: "done", zh: "完成", fr: "fait", de: "fertig")
+}
+
+private func localizedRuntimeStatus(_ rawValue: String, language: AppLanguage) -> String {
+    let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if value.contains("schedule") {
+        return localizedYouText(language, en: "scheduled", zh: "已计划", fr: "planifié", de: "geplant")
+    }
+    if value.contains("pause") {
+        return localizedYouText(language, en: "paused", zh: "已暂停", fr: "en pause", de: "pausiert")
+    }
+    if value.contains("ready") {
+        return localizedYouText(language, en: "ready", zh: "就绪", fr: "prêt", de: "bereit")
+    }
+    if value.contains("complete") || value.contains("done") {
+        return localizedYouText(language, en: "completed", zh: "已完成", fr: "terminé", de: "abgeschlossen")
+    }
+    if value.contains("fail") || value.contains("error") || value.contains("cancel") {
+        return localizedYouText(language, en: "needs attention", zh: "需要处理", fr: "à vérifier", de: "prüfen")
+    }
+    if value.contains("run") || value.contains("active") || value.contains("start") {
+        return localizedYouText(language, en: "running", zh: "运行中", fr: "en cours", de: "läuft")
+    }
+    return rawValue.isEmpty ? localizedYouText(language, en: "unknown", zh: "未知", fr: "inconnu", de: "unbekannt") : rawValue
+}
+
+private func localizedProviderState(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw.lowercased()
+    if value.isEmpty || value == "unknown" {
+        return localizedYouText(language, en: "setup", zh: "待设置", fr: "à configurer", de: "einrichten")
+    }
+    if value.contains("in use") || value.contains("active") {
+        return localizedYouText(language, en: "In use", zh: "使用中", fr: "actif", de: "aktiv")
+    }
+    if value.contains("connected") || value.contains("configured") {
+        return localizedYouText(language, en: "Connected", zh: "已连接", fr: "connecté", de: "verbunden")
+    }
+    if value == "use" || value.contains("setup") || value.contains("missing") || value.contains("needed") {
+        return localizedYouText(language, en: "Use", zh: "使用", fr: "Utiliser", de: "Nutzen")
+    }
+    return raw
+}
+
+private func localizedEmbeddingState(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw.lowercased()
+    if value.isEmpty || value == "unknown" {
+        return localizedYouText(language, en: "unknown", zh: "未知", fr: "inconnu", de: "unbekannt")
+    }
+    if value.contains("fail") || value.contains("error") {
+        return localizedYouText(language, en: "failed", zh: "失败", fr: "échec", de: "fehlgeschlagen")
+    }
+    if value.contains("missing") || value.contains("not found") {
+        return localizedYouText(language, en: "missing", zh: "未安装", fr: "manquant", de: "fehlt")
+    }
+    if value.contains("download") {
+        return localizedYouText(language, en: "downloading", zh: "下载中", fr: "téléchargement", de: "lädt herunter")
+    }
+    if value.contains("wait") {
+        return localizedYouText(language, en: "waiting", zh: "等待中", fr: "en attente", de: "wartet")
+    }
+    if value.contains("ready") || value.contains("loaded") || value.contains("external") {
+        return localizedYouText(language, en: "ready", zh: "就绪", fr: "prêt", de: "bereit")
+    }
+    return raw
 }
 
 struct PersonalModelSummaryPanel: View {
@@ -2207,10 +3260,22 @@ struct PersonalModelSummaryPanel: View {
                     .frame(width: 104, height: 104)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Personal Model")
+                    Text(localizedYouText(
+                        model.appLanguage,
+                        en: "What Elephant remembers",
+                        zh: "Elephant 记住的你",
+                        fr: "Ce qu'Elephant retient",
+                        de: "Was Elephant behält"
+                    ))
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text("Facts are separated from open questions so memory stays reviewable.")
+                    Text(localizedYouText(
+                        model.appLanguage,
+                        en: "Every memory should earn its place. Correct what is off; keep what helps.",
+                        zh: "每条记忆都应该有用。偏了就改掉，有帮助才留下。",
+                        fr: "Chaque souvenir doit mériter sa place. Corrigez ce qui dévie, gardez ce qui aide.",
+                        de: "Jede Erinnerung muss ihren Platz verdienen. Falsches korrigieren, Hilfreiches behalten."
+                    ))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -2218,10 +3283,10 @@ struct PersonalModelSummaryPanel: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 12) {
-                    CompactStat(value: "\(model.snapshot.lensCoverage["identity"] ?? 0)", label: "Identity")
-                    CompactStat(value: "\(model.snapshot.lensCoverage["world"] ?? 0)", label: "World")
-                    CompactStat(value: "\(model.snapshot.lensCoverage["pulse"] ?? 0)", label: "Pulse")
-                    CompactStat(value: "\(model.snapshot.lensCoverage["journey"] ?? 0)", label: "Journey")
+                    CompactStat(value: "\(model.snapshot.lensCoverage["identity"] ?? 0)", label: localizedLensTitle("identity", language: model.appLanguage))
+                    CompactStat(value: "\(model.snapshot.lensCoverage["world"] ?? 0)", label: localizedLensTitle("world", language: model.appLanguage))
+                    CompactStat(value: "\(model.snapshot.lensCoverage["pulse"] ?? 0)", label: localizedLensTitle("pulse", language: model.appLanguage))
+                    CompactStat(value: "\(model.snapshot.lensCoverage["journey"] ?? 0)", label: localizedLensTitle("journey", language: model.appLanguage))
                 }
             }
         }
@@ -2230,19 +3295,31 @@ struct PersonalModelSummaryPanel: View {
 
 struct PersonalModelMapPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
-    @State private var selectedLens: String?
+    @State private var selectedNode: PersonalGraphSelection?
 
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 SectionLabel(
-                    title: "Personal Model Map",
-                    subtitle: "Facts are grouped by lens and dotted topic path."
+                    title: localizedYouText(
+                        model.appLanguage,
+                        en: "Memory Map",
+                        zh: "记忆地图",
+                        fr: "Carte mémoire",
+                        de: "Erinnerungskarte"
+                    ),
+                    subtitle: localizedYouText(
+                        model.appLanguage,
+                        en: "Click any dot to inspect the memory behind it.",
+                        zh: "点击任意圆点，查看它背后的记忆。",
+                        fr: "Cliquez sur un point pour inspecter le souvenir derrière lui.",
+                        de: "Klicke auf einen Punkt, um die Erinnerung dahinter zu prüfen."
+                    )
                 )
-                PersonalModelMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedLens: $selectedLens)
-                    .frame(height: 700)
-                if let selectedLens {
-                    LensDetailStrip(lens: selectedLens)
+                PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, animated: true)
+                    .frame(height: 500)
+                if let selectedNode {
+                    PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
                 }
             }
         }
@@ -2260,11 +3337,23 @@ struct QuestionFieldPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(
-                        title: "Question Field",
-                        subtitle: "Open loops stay separate from facts until you answer, dismiss, or Reflect learns from them."
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Questions worth asking",
+                            zh: "值得确认的问题",
+                            fr: "Questions qui valent la peine",
+                            de: "Fragen, die sich lohnen"
+                        ),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Elephant should ask only when the answer changes how it helps.",
+                            zh: "只有答案会改变帮助方式时，Elephant 才应该问。",
+                            fr: "Elephant ne devrait demander que si la réponse change son aide.",
+                            de: "Elephant sollte nur fragen, wenn die Antwort seine Hilfe verändert."
+                        )
                     )
                     Spacer()
-                    Text("\(openCount) open")
+                    Text(openCountLabel)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.orange)
                 }
@@ -2297,7 +3386,16 @@ struct QuestionFieldPanel: View {
                 }
 
                 if visibleQuestions.isEmpty {
-                    EmptyLine(symbol: "questionmark.bubble", text: "No Personal Model questions in this state.")
+                    EmptyLine(
+                        symbol: "questionmark.bubble",
+                        text: localizedYouText(
+                            model.appLanguage,
+                            en: "No questions need your attention right now.",
+                            zh: "现在没有需要你确认的问题。",
+                            fr: "Aucune question ne demande votre attention pour l'instant.",
+                            de: "Gerade braucht keine Frage deine Aufmerksamkeit."
+                        )
+                    )
                 } else {
                     VStack(spacing: 0) {
                         ForEach(pagedQuestions) { question in
@@ -2319,16 +3417,41 @@ struct QuestionFieldPanel: View {
 
     private var filters: [(id: String, title: String, count: Int)] {
         [
-            ("open", "Open", openCount),
-            ("ready", "Ready", model.snapshot.waitingQuestions),
-            ("asked", "Asked", model.snapshot.askedQuestions),
-            ("answered", "Learned", model.snapshot.answeredQuestions),
-            ("dismissed", "Dismissed", model.snapshot.dismissedQuestions)
+            ("open", localizedFilterTitle("open"), openCount),
+            ("ready", localizedFilterTitle("ready"), model.snapshot.waitingQuestions),
+            ("asked", localizedFilterTitle("asked"), model.snapshot.askedQuestions),
+            ("answered", localizedFilterTitle("answered"), model.snapshot.answeredQuestions),
+            ("dismissed", localizedFilterTitle("dismissed"), model.snapshot.dismissedQuestions)
         ]
+    }
+
+    private var openCountLabel: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "\(openCount) open",
+            zh: "\(openCount) 个待确认",
+            fr: "\(openCount) ouvertes",
+            de: "\(openCount) offen"
+        )
     }
 
     private var openCount: Int {
         model.snapshot.waitingQuestions + model.snapshot.askedQuestions
+    }
+
+    private func localizedFilterTitle(_ id: String) -> String {
+        switch id {
+        case "ready":
+            return localizedYouText(model.appLanguage, en: "Ready", zh: "可回答", fr: "Prêtes", de: "Bereit")
+        case "asked":
+            return localizedYouText(model.appLanguage, en: "Asked", zh: "已问过", fr: "Posées", de: "Gefragt")
+        case "answered":
+            return localizedYouText(model.appLanguage, en: "Learned", zh: "已学到", fr: "Apprises", de: "Gelernt")
+        case "dismissed":
+            return localizedYouText(model.appLanguage, en: "Dismissed", zh: "已忽略", fr: "Ignorées", de: "Verworfen")
+        default:
+            return localizedYouText(model.appLanguage, en: "Open", zh: "待确认", fr: "Ouvertes", de: "Offen")
+        }
     }
 
     private var visibleQuestions: [PersonalModelQuestionItem] {
@@ -2496,6 +3619,852 @@ struct QuestionLedgerRow: View {
     }
 }
 
+struct PersonalGraphSelection: Identifiable, Equatable {
+    var id: String
+    var title: String
+    var subtitle: String
+    var lens: String
+    var kind: String
+    var count: Int
+    var detail: String
+    var facts: [String]
+
+    var accessibilityLabel: String {
+        [title, subtitle, kind, "\(count)"].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
+private enum PersonalModelMapPalette {
+    static let identity = ElephantTheme.accent
+    static let world = ElephantTheme.green
+    static let pulse = Color(red: 0.90, green: 0.65, blue: 0.14)
+    static let journey = Color(red: 0.86, green: 0.24, blue: 0.24)
+}
+
+struct PersonalModelDotMapCanvas: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var userName: String
+    var snapshot: DashboardSnapshot
+    @Binding var selectedNode: PersonalGraphSelection?
+    var animated = true
+
+    var body: some View {
+        GeometryReader { proxy in
+            if animated && !reduceMotion {
+                TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
+                    mapContent(size: proxy.size, seconds: timeline.date.timeIntervalSinceReferenceDate)
+                }
+            } else {
+                mapContent(size: proxy.size, seconds: 0)
+            }
+        }
+        .accessibilityLabel("Personal Model map")
+    }
+
+    @ViewBuilder
+    private func mapContent(size: CGSize, seconds: TimeInterval) -> some View {
+        let layout = buildLayout(in: size, seconds: seconds)
+
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(
+                    RadialGradient(
+                        colors: [ElephantTheme.green.opacity(0.07), ElephantTheme.accent.opacity(0.035), Color.clear],
+                        center: .center,
+                        startRadius: 28,
+                        endRadius: max(size.width, size.height) * 0.76
+                    )
+                )
+
+            Canvas { context, _ in
+                drawBackgroundField(in: &context, size: size, seconds: seconds)
+                for edge in layout.edges {
+                    draw(edge: edge, in: &context, seconds: seconds)
+                }
+                for node in layout.nodes {
+                    draw(node: node, selected: selectedNode?.id == node.selection.id, in: &context, seconds: seconds)
+                }
+            }
+
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .gesture(
+                    SpatialTapGesture()
+                        .onEnded { value in
+                            if let selection = nearestSelection(to: value.location, in: layout) {
+                                selectedNode = selection
+                            }
+                        }
+                )
+                .accessibilityLabel("Personal Model map")
+                .help("Click a dot to inspect memory.")
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var centerValue: String {
+        let trimmed = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty || trimmed == "You" ? "Personal Model" : trimmed
+    }
+
+    private func buildLayout(in size: CGSize, seconds: TimeInterval) -> PersonalDotMapLayout {
+        let centerBase = CGPoint(x: size.width * 0.50, y: size.height * 0.50)
+        let center = drifting(centerBase, id: "center", radius: 3, seconds: seconds)
+        let graphRadius = min(size.width, size.height) * (size.width > size.height * 1.45 ? 0.48 : 0.43)
+        var nodes: [PersonalDotMapNode] = [
+            PersonalDotMapNode(
+                id: "center",
+                tint: ElephantTheme.accent,
+                kind: .center,
+                position: center,
+                radius: 18,
+                selection: PersonalGraphSelection(
+                    id: "overview",
+                    title: centerValue,
+                    subtitle: "Personal Model",
+                    lens: "overview",
+                    kind: "overview",
+                    count: snapshot.personalModelFacts.count,
+                    detail: "A private map of how Elephant organizes memory. Open a branch when you want detail.",
+                    facts: []
+                )
+            )
+        ]
+        var edges: [PersonalDotMapEdge] = []
+
+        for spec in branchSpecs {
+            let facts = facts(for: spec.id)
+            let categories = categories(for: facts, lensID: spec.id)
+            let lensCount = facts.isEmpty ? (snapshot.lensCoverage[spec.id] ?? 0) : facts.count
+            let lensBase = point(from: centerBase, angle: spec.angle, radius: graphRadius * 0.66)
+            let lensRadius = min(15, 10 + CGFloat(lensCount) * 0.18)
+            let lensPoint = drifting(lensBase, id: "lens-\(spec.id)", radius: 4, seconds: seconds)
+            let lensNode = PersonalDotMapNode(
+                id: "lens-\(spec.id)",
+                tint: spec.tint,
+                kind: .lens,
+                position: lensPoint,
+                radius: lensRadius,
+                selection: PersonalGraphSelection(
+                    id: "lens-\(spec.id)",
+                    title: spec.title,
+                    subtitle: "\(lensCount) facts",
+                    lens: spec.id,
+                    kind: "lens",
+                    count: lensCount,
+                    detail: spec.description,
+                    facts: Array(facts.prefix(5)).map(\.text)
+                )
+            )
+            nodes.append(lensNode)
+            edges.append(
+                PersonalDotMapEdge(
+                    fromID: "center",
+                    toID: lensNode.id,
+                    from: center,
+                    to: lensPoint,
+                    tint: spec.tint,
+                    strength: 0.44
+                )
+            )
+
+            let visibleCategories = categories.isEmpty
+                ? [PersonalDotMapCategory(id: "\(spec.id)-empty", title: "No facts yet", count: 0, facts: [])]
+                : categories
+            for (categoryIndex, category) in visibleCategories.enumerated() {
+                let categoryAngle = fanAngle(base: spec.angle, index: categoryIndex, count: visibleCategories.count, spread: .pi * 1.08)
+                let densityBoost = min(0.16, CGFloat(category.count) * 0.012)
+                let categoryRadius = graphRadius * (0.46 + ringOffset(index: categoryIndex) * 0.10 + densityBoost)
+                let categoryBase = bounded(point(from: lensBase, angle: categoryAngle, radius: categoryRadius), in: size, margin: 42)
+                let categoryPoint = drifting(categoryBase, id: "category-\(spec.id)-\(category.id)", radius: 5, seconds: seconds)
+                let categoryNodeID = "category-\(spec.id)-\(category.id)"
+                nodes.append(
+                    PersonalDotMapNode(
+                        id: categoryNodeID,
+                        tint: spec.tint,
+                        kind: .category,
+                        position: categoryPoint,
+                        radius: min(12, 6.5 + CGFloat(category.count) * 0.22),
+                        selection: PersonalGraphSelection(
+                            id: "category-\(spec.id)-\(category.id)",
+                            title: category.title,
+                            subtitle: "\(category.count) facts",
+                            lens: spec.id,
+                            kind: "topic",
+                            count: category.count,
+                            detail: "Topic cluster inside \(spec.title).",
+                            facts: Array(category.facts.prefix(5)).map(\.text)
+                        )
+                    )
+                )
+                edges.append(
+                    PersonalDotMapEdge(
+                        fromID: lensNode.id,
+                        toID: categoryNodeID,
+                        from: lensPoint,
+                        to: categoryPoint,
+                        tint: spec.tint,
+                        strength: 0.30
+                    )
+                )
+
+                let visibleFacts = category.facts
+                for (factIndex, fact) in visibleFacts.enumerated() {
+                    let factAngle = factOrbitAngle(index: factIndex, count: visibleFacts.count, seed: fact.id)
+                    let factBase = bounded(
+                        point(from: categoryBase, angle: factAngle, radius: factOrbitRadius(index: factIndex, total: visibleFacts.count)),
+                        in: size,
+                        margin: 34
+                    )
+                    let factPoint = drifting(
+                        factBase,
+                        id: "fact-\(fact.id)",
+                        radius: factDriftRadius(total: visibleFacts.count),
+                        seconds: seconds
+                    )
+                    let factNodeID = "fact-\(fact.id)"
+                    let factRadius = 4.8 + CGFloat(fact.id.count % 4) * 0.35
+                    nodes.append(
+                        PersonalDotMapNode(
+                            id: factNodeID,
+                            tint: spec.tint,
+                            kind: .fact,
+                            position: factPoint,
+                            radius: factRadius,
+                            selection: PersonalGraphSelection(
+                                id: factNodeID,
+                                title: fact.topic.isEmpty ? category.title : fact.topic,
+                                subtitle: spec.title,
+                                lens: spec.id,
+                                kind: "fact",
+                                count: 1,
+                                detail: fact.detail.isEmpty ? fact.status : fact.detail,
+                                facts: [fact.text]
+                            )
+                        )
+                    )
+                    edges.append(
+                        PersonalDotMapEdge(
+                            fromID: categoryNodeID,
+                            toID: factNodeID,
+                            from: categoryPoint,
+                            to: factPoint,
+                            tint: spec.tint,
+                            strength: 0.22
+                        )
+                    )
+                }
+            }
+        }
+
+        return resolvedLayout(nodes: nodes, edges: edges, in: size)
+    }
+
+    private var branchSpecs: [PersonalDotMapBranchSpec] {
+        [
+            PersonalDotMapBranchSpec(
+                id: "identity",
+                title: "Identity",
+                description: "Stable preferences, identity anchors, names, profile links, and self-description.",
+                tint: PersonalModelMapPalette.identity,
+                angle: -.pi * 0.22
+            ),
+            PersonalDotMapBranchSpec(
+                id: "world",
+                title: "World",
+                description: "People, projects, places, organizations, and external context.",
+                tint: PersonalModelMapPalette.world,
+                angle: -.pi * 0.78
+            ),
+            PersonalDotMapBranchSpec(
+                id: "pulse",
+                title: "Pulse",
+                description: "Current state, open loops, live needs, blockers, and questions to revisit.",
+                tint: PersonalModelMapPalette.pulse,
+                angle: .pi * 0.22
+            ),
+            PersonalDotMapBranchSpec(
+                id: "journey",
+                title: "Journey",
+                description: "Long-term direction, milestones, narratives, and evolving goals.",
+                tint: PersonalModelMapPalette.journey,
+                angle: .pi * 0.78
+            )
+        ]
+    }
+
+    private func facts(for lensID: String) -> [PersonalModelFact] {
+        snapshot.personalModelFacts.filter { fact in
+            fact.status.lowercased() != "deleted" && normalizedLens(for: fact) == lensID
+        }
+    }
+
+    private func categories(for facts: [PersonalModelFact], lensID: String) -> [PersonalDotMapCategory] {
+        var buckets: [String: [PersonalModelFact]] = [:]
+        for fact in facts {
+            let path = topicPath(for: fact, lensID: lensID)
+            let category = path.first ?? "facts"
+            buckets[category, default: []].append(fact)
+        }
+        return buckets.map { key, value in
+            PersonalDotMapCategory(id: key, title: key, count: value.count, facts: value)
+        }
+        .sorted { lhs, rhs in
+            if lhs.count == rhs.count { return lhs.title < rhs.title }
+            return lhs.count > rhs.count
+        }
+    }
+
+    private func normalizedLens(for fact: PersonalModelFact) -> String {
+        let raw = "\(fact.lens) \(fact.topic)".lowercased()
+        if raw.contains("identity") { return "identity" }
+        if raw.contains("world") { return "world" }
+        if raw.contains("pulse") { return "pulse" }
+        if raw.contains("journey") { return "journey" }
+        return "identity"
+    }
+
+    private func topicPath(for fact: PersonalModelFact, lensID: String) -> [String] {
+        let raw = fact.topic.isEmpty ? fact.lens : fact.topic
+        var parts = raw
+            .lowercased()
+            .split { character in character == "." || character == "/" || character == ":" }
+            .map { cleanTopicLabel(String($0)) }
+            .filter { !$0.isEmpty }
+        while parts.first == lensID || parts.first == "personal_model" {
+            parts.removeFirst()
+        }
+        if parts.isEmpty {
+            return ["facts"]
+        }
+        return Array(parts.prefix(3))
+    }
+
+    private func cleanTopicLabel(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 22 else { return trimmed }
+        let end = trimmed.index(trimmed.startIndex, offsetBy: 22)
+        return String(trimmed[..<end])
+    }
+
+    private func drawBackgroundField(in context: inout GraphicsContext, size: CGSize, seconds: TimeInterval) {
+        let center = CGPoint(x: size.width * 0.50, y: size.height * 0.50)
+        for ring in [0.34, 0.50, 0.66, 0.82] {
+            let width = size.width * CGFloat(ring)
+            let height = size.height * CGFloat(ring * 0.78)
+            let rect = CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
+            context.stroke(Path(ellipseIn: rect), with: .color(ElephantTheme.line.opacity(0.10)), lineWidth: 0.7)
+        }
+        for index in 0..<36 {
+            let x = size.width * CGFloat(unit("field-x-\(index)"))
+            let y = size.height * CGFloat(unit("field-y-\(index)"))
+            let pulse = 0.04 + 0.04 * sin(seconds * 0.65 + Double(index) * 0.37)
+            let rect = CGRect(x: x - 1, y: y - 1, width: 2, height: 2)
+            context.fill(Path(ellipseIn: rect), with: .color(ElephantTheme.accent.opacity(pulse)))
+        }
+        context.fill(
+            Path(ellipseIn: CGRect(x: center.x - 64, y: center.y - 64, width: 128, height: 128)),
+            with: .color(ElephantTheme.green.opacity(0.035))
+        )
+    }
+
+    private func draw(edge: PersonalDotMapEdge, in context: inout GraphicsContext, seconds: TimeInterval) {
+        var path = Path()
+        path.move(to: edge.from)
+        let dx = edge.to.x - edge.from.x
+        let pulse = 0.018 * (0.5 + 0.5 * sin(seconds * 0.9 + Double(edge.from.x + edge.to.y) * 0.01))
+        path.addCurve(
+            to: edge.to,
+            control1: CGPoint(x: edge.from.x + dx * 0.42, y: edge.from.y),
+            control2: CGPoint(x: edge.from.x + dx * 0.58, y: edge.to.y)
+        )
+        context.stroke(
+            path,
+            with: .color(edge.tint.opacity(edge.strength + pulse)),
+            style: StrokeStyle(lineWidth: edge.strength > 0.35 ? 1.05 : 0.8, lineCap: .round)
+        )
+    }
+
+    private func draw(node: PersonalDotMapNode, selected: Bool, in context: inout GraphicsContext, seconds: TimeInterval) {
+        let fillOpacity: Double
+        let strokeOpacity: Double
+        switch node.kind {
+        case .center:
+            fillOpacity = 0.90
+            strokeOpacity = 0.34
+        case .lens:
+            fillOpacity = 0.90
+            strokeOpacity = 0.28
+        case .category:
+            fillOpacity = 0.62
+            strokeOpacity = 0.20
+        case .fact:
+            fillOpacity = 0.82
+            strokeOpacity = 0.16
+        }
+
+        let breath = node.kind == .center && animated && !reduceMotion ? breathing(at: seconds) : 0
+        let selectedPulse = selected && animated && !reduceMotion ? 0.5 + 0.5 * sin(seconds * 2.2) : 0
+        let radius = (selected ? node.radius * 1.14 : node.radius) * (1.0 + breath * 0.025)
+        if node.kind == .center {
+            drawMemoryCore(at: node.position, radius: radius, tint: node.tint, selected: selected, breath: breath, selectedPulse: selectedPulse, seconds: seconds, in: &context)
+            return
+        }
+        let rect = CGRect(
+            x: node.position.x - radius,
+            y: node.position.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        )
+        if selected {
+            let aura = rect.insetBy(dx: -11 - selectedPulse * 4, dy: -11 - selectedPulse * 4)
+            context.fill(Path(ellipseIn: aura), with: .color(node.tint.opacity(0.11 + selectedPulse * 0.035)))
+            context.stroke(Path(ellipseIn: aura), with: .color(node.tint.opacity(0.18 + selectedPulse * 0.08)), lineWidth: 1.2)
+        }
+        context.fill(Path(ellipseIn: rect), with: .color(node.tint.opacity(fillOpacity)))
+        context.stroke(Path(ellipseIn: rect.insetBy(dx: -3, dy: -3)), with: .color(node.tint.opacity(selected ? 0.74 : strokeOpacity)), lineWidth: selected ? 2.0 : 1.0)
+    }
+
+    private func drawMemoryCore(
+        at position: CGPoint,
+        radius: CGFloat,
+        tint: Color,
+        selected: Bool,
+        breath: CGFloat,
+        selectedPulse: CGFloat,
+        seconds: TimeInterval,
+        in context: inout GraphicsContext
+    ) {
+        let outerRadius = radius * (2.18 + breath * 0.09)
+        let outerRect = CGRect(
+            x: position.x - outerRadius,
+            y: position.y - outerRadius,
+            width: outerRadius * 2,
+            height: outerRadius * 2
+        )
+        context.fill(Path(ellipseIn: outerRect), with: .color(ElephantTheme.mint.opacity(0.055 + breath * 0.018)))
+        context.stroke(Path(ellipseIn: outerRect.insetBy(dx: 9, dy: 9)), with: .color(tint.opacity(0.095 + breath * 0.025)), lineWidth: 0.9)
+
+        if selected {
+            let selectedRect = outerRect.insetBy(dx: -6 - selectedPulse * 5, dy: -6 - selectedPulse * 5)
+            context.stroke(Path(ellipseIn: selectedRect), with: .color(tint.opacity(0.18 + selectedPulse * 0.08)), lineWidth: 1.4)
+        }
+
+        let orbitRadius = radius * 1.45
+        let orbitRect = CGRect(
+            x: position.x - orbitRadius,
+            y: position.y - orbitRadius,
+            width: orbitRadius * 2,
+            height: orbitRadius * 2
+        )
+        context.stroke(Path(ellipseIn: orbitRect), with: .color(tint.opacity(0.16)), lineWidth: 1.0)
+
+        let rotation = CGFloat(seconds * 0.42)
+        for index in 0..<3 {
+            let angle = rotation + CGFloat(index) * (.pi * 2 / 3)
+            let dot = CGPoint(
+                x: position.x + cos(angle) * orbitRadius,
+                y: position.y + sin(angle) * orbitRadius
+            )
+            let satelliteRadius = max(1.8, radius * 0.11)
+            let satelliteRect = CGRect(
+                x: dot.x - satelliteRadius,
+                y: dot.y - satelliteRadius,
+                width: satelliteRadius * 2,
+                height: satelliteRadius * 2
+            )
+            context.fill(Path(ellipseIn: satelliteRect), with: .color(tint.opacity(index == 0 ? 0.82 : 0.48)))
+        }
+
+        let bodyRadius = radius * 1.10
+        let bodyRect = CGRect(
+            x: position.x - bodyRadius,
+            y: position.y - bodyRadius,
+            width: bodyRadius * 2,
+            height: bodyRadius * 2
+        )
+        context.fill(Path(ellipseIn: bodyRect), with: .color(ElephantTheme.elevated.opacity(0.96)))
+        context.stroke(Path(ellipseIn: bodyRect), with: .color(tint.opacity(0.26)), lineWidth: 1.2)
+
+        let seedRadius = max(1.7, radius * 0.095)
+        let seedOrbit = radius * 0.37
+        context.fill(
+            Path(ellipseIn: CGRect(x: position.x - seedRadius * 1.12, y: position.y - seedRadius * 1.12, width: seedRadius * 2.24, height: seedRadius * 2.24)),
+            with: .color(ElephantTheme.ink.opacity(0.82))
+        )
+        for index in 0..<6 {
+            let angle = CGFloat(index) * (.pi / 3) - .pi / 6
+            let dot = CGPoint(
+                x: position.x + cos(angle) * seedOrbit,
+                y: position.y + sin(angle) * seedOrbit
+            )
+            let dotRect = CGRect(
+                x: dot.x - seedRadius,
+                y: dot.y - seedRadius,
+                width: seedRadius * 2,
+                height: seedRadius * 2
+            )
+            context.fill(Path(ellipseIn: dotRect), with: .color(tint.opacity(0.70)))
+            context.stroke(Path(ellipseIn: dotRect.insetBy(dx: -1.6, dy: -1.6)), with: .color(tint.opacity(0.12)), lineWidth: 0.8)
+        }
+    }
+
+    private func breathing(at seconds: TimeInterval) -> CGFloat {
+        CGFloat(0.5 + 0.5 * sin(seconds * 0.72))
+    }
+
+    private func nearestSelection(to point: CGPoint, in layout: PersonalDotMapLayout) -> PersonalGraphSelection? {
+        layout.nodes
+            .map { node -> (node: PersonalDotMapNode, distance: CGFloat) in
+                let dx = node.position.x - point.x
+                let dy = node.position.y - point.y
+                return (node, sqrt(dx * dx + dy * dy))
+            }
+            .filter { item in
+                item.distance <= max(34, item.node.radius + 16)
+            }
+            .min { lhs, rhs in
+                lhs.distance < rhs.distance
+            }?
+            .node
+            .selection
+    }
+
+    private func point(from origin: CGPoint, angle: CGFloat, radius: CGFloat) -> CGPoint {
+        CGPoint(
+            x: origin.x + cos(angle) * radius,
+            y: origin.y + sin(angle) * radius
+        )
+    }
+
+    private func fanAngle(base: CGFloat, index: Int, count: Int, spread: CGFloat) -> CGFloat {
+        guard count > 1 else { return base }
+        let centered = CGFloat(index) / CGFloat(count - 1) - 0.5
+        let wobble = signedUnit("category-angle-\(index)-\(count)") * 0.10
+        return base + centered * spread + wobble
+    }
+
+    private func factOrbitAngle(index: Int, count: Int, seed: String) -> CGFloat {
+        guard count > 0 else { return 0 }
+        let goldenAngle = CGFloat.pi * (3 - sqrt(5))
+        let base = CGFloat(index) * goldenAngle
+        return base + signedUnit("fact-angle-\(seed)") * 0.18
+    }
+
+    private func factOrbitRadius(index: Int, total: Int) -> CGFloat {
+        let ring = CGFloat(index / 8)
+        let base: CGFloat
+        if total > 14 {
+            base = 52
+        } else if total > 8 {
+            base = 44
+        } else {
+            base = 34
+        }
+        return base + ring * 31 + CGFloat(index % 4) * 5
+    }
+
+    private func factDriftRadius(total: Int) -> CGFloat {
+        total > 8 ? 5 : 6
+    }
+
+    private func resolvedLayout(nodes: [PersonalDotMapNode], edges: [PersonalDotMapEdge], in size: CGSize) -> PersonalDotMapLayout {
+        let resolvedNodes = resolveCollisions(nodes, in: size)
+        var positions: [String: CGPoint] = [:]
+        for node in resolvedNodes {
+            positions[node.id] = node.position
+        }
+        let resolvedEdges = edges.map { edge in
+            PersonalDotMapEdge(
+                fromID: edge.fromID,
+                toID: edge.toID,
+                from: positions[edge.fromID] ?? edge.from,
+                to: positions[edge.toID] ?? edge.to,
+                tint: edge.tint,
+                strength: edge.strength
+            )
+        }
+        return PersonalDotMapLayout(nodes: resolvedNodes, edges: resolvedEdges)
+    }
+
+    private func resolveCollisions(_ nodes: [PersonalDotMapNode], in size: CGSize) -> [PersonalDotMapNode] {
+        guard nodes.count > 1 else { return nodes }
+        var resolved = nodes
+        for _ in 0..<16 {
+            var offsets = Array(repeating: CGSize.zero, count: resolved.count)
+            var moved = false
+            for lhsIndex in 0..<resolved.count {
+                for rhsIndex in (lhsIndex + 1)..<resolved.count {
+                    let lhs = resolved[lhsIndex]
+                    let rhs = resolved[rhsIndex]
+                    let minimumDistance = collisionDistance(lhs, rhs)
+                    let dx = lhs.position.x - rhs.position.x
+                    let dy = lhs.position.y - rhs.position.y
+                    let distance = max(0.1, sqrt(dx * dx + dy * dy))
+                    let overlap = minimumDistance - distance
+                    guard overlap > 0 else { continue }
+
+                    let direction: CGPoint
+                    if distance <= 0.2 {
+                        let angle = CGFloat(unit("collision-\(lhs.id)-\(rhs.id)")) * .pi * 2
+                        direction = CGPoint(x: cos(angle), y: sin(angle))
+                    } else {
+                        direction = CGPoint(x: dx / distance, y: dy / distance)
+                    }
+                    let lhsMobility = collisionMobility(lhs.kind)
+                    let rhsMobility = collisionMobility(rhs.kind)
+                    let totalMobility = lhsMobility + rhsMobility
+                    guard totalMobility > 0 else { continue }
+
+                    let push = overlap * 0.58
+                    offsets[lhsIndex].width += direction.x * push * (lhsMobility / totalMobility)
+                    offsets[lhsIndex].height += direction.y * push * (lhsMobility / totalMobility)
+                    offsets[rhsIndex].width -= direction.x * push * (rhsMobility / totalMobility)
+                    offsets[rhsIndex].height -= direction.y * push * (rhsMobility / totalMobility)
+                    moved = true
+                }
+            }
+            if !moved { break }
+            for index in resolved.indices {
+                let mobility = collisionMobility(resolved[index].kind)
+                guard mobility > 0 else { continue }
+                let anchor = nodes[index].position
+                var position = CGPoint(
+                    x: resolved[index].position.x + offsets[index].width,
+                    y: resolved[index].position.y + offsets[index].height
+                )
+                let anchorPull = max(0.02, 0.08 - mobility * 0.035)
+                position.x += (anchor.x - position.x) * anchorPull
+                position.y += (anchor.y - position.y) * anchorPull
+                resolved[index].position = bounded(position, in: size, margin: boundaryMargin(for: resolved[index]))
+            }
+        }
+        return resolved
+    }
+
+    private func collisionDistance(_ lhs: PersonalDotMapNode, _ rhs: PersonalDotMapNode) -> CGFloat {
+        visualRadius(for: lhs) + visualRadius(for: rhs) + collisionPadding(lhs.kind, rhs.kind)
+    }
+
+    private func visualRadius(for node: PersonalDotMapNode) -> CGFloat {
+        switch node.kind {
+        case .center:
+            return node.radius * 2.32
+        case .lens:
+            return node.radius + 8
+        case .category:
+            return node.radius + 7
+        case .fact:
+            return node.radius + 5
+        }
+    }
+
+    private func collisionPadding(_ lhs: PersonalDotMapNodeKind, _ rhs: PersonalDotMapNodeKind) -> CGFloat {
+        switch (lhs, rhs) {
+        case (.fact, .fact):
+            return 7
+        case (.category, .fact), (.fact, .category):
+            return 9
+        default:
+            return 12
+        }
+    }
+
+    private func collisionMobility(_ kind: PersonalDotMapNodeKind) -> CGFloat {
+        switch kind {
+        case .center:
+            return 0
+        case .lens:
+            return 0.22
+        case .category:
+            return 0.58
+        case .fact:
+            return 1
+        }
+    }
+
+    private func boundaryMargin(for node: PersonalDotMapNode) -> CGFloat {
+        visualRadius(for: node) + 10
+    }
+
+    private func ringOffset(index: Int) -> CGFloat {
+        CGFloat(index % 4)
+    }
+
+    private func bounded(_ point: CGPoint, in size: CGSize, margin: CGFloat) -> CGPoint {
+        CGPoint(
+            x: clamp(point.x, min: margin, max: max(margin, size.width - margin)),
+            y: clamp(point.y, min: margin, max: max(margin, size.height - margin))
+        )
+    }
+
+    private func drifting(_ point: CGPoint, id: String, radius: CGFloat, seconds: TimeInterval) -> CGPoint {
+        guard !reduceMotion else { return point }
+        let phase = unit(id) * .pi * 2
+        let speed = 0.22 + unit("speed-\(id)") * 0.18
+        return CGPoint(
+            x: point.x + CGFloat(sin(seconds * speed + phase)) * radius,
+            y: point.y + CGFloat(cos(seconds * (speed * 0.82) + phase * 0.7)) * radius
+        )
+    }
+
+    private func unit(_ value: String) -> Double {
+        var hash: UInt64 = 1469598103934665603
+        for scalar in value.unicodeScalars {
+            hash ^= UInt64(scalar.value)
+            hash &*= 1099511628211
+        }
+        return Double(hash % 10_000) / 10_000.0
+    }
+
+    private func signedUnit(_ value: String) -> CGFloat {
+        CGFloat(unit(value) * 2.0 - 1.0)
+    }
+
+    private func clamp(_ value: CGFloat, min: CGFloat, max: CGFloat) -> CGFloat {
+        Swift.min(Swift.max(value, min), max)
+    }
+}
+
+private struct PersonalDotMapBranchSpec {
+    var id: String
+    var title: String
+    var description: String
+    var tint: Color
+    var angle: CGFloat
+}
+
+private struct PersonalDotMapCategory: Identifiable {
+    var id: String
+    var title: String
+    var count: Int
+    var facts: [PersonalModelFact]
+}
+
+private enum PersonalDotMapNodeKind {
+    case center
+    case lens
+    case category
+    case fact
+}
+
+private struct PersonalDotMapNode: Identifiable {
+    var id: String
+    var tint: Color
+    var kind: PersonalDotMapNodeKind
+    var position: CGPoint
+    var radius: CGFloat
+    var selection: PersonalGraphSelection
+}
+
+private struct PersonalDotMapEdge {
+    var fromID: String
+    var toID: String
+    var from: CGPoint
+    var to: CGPoint
+    var tint: Color
+    var strength: Double
+}
+
+private struct PersonalDotMapLayout {
+    var nodes: [PersonalDotMapNode]
+    var edges: [PersonalDotMapEdge]
+}
+
+struct PersonalGraphDetailStrip: View {
+    var selection: PersonalGraphSelection
+    var language: AppLanguage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(selection.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Pill(text: selection.kind, symbol: "circle.fill", tint: tint)
+                Spacer()
+                Text(countLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+            }
+            if !detailText.isEmpty {
+                Text(detailText)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(2)
+            }
+            if selection.lens == "overview" {
+                Text(localizedYouText(
+                    language,
+                    en: "No personal profile fields are shown here. Select a branch only when you need to inspect memory.",
+                    zh: "这里不展示个人资料字段；需要检查记忆时，再选择具体分支。",
+                    fr: "Aucun champ de profil personnel n'est affiché ici. Sélectionnez une branche seulement si nécessaire.",
+                    de: "Hier werden keine Profilfelder angezeigt. Wähle einen Zweig nur, wenn du Erinnerungen prüfen willst."
+                ))
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            } else if selection.facts.isEmpty {
+                EmptyLine(
+                    symbol: "circle.grid.cross",
+                    text: localizedYouText(
+                        language,
+                        en: "No reviewable memories in this area yet.",
+                        zh: "这个区域还没有可回看的记忆。",
+                        fr: "Pas encore de souvenirs vérifiables dans cette zone.",
+                        de: "In diesem Bereich gibt es noch keine prüfbaren Erinnerungen."
+                    )
+                )
+            } else {
+                ForEach(Array(selection.facts.prefix(3).enumerated()), id: \.offset) { _, fact in
+                    Text(friendlyMemoryPreview(fact, language: language))
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+    }
+
+    private var countLabel: String {
+        localizedYouText(
+            language,
+            en: "\(selection.count) memories",
+            zh: "\(selection.count) 条记忆",
+            fr: "\(selection.count) souvenirs",
+            de: "\(selection.count) Erinnerungen"
+        )
+    }
+
+    private var detailText: String {
+        if selection.lens == "overview" {
+            return localizedYouText(
+                language,
+                en: "A private map of how Elephant organizes memory.",
+                zh: "Elephant 如何组织记忆的一张私有地图。",
+                fr: "Une carte privée de l'organisation de la mémoire par Elephant.",
+                de: "Eine private Karte, wie Elephant Erinnerung organisiert."
+            )
+        }
+        return selection.detail
+    }
+
+    private var tint: Color {
+        switch selection.lens {
+        case "world": return ElephantTheme.green
+        case "pulse": return ElephantTheme.orange
+        case "journey": return ElephantTheme.accent.opacity(0.82)
+        default: return ElephantTheme.accent
+        }
+    }
+}
+
 struct PersonalModelMapCanvas: View {
     var userName: String
     var snapshot: DashboardSnapshot
@@ -2634,7 +4603,7 @@ struct PersonalModelMapCanvas: View {
                 id: "identity",
                 title: "Identity",
                 symbol: "person.crop.circle",
-                tint: ElephantTheme.accent,
+                tint: PersonalModelMapPalette.identity,
                 lensX: 0.65,
                 lensY: 0.28,
                 categoryX: 0.78,
@@ -2645,7 +4614,7 @@ struct PersonalModelMapCanvas: View {
                 id: "world",
                 title: "World",
                 symbol: "globe",
-                tint: ElephantTheme.green,
+                tint: PersonalModelMapPalette.world,
                 lensX: 0.35,
                 lensY: 0.28,
                 categoryX: 0.22,
@@ -2656,7 +4625,7 @@ struct PersonalModelMapCanvas: View {
                 id: "pulse",
                 title: "Pulse",
                 symbol: "waveform.path.ecg",
-                tint: ElephantTheme.orange,
+                tint: PersonalModelMapPalette.pulse,
                 lensX: 0.65,
                 lensY: 0.72,
                 categoryX: 0.78,
@@ -2667,7 +4636,7 @@ struct PersonalModelMapCanvas: View {
                 id: "journey",
                 title: "Journey",
                 symbol: "map",
-                tint: ElephantTheme.accent.opacity(0.82),
+                tint: PersonalModelMapPalette.journey,
                 lensX: 0.35,
                 lensY: 0.72,
                 categoryX: 0.22,
@@ -3026,7 +4995,7 @@ struct LensNode: View {
 
 struct LensPartitionGrid: View {
     @EnvironmentObject private var model: ElephantAppModel
-    @Binding var selectedLens: String
+    @Binding var selectedLens: String?
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 14) {
@@ -3037,6 +5006,8 @@ struct LensPartitionGrid: View {
                     LensPartitionCard(item: item, selected: selectedLens == item.id)
                 }
                 .buttonStyle(.plain)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .help(item.helpText)
             }
         }
     }
@@ -3049,35 +5020,63 @@ struct LensPartitionGrid: View {
         [
             LensPartition(
                 id: "identity",
-                title: "Identity",
+                title: localizedLensTitle("identity", language: model.appLanguage),
                 value: "\(model.snapshot.lensCoverage["identity"] ?? 0)",
-                subtitle: "Stable preferences, roles, and self-knowledge.",
+                subtitle: localizedYouText(
+                    model.appLanguage,
+                    en: "Stable preferences, roles, and self-knowledge.",
+                    zh: "稳定偏好、角色和自我理解。",
+                    fr: "Préférences stables, rôles et connaissance de soi.",
+                    de: "Stabile Vorlieben, Rollen und Selbstwissen."
+                ),
                 symbol: "person.crop.circle",
-                tint: ElephantTheme.accent
+                tint: PersonalModelMapPalette.identity,
+                helpText: localizedYouText(model.appLanguage, en: "Show identity memories", zh: "查看身份记忆", fr: "Afficher les souvenirs d'identité", de: "Identitätserinnerungen anzeigen")
             ),
             LensPartition(
                 id: "world",
-                title: "World",
+                title: localizedLensTitle("world", language: model.appLanguage),
                 value: "\(model.snapshot.lensCoverage["world"] ?? 0)",
-                subtitle: "People, projects, places, and external context.",
+                subtitle: localizedYouText(
+                    model.appLanguage,
+                    en: "People, projects, places, and external context.",
+                    zh: "人、项目、地点和外部语境。",
+                    fr: "Personnes, projets, lieux et contexte externe.",
+                    de: "Menschen, Projekte, Orte und äußerer Kontext."
+                ),
                 symbol: "globe",
-                tint: ElephantTheme.green
+                tint: PersonalModelMapPalette.world,
+                helpText: localizedYouText(model.appLanguage, en: "Show world memories", zh: "查看世界记忆", fr: "Afficher les souvenirs du monde", de: "Welterinnerungen anzeigen")
             ),
             LensPartition(
                 id: "pulse",
-                title: "Pulse",
+                title: localizedLensTitle("pulse", language: model.appLanguage),
                 value: "\(model.snapshot.lensCoverage["pulse"] ?? 0)",
-                subtitle: "Current state, open loops, and questions to revisit.",
+                subtitle: localizedYouText(
+                    model.appLanguage,
+                    en: "Current state, open loops, and questions to revisit.",
+                    zh: "最近状态、未完事项和需要回看的问题。",
+                    fr: "État actuel, boucles ouvertes et questions à revoir.",
+                    de: "Aktueller Zustand, offene Fäden und spätere Fragen."
+                ),
                 symbol: "waveform.path.ecg",
-                tint: ElephantTheme.orange
+                tint: PersonalModelMapPalette.pulse,
+                helpText: localizedYouText(model.appLanguage, en: "Show current-state memories", zh: "查看近况记忆", fr: "Afficher les souvenirs du présent", de: "Aktuelle Erinnerungen anzeigen")
             ),
             LensPartition(
                 id: "journey",
-                title: "Journey",
+                title: localizedLensTitle("journey", language: model.appLanguage),
                 value: "\(model.snapshot.lensCoverage["journey"] ?? 0)",
-                subtitle: "Lessons, patterns, and decisions that accumulated over time.",
+                subtitle: localizedYouText(
+                    model.appLanguage,
+                    en: "Lessons, patterns, and decisions that accumulated over time.",
+                    zh: "长期积累的经验、模式和关键决定。",
+                    fr: "Leçons, motifs et décisions accumulés avec le temps.",
+                    de: "Lehren, Muster und Entscheidungen über die Zeit."
+                ),
                 symbol: "map",
-                tint: ElephantTheme.accent.opacity(0.82)
+                tint: PersonalModelMapPalette.journey,
+                helpText: localizedYouText(model.appLanguage, en: "Show journey memories", zh: "查看旅程记忆", fr: "Afficher les souvenirs de parcours", de: "Wegerinnerungen anzeigen")
             )
         ]
     }
@@ -3090,6 +5089,7 @@ struct LensPartition: Identifiable {
     var subtitle: String
     var symbol: String
     var tint: Color
+    var helpText: String
 }
 
 struct LensPartitionCard: View {
@@ -3187,7 +5187,7 @@ struct LensFactsPager: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    SectionLabel(title: lensTitle, subtitle: "\(facts.count) facts · page \(currentPage + 1) of \(pageCount)")
+                    SectionLabel(title: lensTitle, subtitle: pagerSubtitle)
                     Spacer()
                     HStack(spacing: 8) {
                         Button {
@@ -3253,20 +5253,53 @@ struct LensFactsPager: View {
     }
 
     private var lensTitle: String {
-        switch lens {
-        case "world": return "World"
-        case "pulse": return "Pulse"
-        case "journey": return "Journey"
-        default: return "Identity"
-        }
+        localizedLensTitle(lens, language: model.appLanguage)
+    }
+
+    private var pagerSubtitle: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "\(facts.count) memories · page \(currentPage + 1) of \(pageCount)",
+            zh: "\(facts.count) 条记忆 · 第 \(currentPage + 1)/\(pageCount) 页",
+            fr: "\(facts.count) souvenirs · page \(currentPage + 1) sur \(pageCount)",
+            de: "\(facts.count) Erinnerungen · Seite \(currentPage + 1) von \(pageCount)"
+        )
     }
 
     private var lensDescription: String {
         switch lens {
-        case "world": return "People, projects, places, tools, and external context Elephant should remember."
-        case "pulse": return "Current state, open loops, blockers, and questions that should stay fresh."
-        case "journey": return "Lessons, patterns, and decisions from prior episodes."
-        default: return "Durable preferences, roles, values, working style, and self-knowledge."
+        case "world":
+            return localizedYouText(
+                model.appLanguage,
+                en: "People, projects, places, tools, and external context Elephant should remember.",
+                zh: "Elephant 应该记住的人、项目、地点、工具和外部语境。",
+                fr: "Personnes, projets, lieux, outils et contexte externe qu'Elephant devrait retenir.",
+                de: "Menschen, Projekte, Orte, Tools und äußerer Kontext, die Elephant behalten sollte."
+            )
+        case "pulse":
+            return localizedYouText(
+                model.appLanguage,
+                en: "Current state, open loops, blockers, and questions that should stay fresh.",
+                zh: "最近状态、未完成的事、阻塞点，以及需要保持新鲜的问题。",
+                fr: "État actuel, boucles ouvertes, blocages et questions à garder fraîches.",
+                de: "Aktueller Zustand, offene Fäden, Blocker und Fragen, die frisch bleiben sollten."
+            )
+        case "journey":
+            return localizedYouText(
+                model.appLanguage,
+                en: "Lessons, patterns, and decisions from prior episodes.",
+                zh: "从过去经历里沉淀下来的经验、模式和决定。",
+                fr: "Leçons, motifs et décisions issus des épisodes passés.",
+                de: "Lehren, Muster und Entscheidungen aus früheren Episoden."
+            )
+        default:
+            return localizedYouText(
+                model.appLanguage,
+                en: "Durable preferences, roles, values, working style, and self-knowledge.",
+                zh: "稳定偏好、角色、价值观、工作方式和自我理解。",
+                fr: "Préférences durables, rôles, valeurs, style de travail et connaissance de soi.",
+                de: "Dauerhafte Vorlieben, Rollen, Werte, Arbeitsstil und Selbstwissen."
+            )
         }
     }
 
@@ -3280,7 +5313,13 @@ struct LensFactsPager: View {
     }
 
     private var emptyText: String {
-        "No reviewed \(lensTitle) facts yet. Run Reflect after a few useful conversations."
+        localizedYouText(
+            model.appLanguage,
+            en: "No \(lensTitle.lowercased()) memories yet. Run Reflect after a few useful conversations.",
+            zh: "还没有\(lensTitle)记忆。聊几段具体的事，再运行 Reflect。",
+            fr: "Pas encore de souvenirs \(lensTitle.lowercased()). Lancez Reflect après quelques conversations utiles.",
+            de: "Noch keine \(lensTitle.lowercased())-Erinnerungen. Starte Reflect nach ein paar nützlichen Gesprächen."
+        )
     }
 }
 
@@ -3388,10 +5427,10 @@ struct FactDisclosureRow: View {
 
     private var tint: Color {
         let lens = fact.lens.lowercased()
-        if lens.contains("pulse") { return ElephantTheme.orange }
-        if lens.contains("world") { return ElephantTheme.green }
-        if lens.contains("journey") { return ElephantTheme.accent.opacity(0.82) }
-        return ElephantTheme.accent
+        if lens.contains("pulse") { return PersonalModelMapPalette.pulse }
+        if lens.contains("world") { return PersonalModelMapPalette.world }
+        if lens.contains("journey") { return PersonalModelMapPalette.journey }
+        return PersonalModelMapPalette.identity
     }
 }
 
@@ -3401,13 +5440,16 @@ struct SkillAffinityPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
-                SectionLabel(title: "Skills Affinity", subtitle: "\(model.snapshot.skillAffinityRows.count) learned affinities")
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Skills Affinity", zh: "常用技能倾向", fr: "Affinité des skills", de: "Skill-Affinität"),
+                    subtitle: localizedFormat(model.appLanguage, en: "%d learned affinities", zh: "%d 条已学习偏好", fr: "%d affinités apprises", de: "%d gelernte Affinitäten", model.snapshot.skillAffinityRows.count)
+                )
                 if model.snapshot.skillAffinityRows.isEmpty {
                     EmptyLine(
                         symbol: "wand.and.stars",
                         text: model.snapshot.skillAffinities > 0
-                            ? "\(model.snapshot.skillAffinities) affinities detected."
-                            : "No skill affinity facts yet."
+                            ? localizedFormat(model.appLanguage, en: "%d affinities detected.", zh: "已经识别出 %d 条技能偏好。", fr: "%d affinités détectées.", de: "%d Affinitäten erkannt.", model.snapshot.skillAffinities)
+                            : localizedYouText(model.appLanguage, en: "No skill affinity facts yet.", zh: "还没学到你常用哪些技能。", fr: "Aucune affinité de skill pour l'instant.", de: "Noch keine Skill-Affinitäten.")
                     )
                     if !model.snapshot.skillNames.isEmpty {
                         FlowLayout(items: model.snapshot.skillNames)
@@ -3448,14 +5490,26 @@ struct DiaryPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
-                SectionLabel(title: "Diary", subtitle: "\(model.snapshot.diaryEntries.count) entries")
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch"),
+                    subtitle: localizedFormat(model.appLanguage, en: "%d entries", zh: "%d 篇", fr: "%d entrées", de: "%d Einträge", model.snapshot.diaryEntries.count)
+                )
                 if model.snapshot.diaryEntries.isEmpty {
-                    EmptyLine(symbol: "book.closed", text: "No diary entries yet. Run Reflect with diary enabled after there is enough context.")
+                    EmptyLine(
+                        symbol: "book.closed",
+                        text: localizedYouText(
+                            model.appLanguage,
+                            en: "No diary entries yet. Run Reflect with diary enabled after there is enough context.",
+                            zh: "还没有日记。等上下文足够后，可以运行带日记的 Reflect。",
+                            fr: "Aucune entrée pour l'instant. Lancez Reflect avec le journal quand il y a assez de contexte.",
+                            de: "Noch keine Tagebucheinträge. Starte Reflect mit Tagebuch, sobald genug Kontext da ist."
+                        )
+                    )
                 } else {
                     ForEach(model.snapshot.diaryEntries) { entry in
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
-                                Label(entry.date.isEmpty ? "Diary entry" : entry.date, systemImage: "book.closed")
+                                Label(entry.date.isEmpty ? localizedYouText(model.appLanguage, en: "Diary entry", zh: "日记", fr: "Entrée de journal", de: "Tagebucheintrag") : entry.date, systemImage: "book.closed")
                                     .font(.headline)
                                     .foregroundStyle(ElephantTheme.ink)
                                 Spacer()
@@ -3486,9 +5540,9 @@ struct DiaryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Diary",
-                subtitle: "Reflective entries written from reviewed episodes.",
-                actionTitle: model.isReflecting ? "Writing" : "Write Diary",
+                title: AppSection.diary.title(language: model.appLanguage),
+                subtitle: model.text(.diaryPageSubtitle),
+                actionTitle: model.isReflecting ? model.text(.writing) : model.text(.writeDiary),
                 actionSymbol: "book.closed"
             ) {
                 writeDiaryForSelectedDate()
@@ -3504,8 +5558,14 @@ struct DiaryView: View {
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 3) {
                             SectionLabel(
-                                title: "Write Diary",
-                                subtitle: "Pick a day with reviewed episodes. Yesterday is selected by default."
+                                title: model.text(.writeDiary),
+                                subtitle: localizedYouText(
+                                    model.appLanguage,
+                                    en: "Pick a day with reviewed episodes. Yesterday is selected by default.",
+                                    zh: "选择有已回看 episodes 的日期。默认选昨天。",
+                                    fr: "Choisissez un jour avec des épisodes revus. Hier est sélectionné par défaut.",
+                                    de: "Wähle einen Tag mit geprüften Episoden. Gestern ist vorausgewählt."
+                                )
                             )
                             Text(selectedDateDisplay)
                                 .font(.caption.weight(.medium))
@@ -3578,19 +5638,19 @@ struct DiaryView: View {
             .buttonStyle(PressablePlainButtonStyle())
             .popover(isPresented: $showsDatePicker, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 12) {
-                    DatePicker("Diary day", selection: $targetDate, displayedComponents: .date)
+                    DatePicker(localizedYouText(model.appLanguage, en: "Diary day", zh: "日记日期", fr: "Jour du journal", de: "Tagebuchtag"), selection: $targetDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                         .frame(width: 300)
                     HStack(spacing: 8) {
-                        Button("Yesterday") {
+                        Button(localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern")) {
                             setTargetDate(relativeToTodayBy: -1)
                         }
-                        Button("Today") {
+                        Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
                             setTargetDate(relativeToTodayBy: 0)
                         }
                         Spacer()
-                        Button("Done") {
+                        Button(localizedYouText(model.appLanguage, en: "Done", zh: "完成", fr: "Terminé", de: "Fertig")) {
                             showsDatePicker = false
                         }
                         .keyboardShortcut(.defaultAction)
@@ -3614,13 +5674,13 @@ struct DiaryView: View {
             Divider()
                 .frame(height: 24)
 
-            Button("Yesterday") {
+            Button(localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern")) {
                 setTargetDate(relativeToTodayBy: -1)
             }
             .buttonStyle(.bordered)
             .help("Select yesterday")
 
-            Button("Today") {
+            Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
                 setTargetDate(relativeToTodayBy: 0)
             }
             .buttonStyle(.bordered)
@@ -3632,7 +5692,12 @@ struct DiaryView: View {
         Button {
             writeDiaryForSelectedDate()
         } label: {
-            Label(model.isReflecting ? "Writing" : "Write for \(requestDateString)", systemImage: "square.and.pencil")
+            Label(
+                model.isReflecting
+                    ? model.text(.writing)
+                    : localizedFormat(model.appLanguage, en: "Write for %@", zh: "写 %@", fr: "Écrire pour %@", de: "Schreiben für %@", requestDateString),
+                systemImage: "square.and.pencil"
+            )
                 .lineLimit(1)
         }
         .buttonStyle(.borderedProminent)
@@ -3647,7 +5712,7 @@ struct DiaryView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Writing diary")
+                Text(localizedYouText(model.appLanguage, en: "Writing diary", zh: "正在写日记", fr: "Écriture du journal", de: "Tagebuch wird geschrieben"))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -3727,18 +5792,18 @@ struct SkillsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Skills",
-                subtitle: "What Elephant can do, and when your Personal Model tends to need each skill.",
-                actionTitle: "Refresh",
+                title: AppSection.skills.title(language: model.appLanguage),
+                subtitle: model.text(.skillsPageSubtitle),
+                actionTitle: model.text(.refresh),
                 actionSymbol: "arrow.clockwise"
             ) {
                 Task { try? await model.refreshDashboard() }
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Installed", value: "\(model.snapshot.skills)", symbol: "wand.and.stars")
-                MetricTile(label: "Affinity", value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
-                MetricTile(label: "Enabled", value: "\(enabledSkills)", symbol: "checkmark.seal", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Installed", zh: "已安装", fr: "Installés", de: "Installiert"), value: "\(model.snapshot.skills)", symbol: "wand.and.stars")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Affinity", zh: "亲和", fr: "Affinité", de: "Affinität"), value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activés", de: "Aktiviert"), value: "\(enabledSkills)", symbol: "checkmark.seal", tint: ElephantTheme.green)
             }
 
             SkillAffinityPanel()
@@ -3761,18 +5826,18 @@ struct ToolsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Tools",
-                subtitle: "Operator actions Elephant can call from local agent loops.",
-                actionTitle: "Refresh",
+                title: AppSection.tools.title(language: model.appLanguage),
+                subtitle: model.text(.toolsPageSubtitle),
+                actionTitle: model.text(.refresh),
                 actionSymbol: "arrow.clockwise"
             ) {
                 Task { try? await model.refreshDashboard() }
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Built-in", value: "\(model.snapshot.enabledTools)/\(model.snapshot.tools)", symbol: "wrench.and.screwdriver")
-                MetricTile(label: "MCP Servers", value: "\(model.snapshot.mcpServers)", symbol: "server.rack", tint: ElephantTheme.green)
-                MetricTile(label: "MCP Tools", value: "\(model.snapshot.mcpTools)", symbol: "point.3.connected.trianglepath.dotted", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Built-in", zh: "内置", fr: "Intégrés", de: "Eingebaut"), value: "\(model.snapshot.enabledTools)/\(model.snapshot.tools)", symbol: "wrench.and.screwdriver")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "MCP Servers", zh: "MCP 服务", fr: "Serveurs MCP", de: "MCP-Server"), value: "\(model.snapshot.mcpServers)", symbol: "server.rack", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "MCP Tools", zh: "MCP 工具", fr: "Outils MCP", de: "MCP-Tools"), value: "\(model.snapshot.mcpTools)", symbol: "point.3.connected.trianglepath.dotted", tint: ElephantTheme.orange)
             }
 
             ToolsCatalogPanel()
@@ -3786,30 +5851,42 @@ struct MessagingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Messaging",
-                subtitle: "IM bridges for WeChat, Feishu, Discord, DingDing, and WeCom.",
-                actionTitle: "Refresh",
+                title: AppSection.messaging.title(language: model.appLanguage),
+                subtitle: model.text(.messagingPageSubtitle),
+                actionTitle: model.text(.refresh),
                 actionSymbol: "arrow.clockwise"
             ) {
                 Task { try? await model.refreshDashboard() }
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Services", value: "\(model.snapshot.gatewayServices)", symbol: "message.badge")
-                MetricTile(label: "Configured", value: "\(model.snapshot.gatewayConfigured)", symbol: "checkmark.seal", tint: ElephantTheme.green)
-                MetricTile(label: "Running", value: "\(model.snapshot.gatewayRunning)", symbol: "bolt.horizontal", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Services", zh: "服务", fr: "Services", de: "Dienste"), value: "\(model.snapshot.gatewayServices)", symbol: "message.badge")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Configured", zh: "已配置", fr: "Configurés", de: "Konfiguriert"), value: "\(model.snapshot.gatewayConfigured)", symbol: "checkmark.seal", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Running", zh: "运行中", fr: "Actifs", de: "Läuft"), value: "\(model.snapshot.gatewayRunning)", symbol: "bolt.horizontal", tint: ElephantTheme.orange)
             }
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionLabel(title: "IM Bridge Cards", subtitle: "Configure credentials, start bridges, and scan WeChat QR from the desktop app.")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "IM Bridge Cards", zh: "消息渠道", fr: "Cartes de passerelles IM", de: "IM-Brückenkarten"),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Configure credentials, start bridges, and scan WeChat QR from the desktop app.",
+                            zh: "在这里连接微信、飞书、Discord 等账号。",
+                            fr: "Configurez les identifiants, lancez les passerelles et scannez le QR WeChat depuis l'app.",
+                            de: "Zugangsdaten konfigurieren, Brücken starten und WeChat-QR in der Desktop-App scannen."
+                        )
+                    )
                     if !model.gatewayActionResult.isEmpty {
                         Text(model.gatewayActionResult)
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.green)
                     }
                     if model.snapshot.gatewayItems.isEmpty {
-                        EmptyLine(symbol: "message.badge", text: "No messaging adapters were returned by the local runtime.")
+                        EmptyLine(
+                            symbol: "message.badge",
+                            text: localizedYouText(model.appLanguage, en: "No messaging adapters were returned by the local runtime.", zh: "本地运行时还没有返回可用的消息渠道。", fr: "Aucun adaptateur de messagerie retourné par le runtime local.", de: "Keine Nachrichtenadapter von der lokalen Runtime.")
+                        )
                     } else {
                         ForEach(model.snapshot.gatewayItems) { service in
                             GatewayServiceCard(service: service)
@@ -3859,10 +5936,10 @@ struct GatewayServiceCard: View {
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.muted)
                     }
-                    SettingsRow(label: "Account", value: service.accountID)
-                    SettingsRow(label: "Transport", value: service.transport.isEmpty ? "default" : service.transport)
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Account", zh: "账号", fr: "Compte", de: "Konto"), value: service.accountID)
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Transport", zh: "传输", fr: "Transport", de: "Transport"), value: service.transport.isEmpty ? localizedYouText(model.appLanguage, en: "default", zh: "默认", fr: "défaut", de: "Standard") : service.transport)
                     if !service.eventPath.isEmpty {
-                        SettingsRow(label: "Event path", value: service.eventPath)
+                        SettingsRow(label: localizedYouText(model.appLanguage, en: "Event path", zh: "事件路径", fr: "Chemin d'événements", de: "Ereignispfad"), value: service.eventPath)
                     }
                     if service.id == "weixin" {
                         WeixinQRPanel()
@@ -3871,19 +5948,19 @@ struct GatewayServiceCard: View {
                     }
                     HStack(spacing: 8) {
                         if service.configured {
-                            Button(service.running ? "Restart" : "Start") {
+                            Button(service.running ? localizedYouText(model.appLanguage, en: "Restart", zh: "重启", fr: "Redémarrer", de: "Neu starten") : localizedYouText(model.appLanguage, en: "Start", zh: "启动", fr: "Démarrer", de: "Starten")) {
                                 Task { await model.runGatewayAction(service: service, action: service.running ? "restart" : "start") }
                             }
-                            Button("Stop") {
+                            Button(localizedYouText(model.appLanguage, en: "Stop", zh: "停止", fr: "Arrêter", de: "Stoppen")) {
                                 Task { await model.runGatewayAction(service: service, action: "stop") }
                             }
                             .disabled(!service.running && !service.starting)
                         } else if service.id == "weixin" {
-                            Button("Connect with QR") {
+                            Button(localizedYouText(model.appLanguage, en: "Connect with QR", zh: "扫码连接", fr: "Connecter par QR", de: "Per QR verbinden")) {
                                 Task { await model.startWeixinQR() }
                             }
                         } else {
-                            Button("Save Configuration") {
+                            Button(localizedYouText(model.appLanguage, en: "Save Configuration", zh: "保存配置", fr: "Enregistrer la configuration", de: "Konfiguration speichern")) {
                                 Task { await model.configureGatewayService(service) }
                             }
                         }
@@ -3898,7 +5975,10 @@ struct GatewayServiceCard: View {
     }
 
     private var statusLabel: String {
-        service.running ? "running" : service.starting ? "starting" : service.configured ? "configured" : "setup"
+        if service.running { return model.text(.statusRunning) }
+        if service.starting { return localizedYouText(model.appLanguage, en: "starting", zh: "启动中", fr: "démarrage", de: "startet") }
+        if service.configured { return model.text(.statusConfigured) }
+        return model.text(.statusSetup)
     }
 
     private var statusTint: Color {
@@ -3909,7 +5989,10 @@ struct GatewayServiceCard: View {
     }
 
     private var detailLine: String {
-        [service.detail, "\(service.accountCount) account(s)"].filter { !$0.isEmpty }.joined(separator: " · ")
+        [
+            service.detail,
+            localizedFormat(model.appLanguage, en: "%d account(s)", zh: "%d 个账号", fr: "%d compte(s)", de: "%d Konto(s)", service.accountCount)
+        ].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
@@ -4086,9 +6169,9 @@ struct HerdView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Herd",
-                subtitle: "Manage the local elephants that share this desktop runtime.",
-                actionTitle: "New Elephant",
+                title: AppSection.herd.title(language: model.appLanguage),
+                subtitle: model.text(.herdPageSubtitle),
+                actionTitle: model.text(.newElephant),
                 actionSymbol: "plus"
             ) {
                 showingCreate = true
@@ -4097,19 +6180,31 @@ struct HerdView: View {
             NativePanel {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(title: "Local Elephants", subtitle: "\(model.snapshot.herdItems.count) state(s)")
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "Local Elephants", zh: "本机 Elephants", fr: "Elephants locaux", de: "Lokale Elephants"),
+                            subtitle: localizedFormat(model.appLanguage, en: "%d state(s)", zh: "%d 个状态", fr: "%d état(s)", de: "%d Status", model.snapshot.herdItems.count)
+                        )
                         Spacer(minLength: 0)
                         Button {
                             Task { try? await model.refreshDashboard() }
                         } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
+                            Label(model.text(.refresh), systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.borderless)
                         .controlSize(.small)
                     }
 
                     if model.snapshot.herdItems.isEmpty {
-                        EmptyLine(symbol: "person.3", text: "No local elephant has been created yet. Run onboarding from Settings after provider setup.")
+                        EmptyLine(
+                            symbol: "person.3",
+                            text: localizedYouText(
+                                model.appLanguage,
+                                en: "No local elephant has been created yet. Run onboarding from Settings after provider setup.",
+                                zh: "还没有创建本机 Elephant。先配好模型，再从设置里重新初始化。",
+                                fr: "Aucun elephant local créé. Lancez l'onboarding depuis Réglages après le provider.",
+                                de: "Noch kein lokaler Elephant. Starte Onboarding nach Provider-Setup in den Einstellungen."
+                            )
+                        )
                     } else {
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                             ForEach(model.snapshot.herdItems) { item in
@@ -4133,23 +6228,24 @@ struct HerdCreateSheet: View {
     @State private var name = "Elephant"
     @State private var identityText = ""
     @State private var avatarURL: URL?
+    @State private var showingSource = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center, spacing: 14) {
                 HerdAvatarImage(size: 82, name: name, url: avatarURL)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Create Elephant")
+                    Text(localizedYouText(model.appLanguage, en: "Create Elephant", zh: "创建 Elephant", fr: "Créer Elephant", de: "Elephant erstellen"))
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text("Create a local Elephant with a name and an authored ELEPHANT.md voice file.")
+                    Text(localizedYouText(model.appLanguage, en: "Create a local Elephant with a name and an authored ELEPHANT.md voice file.", zh: "给这个本机 Elephant 起个名字，并写好 ELEPHANT.md。", fr: "Créez un Elephant local avec un nom et un fichier vocal ELEPHANT.md.", de: "Erstelle einen lokalen Elephant mit Name und ELEPHANT.md-Stimme."))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
                     HStack(spacing: 8) {
-                        Button("Choose Avatar") {
-                            avatarURL = OpenPanelBridge.pickAvatarImageURL()
+                        Button(model.text(.chooseAvatar)) {
+                            avatarURL = OpenPanelBridge.pickAvatarImageURL(language: model.appLanguage)
                         }
-                        Button("Use Default") {
+                        Button(model.text(.useDefault)) {
                             avatarURL = nil
                         }
                         .disabled(avatarURL == nil)
@@ -4159,19 +6255,39 @@ struct HerdCreateSheet: View {
                 Spacer(minLength: 0)
             }
 
-            TextField("Name", text: $name)
+            TextField(localizedYouText(model.appLanguage, en: "Name", zh: "名称", fr: "Nom", de: "Name"), text: $name)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("ELEPHANT.md", text: $identityText, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(8...14)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("ELEPHANT.md")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Spacer()
+                    Button(showingSource ? localizedYouText(model.appLanguage, en: "Preview", zh: "预览", fr: "Aperçu", de: "Vorschau") : localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten")) {
+                        showingSource.toggle()
+                    }
+                    .controlSize(.small)
+                }
+                if showingSource {
+                    TextField("ELEPHANT.md", text: $identityText, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(8...14)
+                } else {
+                    MarkdownBody(text: identityText, font: .callout, color: ElephantTheme.ink)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, minHeight: 180, alignment: .topLeading)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
+                }
+            }
 
             HStack {
                 Spacer()
-                Button("Cancel") {
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                     isPresented = false
                 }
-                Button("Create Elephant") {
+                Button(localizedYouText(model.appLanguage, en: "Create Elephant", zh: "创建 Elephant", fr: "Créer Elephant", de: "Elephant erstellen")) {
                     Task {
                         await model.createHerdElephant(
                             name: name,
@@ -4189,6 +6305,17 @@ struct HerdCreateSheet: View {
         .padding(22)
         .frame(width: 600)
         .background(ElephantTheme.elevated)
+        .onAppear {
+            if identityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                identityText = model.appLanguage.defaultElephantMarkdown(name: name)
+            }
+        }
+        .onChange(of: name) { newValue in
+            let defaults = AppLanguage.allCases.map { $0.defaultElephantMarkdown(name: "Elephant").trimmingCharacters(in: .whitespacesAndNewlines) }
+            if identityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || defaults.contains(identityText.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                identityText = model.appLanguage.defaultElephantMarkdown(name: newValue)
+            }
+        }
     }
 }
 
@@ -4197,6 +6324,7 @@ struct HerdElephantCard: View {
     var item: HerdItem
     @State private var name = ""
     @State private var identityText = ""
+    @State private var editingIdentity = false
     @State private var confirmDelete = false
 
     var body: some View {
@@ -4215,7 +6343,7 @@ struct HerdElephantCard: View {
                             .overlay(Circle().stroke(Color(nsColor: .textBackgroundColor), lineWidth: 2))
                     }
                     .buttonStyle(PressablePlainButtonStyle())
-                    .help("Change Avatar")
+                    .help(model.text(.changeImage))
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -4231,34 +6359,54 @@ struct HerdElephantCard: View {
             }
 
             HStack(spacing: 8) {
-                Pill(text: item.status.isEmpty ? "ready" : item.status, symbol: "circle.fill", tint: item.current ? ElephantTheme.green : ElephantTheme.accent)
+                Pill(text: item.status.isEmpty ? model.text(.ready) : item.status, symbol: "circle.fill", tint: item.current ? ElephantTheme.green : ElephantTheme.accent)
                 if item.level > 0 || !item.stage.isEmpty {
-                    Pill(text: item.stage.isEmpty ? "level \(item.level)" : item.stage, symbol: "sparkles", tint: ElephantTheme.accent)
+                    Pill(text: item.stage.isEmpty ? localizedFormat(model.appLanguage, en: "level %d", zh: "%d 级", fr: "niveau %d", de: "Level %d", item.level) : item.stage, symbol: "sparkles", tint: ElephantTheme.accent)
                 }
                 if item.current {
-                    Pill(text: "current", symbol: "checkmark", tint: ElephantTheme.green)
+                    Pill(text: model.text(.phaseStatusCurrent), symbol: "checkmark", tint: ElephantTheme.green)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
 
-            TextField("Name", text: $name)
+            TextField(localizedYouText(model.appLanguage, en: "Name", zh: "名称", fr: "Nom", de: "Name"), text: $name)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("ELEPHANT.md", text: $identityText, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(8...14)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("ELEPHANT.md")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    Spacer()
+                    Button(editingIdentity ? localizedYouText(model.appLanguage, en: "Preview", zh: "预览", fr: "Aperçu", de: "Vorschau") : localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten")) {
+                        editingIdentity.toggle()
+                    }
+                    .controlSize(.small)
+                }
+                if editingIdentity {
+                    TextField("ELEPHANT.md", text: $identityText, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(8...14)
+                } else {
+                    MarkdownBody(text: identityText, font: .callout, color: ElephantTheme.ink)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.52), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
+                }
+            }
 
             LazyVGrid(columns: metaColumns, spacing: 10) {
-                HerdMeta(label: "Profile", value: item.profileID.isEmpty ? "n/a" : item.profileID)
-                HerdMeta(label: "Created", value: item.createdAt.isEmpty ? "n/a" : item.createdAt)
-                HerdMeta(label: "Source", value: sourceLabel)
-                HerdMeta(label: "Updated", value: item.updatedAt.isEmpty ? "n/a" : item.updatedAt)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Profile", zh: "Profile", fr: "Profil", de: "Profil"), value: item.profileID.isEmpty ? "n/a" : item.profileID)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Created", zh: "创建时间", fr: "Créé", de: "Erstellt"), value: item.createdAt.isEmpty ? "n/a" : item.createdAt)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"), value: sourceLabel)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Updated", zh: "更新时间", fr: "Mis à jour", de: "Aktualisiert"), value: item.updatedAt.isEmpty ? "n/a" : item.updatedAt)
             }
 
             HStack {
-                Button("Save Changes") {
+                Button(localizedYouText(model.appLanguage, en: "Save Changes", zh: "保存修改", fr: "Enregistrer", de: "Änderungen speichern")) {
                     Task {
                         await model.updateHerdElephant(
                             item,
@@ -4267,13 +6415,13 @@ struct HerdElephantCard: View {
                         )
                     }
                 }
-                Button("Delete", role: .destructive) {
+                Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"), role: .destructive) {
                     confirmDelete = true
                 }
                 .disabled(item.current)
                 Spacer()
                 if item.current {
-                    Text("Current elephant is protected.")
+                    Text(localizedYouText(model.appLanguage, en: "Current elephant is protected.", zh: "当前使用中的 Elephant 不能删除。", fr: "L'Elephant actuel est protégé.", de: "Der aktuelle Elephant ist geschützt."))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -4289,14 +6437,20 @@ struct HerdElephantCard: View {
         )
         .onAppear {
             name = item.title
-            identityText = sanitizedText(item.identityText)
+            let renderedText = sanitizedText(item.identityText)
+            identityText = renderedText.isEmpty || isLegacyDefaultIdentity(renderedText)
+                ? model.appLanguage.defaultElephantMarkdown(name: item.title)
+                : renderedText
         }
-        .confirmationDialog("Delete \(item.title)?", isPresented: $confirmDelete) {
-            Button("Delete Elephant", role: .destructive) {
+        .confirmationDialog(
+            localizedFormat(model.appLanguage, en: "Delete %@?", zh: "删除 %@？", fr: "Supprimer %@ ?", de: "%@ löschen?", item.title),
+            isPresented: $confirmDelete
+        ) {
+            Button(localizedYouText(model.appLanguage, en: "Delete Elephant", zh: "删除 Elephant", fr: "Supprimer Elephant", de: "Elephant löschen"), role: .destructive) {
                 Task { await model.deleteHerdElephant(item) }
             }
         } message: {
-            Text("This removes the local Elephant state. The current Elephant is protected.")
+            Text(localizedYouText(model.appLanguage, en: "This removes the local Elephant state. The current Elephant is protected.", zh: "这会删除本地 Elephant 状态。当前 Elephant 受保护。", fr: "Cela supprime l'état local d'Elephant. L'Elephant actuel est protégé.", de: "Das entfernt den lokalen Elephant-Status. Der aktuelle Elephant ist geschützt."))
         }
     }
 
@@ -4304,6 +6458,14 @@ struct HerdElephantCard: View {
         text
             .replacingOccurrences(of: #"(?s)<!--\s*Internal metadata.*?-->\s*"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func isLegacyDefaultIdentity(_ text: String) -> Bool {
+        let normalized = text.lowercased()
+        return normalized.contains("be warm, precise, curious, and direct")
+            || normalized.contains("温暖、精准、好奇、直接")
+            || normalized.contains("être chaleureux, précis, curieux et direct")
+            || normalized.contains("warm, präzise, neugierig und direkt")
     }
 
     private var metaColumns: [GridItem] {
@@ -4380,6 +6542,17 @@ enum UsagePeriod: String, CaseIterable, Identifiable {
     case month = "Month"
 
     var id: String { rawValue }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .day:
+            return localizedYouText(language, en: "Day", zh: "日", fr: "Jour", de: "Tag")
+        case .week:
+            return localizedYouText(language, en: "Week", zh: "周", fr: "Semaine", de: "Woche")
+        case .month:
+            return localizedYouText(language, en: "Month", zh: "月", fr: "Mois", de: "Monat")
+        }
+    }
 }
 
 struct UsageView: View {
@@ -4389,29 +6562,32 @@ struct UsageView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Usage",
-                subtitle: "Token usage details from local runtime steps.",
-                actionTitle: "Refresh",
+                title: AppSection.usage.title(language: model.appLanguage),
+                subtitle: model.text(.usagePageSubtitle),
+                actionTitle: model.text(.refresh),
                 actionSymbol: "arrow.clockwise"
             ) {
                 Task { try? await model.refreshDashboard() }
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Total Tokens", value: abbreviatedCount(model.snapshot.usageTokens), symbol: "sum")
-                MetricTile(label: "Prompt", value: abbreviatedCount(model.snapshot.usagePromptTokens), symbol: "arrow.down.doc", tint: ElephantTheme.accent)
-                MetricTile(label: "Completion", value: abbreviatedCount(model.snapshot.usageCompletionTokens), symbol: "arrow.up.doc", tint: ElephantTheme.green)
-                MetricTile(label: "Events", value: "\(model.snapshot.usageEvents)", symbol: "waveform.path", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Total Tokens", zh: "Token 总量", fr: "Tokens totaux", de: "Tokens gesamt"), value: abbreviatedCount(model.snapshot.usageTokens), symbol: "sum")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Prompt", zh: "输入", fr: "Prompt", de: "Prompt"), value: abbreviatedCount(model.snapshot.usagePromptTokens), symbol: "arrow.down.doc", tint: ElephantTheme.accent)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Completion", zh: "输出", fr: "Réponse", de: "Antwort"), value: abbreviatedCount(model.snapshot.usageCompletionTokens), symbol: "arrow.up.doc", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Events", zh: "事件", fr: "Événements", de: "Ereignisse"), value: "\(model.snapshot.usageEvents)", symbol: "waveform.path", tint: ElephantTheme.orange)
             }
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        SectionLabel(title: "Token Flow", subtitle: "Usage grouped by day, week, or month")
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "Token Flow", zh: "Token 用量", fr: "Flux de tokens", de: "Token-Fluss"),
+                            subtitle: localizedYouText(model.appLanguage, en: "Usage grouped by day, week, or month", zh: "按日、周或月查看用量。", fr: "Usage groupé par jour, semaine ou mois.", de: "Nutzung nach Tag, Woche oder Monat gruppiert.")
+                        )
                         Spacer()
-                        Picker("Period", selection: $period) {
+                        Picker(localizedYouText(model.appLanguage, en: "Period", zh: "周期", fr: "Période", de: "Zeitraum"), selection: $period) {
                             ForEach(UsagePeriod.allCases) { item in
-                                Text(item.rawValue).tag(item)
+                                Text(item.title(language: model.appLanguage)).tag(item)
                             }
                         }
                         .pickerStyle(.segmented)
@@ -4425,9 +6601,12 @@ struct UsageView: View {
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionLabel(title: "Recent Token Events", subtitle: "\(model.snapshot.usageItems.count) shown")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Recent Token Events", zh: "最近用量记录", fr: "Événements token récents", de: "Letzte Token-Ereignisse"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d shown", zh: "显示 %d 条", fr: "%d affichés", de: "%d gezeigt", model.snapshot.usageItems.count)
+                    )
                     if model.snapshot.usageItems.isEmpty {
-                        EmptyLine(symbol: "chart.xyaxis.line", text: "No token usage rows yet.")
+                        EmptyLine(symbol: "chart.xyaxis.line", text: localizedYouText(model.appLanguage, en: "No token usage rows yet.", zh: "还没有模型用量记录。", fr: "Aucune ligne d'usage token.", de: "Noch keine Token-Nutzungszeilen."))
                     } else {
                         ForEach(model.snapshot.usageItems.prefix(12)) { item in
                             UsageEventRow(item: item, maxTokens: maxTokenEvent)
@@ -4547,18 +6726,19 @@ struct UsageChartView: View {
 }
 
 struct UsageTotalsTable: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var points: [UsageTrendPoint]
 
     var body: some View {
         if points.isEmpty {
-            EmptyLine(symbol: "chart.xyaxis.line", text: "No token flow rows yet.")
+            EmptyLine(symbol: "chart.xyaxis.line", text: localizedYouText(model.appLanguage, en: "No token flow rows yet.", zh: "还没有可汇总的用量。", fr: "Aucune ligne de flux token.", de: "Noch keine Token-Flusszeilen."))
         } else {
             VStack(spacing: 0) {
                 HStack {
-                    tableHeader("Period")
-                    tableHeader("Tokens")
-                    tableHeader("Input")
-                    tableHeader("Output")
+                    tableHeader(localizedYouText(model.appLanguage, en: "Period", zh: "周期", fr: "Période", de: "Zeitraum"))
+                    tableHeader(localizedYouText(model.appLanguage, en: "Tokens", zh: "Tokens", fr: "Tokens", de: "Tokens"))
+                    tableHeader(localizedYouText(model.appLanguage, en: "Input", zh: "输入", fr: "Entrée", de: "Eingabe"))
+                    tableHeader(localizedYouText(model.appLanguage, en: "Output", zh: "输出", fr: "Sortie", de: "Ausgabe"))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -4604,6 +6784,7 @@ struct UsageTotalsTable: View {
 }
 
 struct UsageEventRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var item: UsageEventItem
     var maxTokens: Int
 
@@ -4614,7 +6795,7 @@ struct UsageEventRow: View {
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
                 Spacer()
-                Text("\(item.totalTokens) tokens")
+                Text(localizedFormat(model.appLanguage, en: "%d tokens", zh: "%d tokens", fr: "%d tokens", de: "%d Tokens", item.totalTokens))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -4648,9 +6829,9 @@ struct ProviderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Model Provider",
+                title: model.text(.providerTitle),
                 subtitle: providerSubtitle,
-                actionTitle: "Refresh",
+                actionTitle: model.text(.refresh),
                 actionSymbol: "arrow.clockwise"
             ) {
                 Task { try? await model.refreshDashboard() }
@@ -4713,6 +6894,17 @@ enum ScheduleCalendarScope: String, CaseIterable, Identifiable {
     case year = "Year"
 
     var id: String { rawValue }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .week:
+            return localizedYouText(language, en: "Week", zh: "周", fr: "Semaine", de: "Woche")
+        case .month:
+            return localizedYouText(language, en: "Month", zh: "月", fr: "Mois", de: "Monat")
+        case .year:
+            return localizedYouText(language, en: "Year", zh: "年", fr: "Année", de: "Jahr")
+        }
+    }
 
     var stepComponent: Calendar.Component {
         switch self {
@@ -4788,9 +6980,9 @@ struct CronView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Calendar",
-                subtitle: "Reminders from Elephant, agents, and this app in one native calendar.",
-                actionTitle: "Refresh",
+                title: AppSection.cron.title(language: model.appLanguage),
+                subtitle: model.text(.calendarPageSubtitle),
+                actionTitle: model.text(.refresh),
                 actionSymbol: "arrow.clockwise"
             ) {
                 Task { try? await model.refreshDashboard() }
@@ -4810,6 +7002,7 @@ struct CronView: View {
 }
 
 struct ScheduleCalendarPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
     @Binding var scope: ScheduleCalendarScope
     @Binding var focusedDate: Date
     var jobs: [CronJobItem]
@@ -4829,16 +7022,16 @@ struct ScheduleCalendarPanel: View {
 
                     HStack(spacing: 8) {
                         StatusDot(tint: ElephantTheme.green)
-                        Text("\(events.count) dated")
+                        Text(localizedFormat(model.appLanguage, en: "%d dated", zh: "%d 条有日期", fr: "%d datés", de: "%d datiert", events.count))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.muted)
                     }
 
                     Spacer(minLength: 12)
 
-                    Picker("Calendar view", selection: $scope) {
+                    Picker(localizedYouText(model.appLanguage, en: "Calendar view", zh: "日历视图", fr: "Vue calendrier", de: "Kalenderansicht"), selection: $scope) {
                         ForEach(ScheduleCalendarScope.allCases) { item in
-                            Text(item.rawValue).tag(item)
+                            Text(item.title(language: model.appLanguage)).tag(item)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -4854,9 +7047,9 @@ struct ScheduleCalendarPanel: View {
                                 .frame(width: 28, height: 28)
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help("Previous \(scope.rawValue.lowercased())")
+                        .help(localizedFormat(model.appLanguage, en: "Previous %@", zh: "上一个%@", fr: "%@ précédent", de: "Vorherige %@", scope.title(language: model.appLanguage)))
 
-                        Button("Today") {
+                        Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
                             focusedDate = Date()
                         }
                         .controlSize(.small)
@@ -4868,7 +7061,7 @@ struct ScheduleCalendarPanel: View {
                                 .frame(width: 28, height: 28)
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help("Next \(scope.rawValue.lowercased())")
+                        .help(localizedFormat(model.appLanguage, en: "Next %@", zh: "下一个%@", fr: "%@ suivant", de: "Nächste %@", scope.title(language: model.appLanguage)))
                     }
                 }
 
@@ -4888,7 +7081,7 @@ struct ScheduleCalendarPanel: View {
 
     private var title: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         switch scope {
         case .week:
             let interval = Calendar.current.dateInterval(of: .weekOfYear, for: focusedDate)
@@ -5332,21 +7525,21 @@ struct CalendarEventPopover: View {
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(2)
-                    Text(event.job.isSystem ? "System learning reminder" : "Reminder")
+                    Text(event.job.isSystem ? localizedYouText(model.appLanguage, en: "System learning reminder", zh: "系统学习提醒", fr: "Rappel système Learn", de: "System-Learn-Erinnerung") : localizedYouText(model.appLanguage, en: "Reminder", zh: "提醒", fr: "Rappel", de: "Erinnerung"))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
 
                 Spacer(minLength: 8)
-                Pill(text: event.job.status, tint: event.tint)
+                Pill(text: localizedRuntimeStatus(event.job.status, language: model.appLanguage), tint: event.tint)
             }
 
             VStack(spacing: 0) {
-                popoverRow("Next run", formattedDate(event.date))
+                popoverRow(localizedYouText(model.appLanguage, en: "Next run", zh: "下次运行", fr: "Prochaine exécution", de: "Nächster Lauf"), formattedDate(event.date))
                 Divider()
-                popoverRow("When", event.job.schedule.isEmpty ? "n/a" : event.job.schedule)
+                popoverRow(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann"), event.job.schedule.isEmpty ? "n/a" : event.job.schedule)
                 Divider()
-                popoverRow("Runs", "\(event.job.runCount)")
+                popoverRow(localizedYouText(model.appLanguage, en: "Runs", zh: "运行次数", fr: "Exécutions", de: "Läufe"), "\(event.job.runCount)")
             }
             .background(ElephantTheme.panel.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
@@ -5360,13 +7553,13 @@ struct CalendarEventPopover: View {
             }
 
             HStack(spacing: 8) {
-                Button("Run") { Task { await model.runCronJob(event.job) } }
+                Button(localizedYouText(model.appLanguage, en: "Run", zh: "运行", fr: "Lancer", de: "Starten")) { Task { await model.runCronJob(event.job) } }
                     .disabled(!event.job.canRunNow)
-                Button(event.job.status == "paused" ? "Resume" : "Pause") {
+                Button(event.job.status == "paused" ? localizedYouText(model.appLanguage, en: "Resume", zh: "恢复", fr: "Reprendre", de: "Fortsetzen") : localizedYouText(model.appLanguage, en: "Pause", zh: "暂停", fr: "Pause", de: "Pausieren")) {
                     Task { await model.setCronJob(event.job, paused: event.job.status != "paused") }
                 }
                 .disabled(!event.job.canPause)
-                Button("Delete") { Task { await model.deleteCronJob(event.job) } }
+                Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen")) { Task { await model.deleteCronJob(event.job) } }
                     .disabled(!event.job.canDelete)
                 Spacer(minLength: 0)
             }
@@ -5395,7 +7588,7 @@ struct CalendarEventPopover: View {
 
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
@@ -5422,8 +7615,8 @@ struct ReminderComposerLauncher: View {
                 .frame(width: 42, height: 42)
 
                 SectionLabel(
-                    title: "Reminders",
-                    subtitle: "Ask Elephant to remind you or do something later."
+                    title: localizedYouText(model.appLanguage, en: "Reminders", zh: "提醒", fr: "Rappels", de: "Erinnerungen"),
+                    subtitle: localizedYouText(model.appLanguage, en: "Ask Elephant to remind you or do something later.", zh: "让 Elephant 到点提醒你，或稍后接着做。", fr: "Demandez à Elephant de vous rappeler ou de faire quelque chose plus tard.", de: "Bitte Elephant, dich später zu erinnern oder etwas zu erledigen.")
                 )
 
                 Spacer(minLength: 16)
@@ -5438,7 +7631,7 @@ struct ReminderComposerLauncher: View {
                 Button {
                     showingComposer = true
                 } label: {
-                    Label("New Reminder", systemImage: "plus")
+                    Label(localizedYouText(model.appLanguage, en: "New Reminder", zh: "新提醒", fr: "Nouveau rappel", de: "Neue Erinnerung"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -5446,6 +7639,14 @@ struct ReminderComposerLauncher: View {
                 .popover(isPresented: $showingComposer, arrowEdge: .bottom) {
                     reminderComposer
                 }
+            }
+        }
+        .onAppear {
+            if name == "Daily Elephant reminder" {
+                name = localizedYouText(model.appLanguage, en: "Daily Elephant reminder", zh: "每日提醒", fr: "Rappel quotidien Elephant", de: "Tägliche Elephant-Erinnerung")
+            }
+            if prompt == "Review current priorities and suggest the next grounded step." {
+                prompt = localizedYouText(model.appLanguage, en: "Review current priorities and suggest the next grounded step.", zh: "回看今天的重点，给我一个下一步建议。", fr: "Revoir les priorités et proposer la prochaine étape.", de: "Prioritäten prüfen und den nächsten Schritt vorschlagen.")
             }
         }
     }
@@ -5463,10 +7664,10 @@ struct ReminderComposerLauncher: View {
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("New Reminder")
+                    Text(localizedYouText(model.appLanguage, en: "New Reminder", zh: "新提醒", fr: "Nouveau rappel", de: "Neue Erinnerung"))
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
-                    Text("Choose when and what Elephant should do.")
+                    Text(localizedYouText(model.appLanguage, en: "Choose when and what Elephant should do.", zh: "写清楚什么时候提醒，以及要做什么。", fr: "Choisissez quand et ce qu'Elephant doit faire.", de: "Wähle, wann und was Elephant tun soll."))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -5474,23 +7675,23 @@ struct ReminderComposerLauncher: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                labeledField("Title") {
-                    TextField("Daily Elephant reminder", text: $name)
+                labeledField(localizedYouText(model.appLanguage, en: "Title", zh: "标题", fr: "Titre", de: "Titel")) {
+                    TextField(localizedYouText(model.appLanguage, en: "Daily Elephant reminder", zh: "每日提醒", fr: "Rappel quotidien Elephant", de: "Tägliche Elephant-Erinnerung"), text: $name)
                         .textFieldStyle(.roundedBorder)
                 }
-                labeledField("When") {
-                    TextField("daily at 09:00", text: $schedule)
+                labeledField(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann")) {
+                    TextField(localizedYouText(model.appLanguage, en: "daily at 09:00", zh: "每天 09:00", fr: "tous les jours à 09:00", de: "täglich um 09:00"), text: $schedule)
                         .textFieldStyle(.roundedBorder)
                 }
-                labeledField("What should Elephant do?") {
-                    TextField("Review priorities and suggest the next grounded step.", text: $prompt, axis: .vertical)
+                labeledField(localizedYouText(model.appLanguage, en: "What should Elephant do?", zh: "要提醒什么？", fr: "Que doit faire Elephant ?", de: "Was soll Elephant tun?")) {
+                    TextField(localizedYouText(model.appLanguage, en: "Review priorities and suggest the next grounded step.", zh: "回看今天的重点，给我一个下一步建议。", fr: "Revoir les priorités et proposer la prochaine étape.", de: "Prioritäten prüfen und den nächsten Schritt vorschlagen."), text: $prompt, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(3...5)
                 }
             }
 
             HStack(spacing: 8) {
-                Button("Cancel") {
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                     showingComposer = false
                 }
                 Spacer(minLength: 0)
@@ -5500,7 +7701,7 @@ struct ReminderComposerLauncher: View {
                         await MainActor.run { showingComposer = false }
                     }
                 } label: {
-                    Label("Create Reminder", systemImage: "plus")
+                    Label(localizedYouText(model.appLanguage, en: "Create Reminder", zh: "保存提醒", fr: "Créer le rappel", de: "Erinnerung erstellen"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(ElephantTheme.accent)
@@ -5531,10 +7732,13 @@ struct CalendarJobsPanel: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    SectionLabel(title: "All Reminders", subtitle: "\(jobs.count) reminder(s)")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "All Reminders", zh: "所有提醒", fr: "Tous les rappels", de: "Alle Erinnerungen"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d reminder(s)", zh: "%d 条提醒", fr: "%d rappel(s)", de: "%d Erinnerung(en)", jobs.count)
+                    )
                     Spacer(minLength: 12)
                     if !jobs.isEmpty {
-                        Text("Page \(safePage + 1) of \(pageCount)")
+                        Text(localizedFormat(model.appLanguage, en: "Page %d of %d", zh: "第 %d / %d 页", fr: "Page %d sur %d", de: "Seite %d von %d", safePage + 1, pageCount))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.muted)
                         HStack(spacing: 6) {
@@ -5562,14 +7766,14 @@ struct CalendarJobsPanel: View {
                 }
 
                 if jobs.isEmpty {
-                    EmptyLine(symbol: "calendar.badge.clock", text: "No reminders yet.")
+                    EmptyLine(symbol: "calendar.badge.clock", text: localizedYouText(model.appLanguage, en: "No reminders yet.", zh: "还没有提醒。", fr: "Aucun rappel pour l'instant.", de: "Noch keine Erinnerungen."))
                 } else {
                     VStack(spacing: 0) {
                         HStack(spacing: 12) {
-                            tableHeader("Reminder")
-                            tableHeader("When")
+                            tableHeader(localizedYouText(model.appLanguage, en: "Reminder", zh: "提醒", fr: "Rappel", de: "Erinnerung"))
+                            tableHeader(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann"))
                                 .frame(width: 220, alignment: .leading)
-                            tableHeader("Next")
+                            tableHeader(localizedYouText(model.appLanguage, en: "Next", zh: "下次", fr: "Prochain", de: "Nächste"))
                                 .frame(width: 210, alignment: .leading)
                             Text("")
                                 .frame(width: 164)
@@ -5655,11 +7859,11 @@ struct CronJobRow: View {
                 jobIdentity
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.schedule.isEmpty ? "No time set" : job.schedule)
+                    Text(job.schedule.isEmpty ? localizedYouText(model.appLanguage, en: "No time set", zh: "还没设置时间", fr: "Aucun horaire", de: "Keine Zeit gesetzt") : job.schedule)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
-                    Text(job.detail.isEmpty ? "No reminder detail" : job.detail)
+                    Text(job.detail.isEmpty ? localizedYouText(model.appLanguage, en: "No reminder detail", zh: "没有说明", fr: "Aucun détail de rappel", de: "Kein Erinnerungsdetail") : job.detail)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -5667,12 +7871,12 @@ struct CronJobRow: View {
                 .frame(width: 220, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.nextRun.isEmpty ? "Not planned" : job.nextRun)
+                    Text(job.nextRun.isEmpty ? localizedYouText(model.appLanguage, en: "Not planned", zh: "暂无计划", fr: "Non planifié", de: "Nicht geplant") : job.nextRun)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text("Last \(job.lastRun.isEmpty ? "not yet" : job.lastRun) · \(job.runCount) run(s)")
+                    Text(lastRunLine)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.faint)
                         .lineLimit(1)
@@ -5691,7 +7895,7 @@ struct CronJobRow: View {
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .lineLimit(3)
-                Text("Next \(job.nextRun.isEmpty ? "not planned" : job.nextRun) · Last \(job.lastRun.isEmpty ? "not yet" : job.lastRun) · \(job.runCount) run(s)")
+                Text(nextRunLine)
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.faint)
                     .lineLimit(2)
@@ -5713,9 +7917,9 @@ struct CronJobRow: View {
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
                     if job.isSystem {
-                        Pill(text: "system", symbol: "gearshape", tint: ElephantTheme.green)
+                        Pill(text: localizedYouText(model.appLanguage, en: "system", zh: "系统", fr: "système", de: "System"), symbol: "gearshape", tint: ElephantTheme.green)
                     }
-                    Pill(text: job.status, tint: statusTint)
+                    Pill(text: localizedRuntimeStatus(job.status, language: model.appLanguage), tint: statusTint)
                 }
                 Text(job.id)
                     .font(.caption)
@@ -5730,13 +7934,13 @@ struct CronJobRow: View {
 
     private var jobActions: some View {
         HStack(spacing: 6) {
-            Button("Run") { Task { await model.runCronJob(job) } }
+            Button(localizedYouText(model.appLanguage, en: "Run", zh: "运行", fr: "Lancer", de: "Starten")) { Task { await model.runCronJob(job) } }
                 .disabled(!job.canRunNow)
-            Button(job.status == "paused" ? "Resume" : "Pause") {
+            Button(job.status == "paused" ? localizedYouText(model.appLanguage, en: "Resume", zh: "恢复", fr: "Reprendre", de: "Fortsetzen") : localizedYouText(model.appLanguage, en: "Pause", zh: "暂停", fr: "Pause", de: "Pausieren")) {
                 Task { await model.setCronJob(job, paused: job.status != "paused") }
             }
             .disabled(!job.canPause)
-            Button("Delete") { Task { await model.deleteCronJob(job) } }
+            Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen")) { Task { await model.deleteCronJob(job) } }
                 .disabled(!job.canDelete)
         }
         .controlSize(.small)
@@ -5746,6 +7950,31 @@ struct CronJobRow: View {
     private var statusTint: Color {
         job.status == "paused" ? ElephantTheme.orange : ElephantTheme.green
     }
+
+    private var lastRunLine: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "Last %@ · %d run(s)",
+            zh: "上次：%@ · 已运行 %d 次",
+            fr: "Dernier %@ · %d exécution(s)",
+            de: "Zuletzt %@ · %d Lauf/Läufe",
+            job.lastRun.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : job.lastRun,
+            job.runCount
+        )
+    }
+
+    private var nextRunLine: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "Next %@ · Last %@ · %d run(s)",
+            zh: "下次：%@ · 上次：%@ · 已运行 %d 次",
+            fr: "Prochain %@ · Dernier %@ · %d exécution(s)",
+            de: "Nächste %@ · Zuletzt %@ · %d Lauf/Läufe",
+            job.nextRun.isEmpty ? localizedYouText(model.appLanguage, en: "not planned", zh: "暂无计划", fr: "non planifié", de: "nicht geplant") : job.nextRun,
+            job.lastRun.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : job.lastRun,
+            job.runCount
+        )
+    }
 }
 
 struct LearnView: View {
@@ -5754,31 +7983,34 @@ struct LearnView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Learn",
-                subtitle: "Background reflect jobs, diary learning, and memory consolidation.",
-                actionTitle: model.isReflecting ? "Learning" : "Run Learn",
+                title: AppSection.learn.title(language: model.appLanguage),
+                subtitle: model.text(.learnPageSubtitle),
+                actionTitle: model.isReflecting ? model.text(.learning) : model.text(.runLearn),
                 actionSymbol: "brain.head.profile"
             ) {
                 Task { await model.runReflect(trigger: "learn") }
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Questions", value: "\(model.snapshot.waitingQuestions)", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                MetricTile(label: "Worker", value: model.snapshot.workerStatus, symbol: "gearshape.2", tint: ElephantTheme.accent)
-                MetricTile(label: "Jobs", value: "\(model.snapshot.learningItems.count)", symbol: "brain.head.profile", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Questions", zh: "问题", fr: "Questions", de: "Fragen"), value: "\(model.snapshot.waitingQuestions)", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: localizedRuntimeStatus(model.snapshot.workerStatus, language: model.appLanguage), symbol: "gearshape.2", tint: ElephantTheme.accent)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Jobs", zh: "任务", fr: "Tâches", de: "Jobs"), value: "\(model.snapshot.learningItems.count)", symbol: "brain.head.profile", tint: ElephantTheme.green)
             }
 
             LearnControlsPanel()
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionLabel(title: "Learn History", subtitle: "\(model.snapshot.learningItems.count) job(s)")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Learn History", zh: "整理历史", fr: "Historique Learn", de: "Learn-Verlauf"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d job(s)", zh: "%d 个任务", fr: "%d tâche(s)", de: "%d Job(s)", model.snapshot.learningItems.count)
+                    )
                     if model.snapshot.learningItems.isEmpty {
-                        EmptyLine(symbol: "brain.head.profile", text: "No learning jobs returned yet.")
+                        EmptyLine(symbol: "brain.head.profile", text: localizedYouText(model.appLanguage, en: "No learning jobs returned yet.", zh: "还没有记忆整理任务。", fr: "Aucune tâche Learn retournée.", de: "Noch keine Learn-Jobs zurückgegeben."))
                     } else {
-                        LearningJobSection(title: "Active", items: Array(model.snapshot.learningItems.filter { !$0.status.lowercased().contains("completed") && !$0.status.lowercased().contains("failed") }.prefix(8)))
-                        LearningJobSection(title: "Completed", items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("completed") }.prefix(10)))
-                        LearningJobSection(title: "Needs Attention", items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("failed") || $0.status.lowercased().contains("cancel") }.prefix(8)))
+                        LearningJobSection(title: localizedYouText(model.appLanguage, en: "Active", zh: "进行中", fr: "Actifs", de: "Aktiv"), items: Array(model.snapshot.learningItems.filter { !$0.status.lowercased().contains("completed") && !$0.status.lowercased().contains("failed") }.prefix(8)))
+                        LearningJobSection(title: localizedYouText(model.appLanguage, en: "Completed", zh: "已完成", fr: "Terminés", de: "Abgeschlossen"), items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("completed") }.prefix(10)))
+                        LearningJobSection(title: localizedYouText(model.appLanguage, en: "Needs Attention", zh: "需要处理", fr: "À vérifier", de: "Prüfen"), items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("failed") || $0.status.lowercased().contains("cancel") }.prefix(8)))
                     }
                 }
             }
@@ -5789,11 +8021,12 @@ struct LearnView: View {
 struct LearnControlsPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private let actions = [
+    private var actions: [LearnActionSpec] {
+        [
         LearnActionSpec(
             id: "reflect",
-            title: "Reflect",
-            subtitle: "Review conversations, questions, and evidence into memory.",
+            title: model.text(.reflect),
+            subtitle: localizedYouText(model.appLanguage, en: "Review conversations, questions, and evidence into memory.", zh: "把最近的对话、问题和证据整理成记忆。", fr: "Réviser conversations, questions et preuves vers la mémoire.", de: "Gespräche, Fragen und Belege ins Gedächtnis übernehmen."),
             symbol: "brain.head.profile",
             tint: ElephantTheme.accent,
             trigger: "manual",
@@ -5801,8 +8034,8 @@ struct LearnControlsPanel: View {
         ),
         LearnActionSpec(
             id: "dream",
-            title: "Dream",
-            subtitle: "Look for quiet patterns, loose threads, and useful next questions.",
+            title: localizedYouText(model.appLanguage, en: "Dream", zh: "Dream", fr: "Dream", de: "Dream"),
+            subtitle: localizedYouText(model.appLanguage, en: "Look for quiet patterns, loose threads, and useful next questions.", zh: "找出安静的模式、未完的线索，以及下一步该问什么。", fr: "Repérer les motifs discrets, fils ouverts et prochaines questions utiles.", de: "Leise Muster, lose Fäden und nützliche nächste Fragen finden."),
             symbol: "moon.stars",
             tint: ElephantTheme.green,
             trigger: "dream",
@@ -5810,22 +8043,23 @@ struct LearnControlsPanel: View {
         ),
         LearnActionSpec(
             id: "diary",
-            title: "Diary",
-            subtitle: "Write a reflective entry from recent reviewed context.",
+            title: localizedYouText(model.appLanguage, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch"),
+            subtitle: localizedYouText(model.appLanguage, en: "Write a reflective entry from recent reviewed context.", zh: "用最近回看过的内容写一篇日记。", fr: "Écrire une entrée réflexive depuis le contexte récemment revu.", de: "Einen reflektierten Eintrag aus zuletzt geprüftem Kontext schreiben."),
             symbol: "book.closed",
             tint: ElephantTheme.orange,
             trigger: "diary",
             features: "diary"
         )
-    ]
+        ]
+    }
 
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 14) {
                     SectionLabel(
-                        title: "New Reflect Job",
-                        subtitle: "Start a focused background pass when memory needs to catch up."
+                        title: localizedYouText(model.appLanguage, en: "New Reflect Job", zh: "新建记忆整理", fr: "Nouveau job Reflect", de: "Neuer Reflect-Job"),
+                        subtitle: localizedYouText(model.appLanguage, en: "Start a focused background pass when memory needs to catch up.", zh: "让后台把近期内容整理进记忆。", fr: "Lancez un passage en arrière-plan quand la mémoire doit rattraper.", de: "Starte einen fokussierten Hintergrundlauf, wenn das Gedächtnis aufholen soll.")
                     )
                     Spacer(minLength: 12)
                     statusSummary
@@ -5844,7 +8078,7 @@ struct LearnControlsPanel: View {
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(model.isReflecting ? ElephantTheme.accent : latestTint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.isReflecting ? "Learning job is running" : "Last completed")
+                        Text(model.isReflecting ? localizedYouText(model.appLanguage, en: "Learning job is running", zh: "正在整理记忆", fr: "Tâche Learn en cours", de: "Learn-Job läuft") : localizedYouText(model.appLanguage, en: "Last completed", zh: "上次完成", fr: "Dernière fin", de: "Zuletzt abgeschlossen"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.ink)
                         Text(latestCompletedText)
@@ -5875,7 +8109,7 @@ struct LearnControlsPanel: View {
     @ViewBuilder
     private var statusSummary: some View {
         if model.isReflecting {
-            Pill(text: "running", symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.accent)
+            Pill(text: model.text(.statusRunning), symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.accent)
         } else {
             Pill(text: latestBadgeText, symbol: latestCompletedDate == nil ? "clock" : "checkmark", tint: latestTint)
         }
@@ -5886,12 +8120,14 @@ struct LearnControlsPanel: View {
     }
 
     private var latestBadgeText: String {
-        latestCompletedDate == nil ? "not run yet" : "ready"
+        latestCompletedDate == nil
+            ? localizedYouText(model.appLanguage, en: "not run yet", zh: "还没运行过", fr: "pas encore lancé", de: "noch nicht gelaufen")
+            : model.text(.ready)
     }
 
     private var latestCompletedText: String {
         guard let date = latestCompletedDate else {
-            return "No completed reflect job has been reported yet."
+            return localizedYouText(model.appLanguage, en: "No completed reflect job has been reported yet.", zh: "还没有完成过的记忆整理。", fr: "Aucun job Reflect terminé n'a été signalé.", de: "Noch kein abgeschlossener Reflect-Job gemeldet.")
         }
         let formatter = DateFormatter()
         formatter.locale = Locale.current
@@ -5916,6 +8152,7 @@ private struct LearnActionSpec: Identifiable {
 }
 
 private struct LearnActionButton: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var action: LearnActionSpec
     var disabled: Bool
     var onRun: () -> Void
@@ -5958,8 +8195,8 @@ private struct LearnActionButton: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.54 : 1)
-        .help(disabled ? "A learning job is already running." : "Create \(action.title) reflect job")
-        .accessibilityLabel("Create \(action.title) reflect job")
+        .help(disabled ? localizedYouText(model.appLanguage, en: "A learning job is already running.", zh: "已经有记忆整理在运行。", fr: "Une tâche Learn est déjà en cours.", de: "Ein Learn-Job läuft bereits.") : localizedFormat(model.appLanguage, en: "Create %@ reflect job", zh: "开始 %@", fr: "Créer le job Reflect %@", de: "%@ Reflect-Job erstellen", action.title))
+        .accessibilityLabel(localizedFormat(model.appLanguage, en: "Create %@ reflect job", zh: "开始 %@", fr: "Créer le job Reflect %@", de: "%@ Reflect-Job erstellen", action.title))
     }
 }
 
@@ -6020,12 +8257,13 @@ struct LearningJobSection: View {
 }
 
 struct LearningJobRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var item: LearningJobItem
 
     var body: some View {
         DisclosureGroup {
             if item.markdown.isEmpty {
-                Text("No rendered result returned yet.")
+                Text(localizedYouText(model.appLanguage, en: "No rendered result returned yet.", zh: "还没有可显示的结果。", fr: "Aucun résultat rendu pour l'instant.", de: "Noch kein gerendertes Ergebnis."))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .padding(.top, 6)
@@ -6047,7 +8285,7 @@ struct LearningJobRow: View {
                         .lineLimit(2)
                 }
                 Spacer()
-                Pill(text: item.status, tint: statusTint)
+                Pill(text: localizedRuntimeStatus(item.status, language: model.appLanguage), tint: statusTint)
             }
         }
         .padding(.vertical, 7)
@@ -6061,78 +8299,122 @@ struct LearningJobRow: View {
     }
 }
 
+private enum SettingsPane: Hashable {
+    case language
+    case memoryEngine
+    case curiosity
+    case history
+    case sleep
+    case logs
+    case reset
+    case runtime
+    case systemConfig
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @State private var expandedPane: SettingsPane? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
-                title: "Settings",
-                subtitle: "Real local controls that do not need to live in the main sidebar.",
-                actionTitle: "Restart Core",
-                actionSymbol: "arrow.clockwise"
-            ) {
-                Task { await model.restartCore() }
-            }
+                title: model.text(.settingsTitle),
+                subtitle: model.text(.settingsSubtitle)
+            )
 
             NativePanel {
                 VStack(spacing: 0) {
+                    SettingsControlStrip()
+                        .padding(.horizontal, 12)
+                        .padding(.top, 10)
+                        .padding(.bottom, 12)
+                    Divider()
+                        .padding(.leading, 58)
                     ExpandableSettingsRow(
-                        symbol: "slider.horizontal.3",
-                        title: "Runtime Config",
-                        subtitle: model.snapshot.settingsPath.isEmpty ? "global config not resolved" : model.snapshot.settingsPath
+                        symbol: "globe",
+                        title: model.text(.languageSettingsTitle),
+                        subtitle: "\(model.text(.languageSettingsSubtitle))\(model.appLanguage.nativeName)",
+                        expanded: paneBinding(.language)
                     ) {
-                        RuntimeConfigSettingsContent()
+                        LanguageSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "questionmark.bubble",
-                        title: "Curiosity",
-                        subtitle: "\(model.snapshot.waitingQuestions) open Personal Model questions"
+                        title: model.text(.curiosity),
+                        subtitle: "\(model.snapshot.waitingQuestions) \(model.text(.curiositySubtitle))",
+                        expanded: paneBinding(.curiosity)
                     ) {
                         CuriositySettingsContent()
                     }
                     ExpandableSettingsRow(
+                        symbol: "memorychip",
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Memory Engine",
+                            zh: "记忆引擎",
+                            fr: "Moteur mémoire",
+                            de: "Memory Engine"
+                        ),
+                        subtitle: memoryEngineSubtitle,
+                        expanded: paneBinding(.memoryEngine)
+                    ) {
+                        MemoryEngineSettingsContent()
+                    }
+                    ExpandableSettingsRow(
                         symbol: "clock.arrow.circlepath",
-                        title: "History",
-                        subtitle: "\(model.snapshot.episodes) episodes · \(model.snapshot.loops) loops · \(model.snapshot.steps) steps"
+                        title: model.text(.history),
+                        subtitle: "\(model.snapshot.episodes) episodes · \(model.snapshot.loops) loops · \(model.snapshot.steps) steps",
+                        expanded: paneBinding(.history)
                     ) {
                         HistoryUsageSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "moon.zzz",
-                        title: "Sleep Display",
-                        subtitle: "After \(model.sleepIdleMinutes) minutes of inactivity"
+                        title: model.text(.sleepDisplay),
+                        subtitle: String(format: model.text(.sleepDisplaySubtitle), "\(model.sleepIdleMinutes)"),
+                        expanded: paneBinding(.sleep)
                     ) {
                         SleepDisplaySettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "stethoscope",
-                        title: "Logs & Diagnostics",
-                        subtitle: "\(model.snapshot.logs) local log files"
+                        title: model.text(.logsDiagnostics),
+                        subtitle: "\(model.snapshot.logs) \(model.text(.logsDiagnosticsSubtitle))",
+                        expanded: paneBinding(.logs)
                     ) {
                         LogsDiagnosticsSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "exclamationmark.triangle",
-                        title: "Reset Data",
-                        subtitle: "Clear local data and run setup again"
+                        title: model.text(.resetData),
+                        subtitle: model.text(.resetDataSubtitle),
+                        expanded: paneBinding(.reset)
                     ) {
                         ResetDataSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "terminal",
-                        title: "Advanced Runtime",
-                        subtitle: model.snapshot.apiURL.isEmpty ? model.corePhase.label : model.snapshot.apiURL
+                        title: model.text(.advancedRuntime),
+                        subtitle: model.snapshot.apiURL.isEmpty ? model.corePhase.label : model.snapshot.apiURL,
+                        expanded: paneBinding(.runtime)
                     ) {
                         RuntimeSettingsContent()
+                    }
+                    ExpandableSettingsRow(
+                        symbol: "slider.horizontal.3",
+                        title: model.text(.runtimeConfig),
+                        subtitle: model.snapshot.settingsPath.isEmpty ? model.text(.runtimeConfigMissing) : model.snapshot.settingsPath,
+                        expanded: paneBinding(.systemConfig)
+                    ) {
+                        RuntimeConfigSettingsContent()
                     }
                 }
             }
 
-            if !model.lastError.isEmpty {
-                NativePanel {
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(title: "Last Error")
+        if !model.lastError.isEmpty {
+            NativePanel {
+                VStack(alignment: .leading, spacing: 8) {
+                        SectionLabel(title: model.text(.lastError))
                         Text(model.lastError)
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.orange)
@@ -6141,6 +8423,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .frame(maxWidth: 1120, alignment: .topLeading)
     }
 
     private func abbreviatedCount(_ value: Int) -> String {
@@ -6155,9 +8438,120 @@ struct SettingsView: View {
 
     private var providerSubtitle: String {
         if model.snapshot.providerModelID.isEmpty {
-            return model.snapshot.providerID.isEmpty ? "Provider setup needed" : model.snapshot.providerID
+            return model.snapshot.providerID.isEmpty ? model.text(.providerSetupNeeded) : model.snapshot.providerID
         }
         return "\(model.snapshot.providerID) · \(model.snapshot.providerModelID)"
+    }
+
+    private var memoryEngineSubtitle: String {
+        let status = model.snapshot.embeddingStatus.isEmpty ? model.snapshot.semanticStatus : model.snapshot.embeddingStatus
+        let source: String
+        switch model.snapshot.embeddingBootstrapSource.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "modelscope":
+            source = "ModelScope"
+        case "huggingface":
+            source = "HuggingFace"
+        default:
+            source = model.appLanguage.defaultEmbeddingModelSource == "modelscope" ? "ModelScope" : "HuggingFace"
+        }
+        return "\(source) · \(localizedEmbeddingState(status, language: model.appLanguage))"
+    }
+
+    private func paneBinding(_ pane: SettingsPane) -> Binding<Bool> {
+        Binding(
+            get: { expandedPane == pane },
+            set: { isExpanded in
+                expandedPane = isExpanded ? pane : nil
+            }
+        )
+    }
+}
+
+struct SettingsControlStrip: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var hoveringRestart = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(statusTint.opacity(0.12))
+                Image(systemName: statusSymbol)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(statusTint)
+            }
+            .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.text(.advancedRuntime))
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Text(runtimeLine)
+                    .font(.callout)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                Task { await model.restartCore() }
+            } label: {
+                Label(model.text(.restartCore), systemImage: "arrow.clockwise")
+                    .font(.callout.weight(.semibold))
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(hoveringRestart ? ElephantTheme.accent.opacity(0.14) : ElephantTheme.accent.opacity(0.08))
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(hoveringRestart ? ElephantTheme.accent.opacity(0.34) : ElephantTheme.accent.opacity(0.18), lineWidth: 1)
+                    )
+                    .contentShape(Capsule(style: .continuous))
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .foregroundStyle(ElephantTheme.accent)
+            .onHover { hoveringRestart = $0 }
+            .help(model.text(.restartCore))
+        }
+        .frame(maxWidth: .infinity, minHeight: 46, alignment: .center)
+    }
+
+    private var runtimeLine: String {
+        if !model.snapshot.apiURL.isEmpty {
+            return model.snapshot.apiURL
+        }
+        return model.corePhase.label
+    }
+
+    private var statusSymbol: String {
+        switch model.corePhase {
+        case .ready:
+            return "checkmark.seal.fill"
+        case .starting:
+            return "arrow.triangle.2.circlepath"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        case .idle:
+            return "power"
+        }
+    }
+
+    private var statusTint: Color {
+        switch model.corePhase {
+        case .ready:
+            return ElephantTheme.green
+        case .starting:
+            return ElephantTheme.accent
+        case .failed:
+            return ElephantTheme.orange
+        case .idle:
+            return ElephantTheme.faint
+        }
     }
 }
 
@@ -6166,49 +8560,424 @@ struct ExpandableSettingsRow<Content: View>: View {
     var title: String
     var subtitle: String
     var content: Content
-    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Binding private var expanded: Bool
+    @State private var hovering = false
 
     init(
         symbol: String,
         title: String,
         subtitle: String,
+        expanded: Binding<Bool>,
         @ViewBuilder content: () -> Content
     ) {
         self.symbol = symbol
         self.title = title
         self.subtitle = subtitle
+        self._expanded = expanded
         self.content = content()
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            content
-                .padding(.leading, 44)
-                .padding(.trailing, 4)
-                .padding(.bottom, 16)
-                .padding(.top, 2)
-        } label: {
-            HStack(spacing: 18) {
-                Image(systemName: symbol)
-                    .font(.title3)
-                    .foregroundStyle(ElephantTheme.muted)
-                    .frame(width: 26)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(ElephantTheme.ink)
-                    Text(subtitle)
-                        .font(.callout)
-                        .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(1)
+        VStack(spacing: 0) {
+            Button {
+                toggleExpanded()
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(iconBackground)
+                        Image(systemName: symbol)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(iconColor)
+                    }
+                    .frame(width: 34, height: 34)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title)
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                        Text(subtitle)
+                            .font(.callout)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(expanded ? ElephantTheme.accent.opacity(0.14) : hovering ? ElephantTheme.accent.opacity(0.08) : Color.clear)
+                        Image(systemName: "chevron.down")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(expanded || hovering ? ElephantTheme.accent : ElephantTheme.faint)
+                            .rotationEffect(.degrees(expanded ? 0 : -90))
+                    }
+                    .frame(width: 32, height: 32)
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
+                .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(rowBorder, lineWidth: expanded ? 1.2 : 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
+            .buttonStyle(PressablePlainButtonStyle())
+            .onHover { hovering = $0 }
+            .help("\(title): \(subtitle)")
+            .accessibilityLabel("\(title), \(subtitle)")
+
+            if expanded {
+                HStack(alignment: .top, spacing: 0) {
+                    Color.clear
+                        .frame(width: 50)
+                    content
+                        .padding(.top, 8)
+                        .padding(.bottom, 14)
+                        .frame(maxWidth: 720, alignment: .topLeading)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Divider()
+                .padding(.leading, 58)
         }
-        .disclosureGroupStyle(.automatic)
-        Divider()
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: expanded)
+        .animation(.easeOut(duration: 0.14), value: hovering)
+    }
+
+    private func toggleExpanded() {
+        if reduceMotion {
+            expanded.toggle()
+        } else {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                expanded.toggle()
+            }
+        }
+    }
+
+    private var iconColor: Color {
+        if expanded || hovering { return ElephantTheme.accent }
+        return ElephantTheme.muted
+    }
+
+    private var iconBackground: Color {
+        if expanded { return ElephantTheme.accent.opacity(0.10) }
+        if hovering { return ElephantTheme.accent.opacity(0.08) }
+        return ElephantTheme.faint.opacity(0.10)
+    }
+
+    private var rowBackground: Color {
+        if expanded { return Color(nsColor: .controlBackgroundColor).opacity(0.66) }
+        if hovering { return Color(nsColor: .controlBackgroundColor).opacity(0.58) }
+        return Color.clear
+    }
+
+    private var rowBorder: Color {
+        if expanded { return ElephantTheme.accent.opacity(0.16) }
+        if hovering { return ElephantTheme.line.opacity(0.74) }
+        return Color.clear
+    }
+}
+
+enum SettingsActionKind {
+    case primary
+    case secondary
+    case destructive
+}
+
+struct SettingsActionBar<Leading: View, Actions: View>: View {
+    var leading: Leading
+    var actions: Actions
+
+    init(@ViewBuilder actions: () -> Actions) where Leading == EmptyView {
+        self.leading = EmptyView()
+        self.actions = actions()
+    }
+
+    init(@ViewBuilder leading: () -> Leading, @ViewBuilder actions: () -> Actions) {
+        self.leading = leading()
+        self.actions = actions()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            leading
+            Spacer(minLength: 16)
+            actions
+        }
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .trailing)
+        .padding(.top, 4)
+    }
+}
+
+private struct SettingsActionButtonModifier: ViewModifier {
+    var kind: SettingsActionKind
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        content
+            .font(.callout.weight(kind == .primary ? .semibold : .medium))
+            .labelStyle(.titleAndIcon)
+            .buttonStyle(PressablePlainButtonStyle())
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 32)
+            .background(fill, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(stroke, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .primary:
+            return ElephantTheme.accent
+        case .secondary:
+            return ElephantTheme.ink.opacity(0.88)
+        case .destructive:
+            return ElephantTheme.orange
+        }
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .primary:
+            return ElephantTheme.accent.opacity(0.10)
+        case .secondary:
+            return Color(nsColor: .controlBackgroundColor).opacity(0.72)
+        case .destructive:
+            return ElephantTheme.orange.opacity(0.08)
+        }
+    }
+
+    private var stroke: Color {
+        switch kind {
+        case .primary:
+            return ElephantTheme.accent.opacity(0.30)
+        case .secondary:
+            return ElephantTheme.line.opacity(0.78)
+        case .destructive:
+            return ElephantTheme.orange.opacity(0.30)
+        }
+    }
+}
+
+extension View {
+    func settingsActionButton(_ kind: SettingsActionKind = .secondary) -> some View {
+        modifier(SettingsActionButtonModifier(kind: kind))
+    }
+}
+
+struct LanguageSettingsContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    private var languageBinding: Binding<AppLanguage> {
+        Binding(
+            get: { model.appLanguage },
+            set: { model.setAppLanguage($0) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(model.text(.languageSettingsDescription))
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Picker("", selection: languageBinding) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(language.nativeName).tag(language)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            SettingsRow(label: model.text(.languageSettingsTitle), value: model.appLanguage.nativeName)
+        }
+    }
+}
+
+struct MemoryEngineSettingsContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var embeddingSource = ""
+    @State private var loaded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
+                SectionLabel(
+                    title: localizedYouText(
+                        model.appLanguage,
+                        en: "Local Memory Model",
+                        zh: "本地记忆模型",
+                        fr: "Modèle mémoire local",
+                        de: "Lokales Speichermodell"
+                    ),
+                    subtitle: localizedYouText(
+                        model.appLanguage,
+                        en: "Semantic recall uses this local model. Setup picks the best source for your language.",
+                        zh: "语义回忆会使用这个本地模型；初始化会按语言自动选择默认来源。",
+                        fr: "Le rappel sémantique utilise ce modèle local. La configuration choisit la source adaptée à votre langue.",
+                        de: "Semantische Erinnerung nutzt dieses lokale Modell. Die Einrichtung wählt die passende Quelle für deine Sprache."
+                    )
+                )
+                Spacer()
+                Pill(text: embeddingSourceLabel(model.snapshot.embeddingBootstrapSource), symbol: "arrow.down.circle", tint: embeddingTint)
+            }
+
+            HStack(alignment: .center, spacing: 14) {
+                Text(modelSourceLabel)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .frame(width: 106, alignment: .leading)
+                Picker("", selection: $embeddingSource) {
+                    Text("HuggingFace").tag("huggingface")
+                    Text("ModelScope").tag("modelscope")
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 300)
+            }
+
+            VStack(spacing: 0) {
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Status", zh: "状态", fr: "Statut", de: "Status"), value: embeddingLine)
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Active source", zh: "当前来源", fr: "Source active", de: "Aktive Quelle"), value: embeddingSourceLabel(model.snapshot.embeddingBootstrapSource))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Setup default", zh: "初始化默认", fr: "Défaut de configuration", de: "Setup-Standard"), value: embeddingSourceLabel(model.appLanguage.defaultEmbeddingModelSource))
+                if !model.snapshot.embeddingModelRoot.isEmpty {
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Model path", zh: "模型路径", fr: "Chemin du modèle", de: "Modellpfad"), value: model.snapshot.embeddingModelRoot)
+                }
+                if !model.snapshot.embeddingModelSourceURL.isEmpty {
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Source URL", zh: "来源地址", fr: "URL source", de: "Quell-URL"), value: model.snapshot.embeddingModelSourceURL)
+                }
+            }
+
+            if !runtimeSummary.isEmpty {
+                Text(runtimeSummary)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !model.embeddingActionResult.isEmpty {
+                Text(model.embeddingActionResult)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.green)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SettingsActionBar {
+                Button {
+                    Task { try? await model.refreshDashboard() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Refresh", zh: "刷新", fr: "Actualiser", de: "Aktualisieren"), systemImage: "arrow.clockwise")
+                }
+                .settingsActionButton()
+
+                Button {
+                    Task { await model.saveLocalEmbeddingSettings(source: embeddingSource, forceDownload: true) }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Re-download", zh: "重新下载", fr: "Télécharger à nouveau", de: "Neu laden"), systemImage: "arrow.down.circle")
+                }
+                .settingsActionButton()
+
+                Button {
+                    Task { await model.saveLocalEmbeddingSettings(source: embeddingSource, forceDownload: false) }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Apply Source", zh: "应用来源", fr: "Appliquer la source", de: "Quelle anwenden"), systemImage: "checkmark.circle")
+                }
+                .settingsActionButton(.primary)
+            }
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loadFromSnapshot()
+            loaded = true
+        }
+        .onChange(of: model.snapshot.embeddingBootstrapSource) { _ in
+            loadFromSnapshot()
+        }
+        .onChange(of: model.appLanguage) { _ in
+            if model.snapshot.embeddingBootstrapSource.isEmpty {
+                loadFromSnapshot()
+            }
+        }
+    }
+
+    private var modelSourceLabel: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Model source",
+            zh: "模型来源",
+            fr: "Source du modèle",
+            de: "Modellquelle"
+        )
+    }
+
+    private var embeddingLine: String {
+        let status = model.snapshot.embeddingStatus.isEmpty ? model.snapshot.semanticStatus : model.snapshot.embeddingStatus
+        let runtime = model.snapshot.embeddingRuntimeState.trimmingCharacters(in: .whitespacesAndNewlines)
+        let localizedStatus = localizedEmbeddingState(status, language: model.appLanguage)
+        let localizedRuntime = runtime.isEmpty ? "" : localizedEmbeddingState(runtime, language: model.appLanguage)
+        let suffix = localizedRuntime.isEmpty ? localizedStatus : "\(localizedStatus) · \(localizedRuntime)"
+        if model.snapshot.embeddingProviderID.isEmpty {
+            return suffix
+        }
+        return "\(model.snapshot.embeddingProviderID) · \(suffix)"
+    }
+
+    private var runtimeSummary: String {
+        let raw = model.snapshot.embeddingRuntimeSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard model.appLanguage == .zh else { return raw }
+        let status = "\(model.snapshot.embeddingStatus) \(model.snapshot.embeddingRuntimeState) \(raw)".lowercased()
+        if status.contains("download") {
+            let root = model.snapshot.embeddingModelRoot.trimmingCharacters(in: .whitespacesAndNewlines)
+            if root.isEmpty {
+                return "依赖已就绪，正在等待本地记忆模型下载完成。"
+            }
+            return "依赖已就绪，正在等待本地记忆模型下载完成：\(root)"
+        }
+        if status.contains("ready") || status.contains("loaded") || status.contains("external") {
+            return "本地记忆模型已就绪，语义回忆可以使用。"
+        }
+        if status.contains("missing") || status.contains("not found") {
+            return "还没有可用的本地记忆模型，可以重新下载。"
+        }
+        return raw
+    }
+
+    private var embeddingTint: Color {
+        let status = embeddingLine.lowercased()
+        if status.contains("failed") || status.contains("missing") || status.contains("失败") || status.contains("未安装") {
+            return ElephantTheme.orange
+        }
+        if status.contains("ready") || status.contains("loaded") || status.contains("external") || status.contains("就绪") {
+            return ElephantTheme.green
+        }
+        return ElephantTheme.accent
+    }
+
+    private func embeddingSourceLabel(_ source: String) -> String {
+        switch source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "modelscope":
+            return "ModelScope"
+        case "huggingface":
+            return "HuggingFace"
+        default:
+            return model.appLanguage.defaultEmbeddingModelSource == "modelscope" ? "ModelScope" : "HuggingFace"
+        }
+    }
+
+    private func loadFromSnapshot() {
+        embeddingSource = model.snapshot.embeddingBootstrapSource.isEmpty
+            ? model.appLanguage.defaultEmbeddingModelSource
+            : model.snapshot.embeddingBootstrapSource
     }
 }
 
@@ -6222,10 +8991,26 @@ struct ProviderSettingsContent: View {
     @State private var discoveredModels: [String: [ProviderModelOption]] = [:]
     @State private var loadingModels = false
     @State private var loaded = false
-    @State private var autoFetchedProviderID = ""
     @State private var showingProviderConfig = false
+    @State private var providerSearch = ""
+    @State private var providerPage = 0
+
+    private let providerPageSize = 16
 
     var body: some View {
+        providerFactoryContent
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: showingProviderConfig)
+        .onAppear {
+            guard !loaded else { return }
+            loadFromSnapshot()
+            loaded = true
+        }
+        .onChange(of: model.snapshot.providerID) { _ in
+            loadFromSnapshot()
+        }
+    }
+
+    private var providerFactoryContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Pill(text: providerStatusLabel, symbol: "cpu", tint: providerTint)
@@ -6244,34 +9029,55 @@ struct ProviderSettingsContent: View {
                 }
                 providerConfigurationForm
             } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel(title: "Provider factory", subtitle: "\(model.snapshot.providerOptions.count) providers from the runtime catalog. Click a logo card to configure it.")
-                    ProviderFactoryGrid(
-                        options: model.snapshot.providerOptions,
-                        selectedID: providerID,
-                        activeID: model.snapshot.providerID
-                    ) { option in
-                        selectProvider(option, openConfig: true)
-                    }
-                    .popover(isPresented: $showingProviderConfig, arrowEdge: .bottom) {
-                        if let option = selectedOption {
-                            ProviderConfigurationPopover(option: option) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionLabel(
+                        title: model.text(.providerFactory),
+                        subtitle: providerFactorySubtitle
+                    )
+                    ProviderSearchField(text: $providerSearch, placeholder: model.text(.providerSearchPlaceholder))
+
+                    ZStack(alignment: .topTrailing) {
+                        ProviderFactoryGrid(
+                            options: pagedProviderOptions,
+                            selectedID: providerID,
+                            activeID: model.snapshot.providerID,
+                            columnsCount: 4,
+                            emptyText: localizedYouText(model.appLanguage, en: "No provider matches this search.", zh: "没有找到匹配的服务。", fr: "Aucun provider ne correspond.", de: "Kein passender Provider.")
+                        ) { option in
+                            selectProvider(option, openConfig: true)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        if showingProviderConfig, let option = selectedOption {
+                            ProviderConfigurationDropCard(option: option) {
+                                showingProviderConfig = false
+                            } content: {
                                 providerConfigurationForm
+                            }
+                            .frame(maxWidth: 620)
+                            .padding(.top, 8)
+                            .padding(.trailing, 8)
+                            .transition(.scale(scale: 0.96, anchor: .topTrailing).combined(with: .opacity))
+                            .zIndex(2)
+                        }
+                    }
+
+                    if providerPageCount > 1 {
+                        HStack {
+                            Text(localizedFormat(model.appLanguage, en: "%d-%d of %d providers", zh: "第 %d-%d 个 / 共 %d 个", fr: "%d-%d sur %d providers", de: "%d-%d von %d Providern", providerRangeStart, providerRangeEnd, filteredProviderOptions.count))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(ElephantTheme.muted)
+                            Spacer()
+                            PageStepper(page: currentProviderPage, pageCount: providerPageCount) { direction in
+                                providerPage = min(max(0, currentProviderPage + direction), providerPageCount - 1)
                             }
                         }
                     }
                 }
             }
         }
-        .onAppear {
-            guard !loaded else { return }
-            loadFromSnapshot()
-            loaded = true
-            Task { await loadLiveModelsIfNeeded() }
-        }
-        .onChange(of: model.snapshot.providerID) { _ in
-            loadFromSnapshot()
-            Task { await loadLiveModelsIfNeeded() }
+        .onChange(of: providerSearch) { _ in
+            providerPage = 0
         }
     }
 
@@ -6279,12 +9085,17 @@ struct ProviderSettingsContent: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    SectionLabel(title: "Model", subtitle: selectedOption?.active == true ? "Active model for the current provider" : "Select a catalog hint, live-discovered model, or type a custom ID.")
+                    SectionLabel(title: model.text(.modelSection), subtitle: selectedOption?.active == true ? model.text(.activeModelSubtitle) : model.text(.modelPickerSubtitle))
                     Spacer()
                     Button {
                         Task { await loadLiveModels() }
                     } label: {
-                        Label(loadingModels ? "Fetching" : "Fetch models", systemImage: "arrow.clockwise")
+                        Label(
+                            loadingModels
+                                ? model.text(.fetching)
+                                : localizedYouText(model.appLanguage, en: "Fetch models", zh: "刷新模型列表", fr: "Charger les modèles", de: "Modelle laden"),
+                            systemImage: "arrow.clockwise"
+                        )
                     }
                     .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loadingModels)
                     .controlSize(.small)
@@ -6297,8 +9108,8 @@ struct ProviderSettingsContent: View {
                     activeModelID: model.snapshot.providerModelID
                 )
 
-                LabeledContent("Custom model") {
-                    TextField("model id", text: $modelID)
+                LabeledContent(model.text(.customModelID)) {
+                    TextField(model.text(.modelID), text: $modelID)
                         .textFieldStyle(.roundedBorder)
                 }
             }
@@ -6307,24 +9118,28 @@ struct ProviderSettingsContent: View {
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
 
             LabeledContent("Base URL") {
-                TextField("optional endpoint", text: $baseURL)
+                TextField(localizedYouText(model.appLanguage, en: "optional endpoint", zh: "可选接口地址", fr: "endpoint optionnel", de: "optionaler Endpoint"), text: $baseURL)
                     .textFieldStyle(.roundedBorder)
             }
-            LabeledContent("API Key") {
-                SecureField("stored locally", text: $apiKey)
+            LabeledContent(model.text(.apiKey)) {
+                SecureField(localizedYouText(model.appLanguage, en: "stored locally", zh: "只保存在本机", fr: "stocké localement", de: "lokal gespeichert"), text: $apiKey)
                     .textFieldStyle(.roundedBorder)
             }
-            LabeledContent("Context Window") {
-                TextField("auto", text: $contextWindow)
+            LabeledContent(model.text(.contextWindowTokens)) {
+                TextField(localizedYouText(model.appLanguage, en: "auto", zh: "自动", fr: "auto", de: "auto"), text: $contextWindow)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 160)
             }
 
-            SettingsRow(label: "Source", value: model.snapshot.providerSource.isEmpty ? "not configured" : model.snapshot.providerSource)
-            SettingsRow(label: "Embedding", value: embeddingLine)
+            SettingsRow(
+                label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"),
+                value: model.snapshot.providerSource.isEmpty
+                    ? localizedYouText(model.appLanguage, en: "not configured", zh: "尚未配置", fr: "non configuré", de: "nicht konfiguriert")
+                    : model.snapshot.providerSource
+            )
 
             HStack {
-                Button("Save Provider") {
+                Button(localizedYouText(model.appLanguage, en: "Save Provider", zh: "保存模型服务", fr: "Enregistrer le provider", de: "Provider speichern")) {
                     Task {
                         await model.saveProviderSettings(
                             providerID: providerID,
@@ -6337,12 +9152,12 @@ struct ProviderSettingsContent: View {
                 }
                 .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                Button("Test") {
+                Button(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen")) {
                     Task { await model.testProvider() }
                 }
                 .disabled(model.snapshot.providerID.isEmpty && providerID.isEmpty)
 
-                Button("Refresh") {
+                Button(model.text(.refresh)) {
                     Task { try? await model.refreshDashboard() }
                 }
             }
@@ -6357,26 +9172,69 @@ struct ProviderSettingsContent: View {
         discoveredModels[providerID] ?? selectedOption?.models ?? []
     }
 
+    private var filteredProviderOptions: [ProviderOption] {
+        let needle = providerSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return model.snapshot.providerOptions
+            .filter { option in
+                guard !needle.isEmpty else { return true }
+                return providerSearchText(option).contains(needle)
+            }
+            .sorted { left, right in
+                let leftRank = providerSortRank(left)
+                let rightRank = providerSortRank(right)
+                if leftRank != rightRank { return leftRank < rightRank }
+                return left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
+            }
+    }
+
+    private var providerPageCount: Int {
+        max(1, (filteredProviderOptions.count + providerPageSize - 1) / providerPageSize)
+    }
+
+    private var currentProviderPage: Int {
+        min(max(providerPage, 0), providerPageCount - 1)
+    }
+
+    private var pagedProviderOptions: [ProviderOption] {
+        Array(filteredProviderOptions.dropFirst(currentProviderPage * providerPageSize).prefix(providerPageSize))
+    }
+
+    private var providerRangeStart: Int {
+        guard !filteredProviderOptions.isEmpty else { return 0 }
+        return currentProviderPage * providerPageSize + 1
+    }
+
+    private var providerRangeEnd: Int {
+        min(filteredProviderOptions.count, (currentProviderPage + 1) * providerPageSize)
+    }
+
+    private var providerFactorySubtitle: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "%d of %d providers · connected first",
+            zh: "显示 %d / %d 个，已连接优先",
+            fr: "%d sur %d providers · connectés d'abord",
+            de: "%d von %d Providern · verbundene zuerst",
+            filteredProviderOptions.count,
+            model.snapshot.providerOptions.count
+        )
+    }
+
     private var providerStatusLabel: String {
         if model.snapshot.providerStatus == "unknown", !model.snapshot.providerID.isEmpty {
-            return "configured"
+            return localizedProviderState("configured", language: model.appLanguage)
         }
-        return model.snapshot.providerStatus == "unknown" ? "setup needed" : model.snapshot.providerStatus
+        return localizedProviderState(
+            model.snapshot.providerStatus == "unknown" ? "setup needed" : model.snapshot.providerStatus,
+            language: model.appLanguage
+        )
     }
 
     private var providerTint: Color {
-        let value = providerStatusLabel.lowercased()
-        return value.contains("setup") || value.contains("missing") ? ElephantTheme.orange : ElephantTheme.green
-    }
-
-    private var embeddingLine: String {
-        let status = model.snapshot.embeddingStatus.isEmpty ? model.snapshot.semanticStatus : model.snapshot.embeddingStatus
-        let runtime = model.snapshot.embeddingRuntimeState.trimmingCharacters(in: .whitespacesAndNewlines)
-        let suffix = runtime.isEmpty ? status : "\(status) · \(runtime)"
-        if model.snapshot.embeddingProviderID.isEmpty {
-            return suffix
-        }
-        return "\(model.snapshot.embeddingProviderID) · \(suffix)"
+        let value = model.snapshot.providerStatus.lowercased()
+        return model.snapshot.providerID.isEmpty || value == "unknown" || value.contains("setup") || value.contains("missing")
+            ? ElephantTheme.orange
+            : ElephantTheme.green
     }
 
     private func loadFromSnapshot() {
@@ -6404,10 +9262,10 @@ struct ProviderSettingsContent: View {
         providerID = option.id
         applyProviderDefaults(onlyWhenEmpty: false)
         showingProviderConfig = openConfig
-        Task { await loadLiveModels(force: true) }
     }
 
     private func loadLiveModels(force: Bool = false) async {
+        guard !providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         loadingModels = true
         let rows = await model.discoverProviderModels(providerID: providerID, baseURL: baseURL, apiKey: apiKey)
         if !rows.isEmpty {
@@ -6416,27 +9274,56 @@ struct ProviderSettingsContent: View {
                 modelID = rows.first?.id ?? modelID
             }
         }
-        if force || !rows.isEmpty {
-            autoFetchedProviderID = providerID
-        }
         loadingModels = false
     }
 
-    private func loadLiveModelsIfNeeded() async {
-        let trimmedProviderID = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedProviderID.isEmpty,
-              autoFetchedProviderID != trimmedProviderID,
-              discoveredModels[trimmedProviderID] == nil else { return }
-        await loadLiveModels(force: true)
+    private func providerSearchText(_ option: ProviderOption) -> String {
+        [
+            option.displayName,
+            option.id,
+            option.defaultModel,
+            option.defaultBaseURL,
+            option.status,
+            option.source,
+            option.authKind,
+            option.summary,
+            option.models.map(\.id).joined(separator: " ")
+        ]
+        .joined(separator: " ")
+        .lowercased()
+    }
+
+    private func providerSortRank(_ option: ProviderOption) -> Int {
+        if option.id == model.snapshot.providerID || option.active { return 0 }
+        if option.connected { return 1 }
+        if option.storedKeyCount > 0 { return 2 }
+        if option.id == providerID { return 3 }
+        return 4
     }
 }
 
-struct ProviderConfigurationPopover<Content: View>: View {
+struct ProviderConfigurationModalBackdrop: View {
+    var dismiss: () -> Void
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(Color(nsColor: .windowBackgroundColor).opacity(0.28))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: dismiss)
+            .accessibilityHidden(true)
+    }
+}
+
+struct ProviderConfigurationModal<Content: View>: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
+    var close: () -> Void
     var content: Content
 
-    init(option: ProviderOption, @ViewBuilder content: () -> Content) {
+    init(option: ProviderOption, close: @escaping () -> Void, @ViewBuilder content: () -> Content) {
         self.option = option
+        self.close = close
         self.content = content()
     }
 
@@ -6456,6 +9343,16 @@ struct ProviderConfigurationPopover<Content: View>: View {
                 }
                 Spacer(minLength: 0)
                 ProviderStatePill(option: option)
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .foregroundStyle(ElephantTheme.muted)
+                .help(localizedYouText(model.appLanguage, en: "Close", zh: "关闭", fr: "Fermer", de: "Schließen"))
+                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Close provider configuration", zh: "关闭模型服务设置", fr: "Fermer la configuration du provider", de: "Provider-Konfiguration schließen"))
             }
             Divider()
             ScrollView {
@@ -6464,53 +9361,285 @@ struct ProviderConfigurationPopover<Content: View>: View {
             }
             .frame(maxHeight: 560)
         }
+        .padding(18)
+        .frame(width: 680, alignment: .topLeading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.80), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 30, y: 18)
+        .padding(.horizontal, 32)
+    }
+}
+
+struct ProviderConfigurationDropCard<Content: View>: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var option: ProviderOption
+    var close: () -> Void
+    var content: Content
+
+    init(option: ProviderOption, close: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+        self.option = option
+        self.close = close
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                ProviderLogoMark(option: option, size: 40)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(option.displayName)
+                        .font(.headline)
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(option.id)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                ProviderStatePill(option: option)
+                Button(action: close) {
+                    Image(systemName: "chevron.up")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .foregroundStyle(ElephantTheme.muted)
+                .help(localizedYouText(model.appLanguage, en: "Collapse", zh: "收起", fr: "Réduire", de: "Einklappen"))
+                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Collapse provider configuration", zh: "收起模型服务设置", fr: "Réduire la configuration du provider", de: "Provider-Konfiguration einklappen"))
+            }
+            Divider()
+            ScrollView {
+                content
+                    .padding(.vertical, 2)
+            }
+            .frame(maxHeight: 520)
+        }
         .padding(16)
-        .frame(width: 580, alignment: .topLeading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(ElephantTheme.accent.opacity(0.28), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 10)
     }
 }
 
 struct ProviderFactoryGrid: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var options: [ProviderOption]
+    var selectedID: String
+    var activeID: String
+    var columnsCount: Int = 4
+    var emptyText: String = "No provider matches this search."
+    var select: (ProviderOption) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if options.isEmpty {
+                EmptyLine(symbol: "magnifyingglass", text: emptyText)
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(providerRows.indices, id: \.self) { rowIndex in
+                        HStack(spacing: 12) {
+                            ForEach(providerRows[rowIndex]) { option in
+                                Button {
+                                    select(option)
+                                } label: {
+                                    ProviderFactoryCard(
+                                        option: option,
+                                        selected: option.id == selectedID,
+                                        active: option.id == activeID
+                                    )
+                                }
+                                .buttonStyle(PressablePlainButtonStyle())
+                                .help(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
+                                .accessibilityLabel(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
+                                .frame(maxWidth: .infinity)
+                            }
+                            ForEach(0..<max(0, max(1, columnsCount) - providerRows[rowIndex].count), id: \.self) { _ in
+                                Color.clear
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.50), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
+        )
+    }
+
+    private var providerRows: [[ProviderOption]] {
+        let width = max(1, columnsCount)
+        return stride(from: 0, to: options.count, by: width).map { index in
+            Array(options[index..<min(index + width, options.count)])
+        }
+    }
+}
+
+struct ProviderSearchField: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @Binding var text: String
+    var placeholder: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(focused ? ElephantTheme.accent : ElephantTheme.muted)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .focused($focused)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.faint)
+                }
+                .buttonStyle(.plain)
+                .help(localizedYouText(model.appLanguage, en: "Clear search", zh: "清空搜索", fr: "Effacer la recherche", de: "Suche löschen"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 34)
+        .background(
+            focused ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72),
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(focused ? ElephantTheme.accent.opacity(0.60) : ElephantTheme.line.opacity(0.72), lineWidth: 1)
+        )
+    }
+}
+
+struct ProviderFactoryList: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var options: [ProviderOption]
     var selectedID: String
     var activeID: String
     var select: (ProviderOption) -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            ForEach(providerRows.indices, id: \.self) { rowIndex in
-                HStack(spacing: 10) {
-                    ForEach(providerRows[rowIndex]) { option in
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if options.isEmpty {
+                    EmptyLine(symbol: "magnifyingglass", text: localizedYouText(model.appLanguage, en: "No provider matches this search.", zh: "没有找到匹配的服务。", fr: "Aucun provider ne correspond.", de: "Kein passender Provider."))
+                        .padding(.vertical, 20)
+                } else {
+                    ForEach(options) { option in
                         Button {
                             select(option)
                         } label: {
-                            ProviderFactoryCard(
+                            ProviderFactoryListRow(
                                 option: option,
                                 selected: option.id == selectedID,
                                 active: option.id == activeID
                             )
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help("Configure \(option.displayName)")
-                        .accessibilityLabel("Configure \(option.displayName)")
-                        .frame(maxWidth: .infinity)
-                    }
-                    ForEach(0..<max(0, 4 - providerRows[rowIndex].count), id: \.self) { _ in
-                        Color.clear
-                            .frame(maxWidth: .infinity)
+                        .help(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
+                        .accessibilityLabel(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
+                        if option.id != options.last?.id {
+                            Divider()
+                                .padding(.leading, 54)
+                        }
                     }
                 }
             }
         }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.54), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
+    }
+}
+
+struct ProviderFactoryListRow: View {
+    var option: ProviderOption
+    var selected: Bool
+    var active: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProviderLogoMark(option: option, size: 34)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 7) {
+                    Text(option.displayName)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    if isConnected {
+                        Circle()
+                            .fill(active ? ElephantTheme.accent : ElephantTheme.green)
+                            .frame(width: 6, height: 6)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text(option.id)
+                        .font(.caption.monospaced())
+                    if !detailLine.isEmpty {
+                        Text(detailLine)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .foregroundStyle(ElephantTheme.muted)
+            }
+            Spacer(minLength: 0)
+            ProviderStatePill(option: resolvedOption)
+            Image(systemName: selected ? "checkmark.circle.fill" : "chevron.right")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(selected ? ElephantTheme.accent : ElephantTheme.faint)
+                .frame(width: 18)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .background(selected ? ElephantTheme.accent.opacity(0.09) : Color.clear)
+        .contentShape(Rectangle())
     }
 
-    private var providerRows: [[ProviderOption]] {
-        stride(from: 0, to: options.count, by: 4).map { index in
-            Array(options[index..<min(index + 4, options.count)])
+    private var isConnected: Bool {
+        active || option.active || option.connected || option.storedKeyCount > 0
+    }
+
+    private var resolvedOption: ProviderOption {
+        var copy = option
+        if active {
+            copy.active = true
+            copy.connected = true
         }
+        return copy
+    }
+
+    private var detailLine: String {
+        if !option.defaultModel.isEmpty {
+            return option.defaultModel
+        }
+        if !option.source.isEmpty {
+            return option.source
+        }
+        return option.authKind
     }
 }
 
 struct ProviderFactoryCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
     var selected: Bool
     var active: Bool
@@ -6542,12 +9671,12 @@ struct ProviderFactoryCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-        .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(borderColor, style: borderStroke)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var resolvedOption: ProviderOption {
@@ -6566,7 +9695,7 @@ struct ProviderFactoryCard: View {
         if !option.summary.isEmpty {
             return option.summary
         }
-        return option.authKind.isEmpty ? "provider setup" : option.authKind
+        return option.authKind.isEmpty ? model.text(.providerSetup) : option.authKind
     }
 
     private var background: Color {
@@ -6607,6 +9736,7 @@ struct ProviderFactoryCard: View {
 }
 
 struct ProviderStatePill: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
 
     var body: some View {
@@ -6622,15 +9752,15 @@ struct ProviderStatePill: View {
 
     private var label: String {
         if option.active {
-            return "In use"
+            return localizedProviderState("In use", language: model.appLanguage)
         }
         if option.connected {
-            return "Connected"
+            return localizedProviderState("Connected", language: model.appLanguage)
         }
         if option.storedKeyCount > 0 {
-            return "\(option.storedKeyCount) key"
+            return localizedFormat(model.appLanguage, en: "%d key", zh: "%d 个密钥", fr: "%d clé", de: "%d Key", option.storedKeyCount)
         }
-        return "Use"
+        return localizedProviderState("Use", language: model.appLanguage)
     }
 
     private var tint: Color {
@@ -6698,11 +9828,7 @@ struct ProviderLogoAsset {
     var displayName: String
 
     var url: URL? {
-        URL(string: "https://unpkg.com/@lobehub/icons-static-png@latest/light/\(slug)\(suffix).png")
-    }
-
-    private var suffix: String {
-        colorSlugs.contains(slug) ? "-color" : ""
+        LobeHubIconAsset(slug: slug).url
     }
 
     private var slug: String {
@@ -6711,22 +9837,36 @@ struct ProviderLogoAsset {
             return alias
         }
         let display = displayName.lowercased()
+        if display.contains("baidu") || display.contains("qianfan") || display.contains("wenxin") { return "baidu" }
+        if display.contains("cerebras") { return "cerebras" }
         if display.contains("claude code") { return "claudecode" }
         if display.contains("claude") { return "claude" }
+        if display.contains("cohere") { return "cohere" }
         if display.contains("codex") || display.contains("openai") { return "openai" }
         if display.contains("copilot") { return "githubcopilot" }
+        if display.contains("doubao") { return "doubao" }
         if display.contains("gemini cli") { return "geminicli" }
         if display.contains("gemini") || display.contains("google") { return "gemini" }
         if display.contains("groq") { return "groq" }
+        if display.contains("hunyuan") { return "hunyuan" }
         if display.contains("kilo") { return "kilocode" }
         if display.contains("kimi") || display.contains("moonshot") { return "moonshot" }
+        if display.contains("modelscope") { return "modelscope" }
+        if display.contains("nvidia") { return "nvidia" }
+        if display.contains("perplexity") { return "perplexity" }
         if display.contains("qwen") || display.contains("dashscope") || display.contains("alibaba") { return "qwen" }
+        if display.contains("silicon") { return "siliconcloud" }
+        if display.contains("stepfun") || display.contains("step") { return "stepfun" }
+        if display.contains("tokenhub") { return "tencentcloud" }
+        if display.contains("tencent") { return "tencent" }
+        if display.contains("volcengine") || display.contains("ark") { return "volcengine" }
         if display.contains("xiaomi") { return "xiaomimimo" }
         return id.replacingOccurrences(of: "-", with: "")
     }
 
     private var aliases: [String: String] {
         [
+            "baidu-qianfan": "baidu",
             "claude-code": "claudecode",
             "copilot": "githubcopilot",
             "copilot-acp": "githubcopilot",
@@ -6739,34 +9879,72 @@ struct ProviderLogoAsset {
             "openai-compatible": "openai",
             "openai-codex": "openai",
             "qwen-oauth": "qwen",
+            "siliconflow": "siliconcloud",
+            "tencent-hunyuan": "hunyuan",
+            "tencent-tokenhub": "tencentcloud",
+            "volcengine": "doubao",
             "xiaomi": "xiaomimimo",
             "zai": "zai"
         ]
+    }
+}
+
+private struct LobeHubIconAsset {
+    var slug: String
+
+    var url: URL? {
+        URL(string: "https://unpkg.com/@lobehub/icons-static-png@latest/light/\(slug)\(suffix).png")
     }
 
     private var colorSlugs: Set<String> {
         [
             "alibaba",
+            "baidu",
+            "cerebras",
             "claude",
             "claudecode",
+            "cohere",
+            "crewai",
             "deepseek",
+            "dify",
+            "doubao",
             "fireworks",
+            "figma",
             "gemini",
             "geminicli",
+            "github",
             "google",
             "huggingface",
+            "hunyuan",
+            "langchain",
+            "langgraph",
+            "llamaindex",
+            "mcp",
             "minimax",
             "mistral",
+            "modelscope",
+            "nvidia",
+            "perplexity",
             "qwen",
+            "siliconcloud",
+            "stepfun",
+            "tencent",
+            "tencentcloud",
             "together",
             "vllm",
+            "volcengine",
             "xiaomimimo",
             "zhipu"
         ]
     }
+
+    private var suffix: String {
+        colorSlugs.contains(slug) ? "-color" : ""
+    }
 }
 
 struct ModelOptionPicker: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var options: [ProviderModelOption]
     @Binding var selectedID: String
     var loading: Bool
@@ -6776,7 +9954,9 @@ struct ModelOptionPicker: View {
         if options.isEmpty {
             EmptyLine(
                 symbol: loading ? "arrow.clockwise" : "sparkles",
-                text: loading ? "Fetching models from the provider..." : "No model list yet. Use Fetch models or type a custom model ID."
+                text: loading
+                    ? localizedYouText(model.appLanguage, en: "Fetching models from the provider...", zh: "正在从模型服务拉取列表...", fr: "Chargement des modèles depuis le provider...", de: "Modelle werden vom Provider geladen...")
+                    : localizedYouText(model.appLanguage, en: "No model list yet. Use Fetch models or type a custom model ID.", zh: "还没有模型列表。可以刷新模型列表，或手动填写模型 ID。", fr: "Aucune liste de modèles. Chargez les modèles ou saisissez un ID personnalisé.", de: "Noch keine Modellliste. Modelle laden oder eigene Modell-ID eingeben.")
             )
         } else {
             LazyVGrid(columns: columns, spacing: 8) {
@@ -6804,6 +9984,7 @@ struct ModelOptionPicker: View {
 }
 
 struct ModelOptionCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderModelOption
     var selected: Bool
     var active: Bool
@@ -6823,7 +10004,7 @@ struct ModelOptionCard: View {
                 HStack(spacing: 6) {
                     Text(option.source)
                     if active {
-                        Text("active")
+                        Text(localizedProviderState("active", language: model.appLanguage))
                     }
                 }
                 .font(.caption.weight(.semibold))
@@ -6868,6 +10049,7 @@ struct ProviderSectionBlock: View {
 }
 
 struct ProviderChoiceCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
     var selected: Bool
 
@@ -6895,12 +10077,12 @@ struct ProviderChoiceCard: View {
             VStack(alignment: .trailing, spacing: 5) {
                 HStack(spacing: 5) {
                     if option.active {
-                        Pill(text: "active", symbol: "checkmark", tint: ElephantTheme.green)
+                        Pill(text: localizedProviderState("active", language: model.appLanguage), symbol: "checkmark", tint: ElephantTheme.green)
                     } else if option.connected {
-                        Pill(text: "connected", symbol: "bolt.horizontal", tint: ElephantTheme.accent)
+                        Pill(text: localizedProviderState("connected", language: model.appLanguage), symbol: "bolt.horizontal", tint: ElephantTheme.accent)
                     }
                     if option.storedKeyCount > 0 {
-                        Pill(text: "\(option.storedKeyCount) key", symbol: "key", tint: ElephantTheme.green)
+                        Pill(text: localizedFormat(model.appLanguage, en: "%d key", zh: "%d 个密钥", fr: "%d clé", de: "%d Key", option.storedKeyCount), symbol: "key", tint: ElephantTheme.green)
                     }
                 }
                 Text([option.source, option.authKind].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -6920,9 +10102,13 @@ struct ProviderChoiceCard: View {
     }
 
     private var providerSummary: String {
-        let model = option.defaultModel.isEmpty ? "model not selected" : option.defaultModel
-        let endpoint = option.defaultBaseURL.isEmpty ? "default endpoint" : option.defaultBaseURL
-        return "\(model) · \(endpoint)"
+        let modelName = option.defaultModel.isEmpty
+            ? localizedYouText(model.appLanguage, en: "model not selected", zh: "未选择模型", fr: "modèle non choisi", de: "Modell nicht gewählt")
+            : option.defaultModel
+        let endpoint = option.defaultBaseURL.isEmpty
+            ? localizedYouText(model.appLanguage, en: "default endpoint", zh: "默认接口", fr: "endpoint par défaut", de: "Standard-Endpoint")
+            : option.defaultBaseURL
+        return "\(modelName) · \(endpoint)"
     }
 }
 
@@ -6934,10 +10120,13 @@ struct ReflectSettingsContent: View {
             SettingsRow(label: "Questions", value: "\(model.snapshot.waitingQuestions) open")
             SettingsRow(label: "Worker", value: model.snapshot.workerStatus)
             SettingsRow(label: "Latest", value: model.snapshot.latestCompletedAt.isEmpty ? "not yet" : model.snapshot.latestCompletedAt)
-            Button(model.isReflecting ? "Reflecting..." : "Run Reflect") {
-                Task { await model.runReflect(trigger: "settings") }
+            SettingsActionBar {
+                Button(model.isReflecting ? "Reflecting..." : "Run Reflect") {
+                    Task { await model.runReflect(trigger: "settings") }
+                }
+                .settingsActionButton(.primary)
+                .disabled(model.isReflecting)
             }
-            .disabled(model.isReflecting)
         }
     }
 }
@@ -6952,14 +10141,17 @@ struct RuntimeSettingsContent: View {
             SettingsRow(label: "Database", value: model.snapshot.databasePath.isEmpty ? "not resolved" : model.snapshot.databasePath)
             SettingsRow(label: "Provider", value: model.snapshot.providerStatus)
             SettingsRow(label: "Semantic Index", value: model.snapshot.semanticStatus)
-            HStack {
-                Button("Reveal Database") {
-                    model.revealDatabase()
-                }
-                .disabled(model.snapshot.databasePath.isEmpty)
+            SettingsActionBar {
                 Button("Refresh") {
                     Task { try? await model.refreshDashboard() }
                 }
+                .settingsActionButton()
+
+                Button("Reveal Database") {
+                    model.revealDatabase()
+                }
+                .settingsActionButton(.primary)
+                .disabled(model.snapshot.databasePath.isEmpty)
             }
         }
     }
@@ -6967,6 +10159,9 @@ struct RuntimeSettingsContent: View {
 
 struct SleepDisplaySettingsContent: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @State private var password = ""
+    @State private var confirmation = ""
+    @State private var result = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -6978,16 +10173,63 @@ struct SleepDisplaySettingsContent: View {
                 in: 1...120,
                 step: 1
             ) {
-                SettingsRow(label: "Auto sleep", value: "\(model.sleepIdleMinutes) min")
+                SettingsRow(label: model.text(.sleepAutoSleep), value: "\(model.sleepIdleMinutes) min")
             }
-            SettingsRow(label: "Wake", value: "Move, click, or press any key")
-            HStack {
-                Button("Enter Sleep Display") {
-                    model.beginSleepDisplay(reason: "manual")
+            SettingsRow(label: model.text(.sleepWake), value: model.hasAppLockPassword ? model.text(.sleepPasswordRequired) : model.text(.sleepNoPassword))
+            Divider()
+            SectionLabel(
+                title: model.text(.resetLockPassword),
+                subtitle: model.text(.lockPasswordSubtitle)
+            )
+            HStack(spacing: 10) {
+                SecureField(model.text(.lockPassword), text: $password)
+                    .textFieldStyle(.roundedBorder)
+                SecureField(model.text(.lockPasswordConfirm), text: $confirmation)
+                    .textFieldStyle(.roundedBorder)
+            }
+            SettingsActionBar {
+                Button(role: .destructive) {
+                    model.clearAppLockPassword()
+                    password = ""
+                    confirmation = ""
+                    result = model.text(.lockPasswordCleared)
+                } label: {
+                    Text(model.text(.clearLockPassword))
                 }
-                Button("Reset to 10 min") {
+                .settingsActionButton(.destructive)
+
+                Button(model.text(.resetLockPassword)) {
+                    let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.count >= 6 && trimmed == confirmation {
+                        _ = model.setAppLockPassword(trimmed)
+                        password = ""
+                        confirmation = ""
+                        result = model.text(.lockPasswordSaved)
+                    } else if trimmed.count < 6 {
+                        result = model.text(.lockPasswordRequirement)
+                    } else {
+                        result = model.text(.lockPasswordMismatch)
+                    }
+                }
+                .settingsActionButton(.primary)
+                .disabled(password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && confirmation.isEmpty)
+            }
+            if !result.isEmpty {
+                Text(result)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(result == model.text(.lockPasswordSaved) || result == model.text(.lockPasswordCleared) ? ElephantTheme.green : ElephantTheme.orange)
+            }
+            Divider()
+            SettingsActionBar {
+                Button(model.text(.resetSleepTimer)) {
                     model.updateSleepIdleMinutes(10)
                 }
+                .settingsActionButton()
+
+                Button(model.text(.enterSleepDisplay)) {
+                    model.beginSleepDisplay(reason: "manual")
+                }
+                .settingsActionButton(.primary)
             }
         }
     }
@@ -7011,12 +10253,15 @@ struct ResetDataSettingsContent: View {
                     .foregroundStyle(ElephantTheme.green)
             }
 
-            Button(role: .destructive) {
-                showingResetPopover = true
-            } label: {
-                Label(model.isResettingData ? "Resetting..." : "Reset All Data", systemImage: "trash")
+            SettingsActionBar {
+                Button(role: .destructive) {
+                    showingResetPopover = true
+                } label: {
+                    Label(model.isResettingData ? "Resetting..." : "Reset All Data", systemImage: "trash")
+                }
+                .settingsActionButton(.destructive)
+                .disabled(model.isResettingData)
             }
-            .disabled(model.isResettingData)
             .popover(isPresented: $showingResetPopover, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionLabel(
@@ -7028,17 +10273,19 @@ struct ResetDataSettingsContent: View {
                         EmptyLine(symbol: "person.crop.circle", text: "Personal Model facts, questions, profile photo, and herd data will be deleted.")
                         EmptyLine(symbol: "key", text: "Provider keys, gateway secrets, global config, and jobs will be deleted.")
                     }
-                    HStack {
+                    SettingsActionBar {
                         Button("Cancel") {
                             showingResetPopover = false
                         }
-                        Spacer()
+                        .settingsActionButton()
+
                         Button(role: .destructive) {
                             showingResetPopover = false
                             Task { await model.resetAllData() }
                         } label: {
                             Label("Reset All Data", systemImage: "trash")
                         }
+                        .settingsActionButton(.destructive)
                         .disabled(model.isResettingData)
                     }
                 }
@@ -7056,11 +10303,13 @@ struct SkillLibraryPanel: View {
         NativePanel {
             OperatorCatalogContent(
                 kind: "skills",
-                title: "Skill Library",
-                subtitle: "Enable only what should be available in normal agent loops.",
-                searchPrompt: "Search skills",
+                title: localizedYouText(model.appLanguage, en: "Skill Library", zh: "技能库", fr: "Bibliothèque de skills", de: "Skill-Bibliothek"),
+                subtitle: localizedYouText(model.appLanguage, en: "Enable only what normal agent loops should use.", zh: "只打开日常对话里真的会用到的技能。", fr: "Activez seulement ce que les boucles agent normales doivent utiliser.", de: "Aktiviere nur, was normale Agent-Loops nutzen sollen."),
+                searchPrompt: localizedYouText(model.appLanguage, en: "Search skills", zh: "搜索技能", fr: "Rechercher des skills", de: "Skills suchen"),
                 emptySymbol: "wand.and.stars",
-                emptyText: model.snapshot.skills > 0 ? "\(model.snapshot.skills) skills detected." : "No skills returned yet.",
+                emptyText: model.snapshot.skills > 0
+                    ? localizedFormat(model.appLanguage, en: "%d skills detected.", zh: "已经识别出 %d 个技能。", fr: "%d skills détectés.", de: "%d Skills erkannt.", model.snapshot.skills)
+                    : localizedYouText(model.appLanguage, en: "No skills returned yet.", zh: "本地运行时还没有返回技能列表。", fr: "Aucun skill retourné.", de: "Noch keine Skills zurückgegeben."),
                 items: model.snapshot.skillItems,
                 fallbackNames: model.snapshot.skillNames,
                 totalCount: model.snapshot.skills,
@@ -7088,11 +10337,13 @@ struct ToolsCatalogPanel: View {
         NativePanel {
             OperatorCatalogContent(
                 kind: "tools",
-                title: "Tool Library",
-                subtitle: "Built-in and MCP actions available to the local runtime.",
-                searchPrompt: "Search tools",
+                title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Tool-Bibliothek"),
+                subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
+                searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Tools suchen"),
                 emptySymbol: "wrench.and.screwdriver",
-                emptyText: model.snapshot.tools > 0 ? "\(model.snapshot.tools) tools detected." : "No tools returned yet.",
+                emptyText: model.snapshot.tools > 0
+                    ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Tools erkannt.", model.snapshot.tools)
+                    : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Tools zurückgegeben."),
                 items: model.snapshot.toolItems,
                 fallbackNames: model.snapshot.toolNames,
                 totalCount: model.snapshot.tools,
@@ -7111,11 +10362,13 @@ struct SkillsSettingsContent: View {
     var body: some View {
         OperatorCatalogContent(
             kind: "skills",
-            title: "Skill Library",
-            subtitle: "Enable only what should be available in normal agent loops.",
-            searchPrompt: "Search skills",
+            title: localizedYouText(model.appLanguage, en: "Skill Library", zh: "技能库", fr: "Bibliothèque de skills", de: "Skill-Bibliothek"),
+            subtitle: localizedYouText(model.appLanguage, en: "Enable only what normal agent loops should use.", zh: "只打开日常对话里真的会用到的技能。", fr: "Activez seulement ce que les boucles agent normales doivent utiliser.", de: "Aktiviere nur, was normale Agent-Loops nutzen sollen."),
+            searchPrompt: localizedYouText(model.appLanguage, en: "Search skills", zh: "搜索技能", fr: "Rechercher des skills", de: "Skills suchen"),
             emptySymbol: "wand.and.stars",
-            emptyText: model.snapshot.skills > 0 ? "\(model.snapshot.skills) skills detected." : "No skills returned yet.",
+            emptyText: model.snapshot.skills > 0
+                ? localizedFormat(model.appLanguage, en: "%d skills detected.", zh: "已经识别出 %d 个技能。", fr: "%d skills détectés.", de: "%d Skills erkannt.", model.snapshot.skills)
+                : localizedYouText(model.appLanguage, en: "No skills returned yet.", zh: "本地运行时还没有返回技能列表。", fr: "Aucun skill retourné.", de: "Noch keine Skills zurückgegeben."),
             items: model.snapshot.skillItems,
             fallbackNames: model.snapshot.skillNames,
             totalCount: model.snapshot.skills,
@@ -7133,11 +10386,13 @@ struct ToolsSettingsContent: View {
     var body: some View {
         OperatorCatalogContent(
             kind: "tools",
-            title: "Tool Library",
-            subtitle: "Built-in and MCP actions available to the local runtime.",
-            searchPrompt: "Search tools",
+            title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Tool-Bibliothek"),
+            subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
+            searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Tools suchen"),
             emptySymbol: "wrench.and.screwdriver",
-            emptyText: model.snapshot.tools > 0 ? "\(model.snapshot.tools) tools detected." : "No tools returned yet.",
+            emptyText: model.snapshot.tools > 0
+                ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Tools erkannt.", model.snapshot.tools)
+                : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Tools zurückgegeben."),
             items: model.snapshot.toolItems,
             fallbackNames: model.snapshot.toolNames,
             totalCount: model.snapshot.tools,
@@ -7150,6 +10405,7 @@ struct ToolsSettingsContent: View {
 }
 
 private struct OperatorCatalogContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var kind: String
     var title: String
     var subtitle: String
@@ -7176,8 +10432,16 @@ private struct OperatorCatalogContent: View {
                 )
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
-                    Pill(text: "\(enabledCount) enabled", symbol: "checkmark.seal", tint: ElephantTheme.green)
-                    Pill(text: "\(totalCount) total", symbol: kind == "tools" ? "wrench.and.screwdriver" : "wand.and.stars", tint: logoTint)
+                    Pill(
+                        text: localizedFormat(model.appLanguage, en: "%d enabled", zh: "%d 已启用", fr: "%d activés", de: "%d aktiv", enabledCount),
+                        symbol: "checkmark.seal",
+                        tint: ElephantTheme.green
+                    )
+                    Pill(
+                        text: localizedFormat(model.appLanguage, en: "%d total", zh: "%d 总计", fr: "%d au total", de: "%d gesamt", totalCount),
+                        symbol: kind == "tools" ? "wrench.and.screwdriver" : "wand.and.stars",
+                        tint: logoTint
+                    )
                 }
             }
 
@@ -7188,7 +10452,7 @@ private struct OperatorCatalogContent: View {
                 TextField(searchPrompt, text: $query)
                     .textFieldStyle(.plain)
                 Spacer(minLength: 8)
-                Text("\(filteredCount) shown")
+                Text(localizedFormat(model.appLanguage, en: "%d shown", zh: "显示 %d 个", fr: "%d affichés", de: "%d gezeigt", filteredCount))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -7198,12 +10462,24 @@ private struct OperatorCatalogContent: View {
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(items.isEmpty ? "Catalog" : "\(enabledPageItems.count) enabled · \(availablePageItems.count) available on this page")
+                Text(
+                    items.isEmpty
+                        ? localizedYouText(model.appLanguage, en: "Catalog", zh: "目录", fr: "Catalogue", de: "Katalog")
+                        : localizedFormat(
+                            model.appLanguage,
+                            en: "%d enabled · %d available on this page",
+                            zh: "本页已启用 %d 个 · 还可启用 %d 个",
+                            fr: "%d activés · %d disponibles sur cette page",
+                            de: "%d aktiv · %d auf dieser Seite verfügbar",
+                            enabledPageItems.count,
+                            availablePageItems.count
+                        )
+                )
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                     .textCase(.uppercase)
                 Spacer(minLength: 0)
-                Text("Page \(currentPage + 1) of \(pageCount)")
+                Text(localizedFormat(model.appLanguage, en: "Page %d of %d", zh: "第 %d / %d 页", fr: "Page %d sur %d", de: "Seite %d von %d", currentPage + 1, pageCount))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                 PageStepper(page: currentPage, pageCount: pageCount) { direction in
@@ -7288,20 +10564,44 @@ private struct OperatorCatalogContent: View {
 private struct OperatorCatalogLogo: View {
     var symbol: String
     var tint: Color
+    var brandSlug: String? = nil
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(tint.opacity(0.11))
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(tint)
+            if let url = brandURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .padding(8)
+                    default:
+                        fallbackIcon
+                    }
+                }
+            } else {
+                fallbackIcon
+            }
         }
         .frame(width: 42, height: 42)
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(tint.opacity(0.22), lineWidth: 1)
         )
+    }
+
+    private var fallbackIcon: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(tint)
+    }
+
+    private var brandURL: URL? {
+        guard let brandSlug, !brandSlug.isEmpty else { return nil }
+        return LobeHubIconAsset(slug: brandSlug).url
     }
 }
 
@@ -7312,7 +10612,7 @@ private struct OperatorCatalogRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            OperatorCatalogLogo(symbol: logo.symbol, tint: logo.tint)
+            OperatorCatalogLogo(symbol: logo.symbol, tint: logo.tint, brandSlug: logo.brandSlug)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
@@ -7328,7 +10628,11 @@ private struct OperatorCatalogRow: View {
                             .truncationMode(.middle)
                     }
                 }
-                Text(item.detail.isEmpty ? "No description returned by the local runtime." : item.detail)
+                Text(
+                    item.detail.isEmpty
+                        ? localizedYouText(model.appLanguage, en: "No description returned by the local runtime.", zh: "本地运行时没有提供说明。", fr: "Aucune description retournée par le runtime local.", de: "Keine Beschreibung von der lokalen Runtime.")
+                        : item.detail
+                )
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .lineLimit(2)
@@ -7339,11 +10643,17 @@ private struct OperatorCatalogRow: View {
 
             HStack(spacing: 8) {
                 Pill(
-                    text: item.enabled ? "enabled" : "available",
+                    text: item.enabled
+                        ? localizedYouText(model.appLanguage, en: "enabled", zh: "已启用", fr: "activé", de: "aktiv")
+                        : localizedYouText(model.appLanguage, en: "available", zh: "可启用", fr: "disponible", de: "verfügbar"),
                     symbol: item.enabled ? "checkmark" : "circle",
                     tint: item.enabled ? ElephantTheme.green : ElephantTheme.faint
                 )
-                Button(item.enabled ? "Disable" : "Enable") {
+                Button(
+                    item.enabled
+                        ? localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren")
+                        : localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+                ) {
                     Task { await model.setConsoleItem(kind: kind, id: item.id, enabled: !item.enabled) }
                 }
                 .controlSize(.small)
@@ -7367,10 +10677,12 @@ private struct OperatorFallbackNameRows: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(names, id: \.self) { name in
+                let logo = OperatorLogoSpec.forText(name, kind: kind)
                 HStack(spacing: 12) {
                     OperatorCatalogLogo(
-                        symbol: kind == "tools" ? "wrench.and.screwdriver" : "puzzlepiece.extension",
-                        tint: kind == "tools" ? ElephantTheme.accent : ElephantTheme.orange
+                        symbol: logo.symbol,
+                        tint: logo.tint,
+                        brandSlug: logo.brandSlug
                     )
                     Text(name)
                         .font(.callout.weight(.semibold))
@@ -7395,9 +10707,22 @@ private struct OperatorFallbackNameRows: View {
 private struct OperatorLogoSpec {
     var symbol: String
     var tint: Color
+    var brandSlug: String? = nil
 
     static func forItem(_ item: OperationItem, kind: String) -> OperatorLogoSpec {
         let raw = "\(item.id) \(item.title) \(item.detail)".lowercased()
+        return forText(raw, kind: kind)
+    }
+
+    static func forText(_ text: String, kind: String) -> OperatorLogoSpec {
+        let raw = text.lowercased()
+        if let brandSlug = brandSlug(for: raw) {
+            return OperatorLogoSpec(
+                symbol: kind == "tools" ? "wrench.and.screwdriver" : "sparkles",
+                tint: kind == "tools" ? ElephantTheme.accent : ElephantTheme.orange,
+                brandSlug: brandSlug
+            )
+        }
         if kind == "tools" {
             if raw.contains("browser") || raw.contains("http") || raw.contains("url") {
                 return OperatorLogoSpec(symbol: "safari", tint: ElephantTheme.accent)
@@ -7443,6 +10768,43 @@ private struct OperatorLogoSpec {
         }
         return OperatorLogoSpec(symbol: "puzzlepiece.extension", tint: ElephantTheme.orange)
     }
+
+    private static func brandSlug(for raw: String) -> String? {
+        if raw.contains("openai") || raw.contains("chatgpt") || raw.contains("codex") { return "openai" }
+        if raw.contains("anthropic") || raw.contains("claude") { return "claude" }
+        if raw.contains("gemini") || raw.contains("google ai") || raw.contains("ai studio") { return "gemini" }
+        if raw.contains("deepseek") { return "deepseek" }
+        if raw.contains("qwen") || raw.contains("dashscope") || raw.contains("alibaba") { return "qwen" }
+        if raw.contains("kimi") || raw.contains("moonshot") { return "moonshot" }
+        if raw.contains("minimax") { return "minimax" }
+        if raw.contains("mistral") { return "mistral" }
+        if raw.contains("groq") { return "groq" }
+        if raw.contains("xai") || raw.contains("grok") { return "xai" }
+        if raw.contains("cohere") { return "cohere" }
+        if raw.contains("perplexity") { return "perplexity" }
+        if raw.contains("cerebras") { return "cerebras" }
+        if raw.contains("nvidia") || raw.contains("nim") || raw.contains("nemotron") { return "nvidia" }
+        if raw.contains("siliconflow") || raw.contains("silicon cloud") { return "siliconcloud" }
+        if raw.contains("doubao") || raw.contains("volcengine") { return "doubao" }
+        if raw.contains("tokenhub") { return "tencentcloud" }
+        if raw.contains("hunyuan") || raw.contains("tencent") { return "hunyuan" }
+        if raw.contains("qianfan") || raw.contains("wenxin") || raw.contains("baidu") { return "baidu" }
+        if raw.contains("stepfun") { return "stepfun" }
+        if raw.contains("modelscope") { return "modelscope" }
+        if raw.contains("hugging") || raw.contains("transformers") { return "huggingface" }
+        if raw.contains("ollama") { return "ollama" }
+        if raw.contains("vllm") { return "vllm" }
+        if raw.contains("figma") { return "figma" }
+        if raw.contains("github") || raw.contains("gh-") || raw.contains("gh_") { return "github" }
+        if raw.contains("notion") { return "notion" }
+        if raw.contains("langchain") { return "langchain" }
+        if raw.contains("langgraph") { return "langgraph" }
+        if raw.contains("llamaindex") || raw.contains("llama index") { return "llamaindex" }
+        if raw.contains("crewai") || raw.contains("crew ai") { return "crewai" }
+        if raw.contains("dify") { return "dify" }
+        if raw.contains("mcp") { return "mcp" }
+        return nil
+    }
 }
 
 struct RuntimeConfigSettingsContent: View {
@@ -7473,23 +10835,7 @@ struct RuntimeConfigSettingsContent: View {
                         .accessibilityLabel("Global runtime configuration YAML")
                 }
 
-                HStack(spacing: 8) {
-                    Button("Save Config") {
-                        Task { await model.saveGlobalConfig(yamlText: draft) }
-                    }
-                    .disabled(!hasChanges || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                    Button("Reset") {
-                        draft = model.snapshot.settingsYaml
-                    }
-                    .disabled(!hasChanges)
-
-                    Button("Refresh") {
-                        Task { try? await model.refreshDashboard() }
-                    }
-
-                    Spacer(minLength: 0)
-
+                SettingsActionBar {
                     if !model.configActionResult.isEmpty {
                         Label(model.configActionResult, systemImage: "checkmark.circle.fill")
                             .font(.caption.weight(.semibold))
@@ -7499,8 +10845,24 @@ struct RuntimeConfigSettingsContent: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.orange)
                     }
+                } actions: {
+                    Button("Refresh") {
+                        Task { try? await model.refreshDashboard() }
+                    }
+                    .settingsActionButton()
+
+                    Button("Reset") {
+                        draft = model.snapshot.settingsYaml
+                    }
+                    .settingsActionButton()
+                    .disabled(!hasChanges)
+
+                    Button("Save Config") {
+                        Task { await model.saveGlobalConfig(yamlText: draft) }
+                    }
+                    .settingsActionButton(.primary)
+                    .disabled(!hasChanges || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .controlSize(.small)
             }
         }
         .onAppear {
@@ -7563,7 +10925,11 @@ struct OperatorItemRows: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    Button(item.enabled ? "Disable" : "Enable") {
+                    Button(
+                        item.enabled
+                            ? localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren")
+                            : localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+                    ) {
                         Task { await model.setConsoleItem(kind: kind, id: item.id, enabled: !item.enabled) }
                     }
                     .controlSize(.small)
@@ -7931,6 +11297,7 @@ struct ProviderSettingsPanel: View {
                 SettingsRow(label: "Model", value: model.snapshot.providerModelID.isEmpty ? "not selected" : model.snapshot.providerModelID)
                 SettingsRow(label: "Source", value: model.snapshot.providerSource.isEmpty ? "unknown" : model.snapshot.providerSource)
                 SettingsRow(label: "Embedding", value: embeddingLine)
+                SettingsRow(label: "Embedding source", value: embeddingSourceLabel)
 
                 HStack {
                     Button("Test Provider") {
@@ -7979,6 +11346,17 @@ struct ProviderSettingsPanel: View {
             return suffix
         }
         return "\(model.snapshot.embeddingProviderID) · \(suffix)"
+    }
+
+    private var embeddingSourceLabel: String {
+        switch model.snapshot.embeddingBootstrapSource.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "modelscope":
+            return "ModelScope"
+        case "huggingface":
+            return "HuggingFace"
+        default:
+            return model.appLanguage.defaultEmbeddingModelSource == "modelscope" ? "ModelScope" : "HuggingFace"
+        }
     }
 }
 
@@ -8108,10 +11486,12 @@ struct SkillsAndJobsPanel: View {
 
 struct OnboardingFlow: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onComplete: () -> Void
-    private let learnStep = 14
-    private let readyStep = 15
-    private let totalSteps = 16
+    @State private var transitionForward = true
+    private let learnStep = 16
+    private let readyStep = 17
+    private let totalSteps = 18
 
     var body: some View {
         ZStack {
@@ -8120,16 +11500,22 @@ struct OnboardingFlow: View {
                 VStack(spacing: 10) {
                     BrandMark(size: 112, framed: false)
                         .shadow(color: ElephantTheme.accent.opacity(0.10), radius: 22, y: 10)
-                    Text(zh ? "设置 Elephant Agent" : "Set Up Elephant Agent")
+                    Text(model.text(.setupTitle))
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text(zh ? "一步一步建立你的本地 Personal Model。" : "Build your local Personal Model one focused step at a time.")
+                    Text(model.text(.setupSubtitle))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
                 }
 
                 VStack(spacing: 0) {
-                    stepContent
+                    ZStack(alignment: .topLeading) {
+                        stepContent
+                            .id(model.onboardingStep)
+                            .transition(stepTransition)
+                    }
+                    .clipped()
+                    .animation(stepAnimation, value: model.onboardingStep)
                         .padding(.horizontal, 40)
                         .padding(.top, 32)
                         .padding(.bottom, 20)
@@ -8145,14 +11531,24 @@ struct OnboardingFlow: View {
                 )
                 .shadow(color: Color.black.opacity(0.18), radius: 34, y: 22)
 
-                OnboardingProgressDots(count: totalSteps, active: min(model.onboardingStep, readyStep))
-                    .frame(width: 260)
+                OnboardingPhaseRail(
+                    phases: phases,
+                    activeStep: min(model.onboardingStep, readyStep),
+                    language: model.appLanguage,
+                    canNavigate: model.onboardingStep < learnStep
+                ) { phase in
+                    selectPhaseIfAllowed(phase)
+                }
+                .frame(width: 680)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 24)
             .padding(.horizontal, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onExitCommand {
+            goBackIfPossible()
+        }
     }
 
     @ViewBuilder
@@ -8163,30 +11559,34 @@ struct OnboardingFlow: View {
         case 1:
             OnboardingIdentityStep()
         case 2:
-            OnboardingWorkStep()
+            OnboardingLockPasswordStep()
         case 3:
-            OnboardingInterestsStep()
+            OnboardingWorkStep()
         case 4:
-            OnboardingLinksStep()
+            OnboardingInterestsStep()
         case 5:
-            OnboardingHealthNotesStep()
+            OnboardingLinksStep()
         case 6:
-            OnboardingSurveySingleStep(kind: .innerLandscape)
+            OnboardingHealthNotesStep()
         case 7:
-            OnboardingSurveySingleStep(kind: .valueAnchor)
+            OnboardingSurveySingleStep(kind: .innerLandscape)
         case 8:
-            OnboardingSurveySingleStep(kind: .pressurePattern)
+            OnboardingSurveySingleStep(kind: .valueAnchor)
         case 9:
-            OnboardingSurveySingleStep(kind: .recoveryStyle)
+            OnboardingSurveySingleStep(kind: .pressurePattern)
         case 10:
-            OnboardingSurveySingleStep(kind: .decisionCompass)
+            OnboardingSurveySingleStep(kind: .recoveryStyle)
         case 11:
-            OnboardingElephantStep()
+            OnboardingSurveySingleStep(kind: .decisionCompass)
         case 12:
-            OnboardingProviderModelStep()
+            OnboardingElephantStep()
         case 13:
-            OnboardingProviderSecretStep()
+            OnboardingProviderModelStep()
         case 14:
+            OnboardingModelSelectionStep()
+        case 15:
+            OnboardingProviderSecretStep()
+        case 16:
             OnboardingLearningStep()
         default:
             OnboardingCelebrationStep()
@@ -8197,25 +11597,43 @@ struct OnboardingFlow: View {
         HStack(spacing: 12) {
             if model.onboardingStep > 0 && model.onboardingStep < learnStep {
                 Button {
-                    model.onboardingStep = max(0, model.onboardingStep - 1)
+                    goBackIfPossible()
                 } label: {
-                    Label(zh ? "返回" : "Back", systemImage: "chevron.left")
+                    Label(model.text(.back), systemImage: "chevron.left")
                 }
                 .controlSize(.large)
+                .keyboardShortcut(.cancelAction)
             } else {
                 Spacer().frame(width: 96)
             }
 
             Spacer()
 
-            Text("\(min(model.onboardingStep + 1, totalSteps))/\(totalSteps)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(ElephantTheme.faint)
-                .monospacedDigit()
+            VStack(spacing: 2) {
+                Label(currentPhase.title.text(model.appLanguage), systemImage: currentPhase.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+                if let nextRequirement {
+                    Label(nextRequirement, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.orange)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                } else {
+                    Text("\(min(model.onboardingStep + 1, totalSteps))/\(totalSteps)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.faint)
+                        .monospacedDigit()
+                }
+            }
+            .frame(minWidth: 190)
 
             if model.onboardingStep < learnStep {
                 Button {
-                    model.onboardingStep = min(learnStep, model.onboardingStep + 1)
+                    advanceIfPossible()
                 } label: {
                     Label(nextTitle, systemImage: "chevron.right")
                 }
@@ -8223,15 +11641,19 @@ struct OnboardingFlow: View {
                 .controlSize(.large)
                 .tint(ElephantTheme.accent)
                 .disabled(nextDisabled)
+                .help(nextRequirement ?? nextTitle)
+                .accessibilityHint(nextRequirement ?? nextTitle)
+                .keyboardShortcut(.defaultAction)
             } else if model.onboardingStep == readyStep {
                 Button {
                     onComplete()
                 } label: {
-                    Label(zh ? "进入 Elephant Agent" : "Enter Elephant Agent", systemImage: "arrow.right.circle.fill")
+                    Label(model.text(.enterElephant), systemImage: "arrow.right.circle.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .tint(ElephantTheme.accent)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(.horizontal, 30)
@@ -8239,32 +11661,127 @@ struct OnboardingFlow: View {
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.40))
     }
 
+    private func goBackIfPossible() {
+        guard model.onboardingStep > 0 && model.onboardingStep < learnStep else { return }
+        transitionForward = false
+        withAnimation(stepAnimation) {
+            model.onboardingStep = max(0, model.onboardingStep - 1)
+        }
+    }
+
+    private func advanceIfPossible() {
+        guard model.onboardingStep < learnStep, !nextDisabled else { return }
+        if model.onboardingStep == 2 {
+            _ = model.persistOnboardingLockPassword()
+        }
+        transitionForward = true
+        withAnimation(stepAnimation) {
+            model.onboardingStep = min(learnStep, model.onboardingStep + 1)
+        }
+    }
+
+    private func selectPhaseIfAllowed(_ phase: OnboardingPhase) {
+        guard model.onboardingStep < learnStep,
+              phase.range.lowerBound <= model.onboardingStep
+        else { return }
+        transitionForward = phase.range.lowerBound >= model.onboardingStep
+        withAnimation(stepAnimation) {
+            model.onboardingStep = phase.range.lowerBound
+        }
+    }
+
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let insertionX: CGFloat = transitionForward ? 34 : -34
+        let removalX: CGFloat = transitionForward ? -28 : 28
+        return .asymmetric(
+            insertion: .offset(x: insertionX, y: 0)
+                .combined(with: .opacity)
+                .combined(with: .scale(scale: 0.985, anchor: .center)),
+            removal: .offset(x: removalX, y: 0)
+                .combined(with: .opacity)
+                .combined(with: .scale(scale: 0.992, anchor: .center))
+        )
+    }
+
+    private var stepAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.16)
+            : .spring(response: 0.42, dampingFraction: 0.86, blendDuration: 0.06)
+    }
+
     private var nextTitle: String {
         switch model.onboardingStep {
-        case 0: return zh ? "继续" : "Continue"
-        case 13: return zh ? "开始初始化" : "Start Setup"
-        default: return zh ? "下一步" : "Next"
+        case 0: return model.text(.continueAction)
+        case 15: return model.text(.startSetup)
+        default: return model.text(.next)
         }
+    }
+
+    private var nextRequirement: String? {
+        guard nextDisabled else { return nil }
+        switch model.onboardingStep {
+        case 1:
+            return model.text(.requirementPreferredName)
+        case 2:
+            if model.onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines).count < 6 {
+                return model.text(.lockPasswordRequirement)
+            }
+            return model.text(.lockPasswordMismatch)
+        case 7, 8, 9, 10, 11:
+            return model.text(.requirementSurveyChoice)
+        case 12:
+            return model.text(.requirementElephantIdentity)
+        case 13:
+            return model.text(.providerTitle)
+        case 14:
+            return model.text(.selectModel)
+        case 15:
+            return model.text(.requirementProviderDetails)
+        default:
+            return nil
+        }
+    }
+
+    private var currentPhase: OnboardingPhase {
+        phases.first { $0.range.contains(min(model.onboardingStep, readyStep)) } ?? phases[0]
+    }
+
+    private var phases: [OnboardingPhase] {
+        [
+            OnboardingPhase(id: "language", title: .phaseLanguage, symbol: "globe", range: 0...0),
+            OnboardingPhase(id: "profile", title: .phaseProfile, symbol: "person.crop.square", range: 1...6),
+            OnboardingPhase(id: "patterns", title: .phasePattern, symbol: "checklist", range: 7...11),
+            OnboardingPhase(id: "elephant", title: .phaseElephant, symbol: "sparkles", range: 12...12),
+            OnboardingPhase(id: "model", title: .phaseModel, symbol: "cpu", range: 13...15),
+            OnboardingPhase(id: "ready", title: .phaseReady, symbol: "checkmark.seal", range: 16...17)
+        ]
     }
 
     private var nextDisabled: Bool {
         switch model.onboardingStep {
         case 1:
             return model.onboardingPreferredName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case 6:
-            return model.onboardingInnerLandscape.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case 2:
+            return !model.onboardingLockPasswordIsValid
         case 7:
-            return model.onboardingValueAnchor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return model.onboardingInnerLandscape.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 8:
-            return model.onboardingPressurePattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return model.onboardingValueAnchor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 9:
-            return model.onboardingRecoveryStyle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return model.onboardingPressurePattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 10:
-            return model.onboardingDecisionCompass.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return model.onboardingRecoveryStyle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 11:
+            return model.onboardingDecisionCompass.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case 12:
             return model.onboardingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || model.onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 13:
+            return model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case 14:
+            return model.onboardingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case 15:
             return !providerReady
         default:
             return false
@@ -8283,8 +11800,6 @@ struct OnboardingFlow: View {
         }
         return true
     }
-
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
 }
 
 struct OnboardingBackdrop: View {
@@ -8326,6 +11841,150 @@ struct OnboardingProgressDots: View {
     }
 }
 
+struct OnboardingPhase: Identifiable {
+    var id: String
+    var title: AppText
+    var symbol: String
+    var range: ClosedRange<Int>
+}
+
+struct OnboardingPhaseRail: View {
+    var phases: [OnboardingPhase]
+    var activeStep: Int
+    var language: AppLanguage
+    var canNavigate: Bool
+    var onSelect: (OnboardingPhase) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(phases) { phase in
+                OnboardingPhaseRailItem(
+                    phase: phase,
+                    state: state(for: phase),
+                    language: language,
+                    isSelectable: canNavigate && phase.range.lowerBound <= activeStep
+                ) {
+                    onSelect(phase)
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(AppText.phaseProgressLabel.text(language))
+    }
+
+    private func state(for phase: OnboardingPhase) -> OnboardingPhaseRailItem.State {
+        if activeStep > phase.range.upperBound { return .complete }
+        if phase.range.contains(activeStep) { return .active }
+        return .upcoming
+    }
+}
+
+struct OnboardingPhaseRailItem: View {
+    enum State {
+        case complete
+        case active
+        case upcoming
+    }
+
+    var phase: OnboardingPhase
+    var state: State
+    var language: AppLanguage
+    var isSelectable: Bool
+    var onSelect: () -> Void
+
+    var body: some View {
+        Button {
+            guard isSelectable else { return }
+            onSelect()
+        } label: {
+            content
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .disabled(!isSelectable)
+        .help(accessibilityLabel)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(accessibilityHint)
+        .accessibilityRemoveTraits(.isSelected)
+    }
+
+    private var content: some View {
+        HStack(spacing: 6) {
+            Image(systemName: iconName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 14)
+            Text(phase.title.text(language))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 30)
+        .background(background, in: Capsule())
+        .overlay(Capsule().stroke(borderColor, lineWidth: 1))
+        .contentShape(Capsule())
+    }
+
+    private var accessibilityLabel: String {
+        "\(phase.title.text(language)), \(stateText)"
+    }
+
+    private var accessibilityHint: String {
+        isSelectable
+            ? AppText.phaseJumpHint.text(language)
+            : AppText.phaseLockedHint.text(language)
+    }
+
+    private var stateText: String {
+        switch state {
+        case .complete: return AppText.phaseStatusComplete.text(language)
+        case .active: return AppText.phaseStatusCurrent.text(language)
+        case .upcoming: return AppText.phaseStatusUpcoming.text(language)
+        }
+    }
+
+    private var iconName: String {
+        switch state {
+        case .complete: return "checkmark"
+        case .active, .upcoming: return phase.symbol
+        }
+    }
+
+    private var iconColor: Color {
+        switch state {
+        case .complete: return ElephantTheme.green
+        case .active: return ElephantTheme.accent
+        case .upcoming: return ElephantTheme.faint
+        }
+    }
+
+    private var textColor: Color {
+        switch state {
+        case .complete: return ElephantTheme.ink.opacity(0.72)
+        case .active: return ElephantTheme.ink
+        case .upcoming: return ElephantTheme.muted
+        }
+    }
+
+    private var background: Color {
+        switch state {
+        case .complete: return ElephantTheme.green.opacity(0.10)
+        case .active: return ElephantTheme.accent.opacity(0.13)
+        case .upcoming: return Color(nsColor: .controlBackgroundColor).opacity(0.52)
+        }
+    }
+
+    private var borderColor: Color {
+        switch state {
+        case .complete: return ElephantTheme.green.opacity(0.22)
+        case .active: return ElephantTheme.accent.opacity(0.32)
+        case .upcoming: return ElephantTheme.line.opacity(0.42)
+        }
+    }
+}
+
 struct OnboardingStepHeader: View {
     var title: String
     var subtitle: String
@@ -8360,6 +12019,7 @@ struct OnboardingField: View {
     var secure = false
     var suggestions: [String] = []
     @FocusState private var focused: Bool
+    @State private var hovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -8393,42 +12053,88 @@ struct OnboardingField: View {
             .frame(minHeight: lines.upperBound > 1 ? 78 : 38, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(focused ? ElephantTheme.accent.opacity(0.09) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+                    .fill(fieldFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(focused ? ElephantTheme.accent.opacity(0.72) : ElephantTheme.line.opacity(0.76), lineWidth: focused ? 1.4 : 1)
+                    .stroke(fieldStroke, lineWidth: focused ? 1.4 : 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.16), value: focused)
+            .animation(.easeOut(duration: 0.16), value: hovering)
 
             if !suggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 7) {
-                        ForEach(suggestions, id: \.self) { suggestion in
-                            Button {
-                                text = suggestion
-                            } label: {
-                                Text(suggestion)
-                                    .font(.caption.weight(.semibold))
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(
-                                        text == suggestion
-                                            ? ElephantTheme.accent.opacity(0.16)
-                                            : Color(nsColor: .controlBackgroundColor).opacity(0.55),
-                                        in: Capsule()
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(text == suggestion ? ElephantTheme.accent.opacity(0.45) : ElephantTheme.line.opacity(0.54), lineWidth: 1)
-                                    )
-                            }
-                            .buttonStyle(.plain)
+                OnboardingSuggestionChips(suggestions: suggestions, selection: $text)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var fieldFill: Color {
+        if focused {
+            return ElephantTheme.accent.opacity(0.09)
+        }
+        if hovering {
+            return Color(nsColor: .controlBackgroundColor).opacity(0.92)
+        }
+        return Color(nsColor: .controlBackgroundColor).opacity(0.72)
+    }
+
+    private var fieldStroke: Color {
+        if focused {
+            return ElephantTheme.accent.opacity(0.72)
+        }
+        if hovering {
+            return ElephantTheme.accent.opacity(0.32)
+        }
+        return ElephantTheme.line.opacity(0.76)
+    }
+}
+
+struct OnboardingSuggestionChips: View {
+    var suggestions: [String]
+    @Binding var selection: String
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 116), spacing: 8)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            ForEach(suggestions, id: \.self) { suggestion in
+                Button {
+                    selection = suggestion
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(suggestion)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Spacer(minLength: 0)
+                        if selection == suggestion {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption2.weight(.semibold))
                         }
                     }
+                    .foregroundStyle(selection == suggestion ? ElephantTheme.accent : ElephantTheme.ink)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .background(
+                        selection == suggestion
+                            ? ElephantTheme.accent.opacity(0.14)
+                            : Color(nsColor: .controlBackgroundColor).opacity(0.58),
+                        in: Capsule()
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(selection == suggestion ? ElephantTheme.accent.opacity(0.48) : ElephantTheme.line.opacity(0.58), lineWidth: 1)
+                    )
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(PressablePlainButtonStyle())
+                .help(suggestion)
+                .accessibilityLabel(suggestion)
             }
         }
     }
@@ -8439,6 +12145,7 @@ struct OnboardingMenuField: View {
     var placeholder: String
     var options: [String]
     @Binding var selection: String
+    @State private var hovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -8476,15 +12183,26 @@ struct OnboardingMenuField: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: 38)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(
+                            hovering
+                                ? ElephantTheme.accent.opacity(0.08)
+                                : Color(nsColor: .controlBackgroundColor).opacity(0.72)
+                        )
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(ElephantTheme.line.opacity(0.76), lineWidth: 1)
+                        .stroke(hovering ? ElephantTheme.accent.opacity(0.46) : ElephantTheme.line.opacity(0.76), lineWidth: 1)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressablePlainButtonStyle())
+            .onHover { hovering = $0 }
+            .help(selection.isEmpty ? placeholder : "\(title): \(selection)")
+            .accessibilityLabel("\(title), \(selection.isEmpty ? placeholder : selection)")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -8521,7 +12239,7 @@ struct OnboardingChoiceButton: View {
                 }
             }
             .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
             .background(selected ? ElephantTheme.accent : Color(nsColor: .controlBackgroundColor).opacity(0.74), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -8533,104 +12251,341 @@ struct OnboardingChoiceButton: View {
     }
 }
 
-struct OnboardingLanguageStep: View {
-    @EnvironmentObject private var model: ElephantAppModel
+struct OnboardingLanguageOptionButton: View {
+    var title: String
+    var subtitle: String
+    var symbol: String
+    var selected: Bool
+    var height: CGFloat = 52
+    var action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(selected ? .white : ElephantTheme.accent)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(selected ? .white : ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(selected ? .white.opacity(0.78) : ElephantTheme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.86)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(selected ? .white : ElephantTheme.faint)
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .center)
+            .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? ElephantTheme.accent.opacity(0.34) : ElephantTheme.line.opacity(hovering ? 0.82 : 0.64), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+    }
+
+    private var background: Color {
+        if selected { return ElephantTheme.accent }
+        return hovering ? Color(nsColor: .controlBackgroundColor).opacity(0.90) : Color(nsColor: .controlBackgroundColor).opacity(0.74)
+    }
+}
+
+struct OnboardingLanguageStep: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    private let optionHeight: CGFloat = 52
+    private let optionSpacing: CGFloat = 10
+    private let visibleOptionCount = 4
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
             OnboardingStepHeader(
-                title: "Choose your language",
-                subtitle: "Pick the language Elephant should use during setup. You can change it later.",
+                title: model.text(.languageTitle),
+                subtitle: model.text(.languageSubtitle),
                 symbol: "globe"
             )
-            HStack(spacing: 14) {
-                OnboardingChoiceButton(
-                    title: "English",
-                    subtitle: "Use English for the first-run experience.",
-                    symbol: "textformat",
-                    selected: model.onboardingFirstLanguage == "en"
-                ) {
-                    model.onboardingFirstLanguage = "en"
+            Spacer(minLength: 0)
+            HStack(alignment: .top, spacing: 18) {
+                OnboardingLanguageSignal(language: model.appLanguage)
+                    .frame(width: 246, height: languageListHeight)
+
+                ScrollView(.vertical, showsIndicators: AppLanguage.allCases.count > visibleOptionCount) {
+                    LazyVStack(spacing: optionSpacing) {
+                        ForEach(AppLanguage.allCases) { language in
+                            OnboardingLanguageOptionButton(
+                                title: language.nativeName,
+                                subtitle: language.languageCardSubtitle,
+                                symbol: language.symbol,
+                                selected: model.appLanguage == language,
+                                height: optionHeight
+                            ) {
+                                model.setAppLanguage(language)
+                            }
+                        }
+                    }
                 }
-                OnboardingChoiceButton(
-                    title: "中文",
-                    subtitle: "初始化流程使用中文。",
-                    symbol: "character.book.closed",
-                    selected: model.onboardingFirstLanguage == "zh"
-                ) {
-                    model.onboardingFirstLanguage = "zh"
-                }
+                .frame(maxWidth: .infinity)
+                .frame(height: languageListHeight)
             }
             Spacer(minLength: 0)
         }
+    }
+
+    private var languageListHeight: CGFloat {
+        optionHeight * CGFloat(visibleOptionCount) + optionSpacing * CGFloat(visibleOptionCount - 1)
+    }
+}
+
+struct OnboardingLanguageSignal: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var language: AppLanguage
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { timeline in
+            ZStack {
+                Canvas { context, size in
+                    let seconds = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                    let center = CGPoint(x: size.width * 0.50, y: size.height * 0.50)
+                    let radius = min(size.width, size.height) * 0.32
+                    let palette = [
+                        ElephantTheme.accent,
+                        ElephantTheme.mint,
+                        ElephantTheme.ember
+                    ]
+                    for index in 0..<3 {
+                        let phase = CGFloat(seconds * (0.35 + Double(index) * 0.06))
+                        let inset = CGFloat(index) * 18 + sin(phase) * 5
+                        let rect = CGRect(
+                            x: center.x - radius + inset / 2,
+                            y: center.y - radius + inset / 2,
+                            width: radius * 2 - inset,
+                            height: radius * 2 - inset
+                        )
+                        context.stroke(
+                            Path(ellipseIn: rect),
+                            with: .color(palette[index].opacity(0.22)),
+                            style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [26, 18], dashPhase: CGFloat(seconds * 22 + Double(index) * 17))
+                        )
+                    }
+                    for index in 0..<7 {
+                        let angle = seconds * 0.34 + Double(index) * .pi * 2 / 7
+                        let point = CGPoint(
+                            x: center.x + CGFloat(cos(angle)) * (radius + 17),
+                            y: center.y + CGFloat(sin(angle)) * (radius + 17)
+                        )
+                        let dot = CGRect(x: point.x - 3.5, y: point.y - 3.5, width: 7, height: 7)
+                        context.fill(Path(ellipseIn: dot), with: .color(palette[index % palette.count].opacity(0.78)))
+                    }
+                }
+                VStack(spacing: 8) {
+                    Text(primaryGreeting)
+                        .font(.system(size: 42, weight: .semibold, design: .rounded))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                    Text(secondaryGreeting)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [
+                        ElephantTheme.accent.opacity(language == .zh || language == .fr ? 0.08 : 0.13),
+                        ElephantTheme.mint.opacity(language == .zh || language == .de ? 0.13 : 0.08),
+                        Color(nsColor: .controlBackgroundColor).opacity(0.55)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(ElephantTheme.accent.opacity(0.16), lineWidth: 1)
+            )
+        }
+    }
+
+    private var primaryGreeting: String {
+        language.greeting
+    }
+
+    private var secondaryGreeting: String {
+        AppText.languageSignalSubtitle.text(language)
     }
 }
 
 struct OnboardingIdentityStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
     private let mbtiOptions = [
         "INTJ", "INTP", "ENTJ", "ENTP",
         "INFJ", "INFP", "ENFJ", "ENFP",
         "ISTJ", "ISFJ", "ESTJ", "ESFJ",
         "ISTP", "ISFP", "ESTP", "ESFP"
     ]
+    private var genderOptions: [String] {
+        [model.text(.female), model.text(.male), model.text(.nonBinary)]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             OnboardingStepHeader(
-                title: zh ? "你的身份" : "Your Profile",
-                subtitle: zh ? "只收集会进入 Personal Model 的稳定身份锚点。" : "Only collect stable identity anchors that become Personal Model facts.",
+                title: model.text(.identityTitle),
+                subtitle: model.text(.identitySubtitle),
                 symbol: "person.crop.square"
             )
             HStack(alignment: .top, spacing: 22) {
                 OnboardingLogoPicker()
+                    .frame(width: 176)
+                    .frame(minHeight: 222)
                 VStack(spacing: 12) {
-                    OnboardingField(title: zh ? "你的称呼" : "Preferred name", placeholder: zh ? "Elephant 应该怎么称呼你？" : "What should Elephant call you?", text: $model.onboardingPreferredName)
+                    OnboardingField(title: model.text(.preferredName), placeholder: model.text(.preferredNamePlaceholder), text: $model.onboardingPreferredName)
                     HStack(spacing: 12) {
-                        OnboardingField(
-                            title: zh ? "性别" : "Gender",
-                            placeholder: zh ? "按你希望被记录的方式填写" : "As you want it recorded",
-                            text: $model.onboardingGender,
-                            suggestions: zh ? ["女", "男", "非二元"] : ["Female", "Male", "Non-binary"]
+                        OnboardingMenuField(
+                            title: model.text(.gender),
+                            placeholder: model.text(.notSet),
+                            options: genderOptions,
+                            selection: $model.onboardingGender
                         )
-                        OnboardingField(title: zh ? "生日" : "Birth date", placeholder: "YYYY-MM-DD", text: $model.onboardingBirthDate)
+                        OnboardingField(title: model.text(.birthDate), placeholder: "YYYY-MM-DD", text: $model.onboardingBirthDate)
                     }
                     OnboardingMenuField(
                         title: "MBTI",
-                        placeholder: zh ? "不填写" : "Not set",
+                        placeholder: model.text(.notSet),
                         options: mbtiOptions,
                         selection: $model.onboardingMBTI
                     )
                 }
+                .frame(maxWidth: .infinity)
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
+    }
+}
+
+struct OnboardingLockPasswordStep: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            OnboardingStepHeader(
+                title: model.text(.lockPasswordTitle),
+                subtitle: model.text(.lockPasswordSubtitle),
+                symbol: "lock.shield"
+            )
+
+            HStack(alignment: .center, spacing: 24) {
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        ElephantTheme.accent.opacity(0.12),
+                                        ElephantTheme.mint.opacity(0.14),
+                                        Color(nsColor: .textBackgroundColor).opacity(0.78)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 154, height: 154)
+                            .overlay(Circle().stroke(ElephantTheme.line.opacity(0.70), lineWidth: 1))
+
+                        UserAvatarImage(size: 92, name: model.userDisplayName, url: model.userAvatarURL)
+
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(ElephantTheme.ink.opacity(0.84), in: Circle())
+                            .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+                            .offset(x: 52, y: 52)
+                    }
+
+                    Text(model.userDisplayName)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                }
+                .frame(width: 190)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    OnboardingField(
+                        title: model.text(.lockPassword),
+                        placeholder: model.text(.lockPasswordRequirement),
+                        text: $model.onboardingLockPassword,
+                        secure: true
+                    )
+                    OnboardingField(
+                        title: model.text(.lockPasswordConfirm),
+                        placeholder: model.text(.lockPasswordConfirm),
+                        text: $model.onboardingLockPasswordConfirmation,
+                        secure: true
+                    )
+
+                    HStack(spacing: 8) {
+                        Image(systemName: model.onboardingLockPasswordIsValid ? "checkmark.circle.fill" : "info.circle")
+                            .foregroundStyle(model.onboardingLockPasswordIsValid ? ElephantTheme.green : ElephantTheme.muted)
+                        Text(lockStatus)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(model.onboardingLockPasswordIsValid ? ElephantTheme.green : ElephantTheme.muted)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.70), lineWidth: 1))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
+    }
+
+    private var lockStatus: String {
+        if model.onboardingLockPasswordIsValid {
+            return model.text(.lockPasswordSet)
+        }
+        if model.onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines).count < 6 {
+            return model.text(.lockPasswordRequirement)
+        }
+        return model.text(.lockPasswordMismatch)
     }
 }
 
 struct OnboardingElephantStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             OnboardingStepHeader(
-                title: zh ? "Elephant 的性格" : "Elephant Vibe",
-                subtitle: zh ? "这一步只设置 agent 本身，会渲染成 ELEPHANT.md。" : "This only sets the agent identity and renders into ELEPHANT.md.",
+                title: model.text(.elephantVibeTitle),
+                subtitle: model.text(.elephantVibeSubtitle),
                 symbol: "sparkles"
             )
-            OnboardingField(title: zh ? "Elephant 名字" : "Elephant name", placeholder: "Elephant", text: $model.onboardingName)
+            OnboardingField(title: model.text(.elephantName), placeholder: "Elephant", text: $model.onboardingName)
             OnboardingField(
-                title: zh ? "默认 vibe" : "Default vibe",
-                placeholder: zh ? "它默认应该如何陪伴、判断和表达？" : "How should it show up by default?",
+                title: model.text(.defaultVibe),
+                placeholder: model.text(.defaultVibePlaceholder),
                 text: $model.onboardingPurpose,
                 lines: 3...5,
-                suggestions: zh
-                    ? ["温暖、精准、直接", "安静、长期、可靠", "好奇、会追问、少废话"]
-                    : ["Warm, precise, direct", "Quiet, long-term, reliable", "Curious, questioning, concise"]
+                suggestions: [model.text(.vibeSuggestionOne), model.text(.vibeSuggestionTwo), model.text(.vibeSuggestionThree)]
             )
             VStack(alignment: .leading, spacing: 8) {
                 Text("ELEPHANT.md")
@@ -8652,23 +12607,23 @@ struct OnboardingElephantStep: View {
 struct OnboardingWorkStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             OnboardingStepHeader(
-                title: zh ? "你现在所在的位置" : "Where You Are Now",
-                subtitle: zh ? "告诉 Elephant 你当前的主线、组织和时区。" : "Give Elephant your current work thread, organization, and timezone.",
+                title: model.text(.workTitle),
+                subtitle: model.text(.workSubtitle),
                 symbol: "location.magnifyingglass"
             )
-            OnboardingField(title: zh ? "当前主线/工作" : "Current work", placeholder: zh ? "最近主要投入的事情" : "Current attention or work thread", text: $model.onboardingOccupation)
-            OnboardingField(title: zh ? "学校/组织" : "School or organization", placeholder: zh ? "可选" : "Optional", text: $model.onboardingSchool)
-            OnboardingField(
-                title: zh ? "城市/时区" : "City or timezone",
-                placeholder: zh ? "例如：上海 / Asia/Shanghai" : "City or timezone",
-                text: $model.onboardingCity,
-                suggestions: ["Asia/Shanghai", "America/Los_Angeles", "Europe/London"]
-            )
+            OnboardingField(title: model.text(.currentWork), placeholder: model.text(.currentWorkPlaceholder), text: $model.onboardingOccupation)
+            HStack(alignment: .top, spacing: 12) {
+                OnboardingField(title: model.text(.school), placeholder: model.text(.optional), text: $model.onboardingSchool)
+                OnboardingField(
+                    title: model.text(.cityTimezone),
+                    placeholder: model.text(.cityTimezonePlaceholder),
+                    text: $model.onboardingCity,
+                    suggestions: ["Asia/Shanghai", "America/Los_Angeles", "Europe/London"]
+                )
+            }
         }
     }
 }
@@ -8676,22 +12631,20 @@ struct OnboardingWorkStep: View {
 struct OnboardingInterestsStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             OnboardingStepHeader(
-                title: zh ? "兴趣和长期方向" : "Interests and Direction",
-                subtitle: zh ? "只写值得长期记住的兴趣和方向。" : "Write only interests and directions worth remembering long term.",
+                title: model.text(.interestsTitle),
+                subtitle: model.text(.interestsSubtitle),
                 symbol: "sparkles"
             )
             OnboardingField(
-                title: zh ? "兴趣爱好" : "Hobbies",
-                placeholder: zh ? "逗号分隔" : "Comma separated",
+                title: model.text(.hobbies),
+                placeholder: model.text(.hobbiesPlaceholder),
                 text: $model.onboardingHobbies,
-                suggestions: zh ? ["写作, 设计, AI", "阅读, 播客, 散步", "研究, 产品, 音乐"] : ["Writing, design, AI", "Reading, podcasts, walking", "Research, product, music"]
+                suggestions: [model.text(.hobbiesSuggestionOne), model.text(.hobbiesSuggestionTwo), model.text(.hobbiesSuggestionThree)]
             )
-            OnboardingField(title: zh ? "长期愿望" : "Long-term direction", placeholder: zh ? "你希望 Elephant 长期记住的方向" : "A direction you want Elephant to remember", text: $model.onboardingDream, lines: 3...4)
+            OnboardingField(title: model.text(.longTermDirection), placeholder: model.text(.longTermDirectionPlaceholder), text: $model.onboardingDream, lines: 3...4)
         }
     }
 }
@@ -8699,50 +12652,225 @@ struct OnboardingInterestsStep: View {
 struct OnboardingLinksStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             OnboardingStepHeader(
-                title: zh ? "公开链接" : "Public Links",
-                subtitle: zh ? "如果你提供链接，init learn 会用 web/browser 工具读取并提取有助于 Personal Model 的信息。" : "If provided, init learn can inspect these with web/browser tools for Personal Model clues.",
+                title: model.text(.linksTitle),
+                subtitle: model.text(.linksSubtitle),
                 symbol: "link.circle"
             )
-            OnboardingField(title: "Blog", placeholder: "https://", text: $model.onboardingBlogURL)
-            OnboardingField(title: "LinkedIn", placeholder: "https://linkedin.com/in/...", text: $model.onboardingLinkedInURL)
-            OnboardingField(title: "Twitter / X", placeholder: "https://x.com/...", text: $model.onboardingTwitterURL)
+            VStack(spacing: 10) {
+                OnboardingLinkField(
+                    title: "Blog",
+                    subtitle: model.text(.blogLinkHint),
+                    symbol: "globe",
+                    placeholder: "https://",
+                    text: $model.onboardingBlogURL
+                )
+                OnboardingLinkField(
+                    title: "LinkedIn",
+                    subtitle: model.text(.linkedInLinkHint),
+                    symbol: "person.text.rectangle",
+                    placeholder: "https://linkedin.com/in/...",
+                    text: $model.onboardingLinkedInURL
+                )
+                OnboardingLinkField(
+                    title: "Twitter / X",
+                    subtitle: model.text(.twitterLinkHint),
+                    symbol: "quote.bubble",
+                    placeholder: "https://x.com/...",
+                    text: $model.onboardingTwitterURL
+                )
+            }
         }
+    }
+}
+
+struct OnboardingLinkField: View {
+    var title: String
+    var subtitle: String
+    var symbol: String
+    var placeholder: String
+    @Binding var text: String
+    @FocusState private var focused: Bool
+    @State private var hovering = false
+
+    private var hasValue: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(hasValue ? ElephantTheme.accent.opacity(0.14) : ElephantTheme.faint.opacity(0.10))
+                Image(systemName: symbol)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(hasValue ? ElephantTheme.accent : ElephantTheme.muted)
+            }
+            .frame(width: 42, height: 42)
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .foregroundStyle(ElephantTheme.ink)
+                    .focused($focused)
+            }
+
+            Image(systemName: hasValue ? "checkmark.circle.fill" : "circle")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(hasValue ? ElephantTheme.green : ElephantTheme.faint.opacity(0.58))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(focused || hovering ? ElephantTheme.accent.opacity(0.07) : Color(nsColor: .controlBackgroundColor).opacity(0.66))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(focused ? ElephantTheme.accent.opacity(0.70) : hovering ? ElephantTheme.accent.opacity(0.30) : ElephantTheme.line.opacity(0.72), lineWidth: focused ? 1.4 : 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onHover { hovering = $0 }
+        .onTapGesture { focused = true }
+        .help(hasValue ? "\(title): \(text)" : subtitle)
+        .accessibilityLabel("\(title), \(subtitle)")
+        .animation(.easeOut(duration: 0.16), value: focused)
+        .animation(.easeOut(duration: 0.16), value: hovering)
+        .animation(.easeOut(duration: 0.16), value: hasValue)
     }
 }
 
 struct OnboardingHealthNotesStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             OnboardingStepHeader(
-                title: zh ? "照护和边界" : "Care and Boundaries",
-                subtitle: zh ? "只记录会影响安全、照护或避雷的信息。" : "Only record safety, care, or boundary information that changes behavior.",
+                title: model.text(.careTitle),
+                subtitle: model.text(.careSubtitle),
                 symbol: "heart.text.square"
             )
-            OnboardingField(
-                title: zh ? "边界" : "Boundaries",
-                placeholder: zh ? "哪些话题或行为需要避免？" : "Topics or behaviors Elephant should avoid",
-                text: $model.onboardingSafetyBoundaries,
-                lines: 2...3,
-                suggestions: zh ? ["少打断", "先问再建议", "避免空泛鼓励"] : ["Do not interrupt", "Ask before advising", "Avoid vague reassurance"]
-            )
-            HStack(spacing: 12) {
-                OnboardingField(title: zh ? "食物过敏" : "Food allergies", placeholder: zh ? "没有可留空" : "Leave empty if none", text: $model.onboardingFoodAllergies)
-                OnboardingField(title: zh ? "药物过敏" : "Medication allergies", placeholder: zh ? "没有可留空" : "Leave empty if none", text: $model.onboardingMedicationAllergies)
+            HStack(alignment: .top, spacing: 12) {
+                OnboardingCareField(
+                    title: model.text(.boundaries),
+                    placeholder: model.text(.boundariesPlaceholder),
+                    symbol: "hand.raised",
+                    tint: ElephantTheme.orange,
+                    text: $model.onboardingSafetyBoundaries,
+                    lines: 2...3,
+                    minHeight: 136
+                )
+                OnboardingCareField(
+                    title: model.text(.healthSafetyNote),
+                    placeholder: model.text(.healthSafetyPlaceholder),
+                    symbol: "cross.case",
+                    tint: ElephantTheme.accent,
+                    text: $model.onboardingPrivateSafetyNote,
+                    lines: 2...3,
+                    minHeight: 136
+                )
             }
-            HStack(spacing: 12) {
-                OnboardingField(title: zh ? "慢性状况" : "Chronic conditions", placeholder: zh ? "可留空" : "Optional", text: $model.onboardingChronicConditions)
-                OnboardingField(title: zh ? "隐私/安全备注" : "Private safety note", placeholder: zh ? "敏感边界等" : "Sensitive boundaries", text: $model.onboardingPrivateSafetyNote, lines: 2...2)
+            HStack(alignment: .top, spacing: 12) {
+                OnboardingCareField(
+                    title: model.text(.foodAllergies),
+                    placeholder: model.text(.leaveEmptyIfNone),
+                    symbol: "fork.knife",
+                    tint: ElephantTheme.green,
+                    text: $model.onboardingFoodAllergies,
+                    minHeight: 108
+                )
+                OnboardingCareField(
+                    title: model.text(.medicationAllergies),
+                    placeholder: model.text(.leaveEmptyIfNone),
+                    symbol: "pills",
+                    tint: ElephantTheme.green,
+                    text: $model.onboardingMedicationAllergies,
+                    minHeight: 108
+                )
             }
         }
+    }
+}
+
+struct OnboardingCareField: View {
+    var title: String
+    var placeholder: String
+    var symbol: String
+    var tint: Color
+    @Binding var text: String
+    var lines: ClosedRange<Int> = 1...2
+    var minHeight: CGFloat = 118
+    @FocusState private var focused: Bool
+    @State private var hovering = false
+
+    private var hasValue: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(tint.opacity(hasValue ? 0.16 : 0.10))
+                    Image(systemName: symbol)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(tint)
+                        .accessibilityHidden(true)
+                }
+                .frame(width: 34, height: 34)
+
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: hasValue ? "checkmark.circle.fill" : "circle")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(hasValue ? ElephantTheme.green : ElephantTheme.faint.opacity(0.58))
+                    .accessibilityHidden(true)
+            }
+
+            TextField(placeholder, text: $text, axis: lines.upperBound > 1 ? .vertical : .horizontal)
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.ink)
+                .lineLimit(lines)
+                .focused($focused)
+                .accessibilityLabel(title)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(focused || hovering ? tint.opacity(0.07) : Color(nsColor: .controlBackgroundColor).opacity(0.66))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(focused ? tint.opacity(0.66) : hovering ? tint.opacity(0.30) : ElephantTheme.line.opacity(0.72), lineWidth: focused ? 1.4 : 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onTapGesture { focused = true }
+        .onHover { hovering = $0 }
+        .help(hasValue ? "\(title): \(text)" : placeholder)
+        .animation(.easeOut(duration: 0.16), value: focused)
+        .animation(.easeOut(duration: 0.16), value: hovering)
+        .animation(.easeOut(duration: 0.16), value: hasValue)
     }
 }
 
@@ -8758,13 +12886,11 @@ struct OnboardingSurveySingleStep: View {
     @EnvironmentObject private var model: ElephantAppModel
     var kind: OnboardingSurveyKind
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             OnboardingStepHeader(
-                title: zh ? "个人模型问卷" : "Personal Model Survey",
-                subtitle: zh ? "选择最接近的一项。后续可以随时修正。" : "Choose the closest answer. You can revise it later.",
+                title: model.text(.surveyTitle),
+                subtitle: model.text(.surveySubtitle),
                 symbol: "checklist"
             )
             SurveyQuestionBlock(
@@ -8789,61 +12915,67 @@ struct OnboardingSurveySingleStep: View {
 
     private var title: String {
         switch kind {
-        case .innerLandscape: return zh ? "最近的内在天气" : "Recent inner weather"
-        case .valueAnchor: return zh ? "取舍时的锚点" : "Trade-off anchor"
-        case .pressurePattern: return zh ? "压力模式" : "Pressure pattern"
-        case .recoveryStyle: return zh ? "恢复方式" : "Recovery style"
-        case .decisionCompass: return zh ? "决策指南针" : "Decision compass"
+        case .innerLandscape: return model.text(.innerLandscapeTitle)
+        case .valueAnchor: return model.text(.valueAnchorTitle)
+        case .pressurePattern: return model.text(.pressurePatternTitle)
+        case .recoveryStyle: return model.text(.recoveryStyleTitle)
+        case .decisionCompass: return model.text(.decisionCompassTitle)
         }
     }
 
     private var prompt: String {
         switch kind {
-        case .innerLandscape: return zh ? "如果最近的内心状态是一张图，它更像什么？" : "If your recent inner state were an image, what would it look like?"
-        case .valueAnchor: return zh ? "最近做取舍时，你最想保护什么？" : "When you make trade-offs lately, what are you protecting most?"
-        case .pressurePattern: return zh ? "压力上来时，你通常先出现什么反应？" : "When pressure rises, what usually appears first?"
-        case .recoveryStyle: return zh ? "你最常靠什么恢复状态？" : "What most reliably helps you recover?"
-        case .decisionCompass: return zh ? "一个选择是否值得，你最看重哪种信号？" : "What signal tells you a choice is worth it?"
+        case .innerLandscape: return model.text(.innerLandscapePrompt)
+        case .valueAnchor: return model.text(.valueAnchorPrompt)
+        case .pressurePattern: return model.text(.pressurePatternPrompt)
+        case .recoveryStyle: return model.text(.recoveryStylePrompt)
+        case .decisionCompass: return model.text(.decisionCompassPrompt)
         }
     }
 
     private var options: [String] {
-        switch kind {
-        case .innerLandscape:
-            return zh ? ["晴朗但忙碌", "有雾，需要澄清", "暴雨后恢复", "安静蓄力"] : ["Clear but busy", "Foggy and seeking clarity", "Recovering after a storm", "Quietly gathering energy"]
-        case .valueAnchor:
-            return zh ? ["长期创造力", "关系与承诺", "健康与精力", "自由与探索"] : ["Long-term creativity", "Relationships and commitments", "Health and energy", "Freedom and exploration"]
-        case .pressurePattern:
-            return zh ? ["加速解决问题", "反复检查细节", "暂时抽离", "找人确认"] : ["Accelerate and solve", "Check details repeatedly", "Step back temporarily", "Seek confirmation"]
-        case .recoveryStyle:
-            return zh ? ["独处和睡眠", "运动和身体感", "朋友或亲密对话", "整理空间或计划"] : ["Solitude and sleep", "Movement and body cues", "Friends or close conversation", "Organizing space or plans"]
-        case .decisionCompass:
-            return zh ? ["它让我更诚实", "它扩大长期选择", "它减少内耗", "它服务重要的人"] : ["It makes me more honest", "It expands future options", "It reduces inner friction", "It serves people who matter"]
-        }
+        model.appLanguage.surveyOptions[kind] ?? AppLanguage.en.surveyOptions[kind] ?? []
     }
 }
 
 struct OnboardingLogoPicker: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @State private var hovering = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            Button {
-                model.pickUserAvatar()
-            } label: {
+        Button {
+            model.pickUserAvatar()
+        } label: {
+            VStack(spacing: 12) {
                 UserAvatarOrbitView(size: 96, editable: true)
+                    .padding(.top, 4)
+                VStack(spacing: 4) {
+                    Text(model.text(.personalLogo))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Label(model.userAvatarURL == nil ? model.text(.chooseImage) : model.text(.changeImage), systemImage: "photo.on.rectangle.angled")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.accent)
+                        .labelStyle(.titleAndIcon)
+                }
             }
-            .buttonStyle(PressablePlainButtonStyle())
-            .help("Choose personal logo")
-
-            Text(model.onboardingFirstLanguage == "zh" ? "个人 Logo" : "Personal Logo")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(ElephantTheme.ink)
-            Text(model.userAvatarURL == nil ? (model.onboardingFirstLanguage == "zh" ? "选择图片" : "Choose image") : (model.onboardingFirstLanguage == "zh" ? "更换图片" : "Change image"))
-                .font(.caption)
-                .foregroundStyle(ElephantTheme.accent)
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 222)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.46))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(hovering ? ElephantTheme.accent.opacity(0.46) : ElephantTheme.line.opacity(0.72), lineWidth: 1)
+            )
+            .shadow(color: ElephantTheme.accent.opacity(hovering ? 0.10 : 0), radius: 12, y: 6)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .frame(width: 124)
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .help(model.text(.personalLogo))
+        .accessibilityLabel(model.text(.personalLogo))
     }
 }
 
@@ -8857,7 +12989,10 @@ struct SurveyQuestionBlock: View {
         GeometryReader { proxy in
             let headerHeight: CGFloat = 58
             let verticalSpacing: CGFloat = 12
-            let cardHeight = max(86, min(122, (proxy.size.height - headerHeight - verticalSpacing) / 2))
+            let gridSpacing: CGFloat = 12
+            let rowCount = CGFloat(max(1, (options.count + 1) / 2))
+            let availableGridHeight = max(210, proxy.size.height - headerHeight - verticalSpacing)
+            let cardHeight = max(96, (availableGridHeight - gridSpacing * (rowCount - 1)) / rowCount)
             VStack(alignment: .leading, spacing: verticalSpacing) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -8870,7 +13005,7 @@ struct SurveyQuestionBlock: View {
                 }
                 .frame(height: headerHeight, alignment: .topLeading)
 
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: gridSpacing), GridItem(.flexible(), spacing: gridSpacing)], spacing: gridSpacing) {
                     ForEach(options, id: \.self) { option in
                         Button {
                             selection = option
@@ -8881,7 +13016,9 @@ struct SurveyQuestionBlock: View {
                                 height: cardHeight
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressablePlainButtonStyle())
+                        .help(option)
+                        .accessibilityLabel(option)
                     }
                 }
             }
@@ -8895,113 +13032,112 @@ struct SurveyOptionCard: View {
     var title: String
     var selected: Bool
     var height: CGFloat
+    @State private var hovering = false
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        HStack(spacing: 14) {
+            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                .font(.title3.weight(.semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(selected ? .white : hovering ? ElephantTheme.accent : ElephantTheme.faint)
+                .frame(width: 26, height: 26)
+
             Text(title)
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(ElephantTheme.ink)
+                .foregroundStyle(selected ? .white : ElephantTheme.ink)
                 .lineLimit(2)
                 .minimumScaleFactor(0.76)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding(.horizontal, 16)
-            if selected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.accent)
-                    .padding(12)
-            }
+                .multilineTextAlignment(.leading)
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
-        .background(selected ? ElephantTheme.accent.opacity(0.12) : Color(nsColor: .controlBackgroundColor).opacity(0.74), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .center)
+        .background(cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(selected ? ElephantTheme.accent.opacity(0.58) : ElephantTheme.line.opacity(0.82), lineWidth: 1.2)
+                .stroke(borderColor, lineWidth: selected ? 1.5 : 1)
         )
+        .shadow(color: shadowColor, radius: selected ? 14 : hovering ? 10 : 0, y: selected ? 7 : 4)
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.16), value: hovering)
+        .animation(.easeOut(duration: 0.16), value: selected)
+    }
+
+    @ViewBuilder
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.88 : 0.72))
+        if selected {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            ElephantTheme.accent,
+                            ElephantTheme.green.opacity(0.86)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+    }
+
+    private var borderColor: Color {
+        if selected { return Color.white.opacity(0.42) }
+        if hovering { return ElephantTheme.accent.opacity(0.46) }
+        return ElephantTheme.line.opacity(0.72)
+    }
+
+    private var shadowColor: Color {
+        if selected { return ElephantTheme.accent.opacity(0.18) }
+        if hovering { return ElephantTheme.accent.opacity(0.10) }
+        return .clear
     }
 }
 
 struct OnboardingProviderModelStep: View {
     @EnvironmentObject private var model: ElephantAppModel
-    @State private var discoveredModels: [String: [ProviderModelOption]] = [:]
-    @State private var loadingModels = false
     @State private var loaded = false
-    @State private var autoFetchedProviderID = ""
-
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
+    @State private var providerSearch = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             OnboardingStepHeader(
-                title: zh ? "模型 Provider" : "Model Provider",
-                subtitle: zh ? "和 Settings 使用同一套 provider catalog 与模型选择。" : "Uses the same provider catalog and model picker as Settings.",
+                title: model.text(.providerTitle),
+                subtitle: model.text(.providerSubtitle),
                 symbol: "cpu"
             )
             if model.snapshot.providerOptions.isEmpty {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Provider")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(ElephantTheme.muted)
-                        Picker("", selection: $model.onboardingProviderID) {
-                            Text("OpenAI Compatible").tag("openai-compatible")
-                            Text("OpenAI").tag("openai")
-                            Text("Anthropic").tag("anthropic")
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Provider")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    Picker("", selection: $model.onboardingProviderID) {
+                        Text("OpenAI Compatible").tag("openai-compatible")
+                        Text("OpenAI").tag("openai")
+                        Text("Anthropic").tag("anthropic")
                     }
-                    .frame(width: 220)
-                    OnboardingField(title: zh ? "模型 ID" : "Model ID", placeholder: "gpt-4.1 / claude-3.7-sonnet", text: $model.onboardingModelID)
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 320, alignment: .leading)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(title: "Provider factory", subtitle: "\(model.snapshot.providerOptions.count) providers from the runtime catalog")
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(model.snapshot.providerOptions) { option in
-                                Button {
-                                    selectProvider(option, fetch: true)
-                                } label: {
-                                    ProviderFactoryCard(
-                                        option: option,
-                                        selected: option.id == model.onboardingProviderID,
-                                        active: option.id == model.snapshot.providerID
-                                    )
-                                }
-                                .buttonStyle(PressablePlainButtonStyle())
-                                .help("Configure \(option.displayName)")
-                                .frame(width: 158)
-                            }
-                        }
-                    }
-                    .frame(height: 132)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    SectionLabel(title: "Model", subtitle: selectedOption?.active == true ? "Active model for the current provider" : "Choose a catalog hint, live-discovered model, or custom ID.")
-                    Spacer(minLength: 0)
-                    Button {
-                        Task { await loadLiveModels(force: true) }
-                    } label: {
-                        Label(loadingModels ? "Fetching" : "Fetch", systemImage: "arrow.clockwise")
-                    }
-                    .disabled(model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loadingModels)
-                    .controlSize(.small)
-                }
-                HStack(alignment: .top, spacing: 12) {
-                    OnboardingMenuField(
-                        title: zh ? "模型列表" : "Model list",
-                        placeholder: loadingModels ? (zh ? "正在获取" : "Fetching") : (zh ? "选择模型" : "Select model"),
-                        options: availableModels.map(\.id),
-                        selection: $model.onboardingModelID
+                    SectionLabel(title: model.text(.providerFactory), subtitle: "\(filteredProviders.count)/\(model.snapshot.providerOptions.count) \(model.text(.providerFactorySubtitle))")
+                    ProviderSearchField(
+                        text: $providerSearch,
+                        placeholder: model.text(.providerSearchPlaceholder)
                     )
-                    OnboardingField(title: zh ? "自定义模型 ID" : "Custom model ID", placeholder: "gpt-5.4 / claude-sonnet-4-5", text: $model.onboardingModelID)
+                    ProviderFactoryList(
+                        options: filteredProviders,
+                        selectedID: model.onboardingProviderID,
+                        activeID: model.snapshot.providerID
+                    ) { option in
+                        selectProvider(option)
+                    }
+                    .frame(height: 190)
                 }
             }
         }
@@ -9009,11 +13145,9 @@ struct OnboardingProviderModelStep: View {
             guard !loaded else { return }
             loadFromSnapshot()
             loaded = true
-            Task { await loadLiveModelsIfNeeded() }
         }
         .onChange(of: model.onboardingProviderID) { _ in
             applyProviderDefaults(onlyWhenEmpty: false)
-            Task { await loadLiveModelsIfNeeded() }
         }
     }
 
@@ -9021,8 +13155,45 @@ struct OnboardingProviderModelStep: View {
         model.snapshot.providerOptions.first(where: { $0.id == model.onboardingProviderID })
     }
 
-    private var availableModels: [ProviderModelOption] {
-        discoveredModels[model.onboardingProviderID] ?? selectedOption?.models ?? []
+    private var filteredProviders: [ProviderOption] {
+        let needle = providerSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return model.snapshot.providerOptions
+            .filter { option in
+                guard !needle.isEmpty else { return true }
+                return providerSearchText(option).contains(needle)
+            }
+            .sorted { left, right in
+                let leftRank = providerSortRank(left)
+                let rightRank = providerSortRank(right)
+                if leftRank != rightRank {
+                    return leftRank < rightRank
+                }
+                return left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
+            }
+    }
+
+    private func providerSearchText(_ option: ProviderOption) -> String {
+        [
+            option.displayName,
+            option.id,
+            option.defaultModel,
+            option.defaultBaseURL,
+            option.status,
+            option.source,
+            option.authKind,
+            option.summary,
+            option.models.map(\.id).joined(separator: " ")
+        ]
+        .joined(separator: " ")
+        .lowercased()
+    }
+
+    private func providerSortRank(_ option: ProviderOption) -> Int {
+        if option.id == model.snapshot.providerID || option.active { return 0 }
+        if option.connected { return 1 }
+        if option.storedKeyCount > 0 { return 2 }
+        if option.id == model.onboardingProviderID { return 3 }
+        return 4
     }
 
     private func loadFromSnapshot() {
@@ -9044,11 +13215,81 @@ struct OnboardingProviderModelStep: View {
         }
     }
 
-    private func selectProvider(_ option: ProviderOption, fetch: Bool) {
+    private func selectProvider(_ option: ProviderOption) {
         model.onboardingProviderID = option.id
         applyProviderDefaults(onlyWhenEmpty: false)
-        if fetch {
-            Task { await loadLiveModels(force: true) }
+    }
+}
+
+struct OnboardingModelSelectionStep: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var discoveredModels: [String: [ProviderModelOption]] = [:]
+    @State private var loadingModels = false
+    @State private var loaded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            OnboardingStepHeader(
+                title: model.text(.modelSection),
+                subtitle: selectedOption?.active == true ? model.text(.activeModelSubtitle) : model.text(.modelPickerSubtitle),
+                symbol: "square.stack.3d.up"
+            )
+
+            if let option = selectedOption {
+                ProviderOnboardingSummary(option: option, modelID: model.onboardingModelID)
+            }
+
+            HStack {
+                SectionLabel(title: model.text(.modelList), subtitle: model.text(.modelPickerSubtitle))
+                Spacer(minLength: 0)
+                Button {
+                    Task { await loadLiveModels(force: true) }
+                } label: {
+                    Label(loadingModels ? model.text(.fetching) : model.text(.fetch), systemImage: "arrow.clockwise")
+                }
+                .disabled(model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loadingModels)
+                .controlSize(.small)
+            }
+
+            if availableModels.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: loadingModels ? "arrow.triangle.2.circlepath" : "sparkle.magnifyingglass")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(ElephantTheme.accent)
+                    Text(loadingModels ? model.text(.fetching) : model.text(.selectModel))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+                .frame(maxWidth: .infinity, minHeight: 96)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.48), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.70), lineWidth: 1))
+            } else {
+                OnboardingModelChoiceList(
+                    options: availableModels,
+                    selection: $model.onboardingModelID
+                )
+                .frame(height: 96)
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                OnboardingMenuField(
+                    title: model.text(.modelList),
+                    placeholder: loadingModels ? model.text(.fetching) : model.text(.selectModel),
+                    options: availableModels.map(\.id),
+                    selection: $model.onboardingModelID
+                )
+                OnboardingField(title: model.text(.customModelID), placeholder: "gpt-5.4 / claude-sonnet-4-5", text: $model.onboardingModelID)
+            }
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            applyProviderDefaults(onlyWhenEmpty: true)
+            Task { await loadLiveModelsIfNeeded() }
+        }
+        .onChange(of: model.onboardingProviderID) { _ in
+            applyProviderDefaults(onlyWhenEmpty: false)
+            Task { await loadLiveModelsIfNeeded() }
         }
     }
 
@@ -9063,31 +13304,122 @@ struct OnboardingProviderModelStep: View {
                 model.onboardingModelID = rows.first?.id ?? model.onboardingModelID
             }
         }
-        if force || !rows.isEmpty {
-            autoFetchedProviderID = providerID
-        }
         loadingModels = false
     }
 
     private func loadLiveModelsIfNeeded() async {
         let providerID = model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !providerID.isEmpty,
-              autoFetchedProviderID != providerID,
               discoveredModels[providerID] == nil else { return }
-        await loadLiveModels(force: true)
+        await loadLiveModels(force: false)
+    }
+
+    private var selectedOption: ProviderOption? {
+        model.snapshot.providerOptions.first(where: { $0.id == model.onboardingProviderID })
+    }
+
+    private var availableModels: [ProviderModelOption] {
+        discoveredModels[model.onboardingProviderID] ?? selectedOption?.models ?? []
+    }
+
+    private func applyProviderDefaults(onlyWhenEmpty: Bool) {
+        guard let option = selectedOption else { return }
+        if !onlyWhenEmpty || model.onboardingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            model.onboardingModelID = option.defaultModel.isEmpty ? (option.models.first?.id ?? model.onboardingModelID) : option.defaultModel
+        }
+        if !onlyWhenEmpty || model.onboardingBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            model.onboardingBaseURL = option.defaultBaseURL
+        }
+    }
+}
+
+struct ProviderOnboardingSummary: View {
+    var option: ProviderOption
+    var modelID: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProviderLogoMark(option: option, size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(option.displayName)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Text(modelID.isEmpty ? option.id : "\(option.id) · \(modelID)")
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+            ProviderStatePill(option: option)
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
+    }
+}
+
+struct OnboardingModelChoiceList: View {
+    var options: [ProviderModelOption]
+    @Binding var selection: String
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 7) {
+                ForEach(Array(options.prefix(24))) { option in
+                    Button {
+                        selection = option.id
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: selection == option.id ? "checkmark.circle.fill" : "circle")
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(selection == option.id ? ElephantTheme.accent : ElephantTheme.faint)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.label.isEmpty ? option.id : option.label)
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(ElephantTheme.ink)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text("\(option.id) · \(option.source)")
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(ElephantTheme.muted)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(selection == option.id ? ElephantTheme.accent.opacity(0.10) : Color(nsColor: .controlBackgroundColor).opacity(0.56))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(selection == option.id ? ElephantTheme.accent.opacity(0.42) : ElephantTheme.line.opacity(0.56), lineWidth: 1)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .help(option.id)
+                }
+            }
+            .padding(4)
+        }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.32), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.54), lineWidth: 1))
     }
 }
 
 struct OnboardingProviderSecretStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             OnboardingStepHeader(
-                title: zh ? "Endpoint 和凭证" : "Endpoint and Credentials",
-                subtitle: zh ? "字段和内部 Settings 的 Model Provider 设置保持一致。" : "Matches the Model Provider settings inside the app.",
+                title: model.text(.endpointTitle),
+                subtitle: model.text(.endpointSubtitle),
                 symbol: "key"
             )
             if let option = selectedOption {
@@ -9111,14 +13443,14 @@ struct OnboardingProviderSecretStep: View {
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
             }
             HStack(alignment: .top, spacing: 12) {
-                OnboardingField(title: zh ? "Base URL" : "Base URL", placeholder: "https://api.openai.com/v1", text: $model.onboardingBaseURL)
-                OnboardingField(title: zh ? "Context window tokens" : "Context window tokens", placeholder: zh ? "可选" : "Optional", text: $model.onboardingContextWindow)
+                OnboardingField(title: "Base URL", placeholder: "https://api.openai.com/v1", text: $model.onboardingBaseURL)
+                OnboardingField(title: model.text(.contextWindowTokens), placeholder: model.text(.optional), text: $model.onboardingContextWindow)
             }
-            OnboardingField(title: zh ? "API key / token" : "API key or token", placeholder: zh ? "可留空以复用已有配置" : "Leave empty to reuse existing configuration", text: $model.onboardingAPIKey, secure: true)
+            OnboardingField(title: model.text(.apiKey), placeholder: model.text(.apiKeyPlaceholder), text: $model.onboardingAPIKey, secure: true)
             HStack(spacing: 10) {
                 Image(systemName: providerReady ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                     .foregroundStyle(providerReady ? ElephantTheme.green : ElephantTheme.orange)
-                Text(providerReady ? (zh ? "Provider 信息已足够，可以继续。" : "Provider details are ready.") : (zh ? "需要 provider 和模型 ID；OpenAI Compatible 还需要 Base URL，除非复用已有配置。" : "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup."))
+                Text(providerReady ? model.text(.providerReady) : model.text(.providerNeedsDetails))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -9149,18 +13481,16 @@ struct OnboardingProviderSecretStep: View {
 struct OnboardingLearningStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(spacing: 24) {
             Spacer(minLength: 10)
             OnboardingLearningAnimation()
                 .frame(width: 168, height: 168)
             VStack(spacing: 8) {
-                Text(zh ? "正在建立你的 Elephant" : "Building Your Elephant")
+                Text(model.text(.learningTitle))
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text(model.onboardingFinalizationStatus.isEmpty ? (zh ? "准备初始化学习任务" : "Preparing the init learning pass") : model.onboardingFinalizationStatus)
+                Text(model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus)
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .multilineTextAlignment(.center)
@@ -9176,7 +13506,7 @@ struct OnboardingLearningStep: View {
                     Button {
                         Task { await model.startOnboardingFinalization() }
                     } label: {
-                        Label(zh ? "重试" : "Try Again", systemImage: "arrow.clockwise")
+                        Label(model.text(.tryAgain), systemImage: "arrow.clockwise")
                     }
                 }
             } else {
@@ -9196,7 +13526,7 @@ struct OnboardingLearningAnimation: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.9, paused: reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { timeline in
             Canvas { context, size in
                 let seconds = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -9239,18 +13569,16 @@ struct OnboardingLearningAnimation: View {
 struct OnboardingCelebrationStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private var zh: Bool { model.onboardingFirstLanguage == "zh" }
-
     var body: some View {
         VStack(spacing: 22) {
             Spacer(minLength: 12)
             OnboardingCelebrationAnimation()
                 .frame(width: 190, height: 170)
             VStack(spacing: 8) {
-                Text(zh ? "全部准备好了" : "Everything Is Ready")
+                Text(model.text(.celebrationTitle))
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text(zh ? "你的个人资料、social links、问卷答案和第一次 init learning 已进入本地 Elephant Agent。" : "Your profile, social links, survey answers, and first init learning pass are now in the local Elephant Agent.")
+                Text(model.text(.celebrationSubtitle))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .multilineTextAlignment(.center)
@@ -9273,7 +13601,7 @@ struct OnboardingCelebrationAnimation: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0, paused: reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { timeline in
             Canvas { context, size in
                 let seconds = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
                 let palette = [ElephantTheme.accent, ElephantTheme.green, ElephantTheme.ember, ElephantTheme.mint]

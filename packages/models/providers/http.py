@@ -8,6 +8,7 @@ from html import unescape as html_unescape
 import json
 import re
 import shutil
+import socket
 import subprocess
 from typing import Any, Mapping, Protocol, runtime_checkable
 from urllib import error, request
@@ -17,7 +18,7 @@ from packages.harness.retry_policy import RetryPolicy, Retryable, with_retry
 
 DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS = 120.0
 DEFAULT_PROVIDER_HTTP_CONNECT_SECONDS = 15.0
-DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS = 30.0
+DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS = 60.0 * 60.0 * 6.0
 DEFAULT_PROVIDER_RETRY_POLICY = RetryPolicy(
     max_attempts=5,
     base_backoff_s=1.0,
@@ -232,6 +233,8 @@ class UrllibJSONHTTPTransport:
                     body=body,
                 )
             raise ConnectionError(f"provider request failed for {url}: {exc.reason}") from exc
+        except (TimeoutError, socket.timeout) as exc:  # pragma: no cover - exercised by callers
+            raise ConnectionError(f"provider request timed out for {url}: {exc}") from exc
 
     def _provider_http_error(self, exc: error.HTTPError, *, url: str | None = None) -> ProviderHTTPError:
         try:
@@ -639,3 +642,5 @@ class UrllibJSONHTTPTransport:
                 )
                 return
             raise ConnectionError(f"provider stream failed for {url}: {exc.reason}") from exc
+        except (TimeoutError, socket.timeout) as exc:  # pragma: no cover - exercised by callers
+            raise ConnectionError(f"provider stream timed out for {url}: {exc}") from exc

@@ -144,11 +144,69 @@ def _cron_jobs(app: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for job in app.cron_runtime.list_jobs():
         rows.append(_cron_job_record(job))
-    # Append synthetic system job for the built-in proactive ask scheduler.
-    system_job = _proactive_ask_system_job(app)
-    if system_job is not None:
-        rows.insert(0, system_job)
+    system_kinds = {str(row.get("systemKind") or "") for row in rows}
+    system_jobs: list[dict[str, Any]] = []
+    if "dream" not in system_kinds:
+        dream_job = _dream_system_job(app)
+        if dream_job is not None:
+            system_jobs.append(dream_job)
+    if "proactive-ask" not in system_kinds:
+        proactive_job = _proactive_ask_system_job(app)
+        if proactive_job is not None:
+            system_jobs.append(proactive_job)
+    rows = [*system_jobs, *rows]
     return rows
+
+
+def _dream_system_job(app: Any) -> dict[str, Any] | None:
+    """Build a synthetic job row exposing the built-in Dream learning pass."""
+    try:
+        list_jobs = getattr(app.repository, "list_learning_jobs", None)
+        learning_jobs = tuple(list_jobs(limit=500)) if callable(list_jobs) else ()
+        dream_jobs = tuple(
+            job
+            for job in learning_jobs
+            if str(getattr(job, "trigger", "") or "").strip().lower() == "dream"
+            or "dream" in str(getattr(job, "metadata", {}).get("features", "")).lower()
+        )
+        latest = dream_jobs[0] if dream_jobs else None
+        last_run = None
+        last_summary = "nightly long-horizon memory consolidation"
+        if latest is not None:
+            finished_at = getattr(latest, "finished_at", None)
+            started_at = getattr(latest, "started_at", None)
+            created_at = getattr(latest, "created_at", None)
+            last_run = finished_at or started_at or created_at
+            last_summary = (
+                str(getattr(latest, "progress_detail", "") or "").strip()
+                or str(getattr(latest, "summary", "") or "").strip()
+                or last_summary
+            )
+        return {
+            "jobId": "system:dream",
+            "name": "Dream",
+            "schedule": "nightly (built-in)",
+            "scheduleKind": "system",
+            "jobKind": "system",
+            "status": "scheduled",
+            "profileId": None,
+            "eggId": None,
+            "payload": {"type": "learning", "trigger": "dream", "features": "dream"},
+            "skills": [],
+            "createdAt": None,
+            "updatedAt": None,
+            "nextRunAt": None,
+            "lastRunAt": last_run.isoformat() if last_run is not None else None,
+            "runCount": len(dream_jobs),
+            "lastSummary": last_summary,
+            "isSystem": True,
+            "systemKind": "dream",
+            "canRunNow": True,
+            "canPause": False,
+            "canDelete": False,
+        }
+    except Exception:
+        return None
 
 
 def _proactive_ask_system_job(app: Any) -> dict[str, Any] | None:
@@ -203,6 +261,7 @@ def _proactive_ask_system_job(app: Any) -> dict[str, Any] | None:
 
 __all__ = [
     "_cron_jobs",
+    "_dream_system_job",
     "_gateway",
     "_logs",
     "_mcp_catalog",

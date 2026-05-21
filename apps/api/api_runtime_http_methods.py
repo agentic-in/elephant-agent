@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import replace
 import json
-from queue import Queue
-import re
+from queue import Empty, Queue
 import shutil
 from threading import Lock, Thread
 from typing import Any, Mapping
@@ -42,6 +41,15 @@ from .api_runtime_http_dispatch_helpers import (
     _cron_job_record,
     _read_wsgi_body,
 )
+from .api_runtime_personal_model_methods import (
+    _dispatch_personal_model,
+    _persist_proactive_ask_config,
+)
+from .api_runtime_context_compression import (
+    compact_context_after_usage as _compact_context_after_usage,
+)
+
+_STREAM_KEEPALIVE_SECONDS = 15.0
 
 def run_loop(
     self,
@@ -125,6 +133,7 @@ def run_loop(
     )
     if updated_epoch != existing_epoch:
         _epoch_store.save(updated_epoch)
+    outcome = _compact_context_after_usage(self, episode.episode_id, outcome)
     record = APILoopRecord(
         request={
             "prompt": prompt,
@@ -144,6 +153,7 @@ def run_loop(
         latest_loop=record,
         inspection=inspection,
     )
+
 
 def stream_loop_events(
     self,
@@ -166,21 +176,22 @@ def stream_loop_events(
     sequence_lock = Lock()
     stream_sequence = 0
 
-    def enqueue(event: Mapping[str, Any]) -> None:
+    def envelope(event: Mapping[str, Any]) -> dict[str, Any]:
         nonlocal stream_sequence
         with sequence_lock:
             stream_sequence += 1
             sequence = stream_sequence
-        event_queue.put(
-            _jsonable(
-                {
-                    "episode_id": episode_id,
-                    "stream_sequence": sequence,
-                    "stream_emitted_at": _now(),
-                    **dict(event),
-                }
-            )
+        return _jsonable(
+            {
+                "episode_id": episode_id,
+                "stream_sequence": sequence,
+                "stream_emitted_at": _now(),
+                **dict(event),
+            }
         )
+
+    def enqueue(event: Mapping[str, Any]) -> None:
+        event_queue.put(envelope(event))
 
     def stream_observer(delta: str, **metadata: Any) -> None:
         stream_session_id = str(metadata.get("session_id") or "")
@@ -253,7 +264,11 @@ def stream_loop_events(
     Thread(target=worker, daemon=True).start()
 
     while True:
-        event = event_queue.get()
+        try:
+            event = event_queue.get(timeout=_STREAM_KEEPALIVE_SECONDS)
+        except Empty:
+            yield envelope({"type": "stream.heartbeat"})
+            continue
         if event is sentinel:
             break
         yield event  # type: ignore[misc]
@@ -348,9 +363,9 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             or self.repository.ensure_default_personal_model().personal_model_id
         ).strip()
         identity_text = _elephant_identity_text_from_payload(payload, elephant_id=elephant_id, display_name=display_name)
-        identity_mode = _optional_str(payload.get("mode")) or "companion"
+        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode")) or "companion"
         initiative = _optional_str(payload.get("initiative")) or "gentle"
-        working_style = _optional_str(payload.get("personality_preset")) or "companion"
+        working_style = _optional_str(payload.get("personality_preset") or payload.get("working_style")) or "companion"
         state = self.repository.create_state(
             personal_model_id=personal_model_id,
             state_id=f"state:{elephant_id}",
@@ -377,15 +392,15 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         payload = _read_json_bytes(body)
         display_name = _optional_str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name"))
         identity_text = _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
-        identity_mode = _optional_str(payload.get("mode"))
+        personality_preset = _optional_str(payload.get("personality_preset") or payload.get("working_style"))
         initiative = _optional_str(payload.get("initiative"))
-        working_style = _optional_str(payload.get("personality_preset"))
+        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode"))
         updated = replace(
             state,
             elephant_name=display_name or state.elephant_name,
-            identity_mode=identity_mode or state.identity_mode,
-            initiative=initiative or state.initiative,
-            working_style=working_style or state.working_style,
+            identity_mode=identity_mode if identity_mode is not None else state.identity_mode,
+            initiative=initiative if initiative is not None else state.initiative,
+            working_style=personality_preset if personality_preset is not None else state.working_style,
             elephant_identity_text=identity_text if identity_text is not None else state.elephant_identity_text,
             summary=f"{display_name or state.elephant_name} is ready to continue this elephant line.",
             metadata={**dict(state.metadata), "profile_id": state.personal_model_id},
@@ -605,7 +620,7 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
             result = self.update_identity_state(
                 state_id=state_id,
                 display_name=_optional_str(payload.get("display_name") or payload.get("name")),
-                personality_preset=_optional_str(payload.get("personality_preset")),
+                personality_preset=_optional_str(payload.get("personality_preset") or payload.get("working_style")),
                 initiative=_optional_str(payload.get("initiative")),
                 elephant_identity_text=_optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content")),
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
@@ -622,6 +637,7 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
                 fields=payload.get("fields") if isinstance(payload.get("fields"), dict) else None,
                 append=bool(payload.get("append", False)),
                 clear=bool(payload.get("clear", False)),
+                split_personal_model_facts=bool(payload.get("split_personal_model_facts", False)),
             )
             return APIResponse(200, _jsonable({"state_id": state_id, "user": result}))
     if surface == "relationship":
@@ -704,7 +720,9 @@ def _dispatch_internal(self, method: str, parts: tuple[str, ...], body: bytes | 
 def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if parts and parts[0] == "cron":
         if method.upper() == "GET" and len(parts) == 1:
-            return APIResponse(200, {"cron": {"jobs": [_cron_job_record(job) for job in self.cron_runtime.list_jobs()]}})
+            from .api_runtime_console import _cron_jobs
+
+            return APIResponse(200, {"cron": {"jobs": _cron_jobs(self)}})
         if method.upper() == "POST" and len(parts) == 1:
             payload = _read_json_bytes(body)
             job_payload = _cron_payload(payload)
@@ -720,10 +738,10 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
         if len(parts) == 2:
             job_id = parts[1]
             if method.upper() == "GET":
-                if job_id == "system:proactive-ask":
-                    from .api_runtime_console import _proactive_ask_system_job
+                if job_id in {"system:proactive-ask", "system:dream"}:
+                    from .api_runtime_console import _dream_system_job, _proactive_ask_system_job
 
-                    job = _proactive_ask_system_job(self)
+                    job = _dream_system_job(self) if job_id == "system:dream" else _proactive_ask_system_job(self)
                     if job is None:
                         raise ValueError(f"system cron job unavailable: {job_id}")
                     return APIResponse(200, {"cron": {"job": job}})
@@ -732,6 +750,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                 payload = _read_json_bytes(body)
                 action = str(payload.get("action") or "").strip().lower()
                 if action == "pause":
+                    if job_id == "system:dream":
+                        return APIResponse(403, {"error": "system_cron_job_cannot_be_paused"})
                     if job_id == "system:proactive-ask":
                         _persist_proactive_ask_config(self.repository.database_path.parent, {"enabled": False})
                         from .api_runtime_console import _proactive_ask_system_job
@@ -740,6 +760,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     else:
                         job = self.cron_runtime.pause_job(job_id)
                 elif action == "resume":
+                    if job_id == "system:dream":
+                        return APIResponse(403, {"error": "system_cron_job_cannot_be_resumed"})
                     if job_id == "system:proactive-ask":
                         _persist_proactive_ask_config(self.repository.database_path.parent, {"enabled": True})
                         from .api_runtime_console import _proactive_ask_system_job
@@ -753,7 +775,7 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     raise ValueError(f"system cron job unavailable: {job_id}")
                 return APIResponse(200, {"cron": {"job": job if isinstance(job, Mapping) else _cron_job_record(job)}})
             if method.upper() == "DELETE":
-                if job_id == "system:proactive-ask":
+                if job_id in {"system:proactive-ask", "system:dream"}:
                     return APIResponse(403, {"error": "system_cron_jobs_cannot_be_deleted"})
                 job = self.cron_runtime.inspect_job(job_id)
                 if _cron_job_system_kind(job) is not None:
@@ -766,6 +788,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
             # and returns the result synchronously so the dashboard can show it.
             if parts[1] == "system:proactive-ask":
                 return APIResponse(200, _jsonable(self.run_proactive_ask_now()))
+            if parts[1] == "system:dream":
+                return APIResponse(200, _jsonable(self.run_dream_now()))
             return APIResponse(200, _jsonable(self.run_cron_job_now(parts[1])))
     if method.upper() == "PATCH" and len(parts) == 1 and parts[0] == "settings":
         payload = _read_json_bytes(body)

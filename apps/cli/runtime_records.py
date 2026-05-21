@@ -24,7 +24,7 @@ from packages.state import (
     read_elephant_identity_file,
 )
 from packages.state.canonical import build_canonical_profile_state
-from packages.state.governance import parse_elephant_identity_display_name, resolved_companion_settings
+from packages.state.governance import parse_elephant_identity_display_name
 from packages.state.loader import profile_manifest_payload
 from packages.state.persistence import (
     load_persisted_canonical_state,
@@ -157,9 +157,12 @@ class CliRuntimeRecordsMixin:
         loaded = self._load_profile(session.personal_model_id)
         current_state = self.current_elephant_state()
         existing = self.state_for_elephant(elephant_id)
-        companion = resolved_companion_settings(loaded)
         elephant_file_identity = read_elephant_identity_file(self.paths.elephant_file_path(elephant_id))
         elephant_identity_text = elephant_file_identity or elephant_identity_text or loaded.elephant_identity_text or ""
+        canonical_identity = build_canonical_profile_state(
+            loaded,
+            elephant_id=elephant_id,
+        ).elephant_identity
         effective_display_name = (
             elephant_display_name
             or parse_elephant_identity_display_name(elephant_identity_text)
@@ -175,6 +178,10 @@ class CliRuntimeRecordsMixin:
                 elephant_id=elephant_id,
                 state_anchor=f"elephant:{elephant_id}",
                 elephant_name=effective_display_name,
+                identity_mode=canonical_identity.identity_mode,
+                posture=canonical_identity.relational_stance,
+                initiative=canonical_identity.initiative,
+                working_style=canonical_identity.personality_preset,
                 surface_bindings=("cli",),
                 elephant_identity_text=elephant_identity_text,
                 summary="",
@@ -196,9 +203,10 @@ class CliRuntimeRecordsMixin:
         updated = replace(
             existing,
             elephant_name=effective_display_name,
-            identity_mode=loaded.state.mode or existing.identity_mode,
-            initiative=companion.initiative or existing.initiative,
-            working_style=companion.personality_preset or existing.working_style,
+            identity_mode=canonical_identity.identity_mode or existing.identity_mode,
+            posture=canonical_identity.relational_stance or existing.posture,
+            initiative=canonical_identity.initiative or existing.initiative,
+            working_style=canonical_identity.personality_preset or existing.working_style,
             surface_bindings=("cli",),
             elephant_identity_text=elephant_identity_text,
             summary=keep_summary,

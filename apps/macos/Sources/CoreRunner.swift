@@ -16,6 +16,7 @@ final class CoreRunner {
     private var apiLogFile: URL?
     private var apiLogHandle: FileHandle?
     private let ownerID = UUID().uuidString
+    private static let runtimeStampFileName = "mac-runtime.stamp"
 
     func start() async throws -> CoreRuntime {
         if let process, process.isRunning, let baseURL, let databasePath {
@@ -506,7 +507,10 @@ final class CoreRunner {
     private static func ensureInstalledRuntime(data: (home: URL, herd: URL, database: URL)) throws -> URL {
         let fileManager = FileManager.default
         let runtimePython = data.home.appendingPathComponent("venv/bin/python")
-        if fileManager.isExecutableFile(atPath: runtimePython.path) {
+        let desiredStamp = bundleRuntimeStamp()
+        let existingStamp = readRuntimeStamp(home: data.home)
+        let runtimeExists = fileManager.isExecutableFile(atPath: runtimePython.path)
+        if runtimeExists && existingStamp == desiredStamp {
             return runtimePython
         }
 
@@ -521,7 +525,7 @@ final class CoreRunner {
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [
             installer.path,
-            "install",
+            runtimeExists ? "upgrade" : "install",
             "--install-root",
             data.home.path,
             "--bin-dir",
@@ -546,7 +550,30 @@ final class CoreRunner {
             throw CoreRunnerError.installerFailed(detail.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
+        try writeRuntimeStamp(desiredStamp, home: data.home)
         return runtimePython
+    }
+
+    private static func runtimeStampFile(home: URL) -> URL {
+        home.appendingPathComponent(runtimeStampFileName)
+    }
+
+    private static func bundleRuntimeStamp() -> String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let bundleID = (info["CFBundleIdentifier"] as? String) ?? "ai.agentic.elephant.mac"
+        let shortVersion = (info["CFBundleShortVersionString"] as? String) ?? "0"
+        let build = (info["CFBundleVersion"] as? String) ?? "0"
+        return [bundleID, shortVersion, build].joined(separator: ":")
+    }
+
+    private static func readRuntimeStamp(home: URL) -> String? {
+        try? String(contentsOf: runtimeStampFile(home: home), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func writeRuntimeStamp(_ stamp: String, home: URL) throws {
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try "\(stamp)\n".write(to: runtimeStampFile(home: home), atomically: true, encoding: .utf8)
     }
 
     private static func resolvePythonRuntime(

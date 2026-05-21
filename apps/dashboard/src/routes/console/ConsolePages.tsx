@@ -2,9 +2,13 @@ import React from "react";
 import { createPortal } from "react-dom";
 import Alibaba from "@lobehub/icons/es/Alibaba/components/Color";
 import Anthropic from "@lobehub/icons/es/Anthropic/components/Mono";
+import Baidu from "@lobehub/icons/es/Baidu/components/Color";
+import Cerebras from "@lobehub/icons/es/Cerebras/components/Color";
 import Claude from "@lobehub/icons/es/Claude/components/Color";
 import ClaudeCode from "@lobehub/icons/es/ClaudeCode/components/Color";
+import Cohere from "@lobehub/icons/es/Cohere/components/Color";
 import DeepSeek from "@lobehub/icons/es/DeepSeek/components/Color";
+import Doubao from "@lobehub/icons/es/Doubao/components/Color";
 import Fireworks from "@lobehub/icons/es/Fireworks/components/Color";
 import Gemini from "@lobehub/icons/es/Gemini/components/Color";
 import GeminiCLI from "@lobehub/icons/es/GeminiCLI/components/Color";
@@ -12,18 +16,27 @@ import GithubCopilot from "@lobehub/icons/es/GithubCopilot/components/Mono";
 import Google from "@lobehub/icons/es/Google/components/Color";
 import Groq from "@lobehub/icons/es/Groq/components/Mono";
 import HuggingFace from "@lobehub/icons/es/HuggingFace/components/Color";
+import Hunyuan from "@lobehub/icons/es/Hunyuan/components/Color";
 import KiloCode from "@lobehub/icons/es/KiloCode/components/Mono";
 import LobeHub from "@lobehub/icons/es/LobeHub/components/Color";
 import Minimax from "@lobehub/icons/es/Minimax/components/Color";
 import Mistral from "@lobehub/icons/es/Mistral/components/Color";
+import ModelScope from "@lobehub/icons/es/ModelScope/components/Color";
 import Moonshot from "@lobehub/icons/es/Moonshot/components/Mono";
+import Nvidia from "@lobehub/icons/es/Nvidia/components/Color";
 import Ollama from "@lobehub/icons/es/Ollama/components/Mono";
 import OpenAI from "@lobehub/icons/es/OpenAI/components/Mono";
 import OpenCode from "@lobehub/icons/es/OpenCode/components/Mono";
 import OpenRouter from "@lobehub/icons/es/OpenRouter/components/Mono";
+import Perplexity from "@lobehub/icons/es/Perplexity/components/Color";
 import Qwen from "@lobehub/icons/es/Qwen/components/Color";
+import SiliconCloud from "@lobehub/icons/es/SiliconCloud/components/Color";
+import Stepfun from "@lobehub/icons/es/Stepfun/components/Color";
+import Tencent from "@lobehub/icons/es/Tencent/components/Color";
+import TencentCloud from "@lobehub/icons/es/TencentCloud/components/Color";
 import Together from "@lobehub/icons/es/Together/components/Color";
 import Vllm from "@lobehub/icons/es/Vllm/components/Color";
+import Volcengine from "@lobehub/icons/es/Volcengine/components/Color";
 import XAI from "@lobehub/icons/es/XAI/components/Mono";
 import XiaomiMiMo from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
 import ZAI from "@lobehub/icons/es/ZAI/components/Mono";
@@ -3107,6 +3120,7 @@ type EmbeddingDraft = {
 type LobeProviderIcon = React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
 
 const PROVIDER_LOGO_ALIASES: Record<string, string> = {
+  "baidu-qianfan": "baidu",
   "claude-code": "claudecode",
   "copilot-acp": "githubcopilot",
   copilot: "githubcopilot",
@@ -3122,7 +3136,11 @@ const PROVIDER_LOGO_ALIASES: Record<string, string> = {
   "openai-codex": "openai",
   "openai-compatible": "openai",
   "qwen-oauth": "qwen",
+  siliconflow: "siliconcloud",
+  "tencent-hunyuan": "hunyuan",
+  "tencent-tokenhub": "tencentcloud",
   together: "together",
+  volcengine: "doubao",
   xiaomi: "xiaomimimo",
   zai: "zai",
 };
@@ -3130,9 +3148,13 @@ const PROVIDER_LOGO_ALIASES: Record<string, string> = {
 const PROVIDER_LOGO_COMPONENTS: Record<string, LobeProviderIcon> = {
   alibaba: Alibaba,
   anthropic: Anthropic,
+  baidu: Baidu,
+  cerebras: Cerebras,
   claude: Claude,
   claudecode: ClaudeCode,
+  cohere: Cohere,
   deepseek: DeepSeek,
+  doubao: Doubao,
   fireworks: Fireworks,
   gemini: Gemini,
   geminicli: GeminiCLI,
@@ -3140,17 +3162,26 @@ const PROVIDER_LOGO_COMPONENTS: Record<string, LobeProviderIcon> = {
   google: Google,
   groq: Groq,
   huggingface: HuggingFace,
+  hunyuan: Hunyuan,
   kilocode: KiloCode,
   minimax: Minimax,
   mistral: Mistral,
+  modelscope: ModelScope,
   moonshot: Moonshot,
+  nvidia: Nvidia,
   ollama: Ollama,
   opencode: OpenCode,
   openai: OpenAI,
   openrouter: OpenRouter,
+  perplexity: Perplexity,
   qwen: Qwen,
+  siliconcloud: SiliconCloud,
+  stepfun: Stepfun,
+  tencent: Tencent,
+  tencentcloud: TencentCloud,
   together: Together,
   vllm: Vllm,
+  volcengine: Volcengine,
   xai: XAI,
   xiaomimimo: XiaomiMiMo,
   zai: ZAI,
@@ -3203,9 +3234,15 @@ function providerLogoKey(provider: DashboardRow): string {
   if (display.includes("copilot")) return "githubcopilot";
   if (display.includes("gemini") || display.includes("google")) return "gemini";
   if (display.includes("groq")) return "groq";
+  if (display.includes("tokenhub")) return "tencentcloud";
+  if (display.includes("hunyuan") || display.includes("混元")) return "hunyuan";
   if (display.includes("kilo")) return "kilocode";
   if (display.includes("kimi") || display.includes("moonshot")) return "moonshot";
+  if (display.includes("qianfan") || display.includes("wenxin") || display.includes("baidu")) return "baidu";
   if (display.includes("qwen") || display.includes("dashscope") || display.includes("alibaba")) return "qwen";
+  if (display.includes("silicon")) return "siliconcloud";
+  if (display.includes("stepfun") || display.includes("step")) return "stepfun";
+  if (display.includes("volcengine") || display.includes("doubao") || display.includes("ark")) return "doubao";
   if (display.includes("xiaomi")) return "xiaomimimo";
   return id;
 }

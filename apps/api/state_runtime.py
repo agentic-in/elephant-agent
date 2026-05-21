@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+import hashlib
+import re
 from typing import Any, cast
 
 from packages.continuity import ContinuityProjection, ContinuityProjectionService
-from packages.contracts import ElephantIdentityRecord, Episode
+from packages.contracts import ElephantIdentityRecord, Episode, Fact
 from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
 from packages.contracts.runtime import PersonalModelRuntimeState
 from packages.evidence.recall_runtime import RecallRuntime
@@ -186,6 +189,10 @@ class APIStateService:
         identity_record = replace(
             current.identity,
             display_name=display_name if display_name is not None else current.identity.display_name,
+            personality_preset=(
+                personality_preset if personality_preset is not None else current.identity.personality_preset
+            ),
+            initiative=initiative if initiative is not None else current.identity.initiative,
         )
         loaded = build_loaded_profile_from_state(
             personal_model,
@@ -235,6 +242,7 @@ class APIStateService:
         fields: dict[str, object] | None = None,
         append: bool = False,
         clear: bool = False,
+        split_personal_model_facts: bool = False,
     ) -> RenderedUserProfileView:
         personal_model = self._resolve_personal_model(
             state_id=state_id,
@@ -255,10 +263,12 @@ class APIStateService:
             user_profile=current.user,
             relationship_record=current.relationship,
         )
+        field_updates = user_profile_updates(fields) if fields else None
+        normalized_text = _normalized_text(text)
         next_user = apply_user_profile_update(
             current.user,
-            text=_normalized_text(text),
-            field_values=user_profile_updates(fields) if fields else None,
+            text=normalized_text,
+            field_values=field_updates,
             append=append,
             clear=clear,
         )
@@ -276,6 +286,16 @@ class APIStateService:
             state_id=resolved_state.state_id if resolved_state is not None else state_id,
             episode_id=episode_id,
         )
+        if split_personal_model_facts:
+            _replace_user_profile_capture_with_split_facts(
+                self.repository,
+                personal_model_id=personal_model.profile_id,
+                fields=field_updates or {},
+                text=normalized_text,
+                state_id=resolved_state.state_id if resolved_state is not None else state_id,
+                episode_id=episode_id,
+                captured_at=datetime.now(timezone.utc),
+            )
         return cast(RenderedUserProfileView, synced.user_profile)
 
     def update_relationship_state(
@@ -424,6 +444,142 @@ def _normalized_text(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+_INIT_PROFILE_FACT_FIELDS: dict[str, tuple[str, str, str, bool]] = {
+    "preferred_name": ("identity", "identity.anchor.name.preferred", "low", False),
+    "current_work": ("pulse", "pulse.chapter.work.role", "low", False),
+    "school": ("world", "world.institutions.school.current", "low", True),
+    "current_city": ("world", "world.places.city.current", "low", False),
+    "gender": ("identity", "identity.anchor.gender.self_description", "low", False),
+    "birth_date": ("identity", "identity.anchor.birth.date", "medium", False),
+    "mbti": ("identity", "identity.character.mbti.type", "low", False),
+    "hobbies": ("identity", "identity.style.hobbies.personal", "low", False),
+    "dream": ("journey", "journey.direction.long_term", "low", True),
+    "creative_hobby": ("identity", "identity.style.hobbies.creative", "low", True),
+    "media_hobby": ("identity", "identity.style.hobbies.media", "low", True),
+    "movement_hobby": ("identity", "identity.style.hobbies.movement", "low", True),
+    "boundaries": ("identity", "identity.body.boundary.personal", "high", True),
+    "safety_boundaries": ("identity", "identity.body.boundary.personal", "high", True),
+    "first_language": ("identity", "identity.style.language.first", "low", False),
+    "blog": ("world", "world.links.blog", "low", True),
+    "linkedin": ("world", "world.links.linkedin", "low", True),
+    "twitter": ("world", "world.links.twitter", "low", True),
+    "personal_logo": ("identity", "identity.anchor.logo.personal", "low", True),
+    "inner_landscape": ("identity", "identity.pattern.inner_landscape", "medium", True),
+    "value_anchor": ("identity", "identity.values.anchor", "medium", True),
+    "pressure_pattern": ("pulse", "pulse.pattern.pressure", "medium", True),
+    "recovery_style": ("pulse", "pulse.pattern.recovery", "medium", True),
+    "decision_compass": ("journey", "journey.decision.compass", "medium", True),
+}
+
+_INIT_PROFILE_FIELD_ALIASES = {
+    "linked_in": "linkedin",
+    "linkedin_url": "linkedin",
+    "blog_url": "blog",
+    "twitter_url": "twitter",
+    "x_url": "twitter",
+    "personal_logo_path": "personal_logo",
+    "preferredname": "preferred_name",
+}
+
+
+def _replace_user_profile_capture_with_split_facts(
+    repository: RuntimeStorageRepository,
+    *,
+    personal_model_id: str,
+    fields: dict[str, str],
+    text: str | None,
+    state_id: str | None,
+    episode_id: str | None,
+    captured_at: datetime,
+) -> None:
+    upsert_fact = getattr(repository, "upsert_personal_model_fact", None)
+    list_facts = getattr(repository, "list_personal_model_facts", None)
+    if not callable(upsert_fact) or not callable(list_facts):
+        return
+    profile_id = canonical_personal_model_id(personal_model_id)
+    values = _split_profile_values(fields=fields, text=text)
+    if values.get("boundaries") and values.get("safety_boundaries") == values["boundaries"]:
+        values.pop("safety_boundaries", None)
+    for field_id, value in sorted(values.items()):
+        spec = _INIT_PROFILE_FACT_FIELDS.get(field_id)
+        if spec is None:
+            spec = ("identity", f"identity.profile.{field_id}", "low", True)
+        lens, topic, sensitivity, keep_label = spec
+        fact_text = f"{field_id}: {value}" if keep_label else value
+        upsert_fact(
+            Fact(
+                fact_id=_init_profile_fact_id(profile_id, field_id),
+                personal_model_id=profile_id,
+                lens=lens,
+                text=fact_text,
+                confidence=1.0,
+                committed_at=captured_at,
+                source="user_explicit",
+                source_episode_ids=(episode_id,) if episode_id else (),
+                status="active",
+                metadata={
+                    "topic": topic,
+                    "component_kind": "user_profile",
+                    "sync_source": "api.user.update",
+                    "surface": "api",
+                    "state_id": state_id or "",
+                    "episode_id": episode_id or "",
+                    "sensitivity": sensitivity,
+                    "user_directed": "true",
+                    "recall_policy": "stable",
+                    "retention_lifecycle": "durable",
+                    "init_profile_field": field_id,
+                },
+            )
+        )
+
+    for fact in list_facts(personal_model_id=profile_id, status=("active",)):
+        metadata = dict(fact.metadata or {})
+        if metadata.get("canonical_component") != "user-profile":
+            continue
+        if metadata.get("sync_source") != "api.user.update":
+            continue
+        upsert_fact(
+            replace(
+                fact,
+                status="deleted",
+                metadata={
+                    **metadata,
+                    "deleted_by": "init_profile_fact_split",
+                    "split_profile_fields": "true",
+                },
+            )
+        )
+
+
+def _split_profile_values(*, fields: dict[str, str], text: str | None) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in (text or "").splitlines():
+        if ":" not in raw_line:
+            continue
+        raw_key, raw_value = raw_line.split(":", 1)
+        key = _init_profile_field_key(raw_key)
+        value = raw_value.strip()
+        if key and value:
+            values[key] = value
+    for raw_key, raw_value in fields.items():
+        key = _init_profile_field_key(raw_key)
+        value = str(raw_value or "").strip()
+        if key and value:
+            values[key] = value
+    return values
+
+
+def _init_profile_field_key(value: object) -> str:
+    key = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+    return _INIT_PROFILE_FIELD_ALIASES.get(key, key)
+
+
+def _init_profile_fact_id(profile_id: str, field_id: str) -> str:
+    digest = hashlib.sha256(f"{profile_id}:init-profile:{field_id}".encode("utf-8")).hexdigest()[:16]
+    return f"fact:init-profile:{field_id}:{digest}"
 
 
 __all__ = ["APIContinuityInspection", "APIStateService"]

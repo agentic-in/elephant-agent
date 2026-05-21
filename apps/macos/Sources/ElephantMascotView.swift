@@ -197,13 +197,13 @@ struct ElephantMascotView: View {
                     ElephantEar()
                         .stroke(ElephantTheme.accent.opacity(0.14), lineWidth: max(1, size * 0.008))
                 )
-                .rotationEffect(.degrees(-14 + pose.leftEarAngle))
+                .rotationEffect(.degrees(-14.0 + pose.leftEarAngle))
                 .offset(x: -size * 0.335, y: -size * 0.055)
 
             ElephantEar()
                 .fill(Color(red: 0.96, green: 0.70, blue: 0.74).opacity(0.36))
                 .frame(width: size * 0.25, height: size * 0.34)
-                .rotationEffect(.degrees(-14 + pose.leftEarAngle))
+                .rotationEffect(.degrees(-14.0 + pose.leftEarAngle))
                 .offset(x: -size * 0.325, y: -size * 0.035)
 
             ElephantEar()
@@ -223,14 +223,14 @@ struct ElephantMascotView: View {
                         .stroke(ElephantTheme.accent.opacity(0.12), lineWidth: max(1, size * 0.008))
                 )
                 .scaleEffect(x: -1, y: 1)
-                .rotationEffect(.degrees(10 + pose.rightEarAngle))
+                .rotationEffect(.degrees(10.0 + pose.rightEarAngle))
                 .offset(x: size * 0.325, y: -size * 0.045)
 
             ElephantEar()
                 .fill(Color(red: 0.96, green: 0.70, blue: 0.74).opacity(0.32))
                 .frame(width: size * 0.205, height: size * 0.30)
                 .scaleEffect(x: -1, y: 1)
-                .rotationEffect(.degrees(10 + pose.rightEarAngle))
+                .rotationEffect(.degrees(10.0 + pose.rightEarAngle))
                 .offset(x: size * 0.318, y: -size * 0.028)
         }
     }
@@ -254,6 +254,7 @@ struct ElephantMascotView: View {
     private func trunk(pose: ElephantMascotPose) -> some View {
         let tip = pose.naturalTrunkTip(size: size)
         let trunkPath = ElephantNaturalTrunk(curl: pose.trunkCurl, sway: pose.trunkSway, lift: pose.trunkLift)
+        let nostrilRotation = Double(6.0 + pose.trunkSway * 0.08)
 
         return ZStack {
             trunkPath
@@ -285,13 +286,15 @@ struct ElephantMascotView: View {
                     .fill(Color(red: 0.18, green: 0.24, blue: 0.31).opacity(0.48))
             }
             .frame(width: size * 0.034, height: size * 0.010)
-            .rotationEffect(.degrees(6 + pose.trunkSway * 0.08))
+            .rotationEffect(.degrees(nostrilRotation))
             .offset(x: tip.x + size * 0.010, y: tip.y + size * 0.003)
         }
     }
 
     private func tusks(pose: ElephantMascotPose) -> some View {
-        ElephantSideTusk()
+        let tuskRotation = Double(-2.0 + pose.trunkSway * 0.08)
+
+        return ElephantSideTusk()
             .fill(
                 LinearGradient(
                     colors: [
@@ -303,7 +306,7 @@ struct ElephantMascotView: View {
                 )
             )
             .frame(width: size * 0.052, height: size * 0.118)
-            .rotationEffect(.degrees(-2 + pose.trunkSway * 0.08))
+            .rotationEffect(.degrees(tuskRotation))
             .offset(x: size * 0.146, y: size * 0.098 + pose.trunkLift * size * 0.03)
             .opacity(pose.tuskOpacity * 0.56)
     }
@@ -459,7 +462,7 @@ private struct ElephantMascotPose {
             bob = CGFloat(sin(phase * 1.4)) * 1.0
             leftEarAngle = 4 + Double(sin(phase * 1.8)) * 1.6
             rightEarAngle = -5 - Double(sin(phase * 1.6)) * 1.6
-            trunkSway = -8 + CGFloat(sin(phase * 1.4)) * 2.4
+            trunkSway = CGFloat(-8.0) + CGFloat(sin(phase * 1.4)) * 2.4
             trunkLift = -0.28
             trunkCurl = 0.46 + CGFloat(sin(phase * 1.8)) * 0.05
             headTilt = -3.8 + Double(sin(phase * 0.8)) * 1.2
@@ -472,7 +475,7 @@ private struct ElephantMascotPose {
             bob = CGFloat(sin(phase * 2.0)) * 1.4
             leftEarAngle = -4 + Double(sin(phase * 3.1)) * 2.0
             rightEarAngle = 4 - Double(sin(phase * 2.8)) * 2.0
-            trunkSway = 7 + CGFloat(sin(phase * 2.4)) * 4.0
+            trunkSway = CGFloat(7.0) + CGFloat(sin(phase * 2.4)) * 4.0
             trunkLift = -0.12
             trunkCurl = -0.30 + CGFloat(sin(phase * 2.2)) * 0.06
             headTilt = 2.6 + Double(sin(phase * 1.2)) * 0.8
@@ -522,7 +525,7 @@ private struct ElephantMascotPose {
             breath = 1.0 + CGFloat(sin(phase * 1.05)) * 0.026
             leftEarAngle = 7 + Double(sin(phase * 1.25)) * 1.8
             rightEarAngle = -7 - Double(sin(phase * 1.20)) * 1.8
-            trunkSway = 4 + CGFloat(sin(phase * 1.25)) * 3.2
+            trunkSway = CGFloat(4.0) + CGFloat(sin(phase * 1.25)) * 3.2
             trunkLift = -0.08
             trunkCurl = 0.30 + CGFloat(sin(phase * 1.45)) * 0.06
             headTilt = Double(sin(phase * 0.70)) * 1.8

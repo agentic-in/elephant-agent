@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import SwiftUI
 
@@ -123,6 +124,7 @@ enum CorePhase: Equatable {
 
 struct ToolUseEvent: Identifiable, Equatable {
     var id = UUID()
+    var sourceID: String = ""
     var invocationID: String = ""
     var name: String
     var status: String
@@ -362,6 +364,9 @@ struct DashboardSnapshot: Equatable {
     var embeddingRuntimeStatus = ""
     var embeddingRuntimeState = ""
     var embeddingRuntimeSummary = ""
+    var embeddingBootstrapSource = ""
+    var embeddingModelRoot = ""
+    var embeddingModelSourceURL = ""
     var embeddingReady = false
     var semanticStatus = "unknown"
     var workerStatus = "unknown"
@@ -454,12 +459,12 @@ final class ElephantAppModel: ObservableObject {
     @Published var corePhase: CorePhase = .idle
     @Published var snapshot: DashboardSnapshot = .empty
     @Published var messages: [ChatMessage] = [
-        ChatMessage(role: .system, text: "Start a short conversation. Elephant will keep useful facts and open questions reviewable.")
+        ChatMessage(role: .system, text: AppText.chatReady.text(ElephantAppModel.persistedAppLanguage()))
     ]
     @Published var chatScrollRevision = 0
     @Published var wakeDraft = ""
     @Published var onboardingName = "Elephant"
-    @Published var onboardingPurpose = "Be warm, precise, curious, and direct. Protect continuity, ask useful questions, and keep the user's Personal Model correctable."
+    @Published var onboardingPurpose = ElephantAppModel.persistedAppLanguage().defaultElephantVibe
     @Published var onboardingPreferredName = ""
     @Published var onboardingOccupation = ""
     @Published var onboardingSchool = ""
@@ -477,7 +482,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingMedicationAllergies = ""
     @Published var onboardingChronicConditions = ""
     @Published var onboardingPrivateSafetyNote = ""
-    @Published var onboardingFirstLanguage = "en"
+    @Published var onboardingFirstLanguage = ElephantAppModel.persistedAppLanguage().rawValue
     @Published var onboardingBlogURL = ""
     @Published var onboardingLinkedInURL = ""
     @Published var onboardingTwitterURL = ""
@@ -491,6 +496,8 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingModelID = ""
     @Published var onboardingAPIKey = ""
     @Published var onboardingContextWindow = ""
+    @Published var onboardingLockPassword = ""
+    @Published var onboardingLockPasswordConfirmation = ""
     @Published var onboardingStep = 0
     @Published var onboardingFinalizationStarted = false
     @Published var onboardingFinalizationComplete = false
@@ -501,6 +508,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var showingCommandPalette = false
     @Published var lastError = ""
     @Published var providerTestResult = ""
+    @Published var embeddingActionResult = ""
     @Published var gatewayActionResult = ""
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
     @Published var gatewayQR = GatewayQRState()
@@ -515,8 +523,10 @@ final class ElephantAppModel: ObservableObject {
     @Published var userAvatarPath = UserDefaults.standard.string(forKey: ElephantAppModel.userAvatarPathKey) ?? ""
     @Published var herdAvatarPaths: [String: String] = UserDefaults.standard.dictionary(forKey: ElephantAppModel.herdAvatarPathsKey) as? [String: String] ?? [:]
     @Published var hiddenEpisodeIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ElephantAppModel.hiddenEpisodeIDsKey) ?? [])
-    @Published var isSleepDisplayPresented = false
+    @Published var isSleepDisplayPresented = ElephantAppModel.storedAppLockPasswordRecord() != nil
     @Published var sleepDisplayReason = "manual"
+    @Published var sleepUnlockPassword = ""
+    @Published var sleepUnlockError = ""
     @Published var sleepIdleMinutes = ElephantAppModel.persistedSleepIdleMinutes()
     @Published var lastInteractionDate = Date()
     @Published var isResettingData = false
@@ -531,17 +541,45 @@ final class ElephantAppModel: ObservableObject {
     private static let userAvatarPathKey = "elephant.mac.userAvatarImagePath"
     private static let herdAvatarPathsKey = "elephant.mac.herdAvatarImagePaths"
     private static let hiddenEpisodeIDsKey = "elephant.mac.hiddenEpisodeIDs"
+    static let appLanguageKey = "elephant.mac.appLanguage"
     private static let sleepIdleMinutesKey = "elephant.mac.sleepIdleMinutes"
+    private static let appLockPasswordRecordKey = "elephant.mac.appLockPasswordRecord"
     private static let defaultSleepIdleMinutes = 10
+
+    static func persistedAppLanguage() -> AppLanguage {
+        if let code = UserDefaults.standard.string(forKey: appLanguageKey) {
+            return AppLanguage(code: code)
+        }
+        return .preferred
+    }
 
     var userDisplayName: String {
         if let name = snapshot.profileFacts.first(where: { $0.label == "Name" })?.value,
-           !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return name
+           let normalized = Self.normalizedPreferredName(name),
+           !normalized.isEmpty {
+            return normalized
         }
         let preferred = onboardingPreferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !preferred.isEmpty { return preferred }
         return "You"
+    }
+
+    private static func normalizedPreferredName(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let patterns = [
+            #"^(?:用户)?(?:偏好|希望|喜欢)?(?:被)?(?:称为|叫做|叫|称呼为)\s*"#,
+            #"^(?:Preferred name|Name|昵称|名字|称呼)[：:]\s*"#
+        ]
+        for pattern in patterns {
+            if let range = trimmed.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                let cleaned = String(trimmed[range.upperBound...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
+        return trimmed
     }
 
     var userAvatarURL: URL? {
@@ -550,12 +588,21 @@ final class ElephantAppModel: ObservableObject {
         return URL(fileURLWithPath: path)
     }
 
+    var hasAppLockPassword: Bool {
+        Self.storedAppLockPasswordRecord() != nil
+    }
+
+    var onboardingLockPasswordIsValid: Bool {
+        let password = onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        return password.count >= 6 && password == onboardingLockPasswordConfirmation
+    }
+
     var onboardingElephantMarkdown: String {
         let name = onboardingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Elephant"
             : onboardingName.trimmingCharacters(in: .whitespacesAndNewlines)
         let vibe = onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Be warm, precise, curious, and direct."
+            ? appLanguage.defaultElephantVibe
             : onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
         return """
         # \(name)
@@ -596,6 +643,7 @@ final class ElephantAppModel: ObservableObject {
             next.databasePath = runner.databasePath?.path ?? ""
         }
         next.episodeThreads.removeAll { hiddenEpisodeIDs.contains($0.id) }
+        syncAppLanguageFromSnapshot(next)
         snapshot = next
         if snapshot.readyForInteraction {
             readinessPollTask?.cancel()
@@ -666,14 +714,14 @@ final class ElephantAppModel: ObservableObject {
             snapshot.databasePath = runtime.databasePath.path
             activeEpisodeID = ""
             messages = [
-                ChatMessage(role: .system, text: "Set up Elephant to start a new local conversation.")
+                ChatMessage(role: .system, text: text(.resetChatReady))
             ]
             chatScrollRevision += 1
             try await refreshDashboard()
             corePhase = .ready
             selectedSection = .home
             showingOnboarding = true
-            resetDataResult = "Reset complete. Set up Elephant again."
+            resetDataResult = text(.resetComplete)
         } catch {
             corePhase = .failed(error.localizedDescription)
             lastError = error.localizedDescription
@@ -715,6 +763,10 @@ final class ElephantAppModel: ObservableObject {
                 contextWindow: onboardingContextWindow
             )
         }
+        try await client.configureLocalEmbedding(
+            source: appLanguage.defaultEmbeddingModelSource,
+            forceDownload: false
+        )
         let stateID: String
         if onboardingCreatedStateID.isEmpty {
             stateID = try await client.createElephant(name: onboardingName, identityText: onboardingElephantMarkdown)
@@ -737,7 +789,7 @@ final class ElephantAppModel: ObservableObject {
             mediaHobby: onboardingMediaHobby,
             movementHobby: onboardingMovementHobby,
             safetyBoundaries: onboardingCareSummary,
-            firstLanguage: onboardingFirstLanguage,
+            firstLanguage: appLanguage.rawValue,
             blogURL: onboardingBlogURL,
             linkedInURL: onboardingLinkedInURL,
             twitterURL: onboardingTwitterURL,
@@ -766,12 +818,12 @@ final class ElephantAppModel: ObservableObject {
         onboardingFinalizationStarted = true
         onboardingFinalizationComplete = false
         onboardingFinalizationFailed = false
-        onboardingFinalizationStatus = "Creating your local Personal Model"
+        onboardingFinalizationStatus = text(.learningCreateModel)
         onboardingInitReflectJobID = ""
         lastError = ""
         do {
             let stateID = try await createElephantProfileFromOnboarding()
-            onboardingFinalizationStatus = "Opening the first local episode"
+            onboardingFinalizationStatus = text(.learningOpenEpisode)
             try await refreshDashboard()
             let resolvedStateID = snapshot.currentStateID.isEmpty ? stateID : snapshot.currentStateID
             let episodeID = try await client.ensureWakeEpisode(
@@ -780,14 +832,14 @@ final class ElephantAppModel: ObservableObject {
                 activeEpisodeID: ""
             )
             activeEpisodeID = episodeID
-            onboardingFinalizationStatus = "Starting the first learning pass"
+            onboardingFinalizationStatus = text(.learningStartReflect)
             let jobID = try await client.runReflect(trigger: "init_profile")
             onboardingInitReflectJobID = jobID
             try await pollOnboardingInitReflectJob(jobID: jobID)
         } catch {
             onboardingFinalizationFailed = true
             onboardingFinalizationStarted = false
-            onboardingFinalizationStatus = "Setup needs attention"
+            onboardingFinalizationStatus = text(.learningNeedsAttention)
             lastError = error.localizedDescription
         }
     }
@@ -796,14 +848,14 @@ final class ElephantAppModel: ObservableObject {
         let maxAttempts = 120
         for attempt in 0..<maxAttempts {
             if Task.isCancelled { return }
-            onboardingFinalizationStatus = attempt < 2 ? "Learning from your setup answers" : "Finishing the first reflection"
+            onboardingFinalizationStatus = attempt < 2 ? text(.learningFromAnswers) : text(.learningFinishing)
             try await refreshDashboard()
             if let job = onboardingInitReflectJob(jobID: jobID) {
                 let status = job.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 if status.contains("completed") || status.contains("succeeded") || status == "success" {
-                    onboardingFinalizationStatus = "Everything is ready"
+                    onboardingFinalizationStatus = text(.learningReady)
                     onboardingFinalizationComplete = true
-                    onboardingStep = 17
+                    onboardingStep = 16
                     return
                 }
                 if status.contains("failed") || status.contains("cancel") || status.contains("error") {
@@ -833,7 +885,7 @@ final class ElephantAppModel: ObservableObject {
     func startNewChat() {
         activeEpisodeID = ""
         messages = [
-            ChatMessage(role: .system, text: "New conversation ready. Keep it short and review what Elephant learns.")
+            ChatMessage(role: .system, text: text(.newConversationReady))
         ]
         selectedSection = .wake
         focusComposer()
@@ -843,7 +895,7 @@ final class ElephantAppModel: ObservableObject {
         activeEpisodeID = thread.id
         if thread.messages.isEmpty {
             messages = [
-                ChatMessage(role: .system, text: thread.summary.isEmpty ? "This conversation has no rendered messages yet." : thread.summary)
+                ChatMessage(role: .system, text: thread.summary.isEmpty ? text(.noRenderedMessagesYet) : thread.summary)
             ]
         } else {
             messages = thread.messages
@@ -863,6 +915,8 @@ final class ElephantAppModel: ObservableObject {
 
     func beginSleepDisplay(reason: String = "manual") {
         sleepDisplayReason = reason
+        sleepUnlockPassword = ""
+        sleepUnlockError = ""
         isSleepDisplayPresented = true
     }
 
@@ -872,12 +926,14 @@ final class ElephantAppModel: ObservableObject {
             return
         }
         isSleepDisplayPresented = false
+        sleepUnlockPassword = ""
+        sleepUnlockError = ""
         lastInteractionDate = Date()
     }
 
     func registerUserActivity() {
         if isSleepDisplayPresented {
-            dismissSleepDisplay()
+            lastInteractionDate = Date()
             return
         }
         let now = Date()
@@ -893,8 +949,40 @@ final class ElephantAppModel: ObservableObject {
         lastInteractionDate = Date()
     }
 
+    @discardableResult
+    func persistOnboardingLockPassword() -> Bool {
+        guard onboardingLockPasswordIsValid else { return false }
+        return setAppLockPassword(onboardingLockPassword)
+    }
+
+    @discardableResult
+    func setAppLockPassword(_ password: String) -> Bool {
+        let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 6 else { return false }
+        UserDefaults.standard.set(Self.makeAppLockPasswordRecord(for: trimmed), forKey: Self.appLockPasswordRecordKey)
+        return true
+    }
+
+    func clearAppLockPassword() {
+        UserDefaults.standard.removeObject(forKey: Self.appLockPasswordRecordKey)
+        sleepUnlockPassword = ""
+        sleepUnlockError = ""
+    }
+
+    func verifySleepUnlock() {
+        if !hasAppLockPassword {
+            dismissSleepDisplay()
+            return
+        }
+        if Self.password(sleepUnlockPassword, matches: Self.storedAppLockPasswordRecord()) {
+            dismissSleepDisplay()
+        } else {
+            sleepUnlockError = text(.sleepPasswordWrong)
+        }
+    }
+
     func pickUserAvatar() {
-        guard let url = OpenPanelBridge.pickAvatarImageURL() else { return }
+        guard let url = OpenPanelBridge.pickAvatarImageURL(language: appLanguage) else { return }
         do {
             let destination = try persistUserAvatar(from: url)
             userAvatarPath = destination.path
@@ -905,7 +993,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func pickHerdAvatar(for item: HerdItem) {
-        guard let url = OpenPanelBridge.pickAvatarImageURL() else { return }
+        guard let url = OpenPanelBridge.pickAvatarImageURL(language: appLanguage) else { return }
         do {
             try persistHerdAvatar(from: url, key: herdAvatarKey(for: item))
         } catch {
@@ -1044,6 +1132,32 @@ final class ElephantAppModel: ObservableObject {
         } catch {
             providerTestResult = ""
             lastError = error.localizedDescription
+        }
+    }
+
+    func saveLocalEmbeddingSettings(source: String, forceDownload: Bool) async {
+        do {
+            try await client.configureLocalEmbedding(source: source, forceDownload: forceDownload)
+            try await refreshDashboard()
+            let normalized = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let label = normalized == "modelscope" ? "ModelScope" : "HuggingFace"
+            embeddingActionResult = localizedEmbeddingActionResult(label: label, forceDownload: forceDownload)
+        } catch {
+            embeddingActionResult = ""
+            lastError = error.localizedDescription
+        }
+    }
+
+    private func localizedEmbeddingActionResult(label: String, forceDownload: Bool) -> String {
+        switch appLanguage {
+        case .zh:
+            return forceDownload ? "已从 \(label) 重新开始下载记忆模型。" : "记忆模型来源已切换为 \(label)。"
+        case .fr:
+            return forceDownload ? "Téléchargement du modèle mémoire relancé depuis \(label)." : "Source du modèle mémoire définie sur \(label)."
+        case .de:
+            return forceDownload ? "Download des Speichermodells von \(label) neu gestartet." : "Quelle des Speichermodells auf \(label) gesetzt."
+        case .en:
+            return forceDownload ? "Memory model download restarted from \(label)." : "Memory model source set to \(label)."
         }
     }
 
@@ -1315,9 +1429,9 @@ final class ElephantAppModel: ObservableObject {
         let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isWakeRunning else { return }
         wakeDraft = ""
+        isWakeRunning = true
         messages.append(ChatMessage(role: .user, text: text))
         chatScrollRevision += 1
-        isWakeRunning = true
 
         var assistantMessageID: UUID?
         var currentAssistantTextMessageID: UUID?
@@ -1331,7 +1445,9 @@ final class ElephantAppModel: ObservableObject {
         var lastScrollFlush = Date.distantPast
         var liveToolEvents: [ToolUseEvent] = []
         var completed = false
-        let minimumTextFlushInterval: TimeInterval = 1.0 / 30.0
+        var liveToolCardKeys: [UUID: String] = [:]
+        var liveToolGenerations: [String: Int] = [:]
+        let minimumTextFlushInterval: TimeInterval = 0.08
         let minimumScrollFlushInterval: TimeInterval = 0.25
 
         func appendLiveAssistantMessage(text: String = "", toolEvents: [ToolUseEvent] = []) -> UUID {
@@ -1379,17 +1495,33 @@ final class ElephantAppModel: ObservableObject {
             return true
         }
 
+        func toolCardKey(for event: ToolUseEvent) -> String {
+            let baseKey = Self.toolEventKey(event)
+            let generation = liveToolGenerations[baseKey] ?? 0
+            let currentKey = generation == 0 ? baseKey : "\(baseKey)|\(generation)"
+            if let index = liveToolEvents.firstIndex(where: { liveToolCardKeys[$0.id] == currentKey }) {
+                let existing = liveToolEvents[index]
+                if Self.shouldAppendNewToolCard(existing: existing, incoming: event) {
+                    let nextGeneration = generation + 1
+                    liveToolGenerations[baseKey] = nextGeneration
+                    return "\(baseKey)|\(nextGeneration)"
+                }
+            }
+            return currentKey
+        }
+
         func appendOrUpdateToolActivity(_ event: ToolUseEvent) -> Bool {
             _ = flushAssistantText(force: true)
-            let key = Self.toolEventKey(event)
+            let key = toolCardKey(for: event)
             var nextEvent = event
-            if let index = liveToolEvents.firstIndex(where: { Self.toolEventKey($0) == key }) {
+            if let index = liveToolEvents.firstIndex(where: { liveToolCardKeys[$0.id] == key }) {
                 nextEvent = Self.mergedToolEvent(existing: liveToolEvents[index], incoming: event)
                 liveToolEvents[index] = nextEvent
             } else {
                 liveToolEvents.append(nextEvent)
                 liveToolEvents = Array(liveToolEvents.suffix(10))
             }
+            liveToolCardKeys[nextEvent.id] = key
 
             let messageID: UUID
             if let existingMessageID = liveToolMessageIDs[key] {
@@ -1416,20 +1548,35 @@ final class ElephantAppModel: ObservableObject {
         }
 
         func appendCompletedToolActivity(_ event: ToolUseEvent) {
-            let key = Self.toolEventKey(event)
+            let key = toolCardKey(for: event)
             guard liveToolMessageIDs[key] == nil else { return }
             currentAssistantTextMessageID = nil
             currentAssistantText = ""
             renderedAssistantText = ""
+            liveToolCardKeys[event.id] = key
             _ = appendLiveAssistantMessage(toolEvents: [event])
+        }
+
+        func finishedKernelStageEvents(for id: UUID) -> [ToolUseEvent]? {
+            guard let index = messages.firstIndex(where: { $0.id == id }) else { return nil }
+            let events = messages[index].toolEvents
+            guard events.contains(where: { $0.invocationID == "kernel.stage" }) else { return nil }
+            return events.map { event in
+                guard event.invocationID == "kernel.stage" else { return event }
+                var finished = event
+                finished.status = "done"
+                return finished
+            }
         }
 
         func finishLiveMessages() {
             _ = flushAssistantText(force: true)
             for id in liveMessageIDs {
-                updateAssistantMessage(id: id, text: nil, toolEvents: nil, isStreaming: false)
+                updateAssistantMessage(id: id, text: nil, toolEvents: finishedKernelStageEvents(for: id), isStreaming: false)
             }
         }
+
+        currentAssistantTextMessageID = appendLiveAssistantMessage()
 
         do {
             let episodeID = try await client.ensureWakeEpisode(
@@ -1439,9 +1586,10 @@ final class ElephantAppModel: ObservableObject {
             )
             activeEpisodeID = episodeID
 
-            currentAssistantTextMessageID = appendLiveAssistantMessage()
-
             streamLoop: for try await event in client.streamWakeLoop(text, episodeID: episodeID) {
+                if event.type == "stream.heartbeat" {
+                    continue
+                }
                 receivedStreamEvent = true
                 switch event.type {
                 case "assistant.delta":
@@ -1457,7 +1605,17 @@ final class ElephantAppModel: ObservableObject {
                             await Task.yield()
                         }
                     }
-                case "loop.started", "kernel.stage":
+                case "kernel.stage":
+                    if let toolEvent = event.toolEvent {
+                        var stageEvent = toolEvent
+                        if stageEvent.invocationID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            stageEvent.invocationID = "kernel.stage"
+                        }
+                        if appendOrUpdateToolActivity(stageEvent) {
+                            await Task.yield()
+                        }
+                    }
+                case "loop.started":
                     continue
                 case "loop.completed":
                     if let reply = event.reply {
@@ -1516,7 +1674,7 @@ final class ElephantAppModel: ObservableObject {
                 if streamedText.isEmpty, let id = assistantMessageID {
                     updateAssistantMessage(
                         id: id,
-                        text: "The live connection ended before Elephant returned a reply.",
+                        text: self.text(.liveConnectionEnded),
                         toolEvents: nil,
                         isStreaming: false
                     )
@@ -1558,14 +1716,17 @@ final class ElephantAppModel: ObservableObject {
             } else if let assistantMessageID {
                 finishLiveMessages()
                 if streamedText.isEmpty {
+                    let fallbackText = (!receivedStreamEvent && activeEpisodeID.isEmpty)
+                        ? chatLoopFailureMessage(error)
+                        : self.text(.liveConnectionStopped)
                     updateAssistantMessage(
                         id: assistantMessageID,
-                        text: "The live connection stopped before the reply finished.",
+                        text: fallbackText,
                         toolEvents: liveToolEvents,
                         isStreaming: false
                     )
                 } else {
-                    messages.append(ChatMessage(role: .assistant, text: "The live connection stopped before the reply finished."))
+                    messages.append(ChatMessage(role: .assistant, text: self.text(.liveConnectionStopped)))
                 }
                 lastError = error.localizedDescription
             } else {
@@ -1612,14 +1773,14 @@ final class ElephantAppModel: ObservableObject {
     private func chatLoopFailureMessage(detail: String) -> String {
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return "I could not run the full chat loop. Check provider and Personal Model settings, then send again."
+            return text(.chatLoopFailureGeneric)
         }
-        return "I could not run the full chat loop: \(trimmed)"
+        return String(format: text(.chatLoopFailureDetail), trimmed)
     }
 
     private static func toolEventSignature(_ events: [ToolUseEvent]) -> String {
         events
-            .map { [$0.invocationID, $0.name, $0.status, $0.arguments, $0.result].joined(separator: "|") }
+            .map { [$0.sourceID, $0.invocationID, $0.name, $0.status, $0.arguments, $0.result].joined(separator: "|") }
             .joined(separator: "\n")
     }
 
@@ -1631,11 +1792,44 @@ final class ElephantAppModel: ObservableObject {
         return [event.name, event.arguments].joined(separator: "|")
     }
 
+    private static func shouldAppendNewToolCard(existing: ToolUseEvent, incoming: ToolUseEvent) -> Bool {
+        let existingSourceID = existing.sourceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let incomingSourceID = incoming.sourceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !existingSourceID.isEmpty && existingSourceID == incomingSourceID {
+            return false
+        }
+        return isFinishedToolStatus(existing.status) && isNewToolLifecycleStatus(incoming.status)
+    }
+
+    private static func isFinishedToolStatus(_ status: String) -> Bool {
+        let value = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value.contains("complete")
+            || value.contains("success")
+            || value.contains("failed")
+            || value.contains("error")
+            || value.contains("denied")
+            || value.contains("deferred")
+            || value.contains("blocked")
+    }
+
+    private static func isNewToolLifecycleStatus(_ status: String) -> Bool {
+        let value = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value.isEmpty
+            || value.contains("preparing")
+            || value.contains("planned")
+            || value.contains("requested")
+            || value.contains("approved")
+            || value.contains("running")
+            || value.contains("start")
+            || isFinishedToolStatus(value)
+    }
+
     private static func mergedToolEvent(existing: ToolUseEvent, incoming: ToolUseEvent) -> ToolUseEvent {
         ToolUseEvent(
             id: existing.id,
+            sourceID: incoming.sourceID.isEmpty ? existing.sourceID : incoming.sourceID,
             invocationID: incoming.invocationID.isEmpty ? existing.invocationID : incoming.invocationID,
-            name: incoming.name == "tool" ? existing.name : incoming.name,
+            name: incoming.name == "tool" || incoming.name.isEmpty ? existing.name : incoming.name,
             status: incoming.status.isEmpty ? existing.status : incoming.status,
             arguments: incoming.arguments.isEmpty ? existing.arguments : incoming.arguments,
             result: incoming.result.isEmpty ? existing.result : incoming.result
@@ -1643,8 +1837,9 @@ final class ElephantAppModel: ObservableObject {
     }
 
     private func resetOnboardingDrafts() {
+        let freshLanguage = AppLanguage.preferred
         onboardingName = "Elephant"
-        onboardingPurpose = "Be warm, precise, curious, and direct. Protect continuity, ask useful questions, and keep the user's Personal Model correctable."
+        onboardingPurpose = freshLanguage.defaultElephantVibe
         onboardingPreferredName = ""
         onboardingOccupation = ""
         onboardingSchool = ""
@@ -1662,7 +1857,7 @@ final class ElephantAppModel: ObservableObject {
         onboardingMedicationAllergies = ""
         onboardingChronicConditions = ""
         onboardingPrivateSafetyNote = ""
-        onboardingFirstLanguage = "en"
+        setAppLanguage(freshLanguage, updateDefaultVibe: false)
         onboardingBlogURL = ""
         onboardingLinkedInURL = ""
         onboardingTwitterURL = ""
@@ -1676,6 +1871,8 @@ final class ElephantAppModel: ObservableObject {
         onboardingModelID = ""
         onboardingAPIKey = ""
         onboardingContextWindow = ""
+        onboardingLockPassword = ""
+        onboardingLockPasswordConfirmation = ""
         onboardingStep = 0
         onboardingFinalizationStarted = false
         onboardingFinalizationComplete = false
@@ -1691,6 +1888,7 @@ final class ElephantAppModel: ObservableObject {
 
         wakeDraft = ""
         providerTestResult = ""
+        embeddingActionResult = ""
         gatewayActionResult = ""
         gatewaySecretDrafts.removeAll()
         gatewayQR = GatewayQRState()
@@ -1702,6 +1900,8 @@ final class ElephantAppModel: ObservableObject {
         isWakeRunning = false
         isSleepDisplayPresented = false
         sleepDisplayReason = "manual"
+        sleepUnlockPassword = ""
+        sleepUnlockError = ""
         sleepIdleMinutes = Self.defaultSleepIdleMinutes
         hiddenEpisodeIDs.removeAll()
         userAvatarPath = ""
@@ -1713,7 +1913,9 @@ final class ElephantAppModel: ObservableObject {
             Self.userAvatarPathKey,
             Self.herdAvatarPathsKey,
             Self.hiddenEpisodeIDsKey,
-            Self.sleepIdleMinutesKey
+            Self.appLanguageKey,
+            Self.sleepIdleMinutesKey,
+            Self.appLockPasswordRecordKey
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -1770,6 +1972,30 @@ final class ElephantAppModel: ObservableObject {
     private static func persistedSleepIdleMinutes() -> Int {
         let value = UserDefaults.standard.integer(forKey: sleepIdleMinutesKey)
         return value > 0 ? min(120, max(1, value)) : defaultSleepIdleMinutes
+    }
+
+    private static func storedAppLockPasswordRecord() -> String? {
+        let value = UserDefaults.standard.string(forKey: appLockPasswordRecordKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
+    }
+
+    private static func makeAppLockPasswordRecord(for password: String) -> String {
+        let salt = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        return "\(salt):\(passwordDigest(salt: salt, password: password))"
+    }
+
+    private static func password(_ password: String, matches record: String?) -> Bool {
+        guard let record else { return false }
+        let pieces = record.split(separator: ":", maxSplits: 1).map(String.init)
+        guard pieces.count == 2 else { return false }
+        return passwordDigest(salt: pieces[0], password: password) == pieces[1]
+    }
+
+    private static func passwordDigest(salt: String, password: String) -> String {
+        let data = Data("\(salt):\(password)".utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private static func systemIdleSeconds() -> TimeInterval {

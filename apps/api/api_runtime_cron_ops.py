@@ -83,3 +83,29 @@ def run_proactive_ask_now(self) -> dict[str, Any]:
             },
         }
     }
+
+
+def run_dream_now(self) -> dict[str, Any]:
+    """Queue the built-in Dream learning pass once on demand."""
+    from .api_runtime_console import _dream_system_job
+
+    job = _dream_system_job(self)
+    if job is None:
+        raise ValueError("system cron job unavailable: system:dream")
+    result = self.trigger_reflect_job(trigger="dream", features="dream")
+    status = str(result.get("status") or "").strip().lower()
+    outcome = "success" if status == "queued" else "error"
+    detail = str(result.get("detail") or result.get("job_id") or status or "dream job queued")
+    refreshed_job = _dream_system_job(self) or job
+    return {
+        "cron": {
+            "job": refreshed_job,
+            "run": {
+                "outcome": outcome,
+                "summary": detail,
+                "delivered": False,
+                "delivery_error": None if outcome == "success" else detail,
+                "recorded_at": _now().isoformat(),
+            },
+        }
+    }

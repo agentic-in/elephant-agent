@@ -545,6 +545,7 @@ def _sync_elephant_identity(
                 state,
                 elephant_name=identity.display_name,
                 identity_mode=identity.identity_mode or state.identity_mode,
+                posture=identity.relational_stance or state.posture,
                 initiative=identity.initiative or state.initiative,
                 working_style=identity.personality_preset or state.working_style,
                 elephant_identity_text=identity.elephant_identity_text or state.elephant_identity_text,
