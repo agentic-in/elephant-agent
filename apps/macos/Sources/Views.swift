@@ -3574,13 +3574,14 @@ struct PersonalModelDotMapCanvas: View {
             let categories = categories(for: facts, lensID: spec.id)
             let lensCount = facts.isEmpty ? (snapshot.lensCoverage[spec.id] ?? 0) : facts.count
             let lensBase = point(from: centerBase, angle: spec.angle, radius: graphRadius * 0.66)
-            let lensPoint = drifting(lensBase, id: "lens-\(spec.id)", radius: 7, seconds: seconds)
+            let lensRadius = min(15, 10 + CGFloat(lensCount) * 0.18)
+            let lensPoint = drifting(lensBase, id: "lens-\(spec.id)", radius: 4, seconds: seconds)
             let lensNode = PersonalDotMapNode(
                 id: "lens-\(spec.id)",
                 tint: spec.tint,
                 kind: .lens,
                 position: lensPoint,
-                radius: min(15, 10 + CGFloat(lensCount) * 0.18),
+                radius: lensRadius,
                 selection: PersonalGraphSelection(
                     id: "lens-\(spec.id)",
                     title: spec.title,
@@ -3593,19 +3594,30 @@ struct PersonalModelDotMapCanvas: View {
                 )
             )
             nodes.append(lensNode)
-            edges.append(PersonalDotMapEdge(from: center, to: lensPoint, tint: spec.tint, strength: 0.44))
+            edges.append(
+                PersonalDotMapEdge(
+                    fromID: "center",
+                    toID: lensNode.id,
+                    from: center,
+                    to: lensPoint,
+                    tint: spec.tint,
+                    strength: 0.44
+                )
+            )
 
             let visibleCategories = categories.isEmpty
                 ? [PersonalDotMapCategory(id: "\(spec.id)-empty", title: "No facts yet", count: 0, facts: [])]
                 : categories
             for (categoryIndex, category) in visibleCategories.enumerated() {
                 let categoryAngle = fanAngle(base: spec.angle, index: categoryIndex, count: visibleCategories.count, spread: .pi * 1.08)
-                let categoryRadius = graphRadius * (0.42 + ringOffset(index: categoryIndex) * 0.085)
+                let densityBoost = min(0.16, CGFloat(category.count) * 0.012)
+                let categoryRadius = graphRadius * (0.46 + ringOffset(index: categoryIndex) * 0.10 + densityBoost)
                 let categoryBase = bounded(point(from: lensBase, angle: categoryAngle, radius: categoryRadius), in: size, margin: 42)
-                let categoryPoint = drifting(categoryBase, id: "category-\(spec.id)-\(category.id)", radius: 11, seconds: seconds)
+                let categoryPoint = drifting(categoryBase, id: "category-\(spec.id)-\(category.id)", radius: 5, seconds: seconds)
+                let categoryNodeID = "category-\(spec.id)-\(category.id)"
                 nodes.append(
                     PersonalDotMapNode(
-                        id: "category-\(spec.id)-\(category.id)",
+                        id: categoryNodeID,
                         tint: spec.tint,
                         kind: .category,
                         position: categoryPoint,
@@ -3622,7 +3634,16 @@ struct PersonalModelDotMapCanvas: View {
                         )
                     )
                 )
-                edges.append(PersonalDotMapEdge(from: lensPoint, to: categoryPoint, tint: spec.tint, strength: 0.30))
+                edges.append(
+                    PersonalDotMapEdge(
+                        fromID: lensNode.id,
+                        toID: categoryNodeID,
+                        from: lensPoint,
+                        to: categoryPoint,
+                        tint: spec.tint,
+                        strength: 0.30
+                    )
+                )
 
                 let visibleFacts = category.facts
                 for (factIndex, fact) in visibleFacts.enumerated() {
@@ -3632,16 +3653,23 @@ struct PersonalModelDotMapCanvas: View {
                         in: size,
                         margin: 34
                     )
-                    let factPoint = drifting(factBase, id: "fact-\(fact.id)", radius: 12, seconds: seconds)
+                    let factPoint = drifting(
+                        factBase,
+                        id: "fact-\(fact.id)",
+                        radius: factDriftRadius(total: visibleFacts.count),
+                        seconds: seconds
+                    )
+                    let factNodeID = "fact-\(fact.id)"
+                    let factRadius = 4.8 + CGFloat(fact.id.count % 4) * 0.35
                     nodes.append(
                         PersonalDotMapNode(
-                            id: "fact-\(fact.id)",
+                            id: factNodeID,
                             tint: spec.tint,
                             kind: .fact,
                             position: factPoint,
-                            radius: 4.8 + CGFloat(fact.id.count % 4) * 0.35,
+                            radius: factRadius,
                             selection: PersonalGraphSelection(
-                                id: "fact-\(fact.id)",
+                                id: factNodeID,
                                 title: fact.topic.isEmpty ? category.title : fact.topic,
                                 subtitle: spec.title,
                                 lens: spec.id,
@@ -3652,12 +3680,21 @@ struct PersonalModelDotMapCanvas: View {
                             )
                         )
                     )
-                    edges.append(PersonalDotMapEdge(from: categoryPoint, to: factPoint, tint: spec.tint, strength: 0.22))
+                    edges.append(
+                        PersonalDotMapEdge(
+                            fromID: categoryNodeID,
+                            toID: factNodeID,
+                            from: categoryPoint,
+                            to: factPoint,
+                            tint: spec.tint,
+                            strength: 0.22
+                        )
+                    )
                 }
             }
         }
 
-        return PersonalDotMapLayout(nodes: nodes, edges: edges)
+        return resolvedLayout(nodes: nodes, edges: edges, in: size)
     }
 
     private var branchSpecs: [PersonalDotMapBranchSpec] {
@@ -3952,9 +3989,139 @@ struct PersonalModelDotMapCanvas: View {
     }
 
     private func factOrbitRadius(index: Int, total: Int) -> CGFloat {
-        let ring = CGFloat(index / 10)
-        let base = total > 8 ? CGFloat(38) : CGFloat(30)
-        return base + ring * 25 + CGFloat(index % 3) * 4
+        let ring = CGFloat(index / 8)
+        let base: CGFloat
+        if total > 14 {
+            base = 52
+        } else if total > 8 {
+            base = 44
+        } else {
+            base = 34
+        }
+        return base + ring * 31 + CGFloat(index % 4) * 5
+    }
+
+    private func factDriftRadius(total: Int) -> CGFloat {
+        total > 8 ? 5 : 6
+    }
+
+    private func resolvedLayout(nodes: [PersonalDotMapNode], edges: [PersonalDotMapEdge], in size: CGSize) -> PersonalDotMapLayout {
+        let resolvedNodes = resolveCollisions(nodes, in: size)
+        var positions: [String: CGPoint] = [:]
+        for node in resolvedNodes {
+            positions[node.id] = node.position
+        }
+        let resolvedEdges = edges.map { edge in
+            PersonalDotMapEdge(
+                fromID: edge.fromID,
+                toID: edge.toID,
+                from: positions[edge.fromID] ?? edge.from,
+                to: positions[edge.toID] ?? edge.to,
+                tint: edge.tint,
+                strength: edge.strength
+            )
+        }
+        return PersonalDotMapLayout(nodes: resolvedNodes, edges: resolvedEdges)
+    }
+
+    private func resolveCollisions(_ nodes: [PersonalDotMapNode], in size: CGSize) -> [PersonalDotMapNode] {
+        guard nodes.count > 1 else { return nodes }
+        var resolved = nodes
+        for _ in 0..<16 {
+            var offsets = Array(repeating: CGSize.zero, count: resolved.count)
+            var moved = false
+            for lhsIndex in 0..<resolved.count {
+                for rhsIndex in (lhsIndex + 1)..<resolved.count {
+                    let lhs = resolved[lhsIndex]
+                    let rhs = resolved[rhsIndex]
+                    let minimumDistance = collisionDistance(lhs, rhs)
+                    let dx = lhs.position.x - rhs.position.x
+                    let dy = lhs.position.y - rhs.position.y
+                    let distance = max(0.1, sqrt(dx * dx + dy * dy))
+                    let overlap = minimumDistance - distance
+                    guard overlap > 0 else { continue }
+
+                    let direction: CGPoint
+                    if distance <= 0.2 {
+                        let angle = CGFloat(unit("collision-\(lhs.id)-\(rhs.id)")) * .pi * 2
+                        direction = CGPoint(x: cos(angle), y: sin(angle))
+                    } else {
+                        direction = CGPoint(x: dx / distance, y: dy / distance)
+                    }
+                    let lhsMobility = collisionMobility(lhs.kind)
+                    let rhsMobility = collisionMobility(rhs.kind)
+                    let totalMobility = lhsMobility + rhsMobility
+                    guard totalMobility > 0 else { continue }
+
+                    let push = overlap * 0.58
+                    offsets[lhsIndex].width += direction.x * push * (lhsMobility / totalMobility)
+                    offsets[lhsIndex].height += direction.y * push * (lhsMobility / totalMobility)
+                    offsets[rhsIndex].width -= direction.x * push * (rhsMobility / totalMobility)
+                    offsets[rhsIndex].height -= direction.y * push * (rhsMobility / totalMobility)
+                    moved = true
+                }
+            }
+            if !moved { break }
+            for index in resolved.indices {
+                let mobility = collisionMobility(resolved[index].kind)
+                guard mobility > 0 else { continue }
+                let anchor = nodes[index].position
+                var position = CGPoint(
+                    x: resolved[index].position.x + offsets[index].width,
+                    y: resolved[index].position.y + offsets[index].height
+                )
+                let anchorPull = max(0.02, 0.08 - mobility * 0.035)
+                position.x += (anchor.x - position.x) * anchorPull
+                position.y += (anchor.y - position.y) * anchorPull
+                resolved[index].position = bounded(position, in: size, margin: boundaryMargin(for: resolved[index]))
+            }
+        }
+        return resolved
+    }
+
+    private func collisionDistance(_ lhs: PersonalDotMapNode, _ rhs: PersonalDotMapNode) -> CGFloat {
+        visualRadius(for: lhs) + visualRadius(for: rhs) + collisionPadding(lhs.kind, rhs.kind)
+    }
+
+    private func visualRadius(for node: PersonalDotMapNode) -> CGFloat {
+        switch node.kind {
+        case .center:
+            return node.radius * 2.32
+        case .lens:
+            return node.radius + 8
+        case .category:
+            return node.radius + 7
+        case .fact:
+            return node.radius + 5
+        }
+    }
+
+    private func collisionPadding(_ lhs: PersonalDotMapNodeKind, _ rhs: PersonalDotMapNodeKind) -> CGFloat {
+        switch (lhs, rhs) {
+        case (.fact, .fact):
+            return 7
+        case (.category, .fact), (.fact, .category):
+            return 9
+        default:
+            return 12
+        }
+    }
+
+    private func collisionMobility(_ kind: PersonalDotMapNodeKind) -> CGFloat {
+        switch kind {
+        case .center:
+            return 0
+        case .lens:
+            return 0.22
+        case .category:
+            return 0.58
+        case .fact:
+            return 1
+        }
+    }
+
+    private func boundaryMargin(for node: PersonalDotMapNode) -> CGFloat {
+        visualRadius(for: node) + 10
     }
 
     private func ringOffset(index: Int) -> CGFloat {
@@ -4028,6 +4195,8 @@ private struct PersonalDotMapNode: Identifiable {
 }
 
 private struct PersonalDotMapEdge {
+    var fromID: String
+    var toID: String
     var from: CGPoint
     var to: CGPoint
     var tint: Color
