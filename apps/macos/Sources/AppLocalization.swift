@@ -250,6 +250,8 @@ enum AppText {
     case deleteConversationPrompt
     case deleteConversationMessage
     case noSavedChatsYet
+    case showChatHistory
+    case hideChatHistory
     case questionsShort
     case evidenceShort
     case newConversation
@@ -266,6 +268,20 @@ enum AppText {
     case quickCaptureDraft
     case quickThinkDraft
     case quickReviewDraft
+    case toolActivity
+    case live
+    case toolInput
+    case toolResult
+    case showToolDetails
+    case hideToolDetails
+    case assistantThinking
+    case toolFallback
+    case toolDone
+    case noRenderedMessagesYet
+    case liveConnectionEnded
+    case liveConnectionStopped
+    case chatLoopFailureGeneric
+    case chatLoopFailureDetail
     case untitledChat
     case youPageSubtitle
     case diaryPageSubtitle
@@ -703,25 +719,29 @@ enum AppText {
         case .newChat:
             return pick(language, en: "New chat", zh: "新对话", fr: "Nouveau chat", de: "Neuer Chat")
         case .conversationOpen:
-            return pick(language, en: "Conversation open", zh: "对话已打开", fr: "Conversation ouverte", de: "Unterhaltung geöffnet")
+            return pick(language, en: "In conversation", zh: "正在聊天", fr: "Conversation en cours", de: "Im Gespräch")
         case .threads:
-            return pick(language, en: "Threads", zh: "对话", fr: "Fils", de: "Threads")
+            return pick(language, en: "History", zh: "历史", fr: "Historique", de: "Verlauf")
         case .conversationHistory:
-            return pick(language, en: "Conversation history", zh: "对话历史", fr: "Historique des conversations", de: "Unterhaltungsverlauf")
+            return pick(language, en: "Recent chats", zh: "最近对话", fr: "Chats récents", de: "Letzte Chats")
         case .ready:
-            return pick(language, en: "Ready", zh: "准备好了", fr: "Prêt", de: "Bereit")
+            return pick(language, en: "Ready", zh: "可以开始", fr: "Prêt", de: "Bereit")
         case .startAnotherConversation:
-            return pick(language, en: "Start another conversation", zh: "开始另一段对话", fr: "Démarrer une autre conversation", de: "Eine weitere Unterhaltung starten")
+            return pick(language, en: "Start another chat", zh: "开一段新的", fr: "Démarrer un autre chat", de: "Einen neuen Chat starten")
         case .conversation:
             return pick(language, en: "Conversation", zh: "对话", fr: "Conversation", de: "Unterhaltung")
         case .deleteConversation:
-            return pick(language, en: "Delete Conversation", zh: "删除对话", fr: "Supprimer la conversation", de: "Unterhaltung löschen")
+            return pick(language, en: "Delete chat", zh: "删除这段对话", fr: "Supprimer le chat", de: "Chat löschen")
         case .deleteConversationPrompt:
             return pick(language, en: "Delete %@?", zh: "删除 %@？", fr: "Supprimer %@ ?", de: "%@ löschen?")
         case .deleteConversationMessage:
-            return pick(language, en: "This removes the conversation from desktop history. Personal Model facts and evidence are not deleted.", zh: "这只会从桌面历史中移除这段对话，不会删除 Personal Model facts 和 evidence。", fr: "Cela retire la conversation de l'historique du bureau. Les facts et preuves du Personal Model ne sont pas supprimés.", de: "Dies entfernt die Unterhaltung aus dem Desktop-Verlauf. Personal-Model-Facts und Belege werden nicht gelöscht.")
+            return pick(language, en: "This only removes the chat from desktop history. Personal Model facts and evidence stay in place.", zh: "只会从这里的历史里移除，不会删掉 Personal Model 的事实和证据。", fr: "Cela retire seulement le chat de l'historique du bureau. Les facts et preuves du Personal Model restent en place.", de: "Das entfernt den Chat nur aus dem Desktop-Verlauf. Personal-Model-Facts und Belege bleiben erhalten.")
         case .noSavedChatsYet:
-            return pick(language, en: "No saved chats yet.", zh: "还没有保存的对话。", fr: "Aucun chat enregistré pour l'instant.", de: "Noch keine gespeicherten Chats.")
+            return pick(language, en: "No chat history yet.", zh: "还没有对话历史。", fr: "Aucun historique de chat pour l'instant.", de: "Noch kein Chatverlauf.")
+        case .showChatHistory:
+            return pick(language, en: "Show history", zh: "打开历史", fr: "Afficher l'historique", de: "Verlauf anzeigen")
+        case .hideChatHistory:
+            return pick(language, en: "Hide history", zh: "收起历史", fr: "Masquer l'historique", de: "Verlauf ausblenden")
         case .questionsShort:
             return pick(language, en: "questions", zh: "问题", fr: "questions", de: "Fragen")
         case .evidenceShort:
@@ -733,7 +753,7 @@ enum AppText {
         case .voiceInput:
             return pick(language, en: "Voice input", zh: "语音输入", fr: "Saisie vocale", de: "Spracheingabe")
         case .typeMessagePlaceholder:
-            return pick(language, en: "Type a message...", zh: "输入一条消息...", fr: "Écrivez un message...", de: "Nachricht eingeben...")
+            return pick(language, en: "Write a message...", zh: "写点什么...", fr: "Écrivez un message...", de: "Nachricht schreiben...")
         case .send:
             return pick(language, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden")
         case .providerSetup:
@@ -741,19 +761,47 @@ enum AppText {
         case .askElephant:
             return pick(language, en: "Ask Elephant", zh: "问 Elephant", fr: "Demander à Elephant", de: "Elephant fragen")
         case .chatEmptySubtitle:
-            return pick(language, en: "Short, specific chats become reviewable memory, questions, and evidence.", zh: "简短、具体的对话会变成可回看的记忆、问题和证据。", fr: "Les chats courts et précis deviennent des souvenirs, questions et preuves vérifiables.", de: "Kurze, konkrete Chats werden zu überprüfbarer Erinnerung, Fragen und Belegen.")
+            return pick(language, en: "Keep it specific, and useful memories, questions, and evidence stay easy to review.", zh: "聊具体一点，之后就能回看有用的记忆、问题和证据。", fr: "Restez précis, et les souvenirs, questions et preuves utiles restent faciles à relire.", de: "Bleib konkret, dann bleiben nützliche Erinnerungen, Fragen und Belege leicht prüfbar.")
         case .quickCapture:
             return pick(language, en: "Capture", zh: "记录", fr: "Capturer", de: "Festhalten")
         case .quickThink:
-            return pick(language, en: "Think", zh: "思考", fr: "Réfléchir", de: "Denken")
+            return pick(language, en: "Think", zh: "想一下", fr: "Réfléchir", de: "Denken")
         case .quickReview:
-            return pick(language, en: "Review", zh: "回顾", fr: "Revoir", de: "Prüfen")
+            return pick(language, en: "Review", zh: "回看", fr: "Revoir", de: "Prüfen")
         case .quickCaptureDraft:
             return pick(language, en: "Remember this:", zh: "记住这件事：", fr: "Souviens-toi de ceci :", de: "Merke dir das:")
         case .quickThinkDraft:
             return pick(language, en: "Help me think through", zh: "帮我想清楚", fr: "Aide-moi à réfléchir à", de: "Hilf mir nachzudenken über")
         case .quickReviewDraft:
             return pick(language, en: "What should I review from today?", zh: "今天有哪些值得回顾？", fr: "Que devrais-je revoir aujourd'hui ?", de: "Was sollte ich von heute prüfen?")
+        case .toolActivity:
+            return pick(language, en: "Tool activity", zh: "工具记录", fr: "Activité des outils", de: "Tool-Aktivität")
+        case .live:
+            return pick(language, en: "live", zh: "进行中", fr: "en direct", de: "live")
+        case .toolInput:
+            return pick(language, en: "Input", zh: "输入", fr: "Entrée", de: "Eingabe")
+        case .toolResult:
+            return pick(language, en: "Result", zh: "结果", fr: "Résultat", de: "Ergebnis")
+        case .showToolDetails:
+            return pick(language, en: "Show tool details", zh: "展开工具详情", fr: "Afficher les détails de l'outil", de: "Tool-Details anzeigen")
+        case .hideToolDetails:
+            return pick(language, en: "Hide tool details", zh: "收起工具详情", fr: "Masquer les détails de l'outil", de: "Tool-Details ausblenden")
+        case .assistantThinking:
+            return pick(language, en: "Elephant is thinking", zh: "Elephant 正在想", fr: "Elephant réfléchit", de: "Elephant denkt nach")
+        case .toolFallback:
+            return pick(language, en: "tool", zh: "工具", fr: "outil", de: "Tool")
+        case .toolDone:
+            return pick(language, en: "done", zh: "完成", fr: "terminé", de: "fertig")
+        case .noRenderedMessagesYet:
+            return pick(language, en: "This chat has no visible messages yet.", zh: "这段对话还没有可显示的内容。", fr: "Ce chat n'a pas encore de messages visibles.", de: "Dieser Chat hat noch keine sichtbaren Nachrichten.")
+        case .liveConnectionEnded:
+            return pick(language, en: "The live connection ended before Elephant replied.", zh: "实时连接在回复前结束了。", fr: "La connexion en direct s'est arrêtée avant la réponse d'Elephant.", de: "Die Live-Verbindung endete, bevor Elephant geantwortet hat.")
+        case .liveConnectionStopped:
+            return pick(language, en: "The live connection stopped before the reply finished.", zh: "实时连接中断，回复还没完成。", fr: "La connexion en direct s'est arrêtée avant la fin de la réponse.", de: "Die Live-Verbindung stoppte, bevor die Antwort fertig war.")
+        case .chatLoopFailureGeneric:
+            return pick(language, en: "I could not run the full chat loop. Check provider and Personal Model settings, then send again.", zh: "这次没跑完整。检查一下模型和 Personal Model 设置，然后再发一次。", fr: "Je n'ai pas pu terminer la boucle de chat. Vérifiez le provider et le Personal Model, puis renvoyez.", de: "Ich konnte den Chatlauf nicht abschließen. Prüfe Provider und Personal Model und sende erneut.")
+        case .chatLoopFailureDetail:
+            return pick(language, en: "I could not run the full chat loop: %@", zh: "这次没跑完整：%@", fr: "Je n'ai pas pu terminer la boucle de chat : %@", de: "Ich konnte den Chatlauf nicht abschließen: %@")
         case .untitledChat:
             return pick(language, en: "Untitled chat", zh: "未命名对话", fr: "Chat sans titre", de: "Unbenannter Chat")
         case .youPageSubtitle:

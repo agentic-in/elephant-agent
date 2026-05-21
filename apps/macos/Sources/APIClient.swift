@@ -692,6 +692,7 @@ struct APIClient {
             return WakeStreamEvent(
                 type: type,
                 toolEvent: ToolUseEvent(
+                    sourceID: "loop.started",
                     name: "Chat loop",
                     status: "running",
                     arguments: message,
@@ -707,6 +708,7 @@ struct APIClient {
             return WakeStreamEvent(
                 type: type,
                 toolEvent: ToolUseEvent(
+                    sourceID: String(describing: object["id"] ?? object["stream_sequence"] ?? ""),
                     name: stageTitle(object["stage"] as? String ?? "Working"),
                     status: object["status"] as? String ?? "running",
                     arguments: object["detail"] as? String ?? "",
@@ -1340,16 +1342,19 @@ enum SnapshotParser {
     }
 
     private static func providerStatus(discovered: [String: Any], row: [String: Any]) -> String {
-        string(discovered["status"] ?? row["status"])
+        let discoveredStatus = string(discovered["status"])
+        if !discoveredStatus.isEmpty {
+            return discoveredStatus
+        }
+        return string(row["status"])
     }
 
     private static func providerDefaultModel(discovered: [String: Any], row: [String: Any]) -> String {
-        string(
-            discovered["default_model"]
-                ?? row["default_model"]
-                ?? row["default_model_id"]
-                ?? row["model_id"]
-        )
+        let discoveredDefault = firstString(in: discovered, keys: ["default_model"])
+        if !discoveredDefault.isEmpty {
+            return discoveredDefault
+        }
+        return firstString(in: row, keys: ["default_model", "default_model_id", "model_id"])
     }
 
     private static func providerDiscoveredModels(discovered: [String: Any], row: [String: Any]) -> [[String: Any]] {
@@ -1360,43 +1365,47 @@ enum SnapshotParser {
     }
 
     private static func providerBaseURL(discovered: [String: Any], row: [String: Any]) -> String {
-        string(
-            discovered["base_url"]
-                ?? discovered["baseUrl"]
-                ?? discovered["default_base_url"]
-                ?? discovered["defaultBaseURL"]
-                ?? discovered["endpoint"]
-                ?? row["default_base_url"]
-                ?? row["defaultBaseURL"]
-                ?? row["base_url"]
-                ?? row["baseUrl"]
-                ?? row["endpoint"]
-                ?? row["url"]
+        let discoveredURL = firstString(
+            in: discovered,
+            keys: ["base_url", "baseUrl", "default_base_url", "defaultBaseURL", "endpoint"]
+        )
+        if !discoveredURL.isEmpty {
+            return discoveredURL
+        }
+        return firstString(
+            in: row,
+            keys: ["default_base_url", "defaultBaseURL", "base_url", "baseUrl", "endpoint", "url"]
         )
     }
 
     private static func providerDisplayName(row: [String: Any], fallback: String) -> String {
-        string(row["display_name"] ?? row["displayName"] ?? row["name"], fallback: fallback)
+        firstString(in: row, keys: ["display_name", "displayName", "name"], fallback: fallback)
     }
 
     private static func providerAuthKind(_ row: [String: Any]) -> String {
-        string(
-            row["auth_method"]
-                ?? row["auth_type"]
-                ?? row["auth_kind"]
-                ?? row["authKind"]
-                ?? row["credential_kind"]
-                ?? row["credentialKind"]
+        firstString(
+            in: row,
+            keys: ["auth_method", "auth_type", "auth_kind", "authKind", "credential_kind", "credentialKind"]
         )
     }
 
     private static func providerSummary(_ row: [String: Any]) -> String {
-        string(row["catalog_summary"] ?? row["onboarding_hint"] ?? row["transport_display_name"])
+        firstString(in: row, keys: ["catalog_summary", "onboarding_hint", "transport_display_name"])
     }
 
     private static func providerRuntimeConnected(_ status: String) -> Bool {
         let normalized = status.lowercased()
         return ["authenticated", "configured", "available", "ready"].contains { normalized.contains($0) }
+    }
+
+    private static func firstString(in row: [String: Any], keys: [String], fallback: String = "") -> String {
+        for key in keys {
+            let value = string(row[key])
+            if !value.isEmpty {
+                return value
+            }
+        }
+        return fallback
     }
 
     static func providerModelOptions(
@@ -1615,6 +1624,8 @@ enum SnapshotParser {
         var deduped: [ToolUseEvent] = []
         for event in events {
             let key = [
+                event.sourceID,
+                event.invocationID,
                 event.name,
                 event.status,
                 event.arguments,
@@ -1670,6 +1681,18 @@ enum SnapshotParser {
                 ?? metadata["invocation_id"]
                 ?? metadata["invocationId"]
         )
+        let sourceID = string(
+            detail["id"]
+                ?? detail["event_id"]
+                ?? detail["eventId"]
+                ?? dictionary["id"]
+                ?? dictionary["event_id"]
+                ?? dictionary["eventId"]
+                ?? dictionary["stream_sequence"]
+                ?? metadata["id"]
+                ?? metadata["event_id"]
+                ?? metadata["eventId"]
+        )
         let name = compactToolText(
             detail["tool_name"]
                 ?? dictionary["tool_name"]
@@ -1708,6 +1731,7 @@ enum SnapshotParser {
         let rawStatus = string(dictionary["status"], fallback: fallbackStatus)
         events.append(
             ToolUseEvent(
+                sourceID: sourceID,
                 invocationID: invocationID,
                 name: name.isEmpty ? "tool" : name,
                 status: rawStatus.isEmpty ? fallbackStatus : rawStatus,
@@ -1868,7 +1892,7 @@ enum SnapshotParser {
         }
 
         if !pendingToolEvents.isEmpty {
-            result.append(ChatMessage(role: .assistant, text: "Tool trace", toolEvents: pendingToolEvents))
+            result.append(ChatMessage(role: .assistant, text: "", toolEvents: pendingToolEvents))
         }
 
         return result

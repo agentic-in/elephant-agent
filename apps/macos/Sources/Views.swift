@@ -1860,6 +1860,7 @@ struct RuntimeMiniPanel: View {
 
 struct WakeView: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @AppStorage("elephant.mac.chatHistoryVisible") private var chatHistoryVisible = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -1873,13 +1874,17 @@ struct WakeView: View {
             }
 
             HStack(alignment: .top, spacing: 14) {
-                ThreadRailPanel()
-                    .frame(width: 286)
-                    .frame(maxHeight: .infinity)
-                WakeComposerPanel()
+                if chatHistoryVisible {
+                    ThreadRailPanel()
+                        .frame(width: 286)
+                        .frame(maxHeight: .infinity)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+                WakeComposerPanel(historyVisible: $chatHistoryVisible)
                     .frame(maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.18), value: chatHistoryVisible)
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -2027,6 +2032,7 @@ struct ThreadRow: View {
 
 struct WakeComposerPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @Binding var historyVisible: Bool
     @StateObject private var speech = SpeechInputController()
     @FocusState private var focused: Bool
 
@@ -2034,6 +2040,17 @@ struct WakeComposerPanel: View {
         NativePanel {
             VStack(spacing: 0) {
                 HStack {
+                    Button {
+                        historyVisible.toggle()
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .help(model.text(historyVisible ? .hideChatHistory : .showChatHistory))
+                    .accessibilityLabel(model.text(historyVisible ? .hideChatHistory : .showChatHistory))
+
                     Text(model.activeEpisodeID.isEmpty ? model.text(.newConversation) : model.text(.conversation))
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
@@ -2540,24 +2557,29 @@ private struct MarkdownTableView: View {
                 markdownRow(table.headers, header: true)
                 ForEach(Array(table.rows.enumerated()), id: \.offset) { index, row in
                     markdownRow(normalized(row), header: false)
-                        .background(index.isMultiple(of: 2) ? Color.clear : ElephantTheme.line.opacity(0.10))
+                        .background(index.isMultiple(of: 2) ? Color.clear : ElephantTheme.line.opacity(0.08))
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.46))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.78), lineWidth: 1))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func markdownRow(_ values: [String], header: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(Array(normalized(values).enumerated()), id: \.offset) { index, value in
-                InlineMarkdownText(text: value, font: header ? .callout.weight(.semibold) : font, color: header ? color : color.opacity(0.94))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .frame(minWidth: 132, maxWidth: 220, alignment: .topLeading)
-                    .background(header ? ElephantTheme.accent.opacity(0.08) : Color.clear)
+                MarkdownTableCell(
+                    value: displayValue(value, at: index, header: header),
+                    font: header ? .callout.weight(.semibold) : font,
+                    color: header ? color : color.opacity(0.94),
+                    width: columnWidth(at: index),
+                    header: header
+                )
                     .overlay(alignment: .trailing) {
-                        if index < max(table.headers.count, table.rows.map(\.count).max() ?? 0) - 1 {
+                        if index < columnCount - 1 {
                             Rectangle()
                                 .fill(ElephantTheme.line.opacity(0.64))
                                 .frame(width: 1)
@@ -2565,12 +2587,73 @@ private struct MarkdownTableView: View {
                     }
             }
         }
+        .background(header ? ElephantTheme.accent.opacity(0.08) : Color.clear)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ElephantTheme.line.opacity(header ? 0.72 : 0.34))
+                .frame(height: 1)
+        }
     }
 
     private func normalized(_ values: [String]) -> [String] {
-        let count = max(table.headers.count, table.rows.map(\.count).max() ?? 0)
+        let count = columnCount
         if values.count >= count { return values }
         return values + Array(repeating: "", count: count - values.count)
+    }
+
+    private var columnCount: Int {
+        max(table.headers.count, table.rows.map(\.count).max() ?? 0)
+    }
+
+    private func displayValue(_ value: String, at index: Int, header: Bool) -> String {
+        if header && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isIndexColumn(index) {
+            return "#"
+        }
+        return value
+    }
+
+    private func columnWidth(at index: Int) -> CGFloat {
+        if isIndexColumn(index) {
+            return 54
+        }
+        let header = index < table.headers.count ? table.headers[index].lowercased() : ""
+        if header.contains("detail") || header.contains("详情") || header.contains("résultat") || header.contains("ergebnis") {
+            return 360
+        }
+        if header.count <= 3 {
+            return 138
+        }
+        return 190
+    }
+
+    private func isIndexColumn(_ index: Int) -> Bool {
+        guard index == 0, table.headers.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true else {
+            return false
+        }
+        return table.rows.allSatisfy { row in
+            guard let value = row.first?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+                return true
+            }
+            return Int(value) != nil
+        }
+    }
+}
+
+private struct MarkdownTableCell: View {
+    var value: String
+    var font: Font
+    var color: Color
+    var width: CGFloat
+    var header: Bool
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            InlineMarkdownText(text: value, font: font, color: color, fixedHorizontal: true, lineLimit: 1)
+                .padding(.horizontal, header ? 12 : 10)
+                .padding(.vertical, header ? 9 : 8)
+        }
+        .frame(width: width, alignment: .leading)
+        .frame(minHeight: header ? 38 : 36, alignment: .topLeading)
     }
 }
 
@@ -2578,19 +2661,23 @@ struct InlineMarkdownText: View {
     var text: String
     var font: Font
     var color: Color
+    var fixedHorizontal = false
+    var lineLimit: Int?
 
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
                 .font(font)
                 .foregroundStyle(color)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
         } else {
             Text(text)
                 .font(font)
                 .foregroundStyle(color)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
         }
     }
@@ -2665,6 +2752,7 @@ struct MessageBubble: View, Equatable {
 }
 
 struct ToolUseStack: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var events: [ToolUseEvent]
     var isLive = false
 
@@ -2676,7 +2764,7 @@ struct ToolUseStack: View {
                     .foregroundStyle(ElephantTheme.accent)
                     .frame(width: 18, height: 18)
                     .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                Text("Tool activity")
+                Text(model.text(.toolActivity))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink.opacity(0.78))
                 Text("\(events.count)")
@@ -2689,7 +2777,7 @@ struct ToolUseStack: View {
                     Circle()
                         .fill(ElephantTheme.accent)
                         .frame(width: 5, height: 5)
-                    Text("live")
+                    Text(model.text(.live))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.accent)
                 }
@@ -2721,12 +2809,14 @@ struct ToolUseStack: View {
 }
 
 struct ToolTraceWaitingView: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
     var body: some View {
         ElephantThinkingMark()
             .padding(.horizontal, 2)
             .padding(.vertical, 2)
             .fixedSize()
-            .accessibilityLabel("Assistant is thinking")
+            .accessibilityLabel(model.text(.assistantThinking))
     }
 }
 
@@ -2751,6 +2841,7 @@ struct ElephantThinkingMark: View {
 }
 
 struct ToolUseEventRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var event: ToolUseEvent
     @State private var expanded = false
 
@@ -2761,10 +2852,10 @@ struct ToolUseEventRow: View {
             if expanded && hasDetails {
                 VStack(alignment: .leading, spacing: 5) {
                     if !argumentsText.isEmpty {
-                        ToolUseDetailBlock(title: "Input", text: argumentsText, tint: ElephantTheme.accent)
+                        ToolUseDetailBlock(title: model.text(.toolInput), text: argumentsText, tint: ElephantTheme.accent)
                     }
                     if !resultText.isEmpty {
-                        ToolUseDetailBlock(title: "Result", text: resultText, tint: ElephantTheme.green)
+                        ToolUseDetailBlock(title: model.text(.toolResult), text: resultText, tint: ElephantTheme.green)
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -2789,8 +2880,8 @@ struct ToolUseEventRow: View {
                 headerContent
             }
             .buttonStyle(PressablePlainButtonStyle())
-            .help(expanded ? "Hide tool details" : "Show tool details")
-            .accessibilityLabel("\(displayName), \(statusText), \(expanded ? "expanded" : "collapsed")")
+            .help(expanded ? model.text(.hideToolDetails) : model.text(.showToolDetails))
+            .accessibilityLabel("\(displayName), \(statusText), \(expanded ? model.text(.hideToolDetails) : model.text(.showToolDetails))")
         } else {
             headerContent
         }
@@ -2827,12 +2918,12 @@ struct ToolUseEventRow: View {
 
     private var displayName: String {
         let value = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "tool" : value
+        return value.isEmpty ? model.text(.toolFallback) : value
     }
 
     private var statusText: String {
         let value = event.status.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "done" : value
+        return value.isEmpty ? model.text(.toolDone) : value
     }
 
     private var argumentsText: String {
