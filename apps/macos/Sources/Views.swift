@@ -9892,6 +9892,7 @@ struct ProviderLogoAsset {
         if display.contains("tencent") { return "tencent" }
         if display.contains("volcengine") || display.contains("ark") { return "volcengine" }
         if display.contains("xiaomi") { return "xiaomimimo" }
+        if display.contains("vllm") { return "vllm" }
         return id.replacingOccurrences(of: "-", with: "")
     }
 
@@ -9914,6 +9915,8 @@ struct ProviderLogoAsset {
             "tencent-hunyuan": "hunyuan",
             "tencent-tokenhub": "tencentcloud",
             "volcengine": "doubao",
+            "vllm": "vllm",
+            "vllm-semantic-router": "vllm",
             "xiaomi": "xiaomimimo",
             "zai": "zai"
         ]
@@ -13534,6 +13537,9 @@ struct OnboardingProviderModelStep: View {
                         Text("OpenAI Compatible").tag("openai-compatible")
                         Text("OpenAI").tag("openai")
                         Text("Anthropic").tag("anthropic")
+                        Text("Ollama").tag("ollama")
+                        Text("vLLM").tag("vllm")
+                        Text("vLLM Semantic Router").tag("vllm-semantic-router")
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
