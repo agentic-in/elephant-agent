@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import replace
 from datetime import datetime, timezone
 import os
 import re
@@ -29,7 +28,6 @@ from packages.contracts.runtime import (
     RuntimeModelChoice,
     PersonalModelRuntimeState,
     PromptMessage,
-    PromptEnvelope,
     SupportModelProfile,
 )
 from packages.embeddings import OPENAI_COMPATIBLE_EMBED_PROFILE_ID, OPENAI_COMPATIBLE_EMBED_PROVIDER_ID
@@ -47,6 +45,7 @@ from packages.models.discovery import (
     request_json,
 )
 from packages.models.provider_catalog import default_provider_definitions, provider_definition
+from packages.models.prompt_sections import context_with_fallback_tool_prompt
 from packages.models.provider_runtime import ProviderRuntimeResolver
 from packages.models.providers import build_model_adapter
 from packages.storage import RuntimeStorageRepository
@@ -898,7 +897,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
         )
         visible_tools = self._model_visible_tools()
         if visible_tools and not resolution.supports_tools:
-            context = _context_with_fallback_tool_prompt(
+            context = context_with_fallback_tool_prompt(
                 context,
                 self._fallback_tool_prompt(visible_tools),
             )
@@ -974,33 +973,6 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
             ),
             tool_calls=result.tool_calls,
         )
-
-
-def _context_with_fallback_tool_prompt(context: ContextBundle, prompt: str) -> ContextBundle:
-    normalized = prompt.strip()
-    if not normalized:
-        return context
-    envelope = context.prompt_envelope
-    return replace(
-        context,
-        prompt_envelope=PromptEnvelope(
-            frozen_prefix=_append_prompt_section(envelope.frozen_prefix, normalized),
-            session_snapshot=envelope.session_snapshot,
-            loop_context=envelope.loop_context,
-            messages=envelope.messages,
-        ),
-        rendered_prompt=_append_prompt_section(context.rendered_prompt or "", normalized),
-    )
-
-
-def _append_prompt_section(current: str, section: str) -> str:
-    existing = str(current or "").strip()
-    if not existing:
-        return section
-    if section in existing:
-        return existing
-    return f"{existing}\n\n{section}"
-
 
 __all__ = [
     "SurfaceModelProviderCapability",
