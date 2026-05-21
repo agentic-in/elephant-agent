@@ -1681,18 +1681,13 @@ enum SnapshotParser {
                 ?? metadata["invocation_id"]
                 ?? metadata["invocationId"]
         )
-        let sourceID = string(
-            detail["id"]
-                ?? detail["event_id"]
-                ?? detail["eventId"]
-                ?? dictionary["id"]
-                ?? dictionary["event_id"]
-                ?? dictionary["eventId"]
-                ?? dictionary["stream_sequence"]
-                ?? metadata["id"]
-                ?? metadata["event_id"]
-                ?? metadata["eventId"]
-        )
+        var sourceID = firstString(in: detail, keys: ["id", "event_id", "eventId"])
+        if sourceID.isEmpty {
+            sourceID = firstString(in: dictionary, keys: ["id", "event_id", "eventId", "stream_sequence"])
+        }
+        if sourceID.isEmpty {
+            sourceID = firstString(in: metadata, keys: ["id", "event_id", "eventId"])
+        }
         let name = compactToolText(
             detail["tool_name"]
                 ?? dictionary["tool_name"]
