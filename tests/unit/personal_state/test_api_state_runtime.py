@@ -126,6 +126,31 @@ class APIStateServiceTest(unittest.TestCase):
         )
         self.assertEqual(canonical_facts, ())
 
+    def test_update_identity_state_syncs_state_style_and_returns_updated_identity(self) -> None:
+        tmpdir, repository, personal_model, state, episode, runtime = self._bootstrap()
+        self.addCleanup(tmpdir.cleanup)
+
+        updated = runtime.update_identity_state(
+            state_id=state.state_id,
+            episode_id=episode.episode_id,
+            display_name="Atlas",
+            personality_preset="operator",
+            initiative="proactive",
+            elephant_identity_text="Stay durable and exact.",
+        )
+
+        refreshed_state = repository.load_state(state.state_id)
+        self.assertIsNotNone(refreshed_state)
+        assert refreshed_state is not None
+        self.assertEqual(updated.display_name, "Atlas")
+        self.assertEqual(updated.personality_preset, "operator")
+        self.assertEqual(updated.initiative, "proactive")
+        self.assertEqual(refreshed_state.elephant_name, "Atlas")
+        self.assertEqual(refreshed_state.identity_mode, "companion")
+        self.assertEqual(refreshed_state.initiative, "proactive")
+        self.assertEqual(refreshed_state.working_style, "operator")
+        self.assertEqual(refreshed_state.elephant_identity_text, "Stay durable and exact.")
+
     def test_update_user_state_adds_one_governed_memory_capture(self) -> None:
         tmpdir, repository, personal_model, state, episode, runtime = self._bootstrap()
         self.addCleanup(tmpdir.cleanup)

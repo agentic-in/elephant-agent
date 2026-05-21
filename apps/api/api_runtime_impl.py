@@ -85,6 +85,7 @@ from . import api_runtime_provider_methods as _provider_methods
 from . import api_runtime_surface_methods as _surface_methods
 from . import api_runtime_recall_methods as _recall_methods
 from . import api_runtime_http_methods as _http_methods
+from . import api_runtime_http_io_methods as _http_io_methods
 from . import api_runtime_console as _console_methods
 from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
@@ -373,9 +374,9 @@ ElephantAPIApp._dispatch_internal = _http_methods._dispatch_internal
 ElephantAPIApp._dispatch_operator = _http_methods._dispatch_operator
 ElephantAPIApp._dispatch_episodes = _http_methods._dispatch_episodes
 ElephantAPIApp._dispatch_states = _http_methods._dispatch_states
-ElephantAPIApp.run_cron_job_now = _http_methods.run_cron_job_now
+ElephantAPIApp.run_cron_job_now = _http_io_methods.run_cron_job_now
 ElephantAPIApp.run_proactive_ask_now = _cron_methods.run_proactive_ask_now
-ElephantAPIApp.__call__ = _http_methods.__call__
+ElephantAPIApp.__call__ = _http_io_methods.__call__
 
 def create_app(
     *,
