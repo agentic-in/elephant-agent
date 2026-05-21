@@ -8141,9 +8141,9 @@ struct SleepDisplaySettingsContent: View {
                 in: 1...120,
                 step: 1
             ) {
-                SettingsRow(label: "Auto sleep", value: "\(model.sleepIdleMinutes) min")
+                SettingsRow(label: model.text(.sleepAutoSleep), value: "\(model.sleepIdleMinutes) min")
             }
-            SettingsRow(label: "Wake", value: model.hasAppLockPassword ? "Password required" : model.text(.sleepNoPassword))
+            SettingsRow(label: model.text(.sleepWake), value: model.hasAppLockPassword ? model.text(.sleepPasswordRequired) : model.text(.sleepNoPassword))
             Divider()
             SectionLabel(
                 title: model.text(.resetLockPassword),
@@ -8187,10 +8187,10 @@ struct SleepDisplaySettingsContent: View {
             }
             Divider()
             HStack {
-                Button("Enter Sleep Display") {
+                Button(model.text(.enterSleepDisplay)) {
                     model.beginSleepDisplay(reason: "manual")
                 }
-                Button("Reset to 10 min") {
+                Button(model.text(.resetSleepTimer)) {
                     model.updateSleepIdleMinutes(10)
                 }
             }

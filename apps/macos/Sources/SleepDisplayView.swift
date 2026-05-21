@@ -111,14 +111,16 @@ struct SleepDisplayView: View {
                     .allowsHitTesting(false)
 
                 VStack(spacing: 0) {
-                    VStack(spacing: 4) {
-                        Text(dateLine)
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.80))
-                        Text(timeLine)
-                            .font(.system(size: clockSize, weight: .thin, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white.opacity(0.86))
+                    TimelineView(.periodic(from: Date(), by: 1.0)) { timeline in
+                        VStack(spacing: 4) {
+                            Text(dateLine(for: timeline.date))
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.80))
+                            Text(timeLine(for: timeline.date))
+                                .font(.system(size: clockSize, weight: .thin, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white.opacity(0.86))
+                        }
                     }
                     .padding(.top, max(42, proxy.size.height * 0.07))
 
@@ -186,18 +188,18 @@ struct SleepDisplayView: View {
         .accessibilityLabel("Elephant Agent sleep display")
     }
 
-    private var timeLine: String {
+    private func timeLine(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: Date())
+        return formatter.string(from: date)
     }
 
-    private var dateLine: String {
+    private func dateLine(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         formatter.setLocalizedDateFormatFromTemplate("MMMMdEEEE")
-        return formatter.string(from: Date())
+        return formatter.string(from: date)
     }
 }
 

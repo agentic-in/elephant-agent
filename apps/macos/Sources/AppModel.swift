@@ -827,7 +827,7 @@ final class ElephantAppModel: ObservableObject {
                 if status.contains("completed") || status.contains("succeeded") || status == "success" {
                     onboardingFinalizationStatus = text(.learningReady)
                     onboardingFinalizationComplete = true
-                    onboardingStep = 15
+                    onboardingStep = 16
                     return
                 }
                 if status.contains("failed") || status.contains("cancel") || status.contains("error") {

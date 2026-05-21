@@ -200,6 +200,11 @@ enum AppText {
     case sleepUnlock
     case sleepPasswordWrong
     case sleepNoPassword
+    case sleepPasswordRequired
+    case sleepAutoSleep
+    case sleepWake
+    case enterSleepDisplay
+    case resetSleepTimer
     case lockPasswordTitle
     case lockPasswordSubtitle
     case lockPassword
@@ -613,6 +618,16 @@ enum AppText {
             return pick(language, en: "That password does not match.", zh: "密码不匹配。", fr: "Ce mot de passe ne correspond pas.", de: "Das Passwort stimmt nicht.")
         case .sleepNoPassword:
             return pick(language, en: "No lock password is set.", zh: "还没有设置锁屏密码。", fr: "Aucun mot de passe de verrouillage n'est défini.", de: "Kein Sperrpasswort gesetzt.")
+        case .sleepPasswordRequired:
+            return pick(language, en: "Password required", zh: "需要密码", fr: "Mot de passe requis", de: "Passwort erforderlich")
+        case .sleepAutoSleep:
+            return pick(language, en: "Auto sleep", zh: "自动熄屏", fr: "Veille automatique", de: "Automatischer Ruhezustand")
+        case .sleepWake:
+            return pick(language, en: "Wake", zh: "唤醒", fr: "Réveil", de: "Aufwecken")
+        case .enterSleepDisplay:
+            return pick(language, en: "Enter Sleep Display", zh: "进入睡眠显示", fr: "Afficher la veille", de: "Schlafanzeige öffnen")
+        case .resetSleepTimer:
+            return pick(language, en: "Reset to 10 min", zh: "重置为 10 分钟", fr: "Réinitialiser à 10 min", de: "Auf 10 Min. zurücksetzen")
         case .lockPasswordTitle:
             return pick(language, en: "Lock Password", zh: "锁屏密码", fr: "Mot de passe de verrouillage", de: "Sperrpasswort")
         case .lockPasswordSubtitle:
