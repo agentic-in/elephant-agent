@@ -68,8 +68,14 @@ class CanonicalPersonalModelRuntimeStateTest(unittest.TestCase):
 
         self.assertEqual(bundle.elephant_identity.profile_id, "you")
         self.assertEqual(bundle.elephant_identity.display_name, "Aeon")
-        self.assertEqual(bundle.elephant_identity.personality_preset, "")
-        self.assertEqual(bundle.elephant_identity.initiative, "")
+        self.assertEqual(bundle.elephant_identity.identity_mode, "companion")
+        self.assertEqual(bundle.elephant_identity.personality_preset, "companion")
+        self.assertEqual(bundle.elephant_identity.initiative, "proactive")
+        self.assertEqual(bundle.elephant_identity.relational_stance, "close companion with clear boundaries")
+        self.assertEqual(
+            bundle.elephant_identity.working_style_contract,
+            "Steady, curious, lightly playful, and present without making a performance of it.",
+        )
         self.assertIn("Protect continuity", bundle.elephant_identity.elephant_identity_text or "")
         self.assertIn("text-first", bundle.elephant_identity.governance_flags)
 

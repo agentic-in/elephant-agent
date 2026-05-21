@@ -24,7 +24,7 @@ from packages.state import (
     read_elephant_identity_file,
 )
 from packages.state.canonical import build_canonical_profile_state
-from packages.state.governance import parse_elephant_identity_display_name
+from packages.state.governance import parse_elephant_identity_display_name, resolved_companion_settings
 from packages.state.loader import profile_manifest_payload
 from packages.state.persistence import (
     load_persisted_canonical_state,
@@ -157,6 +157,7 @@ class CliRuntimeRecordsMixin:
         loaded = self._load_profile(session.personal_model_id)
         current_state = self.current_elephant_state()
         existing = self.state_for_elephant(elephant_id)
+        companion = resolved_companion_settings(loaded)
         elephant_file_identity = read_elephant_identity_file(self.paths.elephant_file_path(elephant_id))
         elephant_identity_text = elephant_file_identity or elephant_identity_text or loaded.elephant_identity_text or ""
         effective_display_name = (
@@ -195,6 +196,9 @@ class CliRuntimeRecordsMixin:
         updated = replace(
             existing,
             elephant_name=effective_display_name,
+            identity_mode=loaded.state.mode or existing.identity_mode,
+            initiative=companion.initiative or existing.initiative,
+            working_style=companion.personality_preset or existing.working_style,
             surface_bindings=("cli",),
             elephant_identity_text=elephant_identity_text,
             summary=keep_summary,

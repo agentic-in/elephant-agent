@@ -10,7 +10,7 @@ from packages.contracts import ElephantIdentityRecord, Episode
 from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
 from packages.contracts.runtime import PersonalModelRuntimeState
 from packages.evidence.recall_runtime import RecallRuntime
-from packages.state import user_profile_updates
+from packages.state import CompanionSettings, resolve_personality_preset, user_profile_updates
 from packages.state.canonical import build_canonical_profile_state
 from packages.state.persistence import (
     load_persisted_canonical_state,
@@ -165,6 +165,8 @@ class APIStateService:
         episode_id: str | None = None,
         personal_model_id: str | None = None,
         display_name: str | None = None,
+        personality_preset: str | None = None,
+        initiative: str | None = None,
         elephant_identity_text: str | None = None,
         clear_elephant_identity: bool = False,
     ) -> ElephantIdentityRecord:
@@ -191,6 +193,17 @@ class APIStateService:
             user_profile=current.user,
             relationship_record=current.relationship,
         )
+        companion = loaded.companion or CompanionSettings()
+        if personality_preset is not None:
+            resolved_preset = resolve_personality_preset(personality_preset, mode=personal_model.mode)
+            companion = replace(
+                companion,
+                personality_preset=resolved_preset.preset_id,
+                personality=resolved_preset.traits,
+            )
+        if initiative is not None:
+            companion = replace(companion, initiative=initiative)
+        loaded = replace(loaded, companion=companion)
         if clear_elephant_identity or elephant_identity_text is not None:
             loaded = replace(
                 loaded,
