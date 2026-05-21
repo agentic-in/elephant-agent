@@ -23,7 +23,7 @@ Elephant Agent can also discover reusable credentials from local operator state:
 - Qwen OAuth credentials from `~/.qwen/oauth_creds.json`
 - GitHub Copilot OAuth credentials from `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token`
 - GitHub Copilot ACP process availability from `COPILOT_ACP_BASE_URL` or a local `copilot` CLI
-- local provider probes for `ollama` and `vllm`
+- local provider probes for `ollama`, `vllm`, and `vllm-semantic-router`
 
 ## What Elephant Agent stores
 
@@ -154,6 +154,7 @@ Elephant Agent already ships these provider surfaces in the shared runtime:
 - `kilocode`
 - `ollama`
 - `vllm`
+- `vllm-semantic-router`
 
 The product surface stays provider-neutral:
 
