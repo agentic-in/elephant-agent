@@ -759,9 +759,9 @@ enum AppText {
         case .providerSetup:
             return pick(language, en: "provider setup", zh: "配置模型服务", fr: "configuration provider", de: "Provider einrichten")
         case .askElephant:
-            return pick(language, en: "Ask Elephant", zh: "问 Elephant", fr: "Demander à Elephant", de: "Elephant fragen")
+            return pick(language, en: "What's on your mind?", zh: "今天想聊什么？", fr: "De quoi voulez-vous parler ?", de: "Worum geht es gerade?")
         case .chatEmptySubtitle:
-            return pick(language, en: "Keep it specific, and useful memories, questions, and evidence stay easy to review.", zh: "聊具体一点，之后就能回看有用的记忆、问题和证据。", fr: "Restez précis, et les souvenirs, questions et preuves utiles restent faciles à relire.", de: "Bleib konkret, dann bleiben nützliche Erinnerungen, Fragen und Belege leicht prüfbar.")
+            return pick(language, en: "Bring a thought, a decision, or something still unresolved.", zh: "可以是一件事、一个决定，或一段还没理清的想法。", fr: "Une idée, une décision, ou quelque chose qui n'est pas encore clair.", de: "Ein Gedanke, eine Entscheidung oder etwas, das noch offen ist.")
         case .quickCapture:
             return pick(language, en: "Capture", zh: "记录", fr: "Capturer", de: "Festhalten")
         case .quickThink:
