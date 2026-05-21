@@ -871,39 +871,39 @@ enum AppText {
         case .homeHeroTitle:
             return pick(
                 language,
-                en: "Understand you first, then evolve with you.",
-                zh: "先懂你，再陪你一起进化。",
-                fr: "Vous comprendre d'abord, puis évoluer avec vous.",
-                de: "Erst dich verstehen, dann mit dir wachsen."
+                en: "Where should we start today?",
+                zh: "今天从哪里开始？",
+                fr: "Par où voulez-vous commencer aujourd'hui ?",
+                de: "Wo sollen wir heute anfangen?"
             )
         case .homeHeroSubtitle:
             return pick(
                 language,
-                en: "A correctable Personal Model keeps the right threads warm between chats.",
-                zh: "可修正的 Personal Model，会把重要线索留到下一次对话里。",
-                fr: "Un Personal Model corrigeable garde les bons fils entre vos conversations.",
-                de: "Ein korrigierbares Personal Model hält Wichtiges zwischen Gesprächen präsent."
+                en: "Chat, write a diary note, or review what Elephant knows about you.",
+                zh: "可以聊天、写日记，或看看关于你的内容。",
+                fr: "Discutez, écrivez une note de journal, ou revoyez ce qu'Elephant sait de vous.",
+                de: "Chatten, Tagebuch schreiben oder ansehen, was Elephant über dich weiß."
             )
         case .reviewedFactsLabel:
-            return pick(language, en: "Reviewed facts", zh: "已回看的 facts", fr: "Facts vérifiés", de: "Geprüfte Facts")
+            return pick(language, en: "About you", zh: "关于你", fr: "À propos de vous", de: "Über dich")
         case .questionsWaitingLabel:
-            return pick(language, en: "Questions waiting", zh: "等待回答的问题", fr: "Questions en attente", de: "Wartende Fragen")
+            return pick(language, en: "Questions", zh: "待回应的问题", fr: "Questions", de: "Fragen")
         case .evidencePointsLabel:
-            return pick(language, en: "Evidence points", zh: "证据点", fr: "Points de preuve", de: "Belegpunkte")
+            return pick(language, en: "Sources", zh: "来源", fr: "Sources", de: "Quellen")
         case .reviewQuestions:
-            return pick(language, en: "Review questions", zh: "回看问题", fr: "Revoir les questions", de: "Fragen prüfen")
+            return pick(language, en: "About you", zh: "关于你", fr: "À propos de vous", de: "Über dich")
         case .personalModelMapTitle:
             return pick(language, en: "Personal Model Map", zh: "Personal Model 图谱", fr: "Carte du Personal Model", de: "Personal-Model-Karte")
         case .homeMapSubtitle:
-            return pick(language, en: "A living graph of what Elephant can carry into the next reply.", zh: "Elephant 能带入下一次回复的动态记忆图谱。", fr: "Un graphe vivant de ce qu'Elephant peut porter dans la prochaine réponse.", de: "Ein lebendiger Graph dessen, was Elephant in die nächste Antwort mitnimmt.")
+            return pick(language, en: "What Elephant currently understands about you.", zh: "这里是 Elephant 目前了解的内容。", fr: "Ce qu'Elephant comprend de vous pour l'instant.", de: "Was Elephant gerade über dich versteht.")
         case .mapNodeCountFormat:
             return pick(language, en: "%@ nodes", zh: "%@ 个节点", fr: "%@ noeuds", de: "%@ Knoten")
         case .mapClickHint:
-            return pick(language, en: "Click any dot to inspect what Elephant remembers.", zh: "点击任意圆点查看 Elephant 记住了什么。", fr: "Cliquez sur un point pour voir ce qu'Elephant retient.", de: "Klicke auf einen Punkt, um zu sehen, was Elephant erinnert.")
+            return pick(language, en: "Click a dot to see where it came from.", zh: "点一下节点，看看它来自哪里。", fr: "Cliquez sur un point pour voir d'où il vient.", de: "Klicke auf einen Punkt, um seine Herkunft zu sehen.")
         case .homeReadySubtitle:
-            return pick(language, en: "Your local Personal Model with visible memory, questions, and evidence.", zh: "你的本地 Personal Model，记忆、问题和证据都可见。", fr: "Votre Personal Model local avec mémoire, questions et preuves visibles.", de: "Dein lokales Personal Model mit sichtbarer Erinnerung, Fragen und Evidenz.")
+            return pick(language, en: "Chat, diary, and what Elephant knows about you.", zh: "聊天、日记和关于你的内容都在这里。", fr: "Chat, journal, et ce qu'Elephant sait de vous.", de: "Chat, Tagebuch und was Elephant über dich weiß.")
         case .homeSetupSubtitle:
-            return pick(language, en: "Create a local Personal Model, then start with a focused conversation.", zh: "先创建本地 Personal Model，再开始一次专注对话。", fr: "Créez un Personal Model local, puis commencez une conversation ciblée.", de: "Erstelle ein lokales Personal Model und beginne dann ein fokussiertes Gespräch.")
+            return pick(language, en: "Finish local setup, then start your first chat.", zh: "先完成本地设置，再开始第一段聊天。", fr: "Terminez la configuration locale, puis lancez votre premier chat.", de: "Schließe die lokale Einrichtung ab und starte den ersten Chat.")
         case .connectedToElephant:
             return pick(language, en: "Connected to Elephant", zh: "已连接 Elephant", fr: "Connecté à Elephant", de: "Mit Elephant verbunden")
         case .readyForFirstChat:
@@ -983,7 +983,7 @@ enum AppText {
         case .subtitleJournal:
             return pick(language, en: "Journal", zh: "记录", fr: "Journal", de: "Journal")
         case .subtitleAffinity:
-            return pick(language, en: "Affinity", zh: "亲和", fr: "Affinité", de: "Affinität")
+            return pick(language, en: "For you", zh: "适合你的技能", fr: "Pour vous", de: "Für dich")
         case .subtitleActions:
             return pick(language, en: "Actions", zh: "动作", fr: "Actions", de: "Aktionen")
         case .subtitleIM:

@@ -1075,7 +1075,7 @@ enum SnapshotParser {
         if snapshot.steps == 0 {
             snapshot.steps = (runtime["steps"] as? [[String: Any]])?.count ?? 0
         }
-        snapshot.episodeThreads = episodeTraces.prefix(10).compactMap { episodeThread(from: $0) }
+        snapshot.episodeThreads = Array(episodeTraces.lazy.compactMap { episodeThread(from: $0) }.prefix(10))
 
         let reflectRoot = dashboards["reflect"] ?? [:]
         let learning = reflectRoot["learning"] as? [String: Any] ?? [:]
@@ -1837,6 +1837,9 @@ enum SnapshotParser {
         let messages = chatMessages(from: timeline)
         let firstUserMessage = messages.first { $0.role == .user }?.text ?? ""
         let summary = string(row["exit_summary"] ?? row["summary"])
+        guard shouldShowChatThread(row: row, messages: messages, firstUserMessage: firstUserMessage, summary: summary) else {
+            return nil
+        }
         let status = string(row["status"], fallback: "open")
         let titleSeed = firstUserMessage.isEmpty ? summary : firstUserMessage
         let title = compactLine(titleSeed.isEmpty ? "Conversation" : titleSeed, maxLength: 44)
@@ -1857,6 +1860,57 @@ enum SnapshotParser {
             status: status,
             messages: messages
         )
+    }
+
+    private static func shouldShowChatThread(
+        row: [String: Any],
+        messages: [ChatMessage],
+        firstUserMessage: String,
+        summary: String
+    ) -> Bool {
+        let userMessages = messages
+            .filter { $0.role == .user }
+            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !userMessages.isEmpty else { return false }
+
+        let titleText = [
+            firstUserMessage,
+            summary,
+            string(row["display_name"] ?? row["displayName"] ?? row["title"] ?? row["name"])
+        ].joined(separator: "\n")
+        if looksLikeInternalChatHistoryTitle(titleText) {
+            return false
+        }
+        return !userMessages.allSatisfy(looksLikeInternalChatHistoryTitle)
+    }
+
+    private static func looksLikeInternalChatHistoryTitle(_ value: String) -> Bool {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else { return false }
+        let prefixes = [
+            "[context compressed]",
+            "context compressed",
+            "token budget:",
+            "trigger:",
+            "job:",
+            "reflect run",
+            "reflect job",
+            "run reflect",
+            "context compression"
+        ]
+        if prefixes.contains(where: { normalized.hasPrefix($0) }) {
+            return true
+        }
+        let markers = [
+            "\n[context compressed]",
+            "reflect context compression",
+            "method=reflect",
+            "phase=compressing"
+        ]
+        return markers.contains(where: { normalized.contains($0) })
     }
 
     private static func chatMessages(from timeline: [[String: Any]]) -> [ChatMessage] {

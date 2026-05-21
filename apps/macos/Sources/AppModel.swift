@@ -58,7 +58,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .wake: return "Talk"
         case .you: return "Model"
         case .diary: return "Journal"
-        case .skills: return "Affinity"
+        case .skills: return "For you"
         case .tools: return "Actions"
         case .messaging: return "IM"
         case .herd: return "Elephants"

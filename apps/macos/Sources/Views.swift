@@ -460,11 +460,11 @@ struct HomeFirstLookPanel: View {
                     .padding(.top, 2)
 
                     HStack(spacing: 10) {
-                        TodayCommand(title: model.text(.reviewQuestions), symbol: "questionmark.bubble") {
+                        TodayCommand(title: model.text(.reviewQuestions), symbol: "person.crop.circle") {
                             model.selectedSection = .you
                         }
-                        TodayCommand(title: model.text(.reflect), symbol: "brain.head.profile") {
-                            Task { await model.runReflect(trigger: "home") }
+                        TodayCommand(title: AppSection.diary.title(language: model.appLanguage), symbol: "book.closed") {
+                            model.selectedSection = .diary
                         }
                     }
                 }
@@ -1744,11 +1744,11 @@ struct PromptStagePanel: View {
             .tint(ElephantTheme.accent)
 
             HStack(spacing: 12) {
-                TodayCommand(title: model.text(.reviewQuestions), symbol: "questionmark.bubble") {
+                TodayCommand(title: model.text(.reviewQuestions), symbol: "person.crop.circle") {
                     model.selectedSection = .you
                 }
-                TodayCommand(title: model.text(.reflect), symbol: "brain.head.profile") {
-                    Task { await model.runReflect(trigger: "home") }
+                TodayCommand(title: AppSection.diary.title(language: model.appLanguage), symbol: "book.closed") {
+                    model.selectedSection = .diary
                 }
             }
         }
@@ -5459,15 +5459,15 @@ struct SkillAffinityPanel: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
                 SectionLabel(
-                    title: localizedYouText(model.appLanguage, en: "Skills Affinity", zh: "常用技能倾向", fr: "Affinité des skills", de: "Skill-Affinität"),
-                    subtitle: localizedFormat(model.appLanguage, en: "%d learned affinities", zh: "%d 条已学习偏好", fr: "%d affinités apprises", de: "%d gelernte Affinitäten", model.snapshot.skillAffinityRows.count)
+                    title: localizedYouText(model.appLanguage, en: "Skills for You", zh: "适合你的技能", fr: "Skills pour vous", de: "Skills für dich"),
+                    subtitle: localizedFormat(model.appLanguage, en: "%d learned matches", zh: "%d 条已学习线索", fr: "%d correspondances apprises", de: "%d gelernte Treffer", model.snapshot.skillAffinityRows.count)
                 )
                 if model.snapshot.skillAffinityRows.isEmpty {
                     EmptyLine(
                         symbol: "wand.and.stars",
                         text: model.snapshot.skillAffinities > 0
-                            ? localizedFormat(model.appLanguage, en: "%d affinities detected.", zh: "已经识别出 %d 条技能偏好。", fr: "%d affinités détectées.", de: "%d Affinitäten erkannt.", model.snapshot.skillAffinities)
-                            : localizedYouText(model.appLanguage, en: "No skill affinity facts yet.", zh: "还没学到你常用哪些技能。", fr: "Aucune affinité de skill pour l'instant.", de: "Noch keine Skill-Affinitäten.")
+                            ? localizedFormat(model.appLanguage, en: "%d matched skills found.", zh: "已经找到 %d 个适合你的技能。", fr: "%d skills adaptés trouvés.", de: "%d passende Skills gefunden.", model.snapshot.skillAffinities)
+                            : localizedYouText(model.appLanguage, en: "No matched skills yet.", zh: "还没看出哪些技能适合你。", fr: "Aucun skill adapté pour l'instant.", de: "Noch keine passenden Skills.")
                     )
                     if !model.snapshot.skillNames.isEmpty {
                         FlowLayout(items: model.snapshot.skillNames)
@@ -5820,7 +5820,7 @@ struct SkillsView: View {
 
             HStack(spacing: 12) {
                 MetricTile(label: localizedYouText(model.appLanguage, en: "Installed", zh: "已安装", fr: "Installés", de: "Installiert"), value: "\(model.snapshot.skills)", symbol: "wand.and.stars")
-                MetricTile(label: localizedYouText(model.appLanguage, en: "Affinity", zh: "亲和", fr: "Affinité", de: "Affinität"), value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "For you", zh: "适合你的技能", fr: "Pour vous", de: "Für dich"), value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
                 MetricTile(label: localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activés", de: "Aktiviert"), value: "\(enabledSkills)", symbol: "checkmark.seal", tint: ElephantTheme.green)
             }
 
