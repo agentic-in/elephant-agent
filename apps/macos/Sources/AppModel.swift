@@ -511,6 +511,9 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingFinalizationFailed = false
     @Published var onboardingFinalizationStatus = ""
     @Published var onboardingInitReflectJobID = ""
+    @Published var onboardingLearningPollCount = 0
+    @Published var onboardingLearningLastRefreshAt: Date?
+    @Published var onboardingLearningStartedAt: Date?
     @Published var showingOnboarding = false
     @Published var showingCommandPalette = false
     @Published var lastError = ""
@@ -829,6 +832,9 @@ final class ElephantAppModel: ObservableObject {
         onboardingFinalizationFailed = false
         onboardingFinalizationStatus = text(.learningCreateModel)
         onboardingInitReflectJobID = ""
+        onboardingLearningPollCount = 0
+        onboardingLearningStartedAt = Date()
+        onboardingLearningLastRefreshAt = nil
         lastError = ""
         do {
             let stateID = try await createElephantProfileFromOnboarding()
@@ -854,11 +860,15 @@ final class ElephantAppModel: ObservableObject {
     }
 
     private func pollOnboardingInitReflectJob(jobID: String) async throws {
-        let maxAttempts = 180
+        // The init reflect pass may continue for minutes, so onboarding only waits
+        // long enough to surface live progress before handing it to the background queue.
+        let maxAttempts = 45
         for attempt in 0..<maxAttempts {
             if Task.isCancelled { return }
+            onboardingLearningPollCount = attempt + 1
             onboardingFinalizationStatus = attempt < 2 ? text(.learningFromAnswers) : text(.learningFinishing)
             try await refreshDashboard()
+            onboardingLearningLastRefreshAt = Date()
             if let job = onboardingInitReflectJob(jobID: jobID) {
                 let status = job.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 if status.contains("completed") || status.contains("succeeded") || status == "success" {
@@ -874,12 +884,15 @@ final class ElephantAppModel: ObservableObject {
             }
             try await Task.sleep(nanoseconds: 1_000_000_000)
         }
-        throw APIClientError.badStatus("The init learning job is still running. You can enter Elephant and review the learning queue later.")
+        onboardingFinalizationStatus = text(.learningContinuingInBackground)
+        onboardingFinalizationComplete = true
+        onboardingStep = 17
+        scheduleOnboardingAutoCompletion(delayNanoseconds: 1_250_000_000)
     }
 
-    private func scheduleOnboardingAutoCompletion() {
+    private func scheduleOnboardingAutoCompletion(delayNanoseconds: UInt64 = 850_000_000) {
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 850_000_000)
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
             await MainActor.run {
                 guard let self,
                       self.showingOnboarding,
@@ -1979,6 +1992,9 @@ final class ElephantAppModel: ObservableObject {
         onboardingFinalizationFailed = false
         onboardingFinalizationStatus = ""
         onboardingInitReflectJobID = ""
+        onboardingLearningPollCount = 0
+        onboardingLearningLastRefreshAt = nil
+        onboardingLearningStartedAt = nil
         onboardingCreatedStateID = ""
     }
 

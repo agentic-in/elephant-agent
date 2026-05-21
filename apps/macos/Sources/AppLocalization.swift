@@ -182,6 +182,7 @@ enum AppText {
     case learningFromAnswers
     case learningFinishing
     case learningReady
+    case learningContinuingInBackground
     case learningNeedsAttention
     case tryAgain
     case celebrationTitle
@@ -596,6 +597,8 @@ enum AppText {
             return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
         case .learningReady:
             return pick(language, en: "Everything is ready", zh: "全部准备好了", fr: "Tout est prêt", de: "Alles ist bereit")
+        case .learningContinuingInBackground:
+            return pick(language, en: "Still learning in the background. You can enter Elephant now.", zh: "仍在后台学习中，你可以先进入 Elephant。", fr: "L'apprentissage continue en arrière-plan. Vous pouvez entrer dans Elephant.", de: "Der Lernlauf läuft im Hintergrund weiter. Du kannst Elephant jetzt öffnen.")
         case .learningNeedsAttention:
             return pick(language, en: "Setup needs attention", zh: "初始化需要处理", fr: "La configuration demande votre attention", de: "Einrichtung braucht Aufmerksamkeit")
         case .tryAgain:

@@ -14780,7 +14780,10 @@ struct OnboardingLearningStep: View {
             }
             OnboardingLearningLivePanel(
                 job: model.onboardingLearningJob,
-                statusText: model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus
+                statusText: model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus,
+                pollCount: model.onboardingLearningPollCount,
+                startedAt: model.onboardingLearningStartedAt,
+                lastRefreshAt: model.onboardingLearningLastRefreshAt
             )
             .frame(maxWidth: 560)
             if model.onboardingFinalizationFailed {
@@ -14812,8 +14815,18 @@ struct OnboardingLearningLivePanel: View {
     @EnvironmentObject private var model: ElephantAppModel
     var job: LearningJobItem?
     var statusText: String
+    var pollCount: Int
+    var startedAt: Date?
+    var lastRefreshAt: Date?
 
     var body: some View {
+        TimelineView(.periodic(from: Date(), by: 1.0)) { timeline in
+            panel(now: timeline.date)
+        }
+    }
+
+    @ViewBuilder
+    private func panel(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "dot.radiowaves.left.and.right")
@@ -14823,6 +14836,11 @@ struct OnboardingLearningLivePanel: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
                 Spacer(minLength: 0)
+                if isActive {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.62)
+                }
                 Pill(text: statusLabel, tint: statusTint)
             }
 
@@ -14837,6 +14855,26 @@ struct OnboardingLearningLivePanel: View {
                     title: localizedYouText(model.appLanguage, en: "Tool calls", zh: "工具调用", fr: "Appels d'outils", de: "Tool-Aufrufe"),
                     items: toolTraceItems
                 )
+            }
+            .frame(height: 116)
+
+            HStack(spacing: 7) {
+                OnboardingLearningHeartbeatChip(
+                    symbol: "timer",
+                    text: elapsedText(now: now),
+                    tint: statusTint
+                )
+                OnboardingLearningHeartbeatChip(
+                    symbol: "arrow.clockwise",
+                    text: refreshText(now: now),
+                    tint: ElephantTheme.green
+                )
+                OnboardingLearningHeartbeatChip(
+                    symbol: "checklist",
+                    text: pollText,
+                    tint: ElephantTheme.accent
+                )
+                Spacer(minLength: 0)
             }
 
             HStack(spacing: 6) {
@@ -14899,7 +14937,18 @@ struct OnboardingLearningLivePanel: View {
 
     private var stageDetail: String {
         let detail = cleanProgress(job?.progressDetail ?? "")
-        return detail.isEmpty ? statusText : detail
+        guard !detail.isEmpty else { return statusText }
+        let lower = detail.lowercased()
+        if lower.contains("reflect agent running") {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Reflect is reading your answers; new tool events appear here automatically.",
+                zh: "Reflect 正在读取你的答案；新的工具事件会自动出现在这里。",
+                fr: "Reflect lit vos réponses ; les nouveaux événements d'outil apparaissent ici.",
+                de: "Reflect liest deine Antworten; neue Tool-Ereignisse erscheinen hier automatisch."
+            )
+        }
+        return detail
     }
 
     private var featureSummary: String {
@@ -14926,6 +14975,23 @@ struct OnboardingLearningLivePanel: View {
                 ? job?.resolvedTools ?? []
                 : ["tool.personal_model.search", "tool.personal_model.update", "tool.personal_model.questions", "tool.skill.list"]
             names = normalizedTools(fallback)
+            if isActive {
+                let waiting = OnboardingLearningToolTraceItem(
+                    name: localizedYouText(model.appLanguage, en: "Listening for events", zh: "监听工具事件", fr: "Écoute des événements", de: "Wartet auf Events"),
+                    detail: localizedYouText(model.appLanguage, en: "live", zh: "实时", fr: "direct", de: "live"),
+                    symbol: "antenna.radiowaves.left.and.right",
+                    tint: ElephantTheme.accent
+                )
+                let ready = Array(names.prefix(3)).map { name in
+                    OnboardingLearningToolTraceItem(
+                        name: toolDisplayName(name),
+                        detail: localizedYouText(model.appLanguage, en: "ready", zh: "待调用", fr: "pret", de: "bereit"),
+                        symbol: "circle.dotted",
+                        tint: ElephantTheme.faint
+                    )
+                }
+                return [waiting] + ready
+            }
         }
         return Array(names.prefix(4)).map { name in
             let completed = used.contains(name)
@@ -15010,6 +15076,61 @@ struct OnboardingLearningLivePanel: View {
             .replacingOccurrences(of: "_", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private func elapsedText(now: Date) -> String {
+        guard let startedAt else {
+            return localizedYouText(model.appLanguage, en: "starting", zh: "准备计时", fr: "démarrage", de: "startet")
+        }
+        let seconds = max(0, Int(now.timeIntervalSince(startedAt)))
+        let value = formattedDuration(seconds)
+        return localizedYouText(
+            model.appLanguage,
+            en: "waiting \(value)",
+            zh: "已等待 \(value)",
+            fr: "attente \(value)",
+            de: "wartet \(value)"
+        )
+    }
+
+    private func refreshText(now: Date) -> String {
+        guard let lastRefreshAt else {
+            return localizedYouText(model.appLanguage, en: "first refresh pending", zh: "等待首次刷新", fr: "premier rafraîchissement", de: "erste Aktualisierung")
+        }
+        let seconds = max(0, Int(now.timeIntervalSince(lastRefreshAt)))
+        if seconds < 2 {
+            return localizedYouText(model.appLanguage, en: "refreshed now", zh: "刚刚刷新", fr: "rafraîchi", de: "gerade aktualisiert")
+        }
+        return localizedYouText(
+            model.appLanguage,
+            en: "refreshed \(seconds)s ago",
+            zh: "\(seconds)s 前刷新",
+            fr: "rafraîchi il y a \(seconds)s",
+            de: "vor \(seconds)s aktualisiert"
+        )
+    }
+
+    private var pollText: String {
+        guard pollCount > 0 else {
+            return localizedYouText(model.appLanguage, en: "check pending", zh: "等待检查", fr: "vérification", de: "wartet")
+        }
+        return localizedYouText(
+            model.appLanguage,
+            en: "check #\(pollCount)",
+            zh: "第 \(pollCount) 次检查",
+            fr: "vérification \(pollCount)",
+            de: "Prüfung \(pollCount)"
+        )
+    }
+
+    private func formattedDuration(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let remainder = seconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, remainder)
+        }
+        return String(format: "%d:%02d", minutes, remainder)
+    }
 }
 
 struct OnboardingLearningStatusCard: View {
@@ -15038,7 +15159,7 @@ struct OnboardingLearningStatusCard: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.18), lineWidth: 1))
     }
@@ -15081,9 +15202,26 @@ struct OnboardingLearningToolTrace: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ElephantTheme.green.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.green.opacity(0.16), lineWidth: 1))
+    }
+}
+
+struct OnboardingLearningHeartbeatChip: View {
+    var symbol: String
+    var text: String
+    var tint: Color
+
+    var body: some View {
+        Label(text, systemImage: symbol)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(tint.opacity(0.08), in: Capsule())
     }
 }
 
