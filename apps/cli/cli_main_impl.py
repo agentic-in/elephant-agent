@@ -1600,7 +1600,7 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
             api_key=api_key,
         )
     if context_window_tokens is None:
-        context_window_tokens = 128_000
+        context_window_tokens = 256_000
     guide = runtime.provider_setup_guide(provider_id)
     if (
         guide.auth_type == "api_key"

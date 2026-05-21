@@ -16,7 +16,7 @@ from .wizard import (
 if TYPE_CHECKING:
     from .runtime import CliRuntime
 
-DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
+DEFAULT_CONTEXT_WINDOW_TOKENS = 256_000
 MANUAL_MODEL_SENTINEL = "__manual_model__"
 DEFAULT_PROVIDER_ID = "openai-compatible"
 _MODEL_DISCOVERY_KEY_RETRY_EXCLUDED_PROVIDERS = frozenset({"openai-codex", "copilot", "qwen-oauth"})

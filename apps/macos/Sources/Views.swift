@@ -2354,51 +2354,53 @@ struct MarkdownBody: View {
     var text: String
     var font: Font = .body
     var color: Color = ElephantTheme.ink
+    var blockSpacing: CGFloat = 5
+    var lineSpacing: CGFloat = 2.5
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: blockSpacing) {
             ForEach(blocks) { block in
                 switch block.kind {
                 case .heading:
-                    InlineMarkdownText(text: block.text, font: .headline, color: color)
+                    InlineMarkdownText(text: block.text, font: .headline, color: color, lineSpacing: lineSpacing)
                 case .paragraph:
-                    InlineMarkdownText(text: block.text, font: font, color: color)
+                    InlineMarkdownText(text: block.text, font: font, color: color, lineSpacing: lineSpacing)
                 case .bulletList:
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 5) {
                         ForEach(block.items, id: \.self) { item in
                             HStack(alignment: .top, spacing: 6) {
                                 Text("•")
                                     .font(font)
                                     .foregroundStyle(color.opacity(0.72))
-                                InlineMarkdownText(text: item, font: font, color: color)
+                                InlineMarkdownText(text: item, font: font, color: color, lineSpacing: lineSpacing)
                             }
                         }
                     }
                 case .numberedList:
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 5) {
                         ForEach(Array(block.items.enumerated()), id: \.offset) { index, item in
                             HStack(alignment: .top, spacing: 6) {
                                 Text("\(index + 1).")
                                     .font(font)
                                     .foregroundStyle(color.opacity(0.72))
-                                InlineMarkdownText(text: item, font: font, color: color)
+                                InlineMarkdownText(text: item, font: font, color: color, lineSpacing: lineSpacing)
                             }
                         }
                     }
                 case .taskList:
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 5) {
                         ForEach(taskItems(from: block.items)) { item in
                             HStack(alignment: .top, spacing: 7) {
                                 Image(systemName: item.checked ? "checkmark.square.fill" : "square")
                                     .font(.callout.weight(.semibold))
                                     .foregroundStyle(item.checked ? ElephantTheme.accent : color.opacity(0.56))
                                     .frame(width: 18)
-                                InlineMarkdownText(text: item.text, font: font, color: color)
+                                InlineMarkdownText(text: item.text, font: font, color: color, lineSpacing: lineSpacing)
                             }
                         }
                     }
                 case .quote:
-                    InlineMarkdownText(text: block.text, font: font, color: color.opacity(0.86))
+                    InlineMarkdownText(text: block.text, font: font, color: color.opacity(0.86), lineSpacing: lineSpacing)
                         .padding(.leading, 10)
                         .overlay(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -2418,6 +2420,7 @@ struct MarkdownBody: View {
                     Text(block.text)
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(color)
+                        .lineSpacing(2)
                         .textSelection(.enabled)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2786,12 +2789,14 @@ struct InlineMarkdownText: View {
     var color: Color
     var fixedHorizontal = false
     var lineLimit: Int?
+    var lineSpacing: CGFloat = 2
 
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
                 .font(font)
                 .foregroundStyle(color)
+                .lineSpacing(lineSpacing)
                 .lineLimit(lineLimit)
                 .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
@@ -2799,6 +2804,7 @@ struct InlineMarkdownText: View {
             Text(text)
                 .font(font)
                 .foregroundStyle(color)
+                .lineSpacing(lineSpacing)
                 .lineLimit(lineLimit)
                 .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
@@ -3183,6 +3189,19 @@ private func localizedYouText(_ language: AppLanguage, en: String, zh: String, f
 
 private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
     String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
+}
+
+private func formattedTokenWindow(_ tokens: Int) -> String {
+    guard tokens > 0 else { return "" }
+    if tokens >= 1_000_000 {
+        let value = Double(tokens) / 1_000_000.0
+        return value >= 10 ? "\(Int(value.rounded()))M" : String(format: "%.1fM", value)
+    }
+    if tokens >= 1_000 {
+        let value = Double(tokens) / 1_000.0
+        return value >= 100 ? "\(Int(value.rounded()))k" : String(format: "%.1fk", value)
+    }
+    return "\(tokens)"
 }
 
 private enum MacLocalDateTime {
@@ -8302,15 +8321,6 @@ struct LearningJobRow: View {
                 }
             }
             .padding(.top, 6)
-            if item.markdown.isEmpty {
-                Text(localizedYouText(model.appLanguage, en: "No rendered result returned yet.", zh: "还没有可显示的结果。", fr: "Aucun résultat rendu pour l'instant.", de: "Noch kein gerendertes Ergebnis."))
-                    .font(.callout)
-                    .foregroundStyle(ElephantTheme.muted)
-                    .padding(.top, 6)
-            } else {
-                MarkdownBody(text: item.markdown, font: .callout, color: ElephantTheme.ink)
-                    .padding(.top, 6)
-            }
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 StatusDot(tint: statusTint)
@@ -9154,11 +9164,6 @@ struct ProviderSettingsContent: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Pill(text: providerStatusLabel, symbol: "cpu", tint: providerTint)
-                if !model.providerTestResult.isEmpty {
-                    Text(model.providerTestResult)
-                        .font(.callout)
-                        .foregroundStyle(ElephantTheme.green)
-                }
                 Spacer(minLength: 0)
             }
 
@@ -9270,6 +9275,13 @@ struct ProviderSettingsContent: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 160)
             }
+            if contextWindow.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let contextLine = selectedModelContextLine {
+                Label(contextLine, systemImage: "sparkle.magnifyingglass")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             SettingsRow(
                 label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"),
@@ -9290,16 +9302,20 @@ struct ProviderSettingsContent: View {
                         )
                     }
                 }
-                .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.providerActionInFlight)
 
                 Button(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen")) {
                     Task { await model.testProvider() }
                 }
-                .disabled(model.snapshot.providerID.isEmpty && providerID.isEmpty)
+                .disabled((model.snapshot.providerID.isEmpty && providerID.isEmpty) || model.providerActionInFlight)
+            }
 
-                Button(model.text(.refresh)) {
-                    Task { try? await model.refreshDashboard() }
-                }
+            if !model.providerTestResult.isEmpty {
+                ProviderActionFeedback(
+                    message: model.providerTestResult,
+                    failed: model.providerActionFailed,
+                    running: model.providerActionInFlight
+                )
             }
         }
     }
@@ -9310,6 +9326,22 @@ struct ProviderSettingsContent: View {
 
     private var availableModels: [ProviderModelOption] {
         discoveredModels[providerID] ?? selectedOption?.models ?? []
+    }
+
+    private var selectedModelOption: ProviderModelOption? {
+        availableModels.first(where: { $0.id == modelID })
+    }
+
+    private var selectedModelContextLine: String? {
+        guard let tokens = selectedModelOption?.contextWindowTokens, tokens > 0 else { return nil }
+        return localizedFormat(
+            model.appLanguage,
+            en: "Auto context window: %@",
+            zh: "自动上下文窗口：%@",
+            fr: "Fenêtre de contexte auto : %@",
+            de: "Automatisches Kontextfenster: %@",
+            formattedTokenWindow(tokens)
+        )
     }
 
     private var filteredProviderOptions: [ProviderOption] {
@@ -9442,6 +9474,44 @@ struct ProviderSettingsContent: View {
     }
 }
 
+struct ProviderActionFeedback: View {
+    var message: String
+    var failed: Bool
+    var running: Bool
+
+    var body: some View {
+        Label {
+            Text(message)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        } icon: {
+            Image(systemName: symbol)
+                .font(.callout.weight(.bold))
+                .foregroundStyle(tint)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(tint.opacity(0.24), lineWidth: 1))
+    }
+
+    private var tint: Color {
+        if failed { return ElephantTheme.orange }
+        if running { return ElephantTheme.accent }
+        return ElephantTheme.green
+    }
+
+    private var symbol: String {
+        if failed { return "xmark.octagon.fill" }
+        if running { return "arrow.triangle.2.circlepath" }
+        return "checkmark.circle.fill"
+    }
+}
+
 struct ProviderConfigurationModalBackdrop: View {
     var dismiss: () -> Void
 
@@ -9542,7 +9612,7 @@ struct ProviderConfigurationDropCard<Content: View>: View {
                 Spacer(minLength: 0)
                 ProviderStatePill(option: option)
                 Button(action: close) {
-                    Image(systemName: "chevron.up")
+                    Image(systemName: "chevron.down")
                         .font(.callout.weight(.semibold))
                         .frame(width: 30, height: 30)
                         .contentShape(Circle())
@@ -10255,6 +10325,9 @@ struct ModelOptionCard: View {
                     .truncationMode(.middle)
                 HStack(spacing: 6) {
                     Text(option.source)
+                    if option.contextWindowTokens > 0 {
+                        Text(localizedFormat(model.appLanguage, en: "context %@", zh: "上下文 %@", fr: "contexte %@", de: "Kontext %@", formattedTokenWindow(option.contextWindowTokens)))
+                    }
                     if active {
                         Text(localizedProviderState("active", language: model.appLanguage))
                     }
@@ -11619,18 +11692,15 @@ struct ProviderSettingsPanel: View {
                     Button("Test Provider") {
                         Task { await model.testProvider() }
                     }
-                    .disabled(model.snapshot.providerID.isEmpty)
-
-                    Button("Refresh") {
-                        Task { try? await model.refreshDashboard() }
-                    }
+                    .disabled(model.snapshot.providerID.isEmpty || model.providerActionInFlight)
                 }
 
                 if !model.providerTestResult.isEmpty {
-                    Text(model.providerTestResult)
-                        .font(.callout)
-                        .foregroundStyle(ElephantTheme.green)
-                        .fixedSize(horizontal: false, vertical: true)
+                    ProviderActionFeedback(
+                        message: model.providerTestResult,
+                        failed: model.providerActionFailed,
+                        running: model.providerActionInFlight
+                    )
                 }
             }
         }
@@ -11808,6 +11878,8 @@ struct OnboardingFlow: View {
     private let learnStep = 16
     private let readyStep = 17
     private let totalSteps = 18
+    private let footerSideSlotWidth: CGFloat = 176
+    private let footerProgressWidth: CGFloat = 210
 
     var body: some View {
         ZStack {
@@ -11911,19 +11983,22 @@ struct OnboardingFlow: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if model.onboardingStep > 0 && model.onboardingStep < learnStep {
-                Button {
-                    goBackIfPossible()
-                } label: {
-                    Label(model.text(.back), systemImage: "chevron.left")
+            Group {
+                if model.onboardingStep > 0 && model.onboardingStep < learnStep {
+                    Button {
+                        goBackIfPossible()
+                    } label: {
+                        Label(model.text(.back), systemImage: "chevron.left")
+                    }
+                    .controlSize(.large)
+                    .keyboardShortcut(.cancelAction)
+                } else {
+                    Color.clear.frame(width: 1, height: 1)
                 }
-                .controlSize(.large)
-                .keyboardShortcut(.cancelAction)
-            } else {
-                Spacer().frame(width: 96)
             }
+            .frame(width: footerSideSlotWidth, alignment: .leading)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             VStack(spacing: 2) {
                 Label(currentPhase.title.text(model.appLanguage), systemImage: currentPhase.symbol)
@@ -11943,34 +12018,41 @@ struct OnboardingFlow: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.faint)
                         .monospacedDigit()
-                }
+                    }
             }
-            .frame(minWidth: 190)
+            .frame(width: footerProgressWidth)
 
-            if model.onboardingStep < learnStep {
-                Button {
-                    advanceIfPossible()
-                } label: {
-                    Label(nextTitle, systemImage: "chevron.right")
+            Spacer(minLength: 0)
+
+            Group {
+                if model.onboardingStep < learnStep {
+                    Button {
+                        advanceIfPossible()
+                    } label: {
+                        Label(nextTitle, systemImage: "chevron.right")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(ElephantTheme.accent)
+                    .disabled(nextDisabled)
+                    .help(nextRequirement ?? nextTitle)
+                    .accessibilityHint(nextRequirement ?? nextTitle)
+                    .keyboardShortcut(.defaultAction)
+                } else if model.onboardingStep == readyStep {
+                    Button {
+                        onComplete()
+                    } label: {
+                        Label(model.text(.enterElephant), systemImage: "arrow.right.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(ElephantTheme.accent)
+                    .keyboardShortcut(.defaultAction)
+                } else {
+                    Color.clear.frame(width: 1, height: 1)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(ElephantTheme.accent)
-                .disabled(nextDisabled)
-                .help(nextRequirement ?? nextTitle)
-                .accessibilityHint(nextRequirement ?? nextTitle)
-                .keyboardShortcut(.defaultAction)
-            } else if model.onboardingStep == readyStep {
-                Button {
-                    onComplete()
-                } label: {
-                    Label(model.text(.enterElephant), systemImage: "arrow.right.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(ElephantTheme.accent)
-                .keyboardShortcut(.defaultAction)
             }
+            .frame(width: footerSideSlotWidth, alignment: .trailing)
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 18)
@@ -12522,6 +12604,208 @@ struct OnboardingMenuField: View {
     }
 }
 
+enum OnboardingGenderKind {
+    case female
+    case male
+    case other
+}
+
+struct OnboardingGenderOption: Identifiable {
+    var kind: OnboardingGenderKind
+    var value: String
+    var mark: String
+    var tint: Color
+    var id: String { value }
+}
+
+struct OnboardingGenderPickerField: View {
+    var title: String
+    var placeholder: String
+    var options: [OnboardingGenderOption]
+    @Binding var selection: String
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var hovering = false
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Spacer(minLength: 0)
+                if hasValue {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                }
+            }
+
+            Button {
+                expanded.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    GenderPatternMark(option: selectedOption ?? fallbackOption, size: 26, active: hasValue || expanded)
+                    Text(hasValue ? selection : placeholder)
+                        .font(.callout.weight(hasValue ? .semibold : .regular))
+                        .foregroundStyle(hasValue ? ElephantTheme.ink : ElephantTheme.faint)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(hovering || expanded ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(expanded ? ElephantTheme.accent.opacity(0.54) : hovering ? ElephantTheme.accent.opacity(0.34) : ElephantTheme.line.opacity(0.76), lineWidth: expanded ? 1.3 : 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .onHover { hovering = $0 }
+            .popover(isPresented: $expanded, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "Choose gender", zh: "选择性别", fr: "Choisir le genre", de: "Geschlecht wählen"),
+                            subtitle: localizedYouText(model.appLanguage, en: "Optional and editable later.", zh: "可选，之后可以随时改。", fr: "Optionnel, modifiable plus tard.", de: "Optional und später änderbar.")
+                        )
+                        Spacer(minLength: 0)
+                        Button(localizedYouText(model.appLanguage, en: "Clear", zh: "清空", fr: "Effacer", de: "Leeren")) {
+                            selection = ""
+                            expanded = false
+                        }
+                        .controlSize(.small)
+                        .disabled(!hasValue)
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(options) { option in
+                            OnboardingGenderOptionCard(
+                                option: option,
+                                selected: selection == option.value
+                            ) {
+                                selection = option.value
+                                expanded = false
+                            }
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(width: 388)
+                .background(.regularMaterial)
+            }
+            .help(hasValue ? "\(title): \(selection)" : placeholder)
+            .accessibilityLabel("\(title), \(hasValue ? selection : placeholder)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var hasValue: Bool {
+        !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var selectedOption: OnboardingGenderOption? {
+        options.first { $0.value == selection }
+    }
+
+    private var fallbackOption: OnboardingGenderOption {
+        OnboardingGenderOption(kind: .other, value: placeholder, mark: "?", tint: ElephantTheme.muted)
+    }
+}
+
+private struct OnboardingGenderOptionCard: View {
+    var option: OnboardingGenderOption
+    var selected: Bool
+    var select: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: select) {
+            VStack(spacing: 7) {
+                GenderPatternMark(option: option, size: 36, active: selected || hovering)
+                Text(option.value)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(selected ? ElephantTheme.accent : ElephantTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .frame(maxWidth: .infinity, minHeight: 78)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(selected ? option.tint.opacity(0.13) : hovering ? option.tint.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? option.tint.opacity(0.58) : hovering ? option.tint.opacity(0.38) : ElephantTheme.line.opacity(0.60), lineWidth: selected ? 1.3 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .accessibilityLabel(option.value)
+    }
+}
+
+private struct GenderPatternMark: View {
+    var option: OnboardingGenderOption
+    var size: CGFloat
+    var active: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(option.tint.opacity(active ? 0.15 : 0.10))
+            pattern
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            Text(option.mark)
+                .font(.system(size: size * 0.46, weight: .bold, design: .rounded))
+                .foregroundStyle(option.tint)
+        }
+        .frame(width: size, height: size)
+    }
+
+    @ViewBuilder
+    private var pattern: some View {
+        switch option.kind {
+        case .female:
+            ZStack {
+                Circle()
+                    .stroke(option.tint.opacity(0.28), lineWidth: max(1.2, size * 0.05))
+                    .frame(width: size * 0.58, height: size * 0.58)
+                Circle()
+                    .fill(option.tint.opacity(0.18))
+                    .frame(width: size * 0.20, height: size * 0.20)
+                    .offset(x: size * 0.24, y: -size * 0.22)
+            }
+        case .male:
+            ForEach(0..<3, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(option.tint.opacity(0.20))
+                    .frame(width: size * 0.70, height: max(2, size * 0.07))
+                    .rotationEffect(.degrees(-28))
+                    .offset(y: CGFloat(index - 1) * size * 0.18)
+            }
+        case .other:
+            ZStack {
+                Circle()
+                    .fill(option.tint.opacity(0.16))
+                    .frame(width: size * 0.24, height: size * 0.24)
+                    .offset(x: -size * 0.20, y: -size * 0.15)
+                Circle()
+                    .fill(option.tint.opacity(0.14))
+                    .frame(width: size * 0.18, height: size * 0.18)
+                    .offset(x: size * 0.22, y: size * 0.16)
+            }
+        }
+    }
+}
+
 struct OnboardingMBTIPickerField: View {
     var title: String
     var placeholder: String
@@ -12679,6 +12963,13 @@ struct OnboardingDateField: View {
     @State private var monthText = ""
     @State private var dayText = ""
     @State private var hovering = false
+    @FocusState private var focusedPart: DatePart?
+
+    private enum DatePart: Hashable {
+        case year
+        case month
+        case day
+    }
 
     private var hasValue: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -12690,9 +12981,9 @@ struct OnboardingDateField: View {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
-                Text(hasValue ? text : placeholder)
+                Text(statusHint)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(hasValue ? ElephantTheme.ink.opacity(0.68) : ElephantTheme.faint)
+                    .foregroundStyle(statusTint)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if hasValue {
@@ -12702,73 +12993,79 @@ struct OnboardingDateField: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                Image(systemName: "calendar")
+            HStack(spacing: 4) {
+                partField(.year, placeholder: "YYYY", width: 56, limit: 4)
+                Text("/")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(hasValue ? ElephantTheme.accent : ElephantTheme.muted)
-                    .frame(width: 28, height: 44)
-                    .background((hasValue ? ElephantTheme.accent : ElephantTheme.faint).opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                OnboardingDatePartInput(
-                    title: localizedYouText(language, en: "Year", zh: "年", fr: "Année", de: "Jahr"),
-                    placeholder: "YYYY",
-                    text: partBinding(.year),
-                    tint: ElephantTheme.accent
-                )
+                    .foregroundStyle(ElephantTheme.faint)
+                partField(.month, placeholder: "MM", width: 36, limit: 2)
                 Text("/")
-                    .font(.headline.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(ElephantTheme.faint)
-                OnboardingDatePartInput(
-                    title: localizedYouText(language, en: "Month", zh: "月", fr: "Mois", de: "Monat"),
-                    placeholder: "MM",
-                    text: partBinding(.month),
-                    tint: ElephantTheme.green
-                )
-                Text("/")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.faint)
-                OnboardingDatePartInput(
-                    title: localizedYouText(language, en: "Day", zh: "日", fr: "Jour", de: "Tag"),
-                    placeholder: "DD",
-                    text: partBinding(.day),
-                    tint: ElephantTheme.ember
-                )
-                if hasValue {
-                    Button {
-                        clear()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.callout.weight(.semibold))
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(ElephantTheme.faint)
-                    .help(clearTitle)
-                    .accessibilityLabel(clearTitle)
-                }
+                partField(.day, placeholder: "DD", width: 36, limit: 2)
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38, alignment: .center)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.68))
+                    .fill(isFocused || hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(hovering ? ElephantTheme.accent.opacity(0.46) : ElephantTheme.line.opacity(0.76), lineWidth: 1)
+                    .stroke(isFocused ? ElephantTheme.accent.opacity(0.62) : hovering ? ElephantTheme.accent.opacity(0.34) : ElephantTheme.line.opacity(0.76), lineWidth: isFocused ? 1.3 : 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onTapGesture { focusFirstEmptyPart() }
             .onHover { hovering = $0 }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear {
-            syncSelectedDate()
+        .onAppear { syncPartsFromText() }
+        .onChange(of: text) { _ in
+            if !isFocused { syncPartsFromText() }
         }
     }
 
-    private var clearTitle: String {
-        localizedYouText(language, en: "Clear birth date", zh: "清除生日", fr: "Effacer la date de naissance", de: "Geburtsdatum löschen")
+    @ViewBuilder
+    private func partField(_ part: DatePart, placeholder: String, width: CGFloat, limit: Int) -> some View {
+        TextField(placeholder, text: binding(for: part, limit: limit))
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.center)
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(ElephantTheme.ink)
+            .monospacedDigit()
+            .focused($focusedPart, equals: part)
+            .frame(width: width, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(focusedPart == part ? ElephantTheme.accent.opacity(0.12) : Color(nsColor: .textBackgroundColor).opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(focusedPart == part ? ElephantTheme.accent.opacity(0.58) : ElephantTheme.line.opacity(0.50), lineWidth: focusedPart == part ? 1.2 : 1)
+            )
     }
 
-    private func partBinding(_ part: DatePart) -> Binding<String> {
+    private var isFocused: Bool {
+        focusedPart != nil
+    }
+
+    private var statusHint: String {
+        if hasValue { return text }
+        return hasAnyInput
+            ? localizedYouText(language, en: "Use YYYY/MM/DD", zh: "格式 YYYY/MM/DD", fr: "Format YYYY/MM/DD", de: "Format YYYY/MM/DD")
+            : placeholder
+    }
+
+    private var statusTint: Color {
+        if hasValue { return ElephantTheme.green }
+        return hasAnyInput ? ElephantTheme.orange : ElephantTheme.faint
+    }
+
+    private var hasAnyInput: Bool {
+        !yearText.isEmpty || !monthText.isEmpty || !dayText.isEmpty
+    }
+
+    private func binding(for part: DatePart, limit: Int) -> Binding<String> {
         Binding(
             get: {
                 switch part {
@@ -12777,68 +13074,81 @@ struct OnboardingDateField: View {
                 case .day: return dayText
                 }
             },
-            set: { rawValue in
-                setPart(part, rawValue)
-            }
+            set: { setPart(part, rawValue: $0, limit: limit) }
         )
     }
 
-    private func setPart(_ part: DatePart, _ rawValue: String) {
-        let digits = String(rawValue.filter(\.isNumber).prefix(part.maxDigits))
+    private func setPart(_ part: DatePart, rawValue: String, limit: Int) {
+        let digits = String(rawValue.filter(\.isNumber).prefix(8))
+        if part == .year && digits.count > limit {
+            applyDigits(digits)
+            return
+        }
+
+        let value = String(digits.prefix(limit))
         switch part {
         case .year:
-            yearText = digits
+            yearText = value
+            if value.count == limit { focusedPart = .month }
         case .month:
-            monthText = digits
+            monthText = value
+            if value.count == limit { focusedPart = .day }
         case .day:
-            dayText = digits
+            dayText = value
         }
-        updateTextFromParts()
+        updateStoredDate()
     }
 
-    private func updateTextFromParts() {
-        guard let date = Self.date(year: yearText, month: monthText, day: dayText) else {
+    private func applyDigits(_ digits: String) {
+        let compact = String(digits.prefix(8))
+        yearText = String(compact.prefix(4))
+        let afterYear = compact.dropFirst(min(4, compact.count))
+        monthText = String(afterYear.prefix(2))
+        dayText = String(afterYear.dropFirst(min(2, afterYear.count)).prefix(2))
+        if dayText.count == 2 {
+            focusedPart = .day
+        } else if monthText.count == 2 {
+            focusedPart = .day
+        } else if yearText.count == 4 {
+            focusedPart = .month
+        }
+        updateStoredDate()
+    }
+
+    private func updateStoredDate() {
+        if let date = Self.parseParts(year: yearText, month: monthText, day: dayText) {
+            text = Self.storageFormatter.string(from: date)
+        } else if hasAnyInput {
             text = ""
-            return
-        }
-        text = Self.storageFormatter.string(from: date)
-    }
-
-    private func clear() {
-        yearText = ""
-        monthText = ""
-        dayText = ""
-        text = ""
-    }
-
-    private func syncSelectedDate() {
-        guard let parsed = Self.parseDate(text) else {
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                yearText = ""
-                monthText = ""
-                dayText = ""
-            }
-            return
-        }
-        let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: parsed)
-        yearText = parts.year.map(String.init) ?? ""
-        monthText = parts.month.map { String(format: "%02d", $0) } ?? ""
-        dayText = parts.day.map { String(format: "%02d", $0) } ?? ""
-        if text != Self.storageFormatter.string(from: parsed) {
-            text = Self.storageFormatter.string(from: parsed)
+        } else {
+            text = ""
         }
     }
 
-    private enum DatePart: Hashable {
-        case year
-        case month
-        case day
+    private func focusFirstEmptyPart() {
+        if yearText.count < 4 {
+            focusedPart = .year
+        } else if monthText.count < 2 {
+            focusedPart = .month
+        } else {
+            focusedPart = .day
+        }
+    }
 
-        var maxDigits: Int {
-            switch self {
-            case .year: return 4
-            case .month, .day: return 2
-            }
+    private func syncPartsFromText() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let parts = Self.parts(from: trimmed), let date = Self.parseParts(year: parts.year, month: parts.month, day: parts.day) {
+            let formatted = Self.storageFormatter.string(from: date)
+            yearText = parts.year
+            monthText = parts.month
+            dayText = parts.day
+            if text != formatted { text = formatted }
+        } else if trimmed.isEmpty {
+            yearText = ""
+            monthText = ""
+            dayText = ""
+        } else {
+            applyDigits(trimmed.filter(\.isNumber))
         }
     }
 
@@ -12850,83 +13160,43 @@ struct OnboardingDateField: View {
         return formatter
     }()
 
-    private static let inputFormatters: [DateFormatter] = {
-        ["yyyy/MM/dd", "yyyy-MM-dd", "yyyy.M.d", "yyyy/M/d"].map { pattern in
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian)
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = pattern
-            return formatter
-        }
-    }()
-
-    private static func parseDate(_ value: String) -> Date? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        for formatter in inputFormatters {
-            if let date = formatter.date(from: trimmed) {
-                return Calendar(identifier: .gregorian).startOfDay(for: date)
-            }
-        }
-        return nil
+    private static func parts(from value: String) -> (year: String, month: String, day: String)? {
+        let digits = String(value.filter(\.isNumber).prefix(8))
+        guard digits.count == 8 else { return nil }
+        let year = String(digits.prefix(4))
+        let rest = digits.dropFirst(4)
+        let month = String(rest.prefix(2))
+        let day = String(rest.dropFirst(2))
+        return (year, month, day)
     }
 
-    private static func date(year yearText: String, month monthText: String, day dayText: String) -> Date? {
-        guard yearText.count == 4,
-              let year = Int(yearText),
-              let month = Int(monthText),
-              let day = Int(dayText),
-              year >= 1900,
-              (1...12).contains(month),
-              (1...31).contains(day) else {
+    private static func parseParts(year: String, month: String, day: String) -> Date? {
+        guard year.count == 4,
+              month.count == 2,
+              day.count == 2,
+              let yearValue = Int(year),
+              let monthValue = Int(month),
+              let dayValue = Int(day),
+              yearValue >= 1900 else {
             return nil
         }
         let calendar = Calendar(identifier: .gregorian)
         var components = DateComponents()
         components.calendar = calendar
-        components.year = year
-        components.month = month
-        components.day = day
-        guard let date = calendar.date(from: components),
-              calendar.dateComponents([.year, .month, .day], from: date).year == year,
-              calendar.dateComponents([.year, .month, .day], from: date).month == month,
-              calendar.dateComponents([.year, .month, .day], from: date).day == day,
-              date <= Date() else {
+        components.year = yearValue
+        components.month = monthValue
+        components.day = dayValue
+        guard let date = calendar.date(from: components) else {
+            return nil
+        }
+        let actual = calendar.dateComponents([.year, .month, .day], from: date)
+        guard actual.year == yearValue,
+              actual.month == monthValue,
+              actual.day == dayValue,
+              calendar.startOfDay(for: date) <= calendar.startOfDay(for: Date()) else {
             return nil
         }
         return date
-    }
-}
-
-private struct OnboardingDatePartInput: View {
-    var title: String
-    var placeholder: String
-    @Binding var text: String
-    var tint: Color
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(focused ? tint : ElephantTheme.muted)
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
-                .foregroundStyle(ElephantTheme.ink)
-                .monospacedDigit()
-                .multilineTextAlignment(.center)
-                .focused($focused)
-                .frame(height: 26)
-                .background(Color.clear)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 54)
-        .background((focused ? tint.opacity(0.11) : Color(nsColor: .controlBackgroundColor).opacity(0.56)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(focused ? tint.opacity(0.48) : ElephantTheme.line.opacity(0.58), lineWidth: focused ? 1.3 : 1))
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onTapGesture { focused = true }
     }
 }
 
@@ -13403,8 +13673,12 @@ struct OnboardingIdentityStep: View {
         "ISTJ", "ISFJ", "ESTJ", "ESFJ",
         "ISTP", "ISFP", "ESTP", "ESFP"
     ]
-    private var genderOptions: [String] {
-        [model.text(.female), model.text(.male), model.text(.nonBinary)]
+    private var genderOptions: [OnboardingGenderOption] {
+        [
+            OnboardingGenderOption(kind: .female, value: model.text(.female), mark: "♀", tint: ElephantTheme.ember),
+            OnboardingGenderOption(kind: .male, value: model.text(.male), mark: "♂", tint: ElephantTheme.accent),
+            OnboardingGenderOption(kind: .other, value: model.text(.nonBinary), mark: "✦", tint: ElephantTheme.green)
+        ]
     }
 
     var body: some View {
@@ -13421,7 +13695,7 @@ struct OnboardingIdentityStep: View {
                 VStack(spacing: 12) {
                     OnboardingField(title: model.text(.preferredName), placeholder: model.text(.preferredNamePlaceholder), text: $model.onboardingPreferredName)
                     HStack(spacing: 12) {
-                        OnboardingMenuField(
+                        OnboardingGenderPickerField(
                             title: model.text(.gender),
                             placeholder: model.text(.notSet),
                             options: genderOptions,
@@ -14384,7 +14658,7 @@ struct OnboardingModelChoiceList: View {
                                     .foregroundStyle(ElephantTheme.ink)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
-                                Text("\(option.id) · \(option.source)")
+                                Text(modelDetail(option))
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(ElephantTheme.muted)
                                     .lineLimit(1)
@@ -14412,6 +14686,11 @@ struct OnboardingModelChoiceList: View {
         }
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.32), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.54), lineWidth: 1))
+    }
+
+    private func modelDetail(_ option: ProviderModelOption) -> String {
+        let context = option.contextWindowTokens > 0 ? " · context \(formattedTokenWindow(option.contextWindowTokens))" : ""
+        return "\(option.id) · \(option.source)\(context)"
     }
 }
 
@@ -14485,45 +14764,44 @@ struct OnboardingLearningStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
-        VStack(spacing: 18) {
-            Spacer(minLength: 10)
+        VStack(spacing: 10) {
             OnboardingLearningAnimation()
-                .frame(width: 136, height: 136)
-            VStack(spacing: 8) {
+                .frame(width: 88, height: 88)
+            VStack(spacing: 4) {
                 Text(model.text(.learningTitle))
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
                 Text(model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus)
-                    .font(.callout)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
+                    .lineLimit(2)
+                    .frame(maxWidth: 430)
             }
             OnboardingLearningLivePanel(
                 job: model.onboardingLearningJob,
                 statusText: model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus
             )
-            .frame(maxWidth: 600)
+            .frame(maxWidth: 560)
             if model.onboardingFinalizationFailed {
-                VStack(spacing: 10) {
+                HStack(spacing: 10) {
                     Text(model.lastError)
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(ElephantTheme.orange)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 520)
+                        .lineLimit(2)
                     Button {
                         Task { await model.startOnboardingFinalization() }
                     } label: {
                         Label(model.text(.tryAgain), systemImage: "arrow.clockwise")
                     }
+                    .controlSize(.small)
                 }
             } else {
-                ProgressView()
-                    .controlSize(.small)
+                EmptyView()
             }
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 430)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .task {
             await model.startOnboardingFinalization()
         }
@@ -14536,7 +14814,7 @@ struct OnboardingLearningLivePanel: View {
     var statusText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.caption.weight(.bold))
@@ -14548,31 +14826,35 @@ struct OnboardingLearningLivePanel: View {
                 Pill(text: statusLabel, tint: statusTint)
             }
 
-            VStack(spacing: 8) {
-                OnboardingLearningBubble(
-                    trailing: false,
+            HStack(alignment: .top, spacing: 8) {
+                OnboardingLearningStatusCard(
                     symbol: "waveform.path.ecg",
                     title: stageTitle,
                     detail: stageDetail,
                     tint: statusTint
                 )
-                OnboardingLearningBubble(
-                    trailing: true,
-                    symbol: "sparkles",
-                    title: localizedYouText(model.appLanguage, en: "Understanding features", zh: "正在使用的理解能力", fr: "Capacités de compréhension", de: "Aktive Verstehensfunktionen"),
-                    detail: featureSummary,
-                    tint: ElephantTheme.accent
-                )
-                OnboardingLearningBubble(
-                    trailing: false,
-                    symbol: "wrench.and.screwdriver",
-                    title: localizedYouText(model.appLanguage, en: "Available tools", zh: "可用工具", fr: "Outils disponibles", de: "Verfügbare Tools"),
-                    detail: toolSummary,
-                    tint: ElephantTheme.green
+                OnboardingLearningToolTrace(
+                    title: localizedYouText(model.appLanguage, en: "Tool calls", zh: "工具调用", fr: "Appels d'outils", de: "Tool-Aufrufe"),
+                    items: toolTraceItems
                 )
             }
+
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(ElephantTheme.accent)
+                ForEach(featureTags, id: \.self) { feature in
+                    Text(feature)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.accent)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(ElephantTheme.accent.opacity(0.08), in: Capsule())
+                }
+                Spacer(minLength: 0)
+            }
         }
-        .padding(12)
+        .padding(11)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.line.opacity(0.68), lineWidth: 1))
     }
@@ -14582,6 +14864,11 @@ struct OnboardingLearningLivePanel: View {
             return localizedYouText(model.appLanguage, en: "preparing", zh: "准备中", fr: "préparation", de: "wird vorbereitet")
         }
         return localizedRuntimeStatus(job.status, language: model.appLanguage)
+    }
+
+    private var isActive: Bool {
+        let status = (job?.status ?? "").lowercased()
+        return !status.contains("completed") && !status.contains("failed") && !status.contains("cancel")
     }
 
     private var stageTitle: String {
@@ -14595,6 +14882,10 @@ struct OnboardingLearningLivePanel: View {
             return localizedYouText(model.appLanguage, en: "Starting the learning pass", zh: "正在启动学习过程", fr: "Démarrage du passage", de: "Lernlauf startet")
         case "agent_running":
             return localizedYouText(model.appLanguage, en: "Reading and updating the model", zh: "正在读取并更新模型", fr: "Lecture et mise à jour", de: "Liest und aktualisiert")
+        case "tool_running":
+            return localizedYouText(model.appLanguage, en: "A tool is working", zh: "正在调用工具", fr: "Un outil travaille", de: "Ein Tool arbeitet")
+        case "tool_completed":
+            return localizedYouText(model.appLanguage, en: "Tool result received", zh: "工具结果已返回", fr: "Résultat d'outil reçu", de: "Tool-Ergebnis erhalten")
         case "result_written":
             return localizedYouText(model.appLanguage, en: "Writing the learning result", zh: "正在写入学习结果", fr: "Écriture du résultat", de: "Schreibt Ergebnis")
         case "completed":
@@ -14617,14 +14908,91 @@ struct OnboardingLearningLivePanel: View {
         return resolved.joined(separator: ", ")
     }
 
-    private var toolSummary: String {
-        let tools = job?.resolvedTools ?? []
-        let resolved = tools.isEmpty
-            ? ["personal_model.search", "personal_model.update", "personal_model.questions", "skill.list", "skill.view", "web.read"]
-            : tools.map { $0.replacingOccurrences(of: "tool.", with: "") }
-        let visible = resolved.prefix(6)
-        let suffix = resolved.count > visible.count ? " +\(resolved.count - visible.count)" : ""
-        return visible.joined(separator: ", ") + suffix
+    private var featureTags: [String] {
+        let features = job?.resolvedFeatures ?? []
+        let resolved = features.isEmpty ? ["pm", "questions", "skills", "init_links"] : features
+        return Array(resolved.prefix(4))
+    }
+
+    private var toolTraceItems: [OnboardingLearningToolTraceItem] {
+        let used = normalizedTools((job?.usedTools ?? []) + calledTools)
+        let latest = latestTool
+        var names = used
+        if let latest, !names.contains(latest) {
+            names.append(latest)
+        }
+        if names.isEmpty {
+            let fallback = job?.resolvedTools.isEmpty == false
+                ? job?.resolvedTools ?? []
+                : ["tool.personal_model.search", "tool.personal_model.update", "tool.personal_model.questions", "tool.skill.list"]
+            names = normalizedTools(fallback)
+        }
+        return Array(names.prefix(4)).map { name in
+            let completed = used.contains(name)
+            let running = isActive && latest == name && !completed
+            return OnboardingLearningToolTraceItem(
+                name: toolDisplayName(name),
+                detail: running
+                    ? localizedYouText(model.appLanguage, en: "running now", zh: "正在执行", fr: "en cours", de: "laeuft")
+                    : completed
+                        ? localizedYouText(model.appLanguage, en: "completed", zh: "已完成", fr: "termine", de: "fertig")
+                        : localizedYouText(model.appLanguage, en: "ready", zh: "待调用", fr: "pret", de: "bereit"),
+                symbol: running ? "dot.radiowaves.left.and.right" : completed ? "checkmark.circle.fill" : "circle.dotted",
+                tint: running ? ElephantTheme.accent : completed ? ElephantTheme.green : ElephantTheme.faint
+            )
+        }
+    }
+
+    private var latestTool: String? {
+        let detail = job?.progressDetail ?? ""
+        return normalizedTools(
+            detail
+                .components(separatedBy: CharacterSet(charactersIn: " =,()[]\n\t"))
+                .filter { $0.contains("tool.") }
+        ).first
+    }
+
+    private var calledTools: [String] {
+        let detail = job?.progressDetail ?? ""
+        guard let range = detail.range(of: "called=") else { return [] }
+        return normalizedTools(
+            String(detail[range.upperBound...])
+                .components(separatedBy: CharacterSet(charactersIn: ", \n\t"))
+        )
+    }
+
+    private func normalizedTools(_ tools: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for tool in tools {
+            let normalized = tool
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "tool_event", with: "")
+                .trimmingCharacters(in: CharacterSet(charactersIn: "=:;,"))
+            guard normalized.hasPrefix("tool."), !seen.contains(normalized) else { continue }
+            seen.insert(normalized)
+            result.append(normalized)
+        }
+        return result
+    }
+
+    private func toolDisplayName(_ tool: String) -> String {
+        switch tool.replacingOccurrences(of: "tool.", with: "") {
+        case "personal_model.search":
+            return localizedYouText(model.appLanguage, en: "Read model", zh: "读取模型", fr: "Lire le modele", de: "Modell lesen")
+        case "personal_model.update":
+            return localizedYouText(model.appLanguage, en: "Update model", zh: "更新模型", fr: "Mettre a jour", de: "Modell aktualisieren")
+        case "personal_model.questions":
+            return localizedYouText(model.appLanguage, en: "Refine questions", zh: "整理问题", fr: "Questions", de: "Fragen")
+        case "skill.list":
+            return localizedYouText(model.appLanguage, en: "List skills", zh: "读取技能", fr: "Lister skills", de: "Skills listen")
+        case "skill.view":
+            return localizedYouText(model.appLanguage, en: "Inspect skill", zh: "查看技能", fr: "Voir skill", de: "Skill ansehen")
+        case "web.read", "web.extract", "web.search":
+            return localizedYouText(model.appLanguage, en: "Read links", zh: "读取链接", fr: "Lire liens", de: "Links lesen")
+        default:
+            return tool.replacingOccurrences(of: "tool.", with: "")
+        }
     }
 
     private var statusTint: Color {
@@ -14636,9 +15004,86 @@ struct OnboardingLearningLivePanel: View {
 
     private func cleanProgress(_ value: String) -> String {
         value
+            .replacingOccurrences(of: "tool_event=", with: "")
+            .replacingOccurrences(of: "called=", with: "called ")
             .replacingOccurrences(of: "tool.", with: "")
             .replacingOccurrences(of: "_", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct OnboardingLearningStatusCard: View {
+    var symbol: String
+    var title: String
+    var detail: String
+    var tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: symbol)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.18), lineWidth: 1))
+    }
+}
+
+struct OnboardingLearningToolTraceItem: Identifiable {
+    var id: String { "\(name)-\(detail)" }
+    var name: String
+    var detail: String
+    var symbol: String
+    var tint: Color
+}
+
+struct OnboardingLearningToolTrace: View {
+    var title: String
+    var items: [OnboardingLearningToolTraceItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: "wrench.and.screwdriver")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.ink)
+            ForEach(items) { item in
+                HStack(spacing: 7) {
+                    Image(systemName: item.symbol)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(item.tint)
+                        .frame(width: 14)
+                    Text(item.name)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(item.detail)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(item.tint)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .background(ElephantTheme.green.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.green.opacity(0.16), lineWidth: 1))
     }
 }
 

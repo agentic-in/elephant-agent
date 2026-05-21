@@ -36,7 +36,7 @@ _MODEL_OUTPUT_KEYS = (
     "max_tokens",
 )
 
-DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
+DEFAULT_CONTEXT_WINDOW_TOKENS = 256_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,7 +288,7 @@ def heuristic_context_window(model_id: str) -> int | None:
         ("gpt-4o", 128_000),
         ("claude", 200_000),
         ("gemini", 1_048_576),
-        ("glm", 204_800),
+        ("glm", 256_000),
         ("minimax", 204_800),
         ("mimo-v2-pro", 1_000_000),
         ("mimo-v2-omni", 256_000),
@@ -367,7 +367,26 @@ def _merge_discovered_models(
                 "reasoning_efforts": current_reasoning or hinted_reasoning,
             },
         )
-    return tuple(merged)
+    return tuple(_with_context_window_fallback(item) for item in merged)
+
+
+def _with_context_window_fallback(item: DiscoveredProviderModel) -> DiscoveredProviderModel:
+    if item.context_window_tokens is not None:
+        return item
+    context_window = heuristic_context_window(item.model_id)
+    if context_window is None:
+        return item
+    return DiscoveredProviderModel(
+        model_id=item.model_id,
+        label=item.label,
+        context_window_tokens=context_window,
+        max_output_tokens=item.max_output_tokens,
+        source=item.source,
+        metadata={
+            **dict(item.metadata),
+            "context_window_source": "heuristic",
+        },
+    )
 
 
 def _ollama_server_root(base_url: str) -> str:

@@ -24,6 +24,7 @@ from packages.embeddings import (
     embedding_runtime_state,
 )
 from packages.models import SurfaceModelProviderCapability
+from packages.models.discovery import DEFAULT_CONTEXT_WINDOW_TOKENS
 from packages.auth import AuthProfile, PersistentAuthProfileStore, SecretReference
 from packages.context import ContextRuntime
 from packages.contracts import (
@@ -172,8 +173,7 @@ def _provider_profile_with_auto_context(self, profile: AuthProfile) -> AuthProfi
         )
     except Exception:
         detected = None
-    if detected is not None:
-        metadata["context_window_tokens"] = str(detected)
+    metadata["context_window_tokens"] = str(detected or DEFAULT_CONTEXT_WINDOW_TOKENS)
     return replace(profile, metadata=metadata)
 
 

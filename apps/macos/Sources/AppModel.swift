@@ -196,6 +196,8 @@ struct ProviderModelOption: Identifiable, Equatable {
     var id: String
     var label: String
     var source: String
+    var contextWindowTokens: Int
+    var maxOutputTokens: Int
 }
 
 struct OperationItem: Identifiable, Equatable {
@@ -300,6 +302,7 @@ struct LearningJobItem: Identifiable, Equatable {
     var progressDetail: String
     var resolvedFeatures: [String]
     var resolvedTools: [String]
+    var usedTools: [String]
     var markdown: String
 }
 
@@ -512,6 +515,8 @@ final class ElephantAppModel: ObservableObject {
     @Published var showingCommandPalette = false
     @Published var lastError = ""
     @Published var providerTestResult = ""
+    @Published var providerActionFailed = false
+    @Published var providerActionInFlight = false
     @Published var embeddingActionResult = ""
     @Published var gatewayActionResult = ""
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
@@ -849,7 +854,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     private func pollOnboardingInitReflectJob(jobID: String) async throws {
-        let maxAttempts = 120
+        let maxAttempts = 180
         for attempt in 0..<maxAttempts {
             if Task.isCancelled { return }
             onboardingFinalizationStatus = attempt < 2 ? text(.learningFromAnswers) : text(.learningFinishing)
@@ -867,7 +872,7 @@ final class ElephantAppModel: ObservableObject {
                     throw APIClientError.badStatus(job.detail.isEmpty ? "The init learning job did not complete." : job.detail)
                 }
             }
-            try await Task.sleep(nanoseconds: 2_000_000_000)
+            try await Task.sleep(nanoseconds: 1_000_000_000)
         }
         throw APIClientError.badStatus("The init learning job is still running. You can enter Elephant and review the learning queue later.")
     }
@@ -1126,11 +1131,18 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func testProvider() async {
+        providerActionInFlight = true
+        providerActionFailed = false
+        providerTestResult = localizedProviderActionText("test_running")
+        defer { providerActionInFlight = false }
         do {
-            providerTestResult = try await client.testProvider()
+            let reply = try await client.testProvider()
+            providerActionFailed = false
+            providerTestResult = localizedProviderActionText("test_success", detail: reply)
             try? await refreshDashboard()
         } catch {
-            providerTestResult = ""
+            providerActionFailed = true
+            providerTestResult = localizedProviderActionText("test_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
@@ -1142,6 +1154,10 @@ final class ElephantAppModel: ObservableObject {
         apiKey: String,
         contextWindow: String
     ) async {
+        providerActionInFlight = true
+        providerActionFailed = false
+        providerTestResult = localizedProviderActionText("save_running")
+        defer { providerActionInFlight = false }
         do {
             try await client.configureProvider(
                 providerID: providerID,
@@ -1151,9 +1167,11 @@ final class ElephantAppModel: ObservableObject {
                 contextWindow: contextWindow
             )
             try await refreshDashboard()
-            providerTestResult = "Provider saved."
+            providerActionFailed = false
+            providerTestResult = localizedProviderActionText("save_success")
         } catch {
-            providerTestResult = ""
+            providerActionFailed = true
+            providerTestResult = localizedProviderActionText("save_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
@@ -1187,12 +1205,71 @@ final class ElephantAppModel: ObservableObject {
     func discoverProviderModels(providerID: String, baseURL: String, apiKey: String) async -> [ProviderModelOption] {
         do {
             let rows = try await client.discoverProviderModels(providerID: providerID, baseURL: baseURL, apiKey: apiKey)
-            providerTestResult = rows.isEmpty ? "Model discovery returned no live rows." : "\(rows.count) models loaded."
+            providerActionFailed = false
+            providerTestResult = rows.isEmpty ? localizedProviderActionText("fetch_empty") : localizedProviderActionText("fetch_success", count: rows.count)
             return rows
         } catch {
-            providerTestResult = ""
+            providerActionFailed = true
+            providerTestResult = localizedProviderActionText("fetch_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
             return []
+        }
+    }
+
+    private func localizedProviderActionText(_ key: String, detail: String = "", count: Int = 0) -> String {
+        switch appLanguage {
+        case .zh:
+            switch key {
+            case "test_running": return "正在测试模型服务..."
+            case "test_success": return detail.isEmpty ? "测试成功。" : "测试成功：\(detail)"
+            case "test_failed": return detail.isEmpty ? "测试失败。" : "测试失败：\(detail)"
+            case "save_running": return "正在保存模型服务..."
+            case "save_success": return "保存成功。"
+            case "save_failed": return detail.isEmpty ? "保存失败。" : "保存失败：\(detail)"
+            case "fetch_empty": return "模型列表刷新完成，但没有返回可用模型。"
+            case "fetch_success": return "模型列表已刷新：\(count) 个模型。"
+            case "fetch_failed": return detail.isEmpty ? "模型列表刷新失败。" : "模型列表刷新失败：\(detail)"
+            default: return detail
+            }
+        case .fr:
+            switch key {
+            case "test_running": return "Test du provider..."
+            case "test_success": return detail.isEmpty ? "Test réussi." : "Test réussi : \(detail)"
+            case "test_failed": return detail.isEmpty ? "Test échoué." : "Test échoué : \(detail)"
+            case "save_running": return "Enregistrement du provider..."
+            case "save_success": return "Enregistrement réussi."
+            case "save_failed": return detail.isEmpty ? "Enregistrement échoué." : "Enregistrement échoué : \(detail)"
+            case "fetch_empty": return "Liste des modèles actualisée, aucun modèle disponible."
+            case "fetch_success": return "Liste des modèles actualisée : \(count) modèles."
+            case "fetch_failed": return detail.isEmpty ? "Actualisation des modèles échouée." : "Actualisation des modèles échouée : \(detail)"
+            default: return detail
+            }
+        case .de:
+            switch key {
+            case "test_running": return "Provider wird getestet..."
+            case "test_success": return detail.isEmpty ? "Test erfolgreich." : "Test erfolgreich: \(detail)"
+            case "test_failed": return detail.isEmpty ? "Test fehlgeschlagen." : "Test fehlgeschlagen: \(detail)"
+            case "save_running": return "Provider wird gespeichert..."
+            case "save_success": return "Speichern erfolgreich."
+            case "save_failed": return detail.isEmpty ? "Speichern fehlgeschlagen." : "Speichern fehlgeschlagen: \(detail)"
+            case "fetch_empty": return "Modellliste aktualisiert, aber ohne verfügbare Modelle."
+            case "fetch_success": return "Modellliste aktualisiert: \(count) Modelle."
+            case "fetch_failed": return detail.isEmpty ? "Modellliste konnte nicht aktualisiert werden." : "Modellliste konnte nicht aktualisiert werden: \(detail)"
+            default: return detail
+            }
+        case .en:
+            switch key {
+            case "test_running": return "Testing provider..."
+            case "test_success": return detail.isEmpty ? "Test succeeded." : "Test succeeded: \(detail)"
+            case "test_failed": return detail.isEmpty ? "Test failed." : "Test failed: \(detail)"
+            case "save_running": return "Saving provider..."
+            case "save_success": return "Save succeeded."
+            case "save_failed": return detail.isEmpty ? "Save failed." : "Save failed: \(detail)"
+            case "fetch_empty": return "Model list refreshed, but no live models were returned."
+            case "fetch_success": return "Model list refreshed: \(count) models."
+            case "fetch_failed": return detail.isEmpty ? "Model list refresh failed." : "Model list refresh failed: \(detail)"
+            default: return detail
+            }
         }
     }
 
@@ -1911,6 +1988,8 @@ final class ElephantAppModel: ObservableObject {
 
         wakeDraft = ""
         providerTestResult = ""
+        providerActionFailed = false
+        providerActionInFlight = false
         embeddingActionResult = ""
         gatewayActionResult = ""
         gatewaySecretDrafts.removeAll()

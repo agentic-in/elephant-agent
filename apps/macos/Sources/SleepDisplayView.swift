@@ -81,6 +81,8 @@ struct SleepDisplayView: View {
             let shortest = min(proxy.size.width, proxy.size.height)
             let clockSize = min(92, max(64, shortest * 0.082))
             let avatarSize = min(132, max(94, shortest * 0.13))
+            let brandTitleSize = min(34, max(27, shortest * 0.030))
+            let brandSloganSize = min(17, max(14, shortest * 0.014))
 
             ZStack {
                 SleepVideoBackdrop(paused: reduceMotion)
@@ -109,13 +111,13 @@ struct SleepDisplayView: View {
                 VStack {
                     Spacer()
                     HStack(alignment: .bottom) {
-                        VStack(alignment: .leading, spacing: 5) {
+                        VStack(alignment: .leading, spacing: 7) {
                             Text(model.text(.sleepBrandTitle))
-                                .font(.system(size: 22, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.88))
+                                .font(.system(size: brandTitleSize, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.92))
                             Text(model.text(.sleepBrandSlogan))
-                                .font(.callout.weight(.medium))
-                                .foregroundStyle(.white.opacity(0.62))
+                                .font(.system(size: brandSloganSize, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.72))
                                 .lineLimit(2)
                         }
                         Spacer(minLength: 0)

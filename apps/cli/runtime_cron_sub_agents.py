@@ -303,7 +303,7 @@ def _prepare_sub_agent_child(
     system_prompt: str = "",
     learning_agent: bool = False,
 ) -> Mapping[str, Any]:
-    child = _open_sub_agent_child_episode(runtime, parent_session_id)
+    child = _open_sub_agent_child_episode(runtime, parent_session_id, learning_agent=learning_agent)
     child_session_id = child.episode_id
     prompt = task if system_prompt.strip() else _compose_sub_agent_prompt(
         runtime,
@@ -325,7 +325,7 @@ def _prepare_sub_agent_child(
     }
 
 
-def _open_sub_agent_child_episode(runtime: Any, parent_session_id: str) -> Episode:
+def _open_sub_agent_child_episode(runtime: Any, parent_session_id: str, *, learning_agent: bool = False) -> Episode:
     parent = runtime.repository.load_episode(parent_session_id)
     if parent is None:
         raise KeyError(f"episode not found: {parent_session_id}")
@@ -343,6 +343,7 @@ def _open_sub_agent_child_episode(runtime: Any, parent_session_id: str) -> Episo
         metadata={
             "episode_kind": "sub_agent",
             "parent_episode_id": parent.episode_id,
+            "learning_agent": "true" if learning_agent else "false",
             "opened_at": now.isoformat(),
         },
     )

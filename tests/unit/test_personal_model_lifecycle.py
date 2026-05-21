@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from packages.contracts import Step
+from packages.contracts import Fact, Step
 from packages.evidence import recall_time_range_from_payload
 from packages.storage import RuntimeStorageRepository
 from packages.tools.handlers_personal_model import run_personal_model_update
@@ -620,6 +620,97 @@ class PersonalModelLifecycleTest(unittest.TestCase):
         self.assertIn("status: protected", result["summary"])
         self.assertIn("protected core topic cannot be deleted", result["summary"])
         self.assertEqual(active[0].fact_id, created["ref"])
+
+    def test_background_learning_cannot_change_preferred_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+            now = datetime.now(timezone.utc)
+            repository.upsert_personal_model_fact(
+                Fact(
+                    fact_id="fact:preferred-name",
+                    personal_model_id=state.personal_model_id,
+                    lens="identity",
+                    text="Bit",
+                    confidence=1.0,
+                    committed_at=now,
+                    source="user_explicit",
+                    status="active",
+                    metadata={
+                        **protected_topic_metadata("identity.anchor.name.preferred"),
+                        "topic": "identity.anchor.name.preferred",
+                    },
+                )
+            )
+
+            result = run_personal_model_update(
+                ToolInvocation(
+                    invocation_id="invoke:overwrite-protected-name",
+                    tool_id="tool.personal_model.update",
+                    session_id="session-life",
+                    context=ToolRuntimeContext(cwd=Path(tmpdir), personal_model_id=state.personal_model_id),
+                    arguments={
+                        "action": "correct",
+                        "lens": "identity",
+                        "topic": "identity.anchor.name.preferred",
+                        "text": "训灼",
+                        "source": "learned",
+                        "reason": "background inference",
+                    },
+                ),
+                surface=surface,
+            )
+            active = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")
+
+        self.assertIn("status: protected", result["summary"])
+        self.assertEqual(tuple(fact.text for fact in active), ("Bit",))
+
+    def test_chat_correction_can_change_preferred_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+            now = datetime.now(timezone.utc)
+            repository.upsert_personal_model_fact(
+                Fact(
+                    fact_id="fact:preferred-name",
+                    personal_model_id=state.personal_model_id,
+                    lens="identity",
+                    text="Bit",
+                    confidence=1.0,
+                    committed_at=now,
+                    source="user_explicit",
+                    status="active",
+                    metadata={
+                        **protected_topic_metadata("identity.anchor.name.preferred"),
+                        "topic": "identity.anchor.name.preferred",
+                    },
+                )
+            )
+
+            result = run_personal_model_update(
+                ToolInvocation(
+                    invocation_id="invoke:chat-correct-name",
+                    tool_id="tool.personal_model.update",
+                    session_id="session-life",
+                    context=ToolRuntimeContext(cwd=Path(tmpdir), personal_model_id=state.personal_model_id),
+                    arguments={
+                        "action": "correct",
+                        "lens": "identity",
+                        "topic": "identity.anchor.name.preferred",
+                        "text": "灼灼",
+                        "reason": "user asked to change preferred name in chat",
+                    },
+                ),
+                surface=surface,
+            )
+            active = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")
+
+        self.assertNotIn("status: protected", result["summary"])
+        self.assertEqual(tuple(fact.text for fact in active), ("灼灼",))
 
     def test_search_diagnostics_returns_related_claims_and_broad_tip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

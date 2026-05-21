@@ -1093,6 +1093,7 @@ enum SnapshotParser {
             let progressDetail = string(row["progress_detail"] ?? row["progressDetail"])
             let features = learningFeatures(from: row, metadata: metadata, trigger: trigger, progressDetail: progressDetail)
             let tools = learningTools(from: row, metadata: metadata, features: features)
+            let usedTools = learningUsedTools(from: row)
             let resultText = learningMarkdown(from: row)
             return LearningJobItem(
                 id: id,
@@ -1104,6 +1105,7 @@ enum SnapshotParser {
                 progressDetail: progressDetail,
                 resolvedFeatures: features,
                 resolvedTools: tools,
+                usedTools: usedTools,
                 markdown: resultText
             )
         }
@@ -1432,18 +1434,28 @@ enum SnapshotParser {
         var seen = Set<String>()
         var rows: [ProviderModelOption] = []
 
-        func push(_ rawID: String, source: String, label: String = "") {
+        func push(_ rawID: String, source: String, label: String = "", contextWindowTokens: Int = 0, maxOutputTokens: Int = 0) {
             let modelID = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !modelID.isEmpty, !seen.contains(modelID) else { return }
             seen.insert(modelID)
-            rows.append(ProviderModelOption(id: modelID, label: label.isEmpty ? modelID : label, source: source))
+            rows.append(
+                ProviderModelOption(
+                    id: modelID,
+                    label: label.isEmpty ? modelID : label,
+                    source: source,
+                    contextWindowTokens: contextWindowTokens,
+                    maxOutputTokens: maxOutputTokens
+                )
+            )
         }
 
         for row in discoveredRows {
             push(
                 string(row["model_id"] ?? row["modelId"] ?? row["id"]),
                 source: string(row["source"], fallback: "endpoint"),
-                label: string(row["label"] ?? row["name"])
+                label: string(row["label"] ?? row["name"]),
+                contextWindowTokens: int(row["context_window_tokens"] ?? row["contextWindowTokens"] ?? row["context_window"] ?? row["contextWindow"]),
+                maxOutputTokens: int(row["max_output_tokens"] ?? row["maxOutputTokens"] ?? row["max_tokens"] ?? row["maxTokens"])
             )
         }
         for modelID in listStrings(providerRow["model_hints"] ?? providerRow["modelHints"]) {
@@ -1844,6 +1856,17 @@ enum SnapshotParser {
             tools.append(contentsOf: fallbackTools(for: feature))
         }
         return deduplicated(tools)
+    }
+
+    private static func learningUsedTools(from row: [String: Any]) -> [String] {
+        let direct = listStrings(row["tool_names"] ?? row["toolNames"] ?? row["used_tools"] ?? row["usedTools"])
+        if !direct.isEmpty { return deduplicated(direct) }
+        for key in ["learning_result", "learningResult", "result_json", "resultJson", "result"] {
+            let result = object(row[key])
+            let tools = listStrings(result["tool_names"] ?? result["toolNames"] ?? result["used_tools"] ?? result["usedTools"])
+            if !tools.isEmpty { return deduplicated(tools) }
+        }
+        return []
     }
 
     private static func featuresFromProgressDetail(_ detail: String) -> [String] {
