@@ -290,7 +290,7 @@ def build_typer_app(*, default_state_dir: Path | None = None) -> typer.Typer:
     def logs_command(
         state_dir: Path = typer.Option(resolved_state_dir, "--state-dir", help="Gateway state directory."),
         tail: int = typer.Option(80, "--tail", help="Show the last N log lines."),
-        follow: bool = typer.Option(False, "--follow", help="Keep streaming appended log output."),
+        follow: bool = typer.Option(False, "--follow", "-f", help="Keep streaming appended log output."),
         path: bool = typer.Option(False, "--path", help="Print the resolved log file path and exit."),
     ) -> None:
         log_path = _daemon_log_path(state_dir)
@@ -298,14 +298,18 @@ def build_typer_app(*, default_state_dir: Path | None = None) -> typer.Typer:
             print(log_path)
             raise typer.Exit(0)
         if not log_path.exists():
+            typer.echo(
+                f"No daemon log file found at {log_path}. "
+                "Start a detached daemon with `elephant daemon start --detach`, "
+                "or inspect the expected path with `elephant daemon logs --path`.",
+                err=True,
+            )
             raise typer.Exit(1)
         lines = log_path.read_text(encoding="utf-8").splitlines()
         if tail > 0:
             for line in lines[-tail:]:
                 print(line)
         if follow:
-            import select
-
             with log_path.open("r", encoding="utf-8") as f:
                 f.seek(0, 2)
                 try:
