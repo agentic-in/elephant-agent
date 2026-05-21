@@ -787,8 +787,15 @@ struct APIClient {
         let object = try JSONSerialization.jsonObject(with: data)
         let json = object as? [String: Any] ?? [:]
         guard (200..<300).contains(statusCode) else {
-            let detail = json["detail"] as? String ?? json["error"] as? String ?? "HTTP \(statusCode)"
-            throw APIClientError.badStatus(detail)
+            let error = json["error"] as? String
+            let detail = json["detail"] as? String
+            let missing = json["missing"] as? String
+            let message = [detail, error, missing.map { "missing \($0)" }]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ": ")
+            let resolvedMessage = message.isEmpty ? "HTTP \(statusCode)" : message
+            throw APIClientError.badStatus(resolvedMessage)
         }
         return json
     }

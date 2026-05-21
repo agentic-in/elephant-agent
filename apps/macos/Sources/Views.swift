@@ -8168,22 +8168,13 @@ struct ExpandableSettingsRow<Content: View>: View {
                     Color.clear
                         .frame(width: 50)
                     content
-                        .padding(14)
-                        .frame(maxWidth: 980, alignment: .topLeading)
-                        .background(
-                            Color(nsColor: .controlBackgroundColor).opacity(0.36),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
-                        )
+                        .padding(.top, 8)
+                        .padding(.bottom, 14)
+                        .frame(maxWidth: 720, alignment: .topLeading)
                     Spacer(minLength: 0)
                 }
-                .padding(.trailing, 12)
-                .padding(.bottom, 14)
-                .padding(.top, 8)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                .padding(.horizontal, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             Divider()
@@ -8263,22 +8254,51 @@ private struct SettingsActionButtonModifier: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
+        content
+            .font(.callout.weight(kind == .primary ? .semibold : .medium))
+            .labelStyle(.titleAndIcon)
+            .buttonStyle(PressablePlainButtonStyle())
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 32)
+            .background(fill, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(stroke, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private var foreground: Color {
         switch kind {
         case .primary:
-            content
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .tint(ElephantTheme.accent)
+            return ElephantTheme.accent
         case .secondary:
-            content
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .tint(ElephantTheme.faint)
+            return ElephantTheme.ink.opacity(0.88)
         case .destructive:
-            content
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .tint(ElephantTheme.orange)
+            return ElephantTheme.orange
+        }
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .primary:
+            return ElephantTheme.accent.opacity(0.10)
+        case .secondary:
+            return Color(nsColor: .controlBackgroundColor).opacity(0.72)
+        case .destructive:
+            return ElephantTheme.orange.opacity(0.08)
+        }
+    }
+
+    private var stroke: Color {
+        switch kind {
+        case .primary:
+            return ElephantTheme.accent.opacity(0.30)
+        case .secondary:
+            return ElephantTheme.line.opacity(0.78)
+        case .destructive:
+            return ElephantTheme.orange.opacity(0.30)
         }
     }
 }
@@ -8323,8 +8343,8 @@ struct MemoryEngineSettingsContent: View {
     @State private var loaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
                 SectionLabel(
                     title: localizedYouText(
                         model.appLanguage,
@@ -8345,22 +8365,32 @@ struct MemoryEngineSettingsContent: View {
                 Pill(text: embeddingSourceLabel(model.snapshot.embeddingBootstrapSource), symbol: "arrow.down.circle", tint: embeddingTint)
             }
 
-            Picker(modelSourceLabel, selection: $embeddingSource) {
-                Text("HuggingFace").tag("huggingface")
-                Text("ModelScope").tag("modelscope")
+            HStack(alignment: .center, spacing: 14) {
+                Text(modelSourceLabel)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .frame(width: 106, alignment: .leading)
+                Picker("", selection: $embeddingSource) {
+                    Text("HuggingFace").tag("huggingface")
+                    Text("ModelScope").tag("modelscope")
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 300)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 320)
 
-            SettingsRow(label: localizedYouText(model.appLanguage, en: "Status", zh: "状态", fr: "Statut", de: "Status"), value: embeddingLine)
-            SettingsRow(label: localizedYouText(model.appLanguage, en: "Active source", zh: "当前来源", fr: "Source active", de: "Aktive Quelle"), value: embeddingSourceLabel(model.snapshot.embeddingBootstrapSource))
-            SettingsRow(label: localizedYouText(model.appLanguage, en: "Setup default", zh: "初始化默认", fr: "Défaut de configuration", de: "Setup-Standard"), value: embeddingSourceLabel(model.appLanguage.defaultEmbeddingModelSource))
-            if !model.snapshot.embeddingModelRoot.isEmpty {
-                SettingsRow(label: localizedYouText(model.appLanguage, en: "Model path", zh: "模型路径", fr: "Chemin du modèle", de: "Modellpfad"), value: model.snapshot.embeddingModelRoot)
+            VStack(spacing: 0) {
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Status", zh: "状态", fr: "Statut", de: "Status"), value: embeddingLine)
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Active source", zh: "当前来源", fr: "Source active", de: "Aktive Quelle"), value: embeddingSourceLabel(model.snapshot.embeddingBootstrapSource))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Setup default", zh: "初始化默认", fr: "Défaut de configuration", de: "Setup-Standard"), value: embeddingSourceLabel(model.appLanguage.defaultEmbeddingModelSource))
+                if !model.snapshot.embeddingModelRoot.isEmpty {
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Model path", zh: "模型路径", fr: "Chemin du modèle", de: "Modellpfad"), value: model.snapshot.embeddingModelRoot)
+                }
+                if !model.snapshot.embeddingModelSourceURL.isEmpty {
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Source URL", zh: "来源地址", fr: "URL source", de: "Quell-URL"), value: model.snapshot.embeddingModelSourceURL)
+                }
             }
-            if !model.snapshot.embeddingModelSourceURL.isEmpty {
-                SettingsRow(label: localizedYouText(model.appLanguage, en: "Source URL", zh: "来源地址", fr: "URL source", de: "Quell-URL"), value: model.snapshot.embeddingModelSourceURL)
-            }
+
             if !runtimeSummary.isEmpty {
                 Text(runtimeSummary)
                     .font(.caption)
@@ -8374,21 +8404,27 @@ struct MemoryEngineSettingsContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
-                Button(localizedYouText(model.appLanguage, en: "Apply Source", zh: "应用来源", fr: "Appliquer la source", de: "Quelle anwenden")) {
-                    Task { await model.saveLocalEmbeddingSettings(source: embeddingSource, forceDownload: false) }
-                }
-                .settingsActionButton()
-
-                Button(localizedYouText(model.appLanguage, en: "Re-download", zh: "重新下载", fr: "Télécharger à nouveau", de: "Neu laden")) {
-                    Task { await model.saveLocalEmbeddingSettings(source: embeddingSource, forceDownload: true) }
-                }
-                .settingsActionButton()
-
-                Button(localizedYouText(model.appLanguage, en: "Refresh", zh: "刷新", fr: "Actualiser", de: "Aktualisieren")) {
+            SettingsActionBar {
+                Button {
                     Task { try? await model.refreshDashboard() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Refresh", zh: "刷新", fr: "Actualiser", de: "Aktualisieren"), systemImage: "arrow.clockwise")
                 }
                 .settingsActionButton()
+
+                Button {
+                    Task { await model.saveLocalEmbeddingSettings(source: embeddingSource, forceDownload: true) }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Re-download", zh: "重新下载", fr: "Télécharger à nouveau", de: "Neu laden"), systemImage: "arrow.down.circle")
+                }
+                .settingsActionButton()
+
+                Button {
+                    Task { await model.saveLocalEmbeddingSettings(source: embeddingSource, forceDownload: false) }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Apply Source", zh: "应用来源", fr: "Appliquer la source", de: "Quelle anwenden"), systemImage: "checkmark.circle")
+                }
+                .settingsActionButton(.primary)
             }
         }
         .onAppear {
