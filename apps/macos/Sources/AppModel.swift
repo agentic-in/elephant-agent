@@ -296,6 +296,10 @@ struct LearningJobItem: Identifiable, Equatable {
     var detail: String
     var status: String
     var trigger: String
+    var progressStage: String
+    var progressDetail: String
+    var resolvedFeatures: [String]
+    var resolvedTools: [String]
     var markdown: String
 }
 
@@ -889,6 +893,10 @@ final class ElephantAppModel: ObservableObject {
             let trigger = $0.trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             return trigger == "init" || trigger.contains("init")
         }
+    }
+
+    var onboardingLearningJob: LearningJobItem? {
+        onboardingInitReflectJob(jobID: onboardingInitReflectJobID)
     }
 
     func completeOnboarding() {

@@ -1088,13 +1088,22 @@ enum SnapshotParser {
             let id = string(row["job_id"] ?? row["jobId"] ?? row["id"])
             guard !id.isEmpty else { return nil }
             let trigger = string(row["trigger"] ?? row["job_type"] ?? row["jobType"])
+            let metadata = object(row["metadata"])
+            let progressStage = string(row["progress_stage"] ?? row["progressStage"])
+            let progressDetail = string(row["progress_detail"] ?? row["progressDetail"])
+            let features = learningFeatures(from: row, metadata: metadata, trigger: trigger, progressDetail: progressDetail)
+            let tools = learningTools(from: row, metadata: metadata, features: features)
             let resultText = learningMarkdown(from: row)
             return LearningJobItem(
                 id: id,
-                title: learningTitle(from: row, trigger: trigger, id: id, markdown: resultText),
+                title: learningTitle(from: row, trigger: trigger, id: id, markdown: resultText, features: features),
                 detail: [string(row["created_at"] ?? row["createdAt"]), string(row["finished_at"] ?? row["finishedAt"])].filter { !$0.isEmpty }.joined(separator: " → "),
                 status: string(row["status"], fallback: "unknown"),
                 trigger: trigger,
+                progressStage: progressStage,
+                progressDetail: progressDetail,
+                resolvedFeatures: features,
+                resolvedTools: tools,
                 markdown: resultText
             )
         }
@@ -1802,8 +1811,11 @@ enum SnapshotParser {
         return ""
     }
 
-    private static func learningTitle(from row: [String: Any], trigger: String, id: String, markdown: String) -> String {
+    private static func learningTitle(from row: [String: Any], trigger: String, id: String, markdown: String, features: [String]) -> String {
         let summary = string(row["summary"])
+        if !features.isEmpty, summary.lowercased().contains("features=default") {
+            return "reflect job (features=\(features.joined(separator: ",")))"
+        }
         if !summary.isEmpty && !looksLikeLongMarkdown(summary) {
             return compactLine(summary, maxLength: 72)
         }
@@ -1812,6 +1824,83 @@ enum SnapshotParser {
             .map { cleanMarkdownTitleLine($0) }
             .first { !$0.isEmpty }
         return compactLine(firstLine ?? (trigger.isEmpty ? id : trigger), maxLength: 72)
+    }
+
+    private static func learningFeatures(from row: [String: Any], metadata: [String: Any], trigger: String, progressDetail: String) -> [String] {
+        let resolved = listStrings(row["resolved_features"] ?? row["resolvedFeatures"] ?? metadata["resolved_features"] ?? metadata["resolvedFeatures"])
+        if !resolved.isEmpty { return deduplicated(resolved) }
+        let explicit = listStrings(metadata["features"]).filter { $0.lowercased() != "default" }
+        if !explicit.isEmpty { return deduplicated(explicit) }
+        let progress = featuresFromProgressDetail(progressDetail)
+        if !progress.isEmpty { return progress }
+        return fallbackFeatures(for: trigger)
+    }
+
+    private static func learningTools(from row: [String: Any], metadata: [String: Any], features: [String]) -> [String] {
+        let resolved = listStrings(row["resolved_tools"] ?? row["resolvedTools"] ?? metadata["resolved_tools"] ?? metadata["resolvedTools"])
+        if !resolved.isEmpty { return deduplicated(resolved) }
+        var tools: [String] = []
+        for feature in features {
+            tools.append(contentsOf: fallbackTools(for: feature))
+        }
+        return deduplicated(tools)
+    }
+
+    private static func featuresFromProgressDetail(_ detail: String) -> [String] {
+        guard let range = detail.range(of: "features=") else { return [] }
+        let tail = detail[range.upperBound...]
+        let token = tail.split(whereSeparator: { $0.isWhitespace || $0 == ")" || $0 == "]" }).first.map(String.init) ?? ""
+        return deduplicated(listStrings(token).filter { $0.lowercased() != "default" })
+    }
+
+    private static func fallbackFeatures(for trigger: String) -> [String] {
+        switch trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "init", "init_profile", "profile":
+            return ["pm", "questions", "skills", "init_links"]
+        case "manual":
+            return ["pm", "questions", "recall", "skills"]
+        case "dream":
+            return ["dream", "questions", "skills", "diary"]
+        case "diary":
+            return ["diary"]
+        case "context_compaction":
+            return ["compress"]
+        default:
+            return ["pm", "questions", "skills"]
+        }
+    }
+
+    private static func fallbackTools(for feature: String) -> [String] {
+        switch feature.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "pm":
+            return ["tool.personal_model.search", "tool.personal_model.update"]
+        case "questions":
+            return ["tool.personal_model.questions"]
+        case "skills":
+            return ["tool.skill.list", "tool.skill.view", "tool.personal_model.search", "tool.personal_model.update"]
+        case "init_links":
+            return ["tool.web.search", "tool.web.read", "tool.web.extract", "tool.browser.navigate", "tool.browser.snapshot", "tool.browser.scroll", "tool.browser.images"]
+        case "recall":
+            return ["tool.conversation.search"]
+        case "diary":
+            return ["tool.diary.write", "tool.diary.list", "tool.conversation.search", "tool.personal_model.search"]
+        case "dream":
+            return ["tool.personal_model.search", "tool.personal_model.update", "tool.conversation.search"]
+        default:
+            return []
+        }
+    }
+
+    private static func deduplicated(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty, !seen.contains(normalized) else { continue }
+            seen.insert(normalized)
+            result.append(normalized)
+        }
+        return result
     }
 
     private static func looksLikeLongMarkdown(_ text: String) -> Bool {

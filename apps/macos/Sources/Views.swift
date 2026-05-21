@@ -69,6 +69,15 @@ struct RootView: View {
                   let section = AppSection(rawValue: rawValue) else { return }
             model.selectedSection = section
         }
+        .task(id: providerLogoPreloadKey) {
+            await RemoteLogoCache.shared.preload(ProviderLogoAsset.urls(for: model.snapshot.providerOptions))
+        }
+    }
+
+    private var providerLogoPreloadKey: String {
+        model.snapshot.providerOptions
+            .map { "\($0.id):\($0.displayName)" }
+            .joined(separator: "|")
     }
 }
 
@@ -8282,6 +8291,17 @@ struct LearningJobRow: View {
 
     var body: some View {
         DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                LearningJobRuntimeStrip(item: item)
+                if !item.progressDetail.isEmpty {
+                    Text(cleanProgressDetail(item.progressDetail))
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.top, 6)
             if item.markdown.isEmpty {
                 Text(localizedYouText(model.appLanguage, en: "No rendered result returned yet.", zh: "还没有可显示的结果。", fr: "Aucun résultat rendu pour l'instant.", de: "Noch kein gerendertes Ergebnis."))
                     .font(.callout)
@@ -8299,7 +8319,7 @@ struct LearningJobRow: View {
                     Text(item.title)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text([item.trigger, formattedDetail].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([item.trigger, featureSummary, formattedDetail].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -8320,6 +8340,95 @@ struct LearningJobRow: View {
 
     private var formattedDetail: String {
         MacLocalDateTime.formattedRange(item.detail, language: model.appLanguage)
+    }
+
+    private var featureSummary: String {
+        item.resolvedFeatures.isEmpty ? "" : item.resolvedFeatures.joined(separator: ",")
+    }
+
+    private func cleanProgressDetail(_ detail: String) -> String {
+        detail
+            .replacingOccurrences(of: "tool.", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+}
+
+private struct LearningJobRuntimeStrip: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var item: LearningJobItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    RuntimeChip(
+                        text: item.progressStage.isEmpty ? localizedRuntimeStatus(item.status, language: model.appLanguage) : item.progressStage,
+                        symbol: "waveform.path.ecg",
+                        tint: statusTint
+                    )
+                    ForEach(item.resolvedFeatures, id: \.self) { feature in
+                        RuntimeChip(
+                            text: feature,
+                            symbol: "tag.fill",
+                            tint: ElephantTheme.accent
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if item.resolvedFeatures.isEmpty {
+                RuntimeChip(
+                    text: localizedYouText(model.appLanguage, en: "features pending", zh: "等待 feature", fr: "features en attente", de: "Features ausstehend"),
+                    symbol: "tag",
+                    tint: ElephantTheme.muted
+                )
+            }
+            if !item.resolvedTools.isEmpty {
+                Text(toolSummary)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(10)
+        .background(ElephantTheme.canvas.opacity(0.66), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.66), lineWidth: 1))
+    }
+
+    private var toolSummary: String {
+        let visible = item.resolvedTools.prefix(6).map {
+            $0.replacingOccurrences(of: "tool.", with: "")
+        }
+        let suffix = item.resolvedTools.count > visible.count ? " +\(item.resolvedTools.count - visible.count)" : ""
+        return "\(localizedYouText(model.appLanguage, en: "Tools", zh: "工具", fr: "Outils", de: "Tools")): \(visible.joined(separator: ", "))\(suffix)"
+    }
+
+    private var statusTint: Color {
+        let status = item.status.lowercased()
+        if status.contains("completed") { return ElephantTheme.green }
+        if status.contains("failed") || status.contains("cancel") { return ElephantTheme.orange }
+        return ElephantTheme.accent
+    }
+}
+
+private struct RuntimeChip: View {
+    var text: String
+    var symbol: String
+    var tint: Color
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.bold))
+            Text(text)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(tint.opacity(0.10), in: Capsule())
     }
 }
 
@@ -9816,16 +9925,8 @@ struct ProviderLogoMark: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(ElephantTheme.line, lineWidth: 1)
             if let url = logoAsset.url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .padding(size * 0.19)
-                    default:
-                        fallback
-                    }
+                CachedRemoteLogoImage(url: url, padding: size * 0.19) {
+                    fallback
                 }
             } else {
                 fallback
@@ -9860,6 +9961,10 @@ struct ProviderLogoAsset {
 
     var url: URL? {
         LobeHubIconAsset(slug: slug).url
+    }
+
+    static func urls(for options: [ProviderOption]) -> [URL] {
+        options.compactMap { ProviderLogoAsset(providerID: $0.id, displayName: $0.displayName).url }
     }
 
     private var slug: String {
@@ -9971,6 +10076,122 @@ private struct LobeHubIconAsset {
 
     private var suffix: String {
         colorSlugs.contains(slug) ? "-color" : ""
+    }
+}
+
+private struct CachedRemoteLogoImage<Placeholder: View>: View {
+    var url: URL
+    var padding: CGFloat
+    var placeholder: Placeholder
+    @State private var image: NSImage?
+
+    init(url: URL, padding: CGFloat, @ViewBuilder placeholder: () -> Placeholder) {
+        self.url = url
+        self.padding = padding
+        self.placeholder = placeholder()
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(padding)
+            } else {
+                placeholder
+            }
+        }
+        .task(id: url.absoluteString) {
+            image = nil
+            image = await RemoteLogoCache.shared.image(for: url)
+        }
+    }
+}
+
+@MainActor
+private final class RemoteLogoCache {
+    static let shared = RemoteLogoCache()
+
+    private var memory: [String: NSImage] = [:]
+    private var inflight: [String: Task<Data?, Never>] = [:]
+    private let fileManager = FileManager.default
+    private lazy var directory: URL = {
+        let base = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        return base.appendingPathComponent("ElephantAgent/RemoteLogos", isDirectory: true)
+    }()
+
+    func preload(_ urls: [URL]) async {
+        for url in Array(Set(urls.map(\.absoluteString))).compactMap({ URL(string: $0) }).prefix(80) {
+            _ = await image(for: url)
+        }
+    }
+
+    func image(for url: URL) async -> NSImage? {
+        let key = url.absoluteString
+        if let image = memory[key] {
+            return image
+        }
+        if let image = imageFromDisk(for: key) {
+            memory[key] = image
+            return image
+        }
+        let data: Data?
+        if let task = inflight[key] {
+            data = await task.value
+        } else {
+            let task = Task.detached(priority: .utility) { () -> Data? in
+                var request = URLRequest(url: url)
+                request.cachePolicy = .returnCacheDataElseLoad
+                request.timeoutInterval = 12
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    if let status = (response as? HTTPURLResponse)?.statusCode, !(200...299).contains(status) {
+                        return nil
+                    }
+                    return data
+                } catch {
+                    return nil
+                }
+            }
+            inflight[key] = task
+            data = await task.value
+            inflight[key] = nil
+        }
+        guard let data, let image = NSImage(data: data) else {
+            return nil
+        }
+        memory[key] = image
+        write(data, for: key)
+        return image
+    }
+
+    private func imageFromDisk(for key: String) -> NSImage? {
+        let fileURL = cacheFileURL(for: key)
+        guard fileManager.fileExists(atPath: fileURL.path),
+              let image = NSImage(contentsOf: fileURL) else {
+            return nil
+        }
+        return image
+    }
+
+    private func write(_ data: Data, for key: String) {
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: cacheFileURL(for: key), options: [.atomic])
+        } catch {
+            return
+        }
+    }
+
+    private func cacheFileURL(for key: String) -> URL {
+        let encoded = Data(key.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+        return directory.appendingPathComponent(String(encoded.prefix(160))).appendingPathExtension("png")
     }
 }
 
@@ -10641,16 +10862,8 @@ private struct OperatorCatalogLogo: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(tint.opacity(0.11))
             if let url = brandURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .padding(8)
-                    default:
-                        fallbackIcon
-                    }
+                CachedRemoteLogoImage(url: url, padding: 8) {
+                    fallbackIcon
                 }
             } else {
                 fallbackIcon
@@ -12309,12 +12522,162 @@ struct OnboardingMenuField: View {
     }
 }
 
+struct OnboardingMBTIPickerField: View {
+    var title: String
+    var placeholder: String
+    var options: [String]
+    @Binding var selection: String
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var hovering = false
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Spacer(minLength: 0)
+                if hasValue {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                }
+            }
+            Button {
+                expanded.toggle()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(hasValue ? ElephantTheme.accent : ElephantTheme.muted)
+                        .frame(width: 28, height: 28)
+                        .background((hasValue ? ElephantTheme.accent : ElephantTheme.faint).opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    Text(hasValue ? selection : placeholder)
+                        .font(.callout.weight(hasValue ? .semibold : .regular))
+                        .foregroundStyle(hasValue ? ElephantTheme.ink : ElephantTheme.faint)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(hovering || expanded ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(expanded ? ElephantTheme.accent.opacity(0.54) : hovering ? ElephantTheme.accent.opacity(0.34) : ElephantTheme.line.opacity(0.76), lineWidth: expanded ? 1.3 : 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .onHover { hovering = $0 }
+            .popover(isPresented: $expanded, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "Choose a type", zh: "选择一个类型", fr: "Choisir un type", de: "Typ wählen"),
+                            subtitle: localizedYouText(model.appLanguage, en: "Optional and editable later.", zh: "可选，之后可以随时改。", fr: "Optionnel, modifiable plus tard.", de: "Optional und später änderbar.")
+                        )
+                        Spacer(minLength: 0)
+                        Button(localizedYouText(model.appLanguage, en: "Clear", zh: "清空", fr: "Effacer", de: "Leeren")) {
+                            selection = ""
+                        }
+                        .controlSize(.small)
+                        .disabled(!hasValue)
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                        ForEach(options, id: \.self) { option in
+                            OnboardingMBTIOptionCard(
+                                value: option,
+                                selected: selection == option
+                            ) {
+                                selection = option
+                                expanded = false
+                            }
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(width: 460)
+                .background(.regularMaterial)
+            }
+            .help(hasValue ? "\(title): \(selection)" : placeholder)
+            .accessibilityLabel("\(title), \(hasValue ? selection : placeholder)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var hasValue: Bool {
+        !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+private struct OnboardingMBTIOptionCard: View {
+    var value: String
+    var selected: Bool
+    var select: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: select) {
+            VStack(spacing: 5) {
+                Text(value)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(selected ? .white : ElephantTheme.ink)
+                    .monospaced()
+                Text(axisHint)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(selected ? .white.opacity(0.76) : ElephantTheme.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .background(cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? Color.white.opacity(0.22) : hovering ? ElephantTheme.accent.opacity(0.36) : ElephantTheme.line.opacity(0.60), lineWidth: selected ? 1.2 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .accessibilityLabel(value)
+    }
+
+    @ViewBuilder
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        if selected {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [ElephantTheme.accent, ElephantTheme.green.opacity(0.86)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+    }
+
+    private var axisHint: String {
+        value.map(String.init).joined(separator: " ")
+    }
+}
+
 struct OnboardingDateField: View {
     var title: String
     var placeholder: String
     @Binding var text: String
     var language: AppLanguage
-    @State private var selectedDate = Self.defaultDate
+    @State private var yearText = ""
+    @State private var monthText = ""
+    @State private var dayText = ""
     @State private var hovering = false
 
     private var hasValue: Bool {
@@ -12340,27 +12703,38 @@ struct OnboardingDateField: View {
             }
 
             HStack(spacing: 8) {
-                DatePicker(
-                    "",
-                    selection: Binding(
-                        get: { selectedDate },
-                        set: { date in
-                            selectedDate = Calendar(identifier: .gregorian).startOfDay(for: date)
-                            text = Self.storageFormatter.string(from: selectedDate)
-                        }
-                    ),
-                    in: Self.minimumDate...Date(),
-                    displayedComponents: .date
+                Image(systemName: "calendar")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(hasValue ? ElephantTheme.accent : ElephantTheme.muted)
+                    .frame(width: 28, height: 44)
+                    .background((hasValue ? ElephantTheme.accent : ElephantTheme.faint).opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                OnboardingDatePartInput(
+                    title: localizedYouText(language, en: "Year", zh: "年", fr: "Année", de: "Jahr"),
+                    placeholder: "YYYY",
+                    text: partBinding(.year),
+                    tint: ElephantTheme.accent
                 )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .environment(\.locale, Locale(identifier: language.localeIdentifier))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel(title)
-
+                Text("/")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.faint)
+                OnboardingDatePartInput(
+                    title: localizedYouText(language, en: "Month", zh: "月", fr: "Mois", de: "Monat"),
+                    placeholder: "MM",
+                    text: partBinding(.month),
+                    tint: ElephantTheme.green
+                )
+                Text("/")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.faint)
+                OnboardingDatePartInput(
+                    title: localizedYouText(language, en: "Day", zh: "日", fr: "Jour", de: "Tag"),
+                    placeholder: "DD",
+                    text: partBinding(.day),
+                    tint: ElephantTheme.ember
+                )
                 if hasValue {
                     Button {
-                        text = ""
+                        clear()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.callout.weight(.semibold))
@@ -12371,11 +12745,11 @@ struct OnboardingDateField: View {
                     .accessibilityLabel(clearTitle)
                 }
             }
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+                    .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.68))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -12388,36 +12762,84 @@ struct OnboardingDateField: View {
         .onAppear {
             syncSelectedDate()
         }
-        .onChange(of: text) { _ in
-            syncSelectedDate()
-        }
     }
 
     private var clearTitle: String {
         localizedYouText(language, en: "Clear birth date", zh: "清除生日", fr: "Effacer la date de naissance", de: "Geburtsdatum löschen")
     }
 
+    private func partBinding(_ part: DatePart) -> Binding<String> {
+        Binding(
+            get: {
+                switch part {
+                case .year: return yearText
+                case .month: return monthText
+                case .day: return dayText
+                }
+            },
+            set: { rawValue in
+                setPart(part, rawValue)
+            }
+        )
+    }
+
+    private func setPart(_ part: DatePart, _ rawValue: String) {
+        let digits = String(rawValue.filter(\.isNumber).prefix(part.maxDigits))
+        switch part {
+        case .year:
+            yearText = digits
+        case .month:
+            monthText = digits
+        case .day:
+            dayText = digits
+        }
+        updateTextFromParts()
+    }
+
+    private func updateTextFromParts() {
+        guard let date = Self.date(year: yearText, month: monthText, day: dayText) else {
+            text = ""
+            return
+        }
+        text = Self.storageFormatter.string(from: date)
+    }
+
+    private func clear() {
+        yearText = ""
+        monthText = ""
+        dayText = ""
+        text = ""
+    }
+
     private func syncSelectedDate() {
-        guard let parsed = Self.parseDate(text) else { return }
-        selectedDate = parsed
+        guard let parsed = Self.parseDate(text) else {
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                yearText = ""
+                monthText = ""
+                dayText = ""
+            }
+            return
+        }
+        let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: parsed)
+        yearText = parts.year.map(String.init) ?? ""
+        monthText = parts.month.map { String(format: "%02d", $0) } ?? ""
+        dayText = parts.day.map { String(format: "%02d", $0) } ?? ""
+        if text != Self.storageFormatter.string(from: parsed) {
+            text = Self.storageFormatter.string(from: parsed)
+        }
     }
 
-    private static var defaultDate: Date {
-        var components = DateComponents()
-        components.calendar = Calendar(identifier: .gregorian)
-        components.year = 1990
-        components.month = 1
-        components.day = 1
-        return components.date ?? Date()
-    }
+    private enum DatePart: Hashable {
+        case year
+        case month
+        case day
 
-    private static var minimumDate: Date {
-        var components = DateComponents()
-        components.calendar = Calendar(identifier: .gregorian)
-        components.year = 1900
-        components.month = 1
-        components.day = 1
-        return components.date ?? Date(timeIntervalSince1970: 0)
+        var maxDigits: Int {
+            switch self {
+            case .year: return 4
+            case .month, .day: return 2
+            }
+        }
     }
 
     private static let storageFormatter: DateFormatter = {
@@ -12448,6 +12870,64 @@ struct OnboardingDateField: View {
         }
         return nil
     }
+
+    private static func date(year yearText: String, month monthText: String, day dayText: String) -> Date? {
+        guard yearText.count == 4,
+              let year = Int(yearText),
+              let month = Int(monthText),
+              let day = Int(dayText),
+              year >= 1900,
+              (1...12).contains(month),
+              (1...31).contains(day) else {
+            return nil
+        }
+        let calendar = Calendar(identifier: .gregorian)
+        var components = DateComponents()
+        components.calendar = calendar
+        components.year = year
+        components.month = month
+        components.day = day
+        guard let date = calendar.date(from: components),
+              calendar.dateComponents([.year, .month, .day], from: date).year == year,
+              calendar.dateComponents([.year, .month, .day], from: date).month == month,
+              calendar.dateComponents([.year, .month, .day], from: date).day == day,
+              date <= Date() else {
+            return nil
+        }
+        return date
+    }
+}
+
+private struct OnboardingDatePartInput: View {
+    var title: String
+    var placeholder: String
+    @Binding var text: String
+    var tint: Color
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(focused ? tint : ElephantTheme.muted)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundStyle(ElephantTheme.ink)
+                .monospacedDigit()
+                .multilineTextAlignment(.center)
+                .focused($focused)
+                .frame(height: 26)
+                .background(Color.clear)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 54)
+        .background((focused ? tint.opacity(0.11) : Color(nsColor: .controlBackgroundColor).opacity(0.56)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(focused ? tint.opacity(0.48) : ElephantTheme.line.opacity(0.58), lineWidth: focused ? 1.3 : 1))
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onTapGesture { focused = true }
+    }
 }
 
 struct OnboardingHobbyOption: Identifiable {
@@ -12464,6 +12944,7 @@ struct OnboardingMultiSelectMenuField: View {
     @Binding var selection: String
     var language: AppLanguage
     @State private var hovering = false
+    @State private var expanded = false
 
     private var selectedValues: [String] {
         let parts = selection.components(separatedBy: CharacterSet(charactersIn: ",，、"))
@@ -12489,20 +12970,8 @@ struct OnboardingMultiSelectMenuField: View {
                 }
             }
 
-            Menu {
-                Button(clearSelectionTitle) {
-                    selection = ""
-                }
-                .disabled(selectedValues.isEmpty)
-                Divider()
-                ForEach(options) { option in
-                    Button {
-                        toggle(option)
-                    } label: {
-                        Label(option.label, systemImage: selectedValues.contains(option.value) ? "checkmark.circle.fill" : "circle")
-                    }
-                    .help(option.detail)
-                }
+            Button {
+                expanded.toggle()
             } label: {
                 HStack(spacing: 10) {
                     Text(selectionSummary)
@@ -12514,7 +12983,7 @@ struct OnboardingMultiSelectMenuField: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(selectedValues.isEmpty ? ElephantTheme.faint : ElephantTheme.accent)
                         .lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down")
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -12532,6 +13001,19 @@ struct OnboardingMultiSelectMenuField: View {
             }
             .buttonStyle(PressablePlainButtonStyle())
             .onHover { hovering = $0 }
+            .popover(isPresented: $expanded, arrowEdge: .bottom) {
+                OnboardingHobbyPopover(
+                    options: options,
+                    selectedValues: selectedValues,
+                    selectedCountText: selectedCountText,
+                    clearSelectionTitle: clearSelectionTitle,
+                    language: language,
+                    toggle: toggle,
+                    clear: { selection = "" },
+                    done: { expanded = false }
+                )
+                .frame(width: 520)
+            }
             .help(selectedValues.isEmpty ? placeholder : selectedLabels.joined(separator: delimiter))
             .accessibilityLabel("\(title), \(selectionSummary)")
         }
@@ -12584,6 +13066,107 @@ struct OnboardingMultiSelectMenuField: View {
         let knownSet = Set(known)
         let unknown = values.filter { !knownSet.contains($0) }
         return (known + unknown).joined(separator: delimiter)
+    }
+}
+
+private struct OnboardingHobbyPopover: View {
+    var options: [OnboardingHobbyOption]
+    var selectedValues: [String]
+    var selectedCountText: String
+    var clearSelectionTitle: String
+    var language: AppLanguage
+    var toggle: (OnboardingHobbyOption) -> Void
+    var clear: () -> Void
+    var done: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 28, height: 28)
+                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localizedYouText(language, en: "Pick what feels like you", zh: "选一些像你的兴趣", fr: "Choisissez ce qui vous ressemble", de: "Wähle, was nach dir klingt"))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(selectedCountText)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+                Spacer(minLength: 0)
+                Button(clearSelectionTitle, action: clear)
+                    .controlSize(.small)
+                    .disabled(selectedValues.isEmpty)
+                Button(localizedYouText(language, en: "Done", zh: "完成", fr: "Terminé", de: "Fertig"), action: done)
+                    .controlSize(.small)
+                    .keyboardShortcut(.return, modifiers: [])
+            }
+
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    ForEach(options) { option in
+                        OnboardingHobbyOptionButton(
+                            option: option,
+                            selected: selectedValues.contains(option.value)
+                        ) {
+                            toggle(option)
+                        }
+                    }
+                }
+                .padding(2)
+            }
+            .frame(maxHeight: 310)
+        }
+        .padding(14)
+        .background(.regularMaterial)
+    }
+}
+
+private struct OnboardingHobbyOptionButton: View {
+    var option: OnboardingHobbyOption
+    var selected: Bool
+    var toggle: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.callout.weight(.semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(selected ? ElephantTheme.accent : hovering ? ElephantTheme.accent : ElephantTheme.faint)
+                    .frame(width: 20, height: 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(option.label)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(option.detail)
+                        .font(.caption2)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(selected ? ElephantTheme.accent.opacity(0.12) : hovering ? ElephantTheme.mint.opacity(0.10) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? ElephantTheme.accent.opacity(0.45) : ElephantTheme.line.opacity(0.58), lineWidth: selected ? 1.2 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .help(option.detail)
+        .accessibilityLabel(option.label)
     }
 }
 
@@ -12851,7 +13434,7 @@ struct OnboardingIdentityStep: View {
                             language: model.appLanguage
                         )
                     }
-                    OnboardingMenuField(
+                    OnboardingMBTIPickerField(
                         title: "MBTI",
                         placeholder: model.text(.notSet),
                         options: mbtiOptions,
@@ -13080,21 +13663,21 @@ struct OnboardingLinksStep: View {
                     title: "Blog",
                     subtitle: model.text(.blogLinkHint),
                     symbol: "globe",
-                    placeholder: "https://",
+                    placeholder: "your-site.com / @handle",
                     text: $model.onboardingBlogURL
                 )
                 OnboardingLinkField(
                     title: "LinkedIn",
                     subtitle: model.text(.linkedInLinkHint),
                     symbol: "person.text.rectangle",
-                    placeholder: "https://linkedin.com/in/...",
+                    placeholder: "linkedin.com/in/...",
                     text: $model.onboardingLinkedInURL
                 )
                 OnboardingLinkField(
                     title: "Twitter / X",
                     subtitle: model.text(.twitterLinkHint),
                     symbol: "quote.bubble",
-                    placeholder: "https://x.com/...",
+                    placeholder: "x.com/...",
                     text: $model.onboardingTwitterURL
                 )
             }
@@ -13403,23 +13986,25 @@ struct SurveyQuestionBlock: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let headerHeight: CGFloat = 58
-            let verticalSpacing: CGFloat = 12
+            let verticalSpacing: CGFloat = 22
             let gridSpacing: CGFloat = 12
             let rowCount = CGFloat(max(1, (options.count + 1) / 2))
-            let availableGridHeight = max(210, proxy.size.height - headerHeight - verticalSpacing)
-            let cardHeight = max(96, (availableGridHeight - gridSpacing * (rowCount - 1)) / rowCount)
-            VStack(alignment: .leading, spacing: verticalSpacing) {
-                VStack(alignment: .leading, spacing: 4) {
+            let availableGridHeight = max(180, proxy.size.height - 124 - verticalSpacing)
+            let cardHeight = min(92, max(74, (availableGridHeight - gridSpacing * (rowCount - 1)) / rowCount))
+            VStack(alignment: .center, spacing: verticalSpacing) {
+                Spacer(minLength: 0)
+                VStack(alignment: .center, spacing: 8) {
                     Text(title)
-                        .font(.callout.weight(.semibold))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(ElephantTheme.ink)
+                        .multilineTextAlignment(.center)
                     Text(prompt)
-                        .font(.caption)
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.center)
                 }
-                .frame(height: headerHeight, alignment: .topLeading)
+                .frame(maxWidth: 680)
 
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: gridSpacing), GridItem(.flexible(), spacing: gridSpacing)], spacing: gridSpacing) {
                     ForEach(options, id: \.self) { option in
@@ -13437,8 +14022,10 @@ struct SurveyQuestionBlock: View {
                         .accessibilityLabel(option)
                     }
                 }
+                .frame(maxWidth: 920)
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -13451,12 +14038,12 @@ struct SurveyOptionCard: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(.title3.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(selected ? .white : hovering ? ElephantTheme.accent : ElephantTheme.faint)
-                .frame(width: 26, height: 26)
+                .frame(width: 22, height: 22)
 
             Text(title)
                 .font(.callout.weight(.semibold))
@@ -13467,7 +14054,7 @@ struct SurveyOptionCard: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .center)
         .background(cardBackground)
         .overlay(
@@ -13898,10 +14485,10 @@ struct OnboardingLearningStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 18) {
             Spacer(minLength: 10)
             OnboardingLearningAnimation()
-                .frame(width: 168, height: 168)
+                .frame(width: 136, height: 136)
             VStack(spacing: 8) {
                 Text(model.text(.learningTitle))
                     .font(.system(size: 24, weight: .semibold))
@@ -13912,6 +14499,11 @@ struct OnboardingLearningStep: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             }
+            OnboardingLearningLivePanel(
+                job: model.onboardingLearningJob,
+                statusText: model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus
+            )
+            .frame(maxWidth: 600)
             if model.onboardingFinalizationFailed {
                 VStack(spacing: 10) {
                     Text(model.lastError)
@@ -13931,9 +14523,161 @@ struct OnboardingLearningStep: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 350)
+        .frame(maxWidth: .infinity, minHeight: 430)
         .task {
             await model.startOnboardingFinalization()
+        }
+    }
+}
+
+struct OnboardingLearningLivePanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var job: LearningJobItem?
+    var statusText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(statusTint)
+                Text(localizedYouText(model.appLanguage, en: "Live learning stream", zh: "实时学习动态", fr: "Flux d'apprentissage en direct", de: "Live-Lernstream"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Spacer(minLength: 0)
+                Pill(text: statusLabel, tint: statusTint)
+            }
+
+            VStack(spacing: 8) {
+                OnboardingLearningBubble(
+                    trailing: false,
+                    symbol: "waveform.path.ecg",
+                    title: stageTitle,
+                    detail: stageDetail,
+                    tint: statusTint
+                )
+                OnboardingLearningBubble(
+                    trailing: true,
+                    symbol: "sparkles",
+                    title: localizedYouText(model.appLanguage, en: "Understanding features", zh: "正在使用的理解能力", fr: "Capacités de compréhension", de: "Aktive Verstehensfunktionen"),
+                    detail: featureSummary,
+                    tint: ElephantTheme.accent
+                )
+                OnboardingLearningBubble(
+                    trailing: false,
+                    symbol: "wrench.and.screwdriver",
+                    title: localizedYouText(model.appLanguage, en: "Available tools", zh: "可用工具", fr: "Outils disponibles", de: "Verfügbare Tools"),
+                    detail: toolSummary,
+                    tint: ElephantTheme.green
+                )
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.line.opacity(0.68), lineWidth: 1))
+    }
+
+    private var statusLabel: String {
+        guard let job else {
+            return localizedYouText(model.appLanguage, en: "preparing", zh: "准备中", fr: "préparation", de: "wird vorbereitet")
+        }
+        return localizedRuntimeStatus(job.status, language: model.appLanguage)
+    }
+
+    private var stageTitle: String {
+        let stage = (job?.progressStage ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch stage {
+        case "queued":
+            return localizedYouText(model.appLanguage, en: "Queued for learning", zh: "学习任务已排队", fr: "Tâche en file", de: "Lernjob wartet")
+        case "starting":
+            return localizedYouText(model.appLanguage, en: "Worker accepted the job", zh: "Worker 已接收任务", fr: "Worker prêt", de: "Worker hat übernommen")
+        case "agent_starting":
+            return localizedYouText(model.appLanguage, en: "Starting the learning pass", zh: "正在启动学习过程", fr: "Démarrage du passage", de: "Lernlauf startet")
+        case "agent_running":
+            return localizedYouText(model.appLanguage, en: "Reading and updating the model", zh: "正在读取并更新模型", fr: "Lecture et mise à jour", de: "Liest und aktualisiert")
+        case "result_written":
+            return localizedYouText(model.appLanguage, en: "Writing the learning result", zh: "正在写入学习结果", fr: "Écriture du résultat", de: "Schreibt Ergebnis")
+        case "completed":
+            return localizedYouText(model.appLanguage, en: "Learning pass completed", zh: "学习过程已完成", fr: "Passage terminé", de: "Lernlauf abgeschlossen")
+        case "failed":
+            return localizedYouText(model.appLanguage, en: "Needs attention", zh: "需要处理", fr: "À vérifier", de: "Benötigt Prüfung")
+        default:
+            return localizedYouText(model.appLanguage, en: "Preparing the learning job", zh: "正在准备学习任务", fr: "Préparation de la tâche", de: "Lernjob wird vorbereitet")
+        }
+    }
+
+    private var stageDetail: String {
+        let detail = cleanProgress(job?.progressDetail ?? "")
+        return detail.isEmpty ? statusText : detail
+    }
+
+    private var featureSummary: String {
+        let features = job?.resolvedFeatures ?? []
+        let resolved = features.isEmpty ? ["pm", "questions", "skills", "init_links"] : features
+        return resolved.joined(separator: ", ")
+    }
+
+    private var toolSummary: String {
+        let tools = job?.resolvedTools ?? []
+        let resolved = tools.isEmpty
+            ? ["personal_model.search", "personal_model.update", "personal_model.questions", "skill.list", "skill.view", "web.read"]
+            : tools.map { $0.replacingOccurrences(of: "tool.", with: "") }
+        let visible = resolved.prefix(6)
+        let suffix = resolved.count > visible.count ? " +\(resolved.count - visible.count)" : ""
+        return visible.joined(separator: ", ") + suffix
+    }
+
+    private var statusTint: Color {
+        let status = (job?.status ?? "").lowercased()
+        if status.contains("completed") { return ElephantTheme.green }
+        if status.contains("failed") || status.contains("cancel") { return ElephantTheme.orange }
+        return ElephantTheme.accent
+    }
+
+    private func cleanProgress(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "tool.", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct OnboardingLearningBubble: View {
+    var trailing: Bool
+    var symbol: String
+    var title: String
+    var detail: String
+    var tint: Color
+
+    var body: some View {
+        HStack {
+            if trailing {
+                Spacer(minLength: 44)
+            }
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: symbol)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                    .frame(width: 18, height: 18)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 430, alignment: .leading)
+            .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.18), lineWidth: 1))
+            if !trailing {
+                Spacer(minLength: 44)
+            }
         }
     }
 }
