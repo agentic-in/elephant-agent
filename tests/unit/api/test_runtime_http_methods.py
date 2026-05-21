@@ -198,6 +198,16 @@ class APIContextCompressionTest(unittest.TestCase):
                     for detail in details
                 )
             )
+            results = [
+                str((event.get("payload") or {}).get("result") or "")
+                for event in telemetry.events
+                if event.get("event_type") == "kernel.stage"
+                and event.get("episode_id") == episode_id
+                and (event.get("payload") or {}).get("stage") == "context-compact"
+            ]
+            self.assertTrue(
+                any("Reflect context compression completed" in result for result in results)
+            )
 
     def test_after_turn_low_usage_does_not_emit_context_compact_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -397,6 +407,7 @@ class LoopEventStreamTest(unittest.TestCase):
                     "payload": {
                         "stage": "context-compact",
                         "detail": "reason=usage tokens=900->300",
+                        "result": "Reflect context compression completed. method=reflect",
                     },
                 }
             )
@@ -415,6 +426,7 @@ class LoopEventStreamTest(unittest.TestCase):
 
         self.assertEqual(stage_event["stage"], "context-compact")
         self.assertEqual(stage_event["detail"], "reason=usage tokens=900->300")
+        self.assertEqual(stage_event["result"], "Reflect context compression completed. method=reflect")
         self.assertEqual(stage_event["status"], "running")
 
     def test_stream_loop_events_emits_heartbeat_while_loop_is_quiet(self) -> None:

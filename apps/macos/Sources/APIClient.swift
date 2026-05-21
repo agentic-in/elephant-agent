@@ -712,7 +712,7 @@ struct APIClient {
                     name: stageTitle(object["stage"] as? String ?? "Working"),
                     status: object["status"] as? String ?? "running",
                     arguments: object["detail"] as? String ?? "",
-                    result: ""
+                    result: object["result"] as? String ?? ""
                 ),
                 stage: object["stage"] as? String ?? "",
                 detail: object["detail"] as? String ?? ""

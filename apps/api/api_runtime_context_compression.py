@@ -59,6 +59,7 @@ def compact_context_after_usage(app: Any, episode_id: str, outcome: Any) -> Any:
             f"compacting={len(to_summarize)} tail={len(tail)} "
             f"method=reflect"
         ),
+        result="Reflect context compression running",
     )
     reflect_attempted = False
 
@@ -117,6 +118,13 @@ def compact_context_after_usage(app: Any, episode_id: str, outcome: Any) -> Any:
         episode_id,
         source_event_id=source_event_id,
         detail=record.detail,
+        result=_context_compact_result_text(
+            method=compress_result.method,
+            reflect_attempted=reflect_attempted,
+            compacted_messages=compacted_messages,
+            before_messages=compress_result.before_messages,
+            after_messages=compress_result.after_messages,
+        ),
         recorded_at=record.recorded_at,
     )
     flush_projection_cache(getattr(app, "context", None))
@@ -173,6 +181,7 @@ def _emit_context_compact_stage(
     *,
     source_event_id: str,
     detail: str,
+    result: str = "",
     recorded_at: datetime | None = None,
 ) -> None:
     recorded = recorded_at or datetime.now(timezone.utc)
@@ -188,11 +197,33 @@ def _emit_context_compact_stage(
                 "payload": {
                     "stage": "context-compact",
                     "detail": detail,
+                    "result": result,
                     "recorded_at": recorded.isoformat(),
                     "event_id": source_event_id,
                 },
             }
         )
+
+
+def _context_compact_result_text(
+    *,
+    method: str,
+    reflect_attempted: bool,
+    compacted_messages: int,
+    before_messages: int,
+    after_messages: int,
+) -> str:
+    if method == "reflect":
+        prefix = "Reflect context compression completed"
+    elif reflect_attempted:
+        prefix = "Reflect failed; deterministic fallback completed"
+    else:
+        prefix = "Deterministic context compression completed"
+    return (
+        f"{prefix}. "
+        f"method={method}; messages={before_messages}->{after_messages}; "
+        f"compacted_messages={compacted_messages}"
+    )
 
 
 def _persist_context_compress_summary(app: Any, episode_id: str, summary: str) -> None:
