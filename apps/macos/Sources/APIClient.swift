@@ -134,6 +134,20 @@ struct APIClient {
         }
     }
 
+    func configureLocalEmbedding(source: String, forceDownload: Bool) async throws {
+        let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let resolvedSource = normalizedSource == "modelscope" ? "modelscope" : "huggingface"
+        _ = try await request(
+            path: "/v1/providers/embeddings",
+            method: "POST",
+            body: [
+                "source": "local",
+                "modelSource": resolvedSource,
+                "forceDownload": forceDownload
+            ]
+        )
+    }
+
     func createElephant(name: String, identityText: String) async throws -> String {
         let json = try await request(
             path: "/v1/herd",
@@ -256,6 +270,8 @@ struct APIClient {
             body: [
                 "append": true,
                 "fields": fields,
+                "durable_fields": durableNotes,
+                "split_personal_model_facts": true,
                 "text": lines
             ]
         )
@@ -676,6 +692,7 @@ struct APIClient {
             return WakeStreamEvent(
                 type: type,
                 toolEvent: ToolUseEvent(
+                    sourceID: "loop.started",
                     name: "Chat loop",
                     status: "running",
                     arguments: message,
@@ -691,6 +708,7 @@ struct APIClient {
             return WakeStreamEvent(
                 type: type,
                 toolEvent: ToolUseEvent(
+                    sourceID: String(describing: object["id"] ?? object["stream_sequence"] ?? ""),
                     name: stageTitle(object["stage"] as? String ?? "Working"),
                     status: object["status"] as? String ?? "running",
                     arguments: object["detail"] as? String ?? "",
@@ -769,8 +787,15 @@ struct APIClient {
         let object = try JSONSerialization.jsonObject(with: data)
         let json = object as? [String: Any] ?? [:]
         guard (200..<300).contains(statusCode) else {
-            let detail = json["detail"] as? String ?? json["error"] as? String ?? "HTTP \(statusCode)"
-            throw APIClientError.badStatus(detail)
+            let error = json["error"] as? String
+            let detail = json["detail"] as? String
+            let missing = json["missing"] as? String
+            let message = [detail, error, missing.map { "missing \($0)" }]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ": ")
+            let resolvedMessage = message.isEmpty ? "HTTP \(statusCode)" : message
+            throw APIClientError.badStatus(resolvedMessage)
         }
         return json
     }
@@ -1098,6 +1123,13 @@ enum SnapshotParser {
         snapshot.embeddingRuntimeStatus = string(embeddingProvider["embedding_runtime_status"] ?? embeddingProvider["runtime_status"])
         snapshot.embeddingRuntimeState = string(embeddingProvider["embedding_runtime_state"] ?? embeddingProvider["runtime_state"])
         snapshot.embeddingRuntimeSummary = string(embeddingProvider["embedding_runtime_summary"] ?? embeddingProvider["runtime_summary"])
+        snapshot.embeddingBootstrapSource = string(
+            embeddingProvider["embedding_bootstrap_source"]
+                ?? embeddingProvider["embeddingSource"]
+                ?? embeddingProvider["embedding_source"]
+        )
+        snapshot.embeddingModelRoot = string(embeddingProvider["embedding_model_root"] ?? embeddingProvider["model_root"])
+        snapshot.embeddingModelSourceURL = string(embeddingProvider["embedding_model_source_url"] ?? embeddingProvider["model_source_url"])
         snapshot.embeddingReady = bool(
             embeddingProvider["embedding_ready"]
                 ?? embeddingProvider["embedding_runtime_ready"]
@@ -1111,60 +1143,12 @@ enum SnapshotParser {
         }
         let providerRows = models["providers"] as? [[String: Any]] ?? []
         let providerKeyRows = models["keys"] as? [[String: Any]] ?? []
-        snapshot.providerOptions = providerRows.compactMap { row in
-            let id = string(row["provider_id"] ?? row["providerId"] ?? row["id"])
-            guard !id.isEmpty else { return nil }
-            let discovered = row["discovered_state"] as? [String: Any] ?? [:]
-            let isActive = id == snapshot.providerID
-            let storedKeyCount = providerKeyRows.filter { key in
-                string(key["providerId"] ?? key["provider_id"]) == id && bool(key["hasValue"] ?? key["has_value"])
-            }.count
-            let status = string(discovered["status"] ?? row["status"])
-            let source = string(discovered["source"] ?? row["source"])
-            let defaultModel = string(
-                discovered["default_model"]
-                    ?? row["default_model"]
-                    ?? row["default_model_id"]
-                    ?? row["model_id"]
-            )
-            let discoveredModels = (discovered["models"] as? [[String: Any]])
-                ?? (row["models"] as? [[String: Any]])
-                ?? (discovered["model_options"] as? [[String: Any]])
-                ?? []
-            let activeModel = isActive ? snapshot.providerModelID : ""
-            let modelRows = providerModelOptions(
-                fromDiscoveredRows: discoveredModels,
-                providerRow: row,
-                defaultModel: activeModel.isEmpty ? defaultModel : activeModel
-            )
-            let runtimeConnected = ["authenticated", "configured", "available", "ready"].contains { status.lowercased().contains($0) }
-            return ProviderOption(
-                id: id,
-                displayName: string(row["display_name"] ?? row["displayName"] ?? row["name"], fallback: id),
-                defaultModel: activeModel.isEmpty ? defaultModel : activeModel,
-                defaultBaseURL: string(
-                    discovered["base_url"]
-                        ?? discovered["baseUrl"]
-                        ?? discovered["default_base_url"]
-                        ?? discovered["defaultBaseURL"]
-                        ?? discovered["endpoint"]
-                        ?? row["default_base_url"]
-                        ?? row["defaultBaseURL"]
-                        ?? row["base_url"]
-                        ?? row["baseUrl"]
-                        ?? row["endpoint"]
-                        ?? row["url"]
-                ),
-                status: status,
-                source: source,
-                authKind: string(row["auth_method"] ?? row["auth_type"] ?? row["auth_kind"] ?? row["authKind"] ?? row["credential_kind"] ?? row["credentialKind"]),
-                summary: string(row["catalog_summary"] ?? row["onboarding_hint"] ?? row["transport_display_name"]),
-                connected: isActive || runtimeConnected || storedKeyCount > 0,
-                active: isActive,
-                storedKeyCount: storedKeyCount,
-                models: modelRows
-            )
-        }
+        snapshot.providerOptions = providerOptions(
+            from: providerRows,
+            providerKeyRows: providerKeyRows,
+            activeProviderID: snapshot.providerID,
+            activeProviderModelID: snapshot.providerModelID
+        )
         if snapshot.providerBaseURL.isEmpty,
            let activeOption = snapshot.providerOptions.first(where: { $0.id == snapshot.providerID }),
            !activeOption.defaultBaseURL.isEmpty {
@@ -1301,6 +1285,134 @@ enum SnapshotParser {
         }
 
         return snapshot
+    }
+
+    private static func providerOptions(
+        from providerRows: [[String: Any]],
+        providerKeyRows: [[String: Any]],
+        activeProviderID: String,
+        activeProviderModelID: String
+    ) -> [ProviderOption] {
+        providerRows.compactMap { row in
+            providerOption(
+                from: row,
+                providerKeyRows: providerKeyRows,
+                activeProviderID: activeProviderID,
+                activeProviderModelID: activeProviderModelID
+            )
+        }
+    }
+
+    private static func providerOption(
+        from row: [String: Any],
+        providerKeyRows: [[String: Any]],
+        activeProviderID: String,
+        activeProviderModelID: String
+    ) -> ProviderOption? {
+        let id = string(row["provider_id"] ?? row["providerId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+
+        let discovered = row["discovered_state"] as? [String: Any] ?? [:]
+        let isActive = id == activeProviderID
+        let storedKeyCount = storedProviderKeyCount(for: id, in: providerKeyRows)
+        let status = providerStatus(discovered: discovered, row: row)
+        let defaultModel = providerDefaultModel(discovered: discovered, row: row)
+        let activeModel = isActive ? activeProviderModelID : ""
+        let resolvedModel = activeModel.isEmpty ? defaultModel : activeModel
+        let modelRows = providerModelOptions(
+            fromDiscoveredRows: providerDiscoveredModels(discovered: discovered, row: row),
+            providerRow: row,
+            defaultModel: resolvedModel
+        )
+
+        return ProviderOption(
+            id: id,
+            displayName: providerDisplayName(row: row, fallback: id),
+            defaultModel: resolvedModel,
+            defaultBaseURL: providerBaseURL(discovered: discovered, row: row),
+            status: status,
+            source: string(discovered["source"] ?? row["source"]),
+            authKind: providerAuthKind(row),
+            summary: providerSummary(row),
+            connected: isActive || providerRuntimeConnected(status) || storedKeyCount > 0,
+            active: isActive,
+            storedKeyCount: storedKeyCount,
+            models: modelRows
+        )
+    }
+
+    private static func storedProviderKeyCount(for providerID: String, in providerKeyRows: [[String: Any]]) -> Int {
+        providerKeyRows.filter { key in
+            string(key["providerId"] ?? key["provider_id"]) == providerID
+                && bool(key["hasValue"] ?? key["has_value"])
+        }.count
+    }
+
+    private static func providerStatus(discovered: [String: Any], row: [String: Any]) -> String {
+        let discoveredStatus = string(discovered["status"])
+        if !discoveredStatus.isEmpty {
+            return discoveredStatus
+        }
+        return string(row["status"])
+    }
+
+    private static func providerDefaultModel(discovered: [String: Any], row: [String: Any]) -> String {
+        let discoveredDefault = firstString(in: discovered, keys: ["default_model"])
+        if !discoveredDefault.isEmpty {
+            return discoveredDefault
+        }
+        return firstString(in: row, keys: ["default_model", "default_model_id", "model_id"])
+    }
+
+    private static func providerDiscoveredModels(discovered: [String: Any], row: [String: Any]) -> [[String: Any]] {
+        if let rows = discovered["models"] as? [[String: Any]] { return rows }
+        if let rows = row["models"] as? [[String: Any]] { return rows }
+        if let rows = discovered["model_options"] as? [[String: Any]] { return rows }
+        return []
+    }
+
+    private static func providerBaseURL(discovered: [String: Any], row: [String: Any]) -> String {
+        let discoveredURL = firstString(
+            in: discovered,
+            keys: ["base_url", "baseUrl", "default_base_url", "defaultBaseURL", "endpoint"]
+        )
+        if !discoveredURL.isEmpty {
+            return discoveredURL
+        }
+        return firstString(
+            in: row,
+            keys: ["default_base_url", "defaultBaseURL", "base_url", "baseUrl", "endpoint", "url"]
+        )
+    }
+
+    private static func providerDisplayName(row: [String: Any], fallback: String) -> String {
+        firstString(in: row, keys: ["display_name", "displayName", "name"], fallback: fallback)
+    }
+
+    private static func providerAuthKind(_ row: [String: Any]) -> String {
+        firstString(
+            in: row,
+            keys: ["auth_method", "auth_type", "auth_kind", "authKind", "credential_kind", "credentialKind"]
+        )
+    }
+
+    private static func providerSummary(_ row: [String: Any]) -> String {
+        firstString(in: row, keys: ["catalog_summary", "onboarding_hint", "transport_display_name"])
+    }
+
+    private static func providerRuntimeConnected(_ status: String) -> Bool {
+        let normalized = status.lowercased()
+        return ["authenticated", "configured", "available", "ready"].contains { normalized.contains($0) }
+    }
+
+    private static func firstString(in row: [String: Any], keys: [String], fallback: String = "") -> String {
+        for key in keys {
+            let value = string(row[key])
+            if !value.isEmpty {
+                return value
+            }
+        }
+        return fallback
     }
 
     static func providerModelOptions(
@@ -1519,6 +1631,8 @@ enum SnapshotParser {
         var deduped: [ToolUseEvent] = []
         for event in events {
             let key = [
+                event.sourceID,
+                event.invocationID,
                 event.name,
                 event.status,
                 event.arguments,
@@ -1574,6 +1688,13 @@ enum SnapshotParser {
                 ?? metadata["invocation_id"]
                 ?? metadata["invocationId"]
         )
+        var sourceID = firstString(in: detail, keys: ["id", "event_id", "eventId"])
+        if sourceID.isEmpty {
+            sourceID = firstString(in: dictionary, keys: ["id", "event_id", "eventId", "stream_sequence"])
+        }
+        if sourceID.isEmpty {
+            sourceID = firstString(in: metadata, keys: ["id", "event_id", "eventId"])
+        }
         let name = compactToolText(
             detail["tool_name"]
                 ?? dictionary["tool_name"]
@@ -1612,6 +1733,7 @@ enum SnapshotParser {
         let rawStatus = string(dictionary["status"], fallback: fallbackStatus)
         events.append(
             ToolUseEvent(
+                sourceID: sourceID,
                 invocationID: invocationID,
                 name: name.isEmpty ? "tool" : name,
                 status: rawStatus.isEmpty ? fallbackStatus : rawStatus,
@@ -1772,7 +1894,7 @@ enum SnapshotParser {
         }
 
         if !pendingToolEvents.isEmpty {
-            result.append(ChatMessage(role: .assistant, text: "Tool trace", toolEvents: pendingToolEvents))
+            result.append(ChatMessage(role: .assistant, text: "", toolEvents: pendingToolEvents))
         }
 
         return result
@@ -1893,6 +2015,18 @@ enum SnapshotParser {
 
     private static func stripProfileFactPrefix(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferredNamePatterns = [
+            #"^(?:用户)?(?:偏好|希望|喜欢)?(?:被)?(?:称为|叫做|叫|称呼为)\s*"#,
+            #"^(?:Preferred name|Name|昵称|名字|称呼)[：:]\s*"#
+        ]
+        for pattern in preferredNamePatterns {
+            if let range = trimmed.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                let cleaned = String(trimmed[range.upperBound...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
         guard let range = trimmed.range(of: #"^[^:：]+[：:]\s*"#, options: .regularExpression) else {
             return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
         }

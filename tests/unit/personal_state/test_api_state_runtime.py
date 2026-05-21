@@ -246,6 +246,68 @@ class APIStateServiceTest(unittest.TestCase):
         ):
             self.assertIn(expected, fact_text)
 
+    def test_update_user_state_can_split_onboarding_profile_into_independent_facts(self) -> None:
+        tmpdir, repository, personal_model, state, episode, runtime = self._bootstrap()
+        self.addCleanup(tmpdir.cleanup)
+
+        fields = {
+            "preferred_name": "Bit",
+            "current_work": "Building durable agent systems.",
+            "current_city": "Asia/Shanghai",
+            "first_language": "zh",
+            "boundaries": "Ask before discussing health.",
+        }
+        durable_notes = {
+            "blog": "https://example.com/blog",
+            "linkedin": "https://linkedin.com/in/bit",
+            "pressure_pattern": "Checks details repeatedly",
+        }
+        text = "\n".join(f"{key}: {value}" for key, value in {**fields, **durable_notes}.items())
+
+        updated = runtime.update_user_state(
+            state_id=state.state_id,
+            episode_id=episode.episode_id,
+            fields=fields,
+            text=text,
+            append=True,
+            split_personal_model_facts=True,
+        )
+
+        self.assertEqual(updated.preferred_name, "Bit")
+        active_facts = self._canonical_facts(
+            repository,
+            personal_model_id=personal_model.profile_id,
+            sync_source="api.user.update",
+        )
+        self.assertGreaterEqual(len(active_facts), 8)
+        self.assertFalse(
+            any(str(fact.metadata.get("canonical_component") or "") == "user-profile" for fact in active_facts)
+        )
+        facts_by_field = {
+            str(fact.metadata.get("init_profile_field") or ""): fact
+            for fact in active_facts
+        }
+        self.assertEqual(facts_by_field["preferred_name"].text, "Bit")
+        self.assertEqual(str(facts_by_field["preferred_name"].metadata.get("topic") or ""), "identity.anchor.name.preferred")
+        self.assertEqual(facts_by_field["current_work"].lens, "pulse")
+        self.assertEqual(facts_by_field["blog"].text, "blog: https://example.com/blog")
+
+        all_update_facts = tuple(
+            fact
+            for fact in repository.list_personal_model_facts(
+                personal_model_id=personal_model.profile_id,
+                status=("active", "deleted"),
+            )
+            if str(fact.metadata.get("sync_source") or "") == "api.user.update"
+        )
+        aggregate_facts = tuple(
+            fact
+            for fact in all_update_facts
+            if str(fact.metadata.get("canonical_component") or "") == "user-profile"
+        )
+        self.assertEqual(len(aggregate_facts), 1)
+        self.assertEqual(aggregate_facts[0].status, "deleted")
+
     def test_update_relationship_state_adds_one_governed_memory_capture(self) -> None:
         tmpdir, repository, personal_model, state, episode, runtime = self._bootstrap()
         self.addCleanup(tmpdir.cleanup)

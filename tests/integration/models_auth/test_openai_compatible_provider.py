@@ -1331,7 +1331,7 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
         self.assertEqual(transport.timeout_seconds, DEFAULT_PROVIDER_HTTP_TIMEOUT_SECONDS)
         self.assertEqual(transport.timeout_seconds, 120.0)
         self.assertEqual(transport.stream_timeout_seconds, DEFAULT_PROVIDER_STREAM_HEARTBEAT_SECONDS)
-        self.assertEqual(transport.stream_timeout_seconds, 30.0)
+        self.assertEqual(transport.stream_timeout_seconds, 21_600.0)
 
     def test_html_http_errors_are_summarized_with_codex_reauth_hint(self) -> None:
         transport = UrllibJSONHTTPTransport()
@@ -1430,7 +1430,7 @@ class UrllibJSONHTTPTransportFallbackTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("--write-out", command)
         self.assertIn("--max-time", command)
-        self.assertEqual(command[command.index("--max-time") + 1], "30")
+        self.assertEqual(command[command.index("--max-time") + 1], "21600")
         self.assertIn("https://api.githubcopilot.com/v1/responses", command)
 
 

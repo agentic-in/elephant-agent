@@ -111,11 +111,26 @@ def _project_companion_settings(
         return resolved_current
     governance_flags = set(identity_record.governance_flags if identity_record is not None else ())
     notes = relationship_record.continuity_notes if relationship_record is not None else resolved_current.notes
+    requested_preset = (
+        identity_record.personality_preset.strip()
+        if identity_record is not None and identity_record.personality_preset.strip()
+        else resolved_current.personality_preset
+    )
+    resolved_preset = resolve_personality_preset(requested_preset, mode=mode)
+    personality = (
+        resolved_current.personality
+        if requested_preset == resolved_current.personality_preset
+        else resolved_preset.traits
+    )
     return CompanionSettings(
         text_first=_flag_enabled(governance_flags, positive="text-first", fallback=resolved_current.text_first),
-        personality_preset=resolved_current.personality_preset,
-        personality=resolved_current.personality,
-        initiative=resolved_current.initiative,
+        personality_preset=resolved_preset.preset_id,
+        personality=personality,
+        initiative=(
+            identity_record.initiative.strip()
+            if identity_record is not None and identity_record.initiative.strip()
+            else resolved_current.initiative
+        ),
         preserve_relationship_timeline=_flag_enabled(
             governance_flags,
             positive="preserve-relationship-timeline",

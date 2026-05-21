@@ -3,25 +3,25 @@
 @import "./skillhub.css";
 
 :root {
-  --ifm-color-primary: #5f95b8;
-  --ifm-color-primary-dark: #4f86aa;
-  --ifm-color-primary-darker: #42799c;
-  --ifm-color-primary-darkest: #376c8f;
-  --ifm-color-primary-light: #79afd4;
-  --ifm-color-primary-lighter: #9bc7df;
-  --ifm-color-primary-lightest: #cbe3f2;
-  --ifm-background-color: #f6fbff;
+  --ifm-color-primary: #6f9294;
+  --ifm-color-primary-dark: #587d80;
+  --ifm-color-primary-darker: #4e7377;
+  --ifm-color-primary-darkest: #42676b;
+  --ifm-color-primary-light: #87a9a5;
+  --ifm-color-primary-lighter: #b6cbc7;
+  --ifm-color-primary-lightest: #dce9e4;
+  --ifm-background-color: #fbf7ef;
   --ifm-background-surface-color: rgba(255, 255, 255, 0.88);
-  --ifm-font-color-base: #1d2b36;
-  --ifm-color-content: #1d2b36;
-  --ifm-color-content-secondary: rgba(43, 39, 32, 0.7);
-  --ifm-color-emphasis-100: rgba(43, 39, 32, 0.04);
-  --ifm-color-emphasis-200: rgba(43, 39, 32, 0.08);
-  --ifm-color-emphasis-300: rgba(43, 39, 32, 0.14);
-  --ifm-color-emphasis-500: #637989;
-  --ifm-color-emphasis-600: #526b7d;
-  --ifm-color-emphasis-700: #304452;
-  --ifm-heading-color: #1d2b36;
+  --ifm-font-color-base: #243039;
+  --ifm-color-content: #243039;
+  --ifm-color-content-secondary: rgba(48, 43, 36, 0.7);
+  --ifm-color-emphasis-100: rgba(48, 43, 36, 0.04);
+  --ifm-color-emphasis-200: rgba(48, 43, 36, 0.08);
+  --ifm-color-emphasis-300: rgba(48, 43, 36, 0.14);
+  --ifm-color-emphasis-500: #68736f;
+  --ifm-color-emphasis-600: #5f6f70;
+  --ifm-color-emphasis-700: #2d3938;
+  --ifm-heading-color: #243039;
   --ifm-font-family-base: var(--font-main);
   --ifm-heading-font-family: var(--font-main);
   --ifm-heading-font-weight: 400;
@@ -33,23 +33,23 @@
   --ifm-menu-link-padding-horizontal: 0.88rem;
   --ifm-menu-link-padding-vertical: 0.7rem;
   --ifm-toc-border-color: var(--border-soft);
-  --ifm-pre-background: #eaf4fb;
-  --ifm-code-background: rgba(121, 175, 212, 0.16);
+  --ifm-pre-background: #f4efe7;
+  --ifm-code-background: rgba(135, 169, 165, 0.16);
 }
 
 html[data-theme="dark"] {
-  --ifm-background-color: #f6fbff;
+  --ifm-background-color: #fbf7ef;
   --ifm-background-surface-color: rgba(255, 255, 255, 0.88);
-  --ifm-font-color-base: #1d2b36;
-  --ifm-color-content: #1d2b36;
-  --ifm-color-content-secondary: rgba(43, 39, 32, 0.68);
-  --ifm-color-emphasis-100: rgba(43, 39, 32, 0.04);
-  --ifm-color-emphasis-200: rgba(43, 39, 32, 0.08);
-  --ifm-color-emphasis-300: rgba(43, 39, 32, 0.14);
-  --ifm-color-emphasis-600: #526b7d;
-  --ifm-color-emphasis-700: #304452;
-  --ifm-heading-color: #1d2b36;
-  --ifm-hover-overlay: rgba(121, 175, 212, 0.12);
+  --ifm-font-color-base: #243039;
+  --ifm-color-content: #243039;
+  --ifm-color-content-secondary: rgba(48, 43, 36, 0.68);
+  --ifm-color-emphasis-100: rgba(48, 43, 36, 0.04);
+  --ifm-color-emphasis-200: rgba(48, 43, 36, 0.08);
+  --ifm-color-emphasis-300: rgba(48, 43, 36, 0.14);
+  --ifm-color-emphasis-600: #5f6f70;
+  --ifm-color-emphasis-700: #2d3938;
+  --ifm-heading-color: #243039;
+  --ifm-hover-overlay: rgba(135, 169, 165, 0.12);
 }
 
 html,
@@ -116,12 +116,12 @@ html.docs-wrapper .theme-doc-markdown a:not(.hash-link):not(.button) {
   font-weight: 520;
   text-decoration-line: underline;
   text-decoration-thickness: 0.08em;
-  text-decoration-color: rgba(121, 175, 212, 0.42);
+  text-decoration-color: rgba(135, 169, 165, 0.42);
   text-underline-offset: 0.2em;
   background-image: linear-gradient(
     180deg,
     transparent 58%,
-    rgba(203, 227, 242, 0.62) 58%
+    rgba(220, 233, 228, 0.62) 58%
   );
   background-size: 100% 100%;
   border-radius: 0.18rem;
@@ -134,7 +134,7 @@ html.docs-wrapper .theme-doc-markdown a:not(.hash-link):not(.button) {
 .blog-post-page .markdown a:not(.hash-link):not(.tag):hover,
 html.docs-wrapper .theme-doc-markdown a:not(.hash-link):not(.button):hover {
   color: var(--accent-dark);
-  text-decoration-color: rgba(79, 134, 170, 0.82);
+  text-decoration-color: rgba(88, 125, 128, 0.82);
   background-size: 100% 135%;
 }
 
@@ -150,12 +150,12 @@ html.docs-wrapper .theme-doc-markdown p > a:only-child {
   gap: 0.55rem;
   min-height: 2.5rem;
   padding: 0.45rem 0.9rem 0.48rem 1rem;
-  border: 1px solid rgba(79, 134, 170, 0.22);
+  border: 1px solid rgba(88, 125, 128, 0.22);
   border-radius: 999px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 251, 255, 0.88)),
-    rgba(203, 227, 242, 0.3);
-  box-shadow: 0 10px 24px rgba(45, 92, 123, 0.08);
+    rgba(220, 233, 228, 0.3);
+  box-shadow: 0 10px 24px rgba(71, 83, 79, 0.08);
   color: var(--text-main);
   font-weight: 620;
   line-height: 1.1;
@@ -173,10 +173,10 @@ html.docs-wrapper .theme-doc-markdown p > a:only-child::after {
 
 .blog-post-page .markdown p > a:only-child:hover,
 html.docs-wrapper .theme-doc-markdown p > a:only-child:hover {
-  border-color: rgba(79, 134, 170, 0.42);
+  border-color: rgba(88, 125, 128, 0.42);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 248, 254, 0.94)),
-    rgba(203, 227, 242, 0.42);
+    rgba(220, 233, 228, 0.42);
 }
 
 .blog-post-page .markdown p > a:only-child:hover::after,
@@ -256,7 +256,7 @@ html.docs-wrapper .theme-doc-markdown p > a:only-child:hover::after {
 
 .blog-post-page .markdown blockquote {
   border-left: 3px solid var(--accent-light);
-  background: rgba(203, 227, 242, 0.22);
+  background: rgba(220, 233, 228, 0.22);
   border-radius: 0 0.6rem 0.6rem 0;
   padding: 0.8rem 1.2rem;
   font-style: normal;
@@ -268,7 +268,7 @@ html.docs-wrapper .theme-doc-markdown p > a:only-child:hover::after {
 }
 
 .blog-post-page .markdown code {
-  background: rgba(121, 175, 212, 0.16);
+  background: rgba(135, 169, 165, 0.16);
   border-radius: 0.35rem;
   padding: 0.15rem 0.4rem;
   font-size: 0.88em;
@@ -294,7 +294,7 @@ html.docs-wrapper .theme-doc-markdown p > a:only-child:hover::after {
 
 .blog-post-page .markdown thead tr,
 .blog-post-page .markdown tr:nth-child(2n) {
-  background: rgba(203, 227, 242, 0.18);
+  background: rgba(220, 233, 228, 0.18);
 }
 
 .blog-post-page .markdown table th {
@@ -320,7 +320,7 @@ html.docs-wrapper .theme-doc-markdown p > a:only-child:hover::after {
 }
 
 .blog-post-page .markdown table tr:hover td {
-  background: rgba(203, 227, 242, 0.18);
+  background: rgba(220, 233, 228, 0.18);
 }
 
 .blog-post-page .avatar {

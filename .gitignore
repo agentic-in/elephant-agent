@@ -34,3 +34,4 @@ skills/
 packages/skills/**/__pycache__/
 packages/skills/**/*.py[cod]
 _temp/
+tmp/

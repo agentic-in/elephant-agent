@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 struct AppActivityMonitor: NSViewRepresentable {
@@ -82,33 +83,47 @@ struct SleepDisplayView: View {
             let avatarSize = min(132, max(94, shortest * 0.13))
 
             ZStack {
-                AppBackground()
-                    .blur(radius: reduceMotion ? 0 : 20)
-                    .saturation(1.14)
-                    .brightness(-0.05)
-                    .opacity(0.96)
+                SleepVideoBackdrop(paused: reduceMotion)
+                    .saturation(1.08)
+                    .brightness(-0.04)
+                    .ignoresSafeArea()
 
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(0.18),
-                        ElephantTheme.accent.opacity(0.16),
-                        Color.black.opacity(0.22)
+                        Color.black.opacity(0.30),
+                        ElephantTheme.accent.opacity(0.10),
+                        Color.black.opacity(0.38)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
 
-                Rectangle()
-                    .fill(.thinMaterial)
-                    .overlay(
-                        Color.white.opacity(0.10)
-                    )
+                Color.black.opacity(0.08)
                     .ignoresSafeArea()
 
                 SleepAmbientGlass(paused: reduceMotion)
-                    .opacity(0.74)
+                    .opacity(0.56)
                     .allowsHitTesting(false)
+
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(model.text(.sleepBrandTitle))
+                                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.88))
+                            Text(model.text(.sleepBrandSlogan))
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.62))
+                                .lineLimit(2)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 34)
+                    .padding(.bottom, 28)
+                }
+                .allowsHitTesting(false)
 
                 VStack(spacing: 0) {
                     TimelineView(.periodic(from: Date(), by: 1.0)) { timeline in
@@ -203,44 +218,140 @@ struct SleepDisplayView: View {
     }
 }
 
+private struct SleepVideoBackdrop: View {
+    var paused: Bool
+
+    var body: some View {
+        if let bundledURL = Bundle.main.url(forResource: "baby-el", withExtension: "mp4") {
+            LoopingVideoBackground(url: bundledURL, paused: paused)
+        } else {
+            AppBackground()
+                .blur(radius: paused ? 0 : 20)
+                .saturation(1.14)
+                .opacity(0.96)
+        }
+    }
+}
+
+private struct LoopingVideoBackground: NSViewRepresentable {
+    var url: URL
+    var paused: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> VideoLayerView {
+        let view = VideoLayerView()
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer(playerItem: item)
+        let looper = AVPlayerLooper(player: player, templateItem: item)
+        player.isMuted = true
+        player.actionAtItemEnd = .none
+        player.play()
+        view.playerLayer.player = player
+        context.coordinator.player = player
+        context.coordinator.looper = looper
+        return view
+    }
+
+    func updateNSView(_ nsView: VideoLayerView, context: Context) {
+        if paused {
+            context.coordinator.player?.pause()
+        } else {
+            context.coordinator.player?.play()
+        }
+    }
+
+    static func dismantleNSView(_ nsView: VideoLayerView, coordinator: Coordinator) {
+        coordinator.player?.pause()
+        nsView.playerLayer.player = nil
+    }
+
+    final class Coordinator {
+        var player: AVQueuePlayer?
+        var looper: AVPlayerLooper?
+    }
+}
+
+private final class VideoLayerView: NSView {
+    let playerLayer = AVPlayerLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
+    }
+}
+
 private struct SleepAmbientGlass: View {
     var paused: Bool
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: paused)) { timeline in
-            Canvas { context, size in
-                let phase = paused ? 0 : timeline.date.timeIntervalSinceReferenceDate
-                let palette = [ElephantTheme.accent, ElephantTheme.mint, ElephantTheme.ember, ElephantTheme.green]
+            SleepAmbientCanvas(phase: paused ? 0 : timeline.date.timeIntervalSinceReferenceDate)
+                .blur(radius: 18)
+        }
+    }
+}
 
-                for index in 0..<7 {
-                    let progress = CGFloat((phase * (0.020 + Double(index) * 0.004) + Double(index) * 0.19).truncatingRemainder(dividingBy: 1))
-                    let x = size.width * (0.10 + 0.80 * progress)
-                    let y = size.height * (0.18 + 0.64 * CGFloat((sin(phase * 0.18 + Double(index)) + 1.0) / 2.0))
-                    let radius = min(size.width, size.height) * (0.10 + CGFloat(index % 3) * 0.035)
-                    let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(palette[index % palette.count].opacity(0.045))
-                    )
-                }
+private struct SleepAmbientCanvas: View {
+    var phase: TimeInterval
+    private let palette = [ElephantTheme.accent, ElephantTheme.mint, ElephantTheme.ember, ElephantTheme.green]
 
-                for index in 0..<4 {
-                    let y = size.height * (0.24 + CGFloat(index) * 0.17)
-                    var path = Path()
-                    path.move(to: CGPoint(x: -120, y: y))
-                    path.addCurve(
-                        to: CGPoint(x: size.width + 120, y: y + CGFloat(sin(phase * 0.22 + Double(index))) * 22),
-                        control1: CGPoint(x: size.width * 0.25, y: y - 74 + CGFloat(cos(phase * 0.21 + Double(index))) * 20),
-                        control2: CGPoint(x: size.width * 0.70, y: y + 74 + CGFloat(sin(phase * 0.17 + Double(index))) * 20)
-                    )
-                    context.stroke(
-                        path,
-                        with: .color(.white.opacity(0.18)),
-                        style: StrokeStyle(lineWidth: 1.1, lineCap: .round)
-                    )
-                }
-            }
-            .blur(radius: 18)
+    var body: some View {
+        Canvas { context, size in
+            drawOrbs(context: &context, size: size)
+            drawWaveLines(context: &context, size: size)
+        }
+    }
+
+    private func drawOrbs(context: inout GraphicsContext, size: CGSize) {
+        for index in 0..<7 {
+            let speed = 0.020 + Double(index) * 0.004
+            let offset = Double(index) * 0.19
+            let progress = CGFloat((phase * speed + offset).truncatingRemainder(dividingBy: 1))
+            let x = size.width * (0.10 + 0.80 * progress)
+            let wave = CGFloat((sin(phase * 0.18 + Double(index)) + 1.0) / 2.0)
+            let y = size.height * (0.18 + 0.64 * wave)
+            let radius = min(size.width, size.height) * (0.10 + CGFloat(index % 3) * 0.035)
+            let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+            context.fill(
+                Path(ellipseIn: rect),
+                with: .color(palette[index % palette.count].opacity(0.045))
+            )
+        }
+    }
+
+    private func drawWaveLines(context: inout GraphicsContext, size: CGSize) {
+        for index in 0..<4 {
+            let y = size.height * (0.24 + CGFloat(index) * 0.17)
+            let indexPhase = Double(index)
+            var path = Path()
+            path.move(to: CGPoint(x: -120, y: y))
+            path.addCurve(
+                to: CGPoint(x: size.width + 120, y: y + CGFloat(sin(phase * 0.22 + indexPhase)) * 22),
+                control1: CGPoint(x: size.width * 0.25, y: y - 74 + CGFloat(cos(phase * 0.21 + indexPhase)) * 20),
+                control2: CGPoint(x: size.width * 0.70, y: y + 74 + CGFloat(sin(phase * 0.17 + indexPhase)) * 20)
+            )
+            context.stroke(
+                path,
+                with: .color(.white.opacity(0.18)),
+                style: StrokeStyle(lineWidth: 1.1, lineCap: .round)
+            )
         }
     }
 }

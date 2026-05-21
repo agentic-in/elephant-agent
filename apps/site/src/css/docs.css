@@ -17,12 +17,12 @@ html.docs-wrapper .theme-doc-markdown {
 html.docs-wrapper article {
   max-width: none;
   padding: clamp(1.35rem, 2vw, 2.15rem);
-  border: 1px solid rgba(54, 103, 135, 0.12);
+  border: 1px solid rgba(76, 91, 91, 0.12);
   border-radius: 1.2rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.94)),
     rgba(255, 255, 255, 0.9);
-  box-shadow: 0 18px 42px rgba(45, 92, 123, 0.06);
+  box-shadow: 0 18px 42px rgba(71, 83, 79, 0.06);
 }
 
 html.docs-wrapper .theme-doc-breadcrumbs {
@@ -39,7 +39,7 @@ html.docs-wrapper .theme-doc-markdown p,
 html.docs-wrapper .theme-doc-markdown li,
 html.docs-wrapper .theme-doc-markdown td,
 html.docs-wrapper .theme-doc-markdown blockquote {
-  color: #1d2b36;
+  color: #243039;
 }
 
 html.docs-wrapper .breadcrumbs {
@@ -64,7 +64,7 @@ html.docs-doc-id-intro .theme-doc-markdown > p:first-of-type {
   max-width: 52rem;
   font-size: 1.12rem;
   line-height: 1.75;
-  color: #304452;
+  color: #2d3938;
 }
 
 html.docs-wrapper .theme-doc-markdown h2,
@@ -107,7 +107,7 @@ html.docs-wrapper .theme-doc-markdown :is(a, code) {
 }
 
 html.docs-wrapper .theme-doc-markdown code {
-  border: 1px solid rgba(54, 103, 135, 0.12);
+  border: 1px solid rgba(76, 91, 91, 0.12);
   border-radius: 0.45rem;
   color: var(--text-main);
   background: rgba(170, 162, 149, 0.12);
@@ -161,7 +161,7 @@ html.docs-wrapper .menu__link {
 
 html.docs-wrapper .menu__link:hover,
 html.docs-wrapper .menu__link--active {
-  background: rgba(203, 227, 242, 0.28);
+  background: rgba(220, 233, 228, 0.28);
   color: var(--text-main);
 }
 
@@ -249,12 +249,12 @@ html.docs-wrapper .table-of-contents__link:hover {
   html.docs-wrapper .theme-doc-sidebar-menu {
     margin-right: 1.1rem;
     padding: 0.68rem 0.66rem 0.85rem;
-    border: 1px solid rgba(54, 103, 135, 0.11);
+    border: 1px solid rgba(76, 91, 91, 0.11);
     border-radius: 1.05rem;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(246, 251, 255, 0.68)),
       rgba(255, 255, 255, 0.7);
-    box-shadow: 0 14px 32px rgba(45, 92, 123, 0.055);
+    box-shadow: 0 14px 32px rgba(71, 83, 79, 0.055);
     overflow: visible;
   }
 
@@ -272,7 +272,7 @@ html.docs-wrapper .table-of-contents__link:hover {
   html.docs-wrapper .theme-doc-sidebar-menu > .menu__list > .menu__list-item:not(:first-child) {
     margin-top: 0.65rem;
     padding-top: 0.58rem;
-    border-top: 1px solid rgba(54, 103, 135, 0.09);
+    border-top: 1px solid rgba(76, 91, 91, 0.09);
   }
 
   html.docs-wrapper .theme-doc-sidebar-menu .theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
@@ -300,12 +300,12 @@ html.docs-wrapper .table-of-contents__link:hover {
   html.docs-wrapper .theme-doc-sidebar-menu .theme-doc-sidebar-item-link-level-1 > .menu__link {
     margin: 0 0 0.28rem;
     padding: 0.75rem 0.85rem;
-    border: 1px solid rgba(79, 134, 170, 0.16);
+    border: 1px solid rgba(88, 125, 128, 0.16);
     border-radius: 0.85rem;
     background: rgba(255, 255, 255, 0.68);
     color: var(--text-main);
     font-weight: 650;
-    box-shadow: 0 8px 18px rgba(45, 92, 123, 0.035);
+    box-shadow: 0 8px 18px rgba(71, 83, 79, 0.035);
   }
 
   html.docs-wrapper .theme-doc-sidebar-menu .theme-doc-sidebar-item-link-level-2 > .menu__link {
@@ -321,9 +321,9 @@ html.docs-wrapper .table-of-contents__link:hover {
 
   html.docs-wrapper .theme-doc-sidebar-menu .theme-doc-sidebar-item-link-level-2 > .menu__link--active {
     background:
-      linear-gradient(90deg, rgba(121, 175, 212, 0.26), rgba(203, 227, 242, 0.12)),
+      linear-gradient(90deg, rgba(135, 169, 165, 0.26), rgba(220, 233, 228, 0.12)),
       rgba(255, 255, 255, 0.72);
-    border-left-color: rgba(79, 134, 170, 0.72);
+    border-left-color: rgba(88, 125, 128, 0.72);
     color: var(--text-main);
     font-weight: 720;
   }

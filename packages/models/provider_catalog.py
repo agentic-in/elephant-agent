@@ -67,6 +67,12 @@ class ProviderDefinition:
     metadata: Mapping[str, str] = field(default_factory=dict)
 
 
+def _extra_provider_definitions() -> tuple[ProviderDefinition, ...]:
+    from .provider_catalog_extra import extra_provider_definitions
+
+    return extra_provider_definitions()
+
+
 _DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
     ProviderDefinition(
         provider_id="openai-compatible",
@@ -400,6 +406,7 @@ _DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             "unsupported_capabilities": "reasoning",
         },
     ),
+    *_extra_provider_definitions(),
     ProviderDefinition(
         provider_id="together",
         display_name="Together AI",

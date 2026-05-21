@@ -172,6 +172,34 @@ class ProviderRetryTest(unittest.TestCase):
         self.assertEqual(ctx.exception.partial_text, "Half an answer")
         self.assertEqual(ctx.exception.kind, "sse_incomplete")
 
+    def test_post_json_stream_mid_stream_read_timeout_yields_partial(self) -> None:
+        transport = UrllibJSONHTTPTransport()
+
+        class _TimeoutResponse(_FakeResponse):
+            def __iter__(self):
+                yield b"event: content_block_delta\n"
+                yield b'data: {"delta": {"type": "text_delta", "text": "Still "}}\n'
+                yield b"\n"
+                raise TimeoutError("The read operation timed out")
+
+        def fake_urlopen(req, *, timeout):
+            return _TimeoutResponse(status=200, body=b"")
+
+        chunks: list[JSONHTTPStreamChunk] = []
+        with mock.patch("time.sleep"), mock.patch.object(
+            urllib_request, "urlopen", side_effect=fake_urlopen
+        ):
+            with self.assertRaises(ProviderSSEIncompleteError) as ctx:
+                for chunk in transport.post_json_stream(
+                    url="http://provider/v1/messages/stream",
+                    headers={},
+                    payload={},
+                ):
+                    chunks.append(chunk)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(ctx.exception.partial_text, "Still ")
+        self.assertEqual(ctx.exception.kind, "sse_incomplete")
+
 
 if __name__ == "__main__":
     unittest.main()

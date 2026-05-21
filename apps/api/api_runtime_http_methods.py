@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import replace
 import json
-from queue import Queue
-import re
+from queue import Empty, Queue
 import shutil
 from threading import Lock, Thread
 from typing import Any, Mapping
@@ -42,6 +41,12 @@ from .api_runtime_http_dispatch_helpers import (
     _cron_job_record,
     _read_wsgi_body,
 )
+from .api_runtime_personal_model_methods import (
+    _dispatch_personal_model,
+    _persist_proactive_ask_config,
+)
+
+_STREAM_KEEPALIVE_SECONDS = 15.0
 
 def run_loop(
     self,
@@ -166,21 +171,22 @@ def stream_loop_events(
     sequence_lock = Lock()
     stream_sequence = 0
 
-    def enqueue(event: Mapping[str, Any]) -> None:
+    def envelope(event: Mapping[str, Any]) -> dict[str, Any]:
         nonlocal stream_sequence
         with sequence_lock:
             stream_sequence += 1
             sequence = stream_sequence
-        event_queue.put(
-            _jsonable(
-                {
-                    "episode_id": episode_id,
-                    "stream_sequence": sequence,
-                    "stream_emitted_at": _now(),
-                    **dict(event),
-                }
-            )
+        return _jsonable(
+            {
+                "episode_id": episode_id,
+                "stream_sequence": sequence,
+                "stream_emitted_at": _now(),
+                **dict(event),
+            }
         )
+
+    def enqueue(event: Mapping[str, Any]) -> None:
+        event_queue.put(envelope(event))
 
     def stream_observer(delta: str, **metadata: Any) -> None:
         stream_session_id = str(metadata.get("session_id") or "")
@@ -253,7 +259,11 @@ def stream_loop_events(
     Thread(target=worker, daemon=True).start()
 
     while True:
-        event = event_queue.get()
+        try:
+            event = event_queue.get(timeout=_STREAM_KEEPALIVE_SECONDS)
+        except Empty:
+            yield envelope({"type": "stream.heartbeat"})
+            continue
         if event is sentinel:
             break
         yield event  # type: ignore[misc]
@@ -354,6 +364,9 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             state_anchor=f"elephant:{elephant_id}",
             elephant_id=elephant_id,
             elephant_name=display_name,
+            identity_mode=_optional_str(payload.get("mode") or payload.get("identity_mode")) or "",
+            initiative=_optional_str(payload.get("initiative")) or "",
+            working_style=_optional_str(payload.get("personality_preset") or payload.get("working_style")) or "",
             surface_bindings=("api", "dashboard"),
             elephant_identity_text=identity_text,
             summary=f"{display_name} is ready to continue this elephant line.",
@@ -372,16 +385,15 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         display_name = _optional_str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name"))
         mode = _optional_str(payload.get("mode"))
         identity_text = _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
+        personality_preset = _optional_str(payload.get("personality_preset") or payload.get("working_style"))
+        initiative = _optional_str(payload.get("initiative"))
+        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode"))
         updated = replace(
             state,
             elephant_name=display_name or state.elephant_name,
-            identity_mode=mode or state.identity_mode or "companion",
-            initiative=_optional_str(payload.get("initiative")) if payload.get("initiative") is not None else state.initiative,
-            working_style=(
-                _optional_str(payload.get("personality_preset") or payload.get("working_style"))
-                if payload.get("personality_preset") is not None or payload.get("working_style") is not None
-                else state.working_style
-            ),
+            identity_mode=identity_mode if identity_mode is not None else state.identity_mode or "companion",
+            initiative=initiative if initiative is not None else state.initiative,
+            working_style=personality_preset if personality_preset is not None else state.working_style,
             elephant_identity_text=identity_text if identity_text is not None else state.elephant_identity_text,
             summary=f"{display_name or state.elephant_name} is ready to continue this elephant line.",
             metadata={**dict(state.metadata), "profile_id": state.personal_model_id},
@@ -601,7 +613,7 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
             result = self.update_identity_state(
                 state_id=state_id,
                 display_name=_optional_str(payload.get("display_name") or payload.get("name")),
-                personality_preset=_optional_str(payload.get("personality_preset")),
+                personality_preset=_optional_str(payload.get("personality_preset") or payload.get("working_style")),
                 initiative=_optional_str(payload.get("initiative")),
                 elephant_identity_text=_optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content")),
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
@@ -618,6 +630,7 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
                 fields=payload.get("fields") if isinstance(payload.get("fields"), dict) else None,
                 append=bool(payload.get("append", False)),
                 clear=bool(payload.get("clear", False)),
+                split_personal_model_facts=bool(payload.get("split_personal_model_facts", False)),
             )
             return APIResponse(200, _jsonable({"state_id": state_id, "user": result}))
     if surface == "relationship":
@@ -700,7 +713,9 @@ def _dispatch_internal(self, method: str, parts: tuple[str, ...], body: bytes | 
 def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if parts and parts[0] == "cron":
         if method.upper() == "GET" and len(parts) == 1:
-            return APIResponse(200, {"cron": {"jobs": [_cron_job_record(job) for job in self.cron_runtime.list_jobs()]}})
+            from .api_runtime_console import _cron_jobs
+
+            return APIResponse(200, {"cron": {"jobs": _cron_jobs(self)}})
         if method.upper() == "POST" and len(parts) == 1:
             payload = _read_json_bytes(body)
             job_payload = _cron_payload(payload)
@@ -716,10 +731,10 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
         if len(parts) == 2:
             job_id = parts[1]
             if method.upper() == "GET":
-                if job_id == "system:proactive-ask":
-                    from .api_runtime_console import _proactive_ask_system_job
+                if job_id in {"system:proactive-ask", "system:dream"}:
+                    from .api_runtime_console import _dream_system_job, _proactive_ask_system_job
 
-                    job = _proactive_ask_system_job(self)
+                    job = _dream_system_job(self) if job_id == "system:dream" else _proactive_ask_system_job(self)
                     if job is None:
                         raise ValueError(f"system cron job unavailable: {job_id}")
                     return APIResponse(200, {"cron": {"job": job}})
@@ -728,6 +743,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                 payload = _read_json_bytes(body)
                 action = str(payload.get("action") or "").strip().lower()
                 if action == "pause":
+                    if job_id == "system:dream":
+                        return APIResponse(403, {"error": "system_cron_job_cannot_be_paused"})
                     if job_id == "system:proactive-ask":
                         _persist_proactive_ask_config(self.repository.database_path.parent, {"enabled": False})
                         from .api_runtime_console import _proactive_ask_system_job
@@ -736,6 +753,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     else:
                         job = self.cron_runtime.pause_job(job_id)
                 elif action == "resume":
+                    if job_id == "system:dream":
+                        return APIResponse(403, {"error": "system_cron_job_cannot_be_resumed"})
                     if job_id == "system:proactive-ask":
                         _persist_proactive_ask_config(self.repository.database_path.parent, {"enabled": True})
                         from .api_runtime_console import _proactive_ask_system_job
@@ -749,7 +768,7 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     raise ValueError(f"system cron job unavailable: {job_id}")
                 return APIResponse(200, {"cron": {"job": job if isinstance(job, Mapping) else _cron_job_record(job)}})
             if method.upper() == "DELETE":
-                if job_id == "system:proactive-ask":
+                if job_id in {"system:proactive-ask", "system:dream"}:
                     return APIResponse(403, {"error": "system_cron_jobs_cannot_be_deleted"})
                 job = self.cron_runtime.inspect_job(job_id)
                 if _cron_job_system_kind(job) is not None:
@@ -762,6 +781,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
             # and returns the result synchronously so the dashboard can show it.
             if parts[1] == "system:proactive-ask":
                 return APIResponse(200, _jsonable(self.run_proactive_ask_now()))
+            if parts[1] == "system:dream":
+                return APIResponse(200, _jsonable(self.run_dream_now()))
             return APIResponse(200, _jsonable(self.run_cron_job_now(parts[1])))
     if method.upper() == "PATCH" and len(parts) == 1 and parts[0] == "settings":
         payload = _read_json_bytes(body)
@@ -803,186 +824,3 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
         )
         return APIResponse(200, _jsonable(result))
     return APIResponse(404, {"error": "not_found"})
-def _dispatch_personal_model(
-    self, method: str, parts: tuple[str, ...], body: bytes | None
-) -> APIResponse:
-    """Operator-surface writes against Personal Model claims and questions.
-
-    Routes:
-      * ``PATCH /v1/operator/personal-model/questions`` — update proactive question cadence.
-      * ``POST  /v1/operator/personal-model/questions/{id}/bump``
-      * ``POST  /v1/operator/personal-model/questions/{id}/dismiss``
-      * ``POST  /v1/operator/personal-model/questions/{id}/answer``
-      * ``POST  /v1/operator/personal-model/claims/{id}/correct``
-      * ``POST  /v1/operator/personal-model/claims/{id}/forget``
-      * ``POST  /v1/operator/personal-model/claims/{id}/restore``
-      * ``POST  /v1/operator/personal-model/claims/{id}/delete``
-      * ``POST  /v1/operator/personal-model/claims/{id}/protect``
-      * ``POST  /v1/operator/personal-model/claims/{id}/unprotect``
-    """
-    from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
-    from packages.understanding import PersonalModelUnderstandingSurface
-
-    normalized = method.upper()
-
-    if normalized == "PATCH" and parts == ("questions",):
-        payload = _read_json_bytes(body)
-        # New format: accepts proactive_ask config directly (idle_threshold_minutes, daily_max, quiet_hours).
-        # Legacy: also accepts learning_intensity for migration.
-        proactive_updates: dict[str, Any] = {}
-        if "idle_threshold_minutes" in payload:
-            proactive_updates["idle_threshold_minutes"] = max(1, int(payload["idle_threshold_minutes"]))
-        if "daily_max" in payload:
-            proactive_updates["daily_max"] = max(1, int(payload["daily_max"]))
-        if "quiet_hours" in payload:
-            qh = payload["quiet_hours"]
-            if isinstance(qh, (list, tuple)) and len(qh) == 2:
-                proactive_updates["quiet_hours"] = [int(qh[0]) % 24, int(qh[1]) % 24]
-        if "enabled" in payload:
-            proactive_updates["enabled"] = bool(payload["enabled"])
-        # Legacy migration: map learning_intensity → numeric values.
-        intensity = str(payload.get("learning_intensity") or "").strip().lower()
-        if intensity in {"low", "medium", "high"} and not proactive_updates:
-            _INTENSITY_MAP = {
-                "low": {"idle_threshold_minutes": 720, "daily_max": 2, "quiet_hours": [23, 7]},
-                "medium": {"idle_threshold_minutes": 180, "daily_max": 8, "quiet_hours": [23, 7]},
-                "high": {"idle_threshold_minutes": 60, "daily_max": 24, "quiet_hours": [1, 7]},
-            }
-            proactive_updates = _INTENSITY_MAP[intensity]
-        if not proactive_updates:
-            raise ValueError("provide idle_threshold_minutes, daily_max, quiet_hours, or learning_intensity")
-        _persist_proactive_ask_config(self.repository.database_path.parent, proactive_updates)
-        return APIResponse(200, {"proactive_ask": proactive_updates})
-
-    if normalized == "POST" and len(parts) >= 3 and parts[0] == "questions":
-        question_id = unquote(parts[1]).strip()
-        action = parts[2].strip().lower()
-        if action not in {"bump", "dismiss", "answer"}:
-            return APIResponse(404, {"error": "not_found"})
-        payload = _read_json_bytes(body) if body else {}
-        personal_model_id = str(payload.get("personal_model_id") or DEFAULT_PERSONAL_MODEL_ID)
-        if action == "bump":
-            list_open = getattr(self.repository, "list_open_questions", None)
-            upsert = getattr(self.repository, "upsert_open_question", None)
-            if not callable(list_open) or not callable(upsert):
-                return APIResponse(500, {"error": "personal_model_questions_not_available"})
-            candidates = list_open(personal_model_id=personal_model_id, status=("open", "asked"))
-            target = next((q for q in candidates if q.question_id == question_id), None)
-            if target is None:
-                return APIResponse(404, {"error": "question_not_found"})
-            bumped = replace(target, priority=min(1.0, max(target.priority, 0.85)))
-            upsert(bumped)
-            return APIResponse(200, {"personal_model": {"question_id": question_id, "priority": bumped.priority}})
-        if action == "dismiss":
-            surface = PersonalModelUnderstandingSurface(repository=self.repository, semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None))
-            result = surface.manage_personal_model_questions(
-                str(payload.get("episode_id") or "dashboard"),
-                action="dismiss",
-                personal_model_id=personal_model_id,
-                question_id=question_id,
-                reason=str(payload.get("reason") or "user_opted_out"),
-            )
-            return APIResponse(200, {"personal_model": result})
-        if action == "answer":
-            content = str(payload.get("content") or "").strip()
-            if not content:
-                raise ValueError("answer requires 'content'")
-            surface = PersonalModelUnderstandingSurface(repository=self.repository, semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None))
-            result = surface.manage_personal_model_questions(
-                str(payload.get("episode_id") or "dashboard"),
-                action="answer",
-                personal_model_id=personal_model_id,
-                question_id=question_id,
-                answer=content,
-                reason="dashboard answer",
-            )
-            return APIResponse(200, {"personal_model": result})
-
-    if normalized == "POST" and len(parts) >= 3 and parts[0] == "claims":
-        claim_id = unquote(parts[1]).strip()
-        action = parts[2].strip().lower()
-        if action not in {"correct", "forget", "dispute", "restore", "delete", "protect", "unprotect"}:
-            return APIResponse(404, {"error": "not_found"})
-        payload = _read_json_bytes(body) if body else {}
-        personal_model_id = str(payload.get("personal_model_id") or DEFAULT_PERSONAL_MODEL_ID).strip() or DEFAULT_PERSONAL_MODEL_ID
-        facts = tuple(self.repository.list_personal_model_facts(personal_model_id=personal_model_id, status=("active", "retired", "disputed") if action in {"restore", "delete"} else "active"))
-        target = next((fact for fact in facts if fact.fact_id == claim_id), None)
-        if target is None:
-            return APIResponse(404, {"error": "claim_not_found"})
-        metadata = dict(target.metadata or {})
-        reason = str(payload.get("reason") or f"dashboard {action}").strip()
-        if action in {"protect", "unprotect"}:
-            now = _now()
-            if action == "protect":
-                next_metadata = {
-                    **metadata,
-                    "protected": "user",
-                    "protected_reason": reason or "dashboard protect",
-                    "projection_policy": str(metadata.get("projection_policy") or "tool_only"),
-                    "protected_at": now.isoformat(),
-                }
-            else:
-                next_metadata = {
-                    **metadata,
-                    "protected": "user_unprotected",
-                    "protected_reason": reason or "dashboard unprotect",
-                    "unprotected_at": now.isoformat(),
-                }
-            updated = replace(target, metadata=next_metadata)
-            self.repository.upsert_personal_model_fact(updated)
-            return APIResponse(200, {"personal_model": {"action": action, "status": "active", "ref": claim_id, "claim": _serialize(updated)}})
-        if action == "delete":
-            from packages.understanding.personal_model_governance import is_protected_topic
-            if is_protected_topic(str(metadata.get("topic") or ""), metadata):
-                return APIResponse(409, {"error": "protected_topic", "detail": "protected Personal Model topics must be unprotected before delete", "ref": claim_id})
-            now = _now()
-            deleted = replace(
-                target,
-                status="deleted",
-                metadata={
-                    **metadata,
-                    "deleted_by": "dashboard",
-                    "deleted_reason": reason,
-                    "deleted_at": now.isoformat(),
-                    "understanding_status": "deleted",
-                },
-            )
-            self.repository.upsert_personal_model_fact(deleted)
-            list_entries = getattr(self.repository, "list_semantic_index_entries", None)
-            upsert_entry = getattr(self.repository, "upsert_semantic_index_entry", None)
-            if callable(list_entries) and callable(upsert_entry):
-                for entry in list_entries(personal_model_id=personal_model_id, owner_scope="personal_model"):
-                    if getattr(entry, "source_id", "") != claim_id:
-                        continue
-                    upsert_entry(
-                        replace(
-                            entry,
-                            status="deleted",
-                            updated_at=now,
-                            metadata={
-                                **dict(getattr(entry, "metadata", {}) or {}),
-                                "claim_status": "deleted",
-                                "deactivated_by": "dashboard",
-                            },
-                        )
-                    )
-            return APIResponse(200, {"personal_model": {"action": "delete", "status": "deleted", "ref": claim_id}})
-        topic = str(payload.get("topic") or metadata.get("topic") or "").strip()
-        if not topic:
-            return APIResponse(409, {"error": "claim_missing_topic"})
-        surface = PersonalModelUnderstandingSurface(repository=self.repository, semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None))
-        result = surface.update_personal_model(
-            str(payload.get("episode_id") or "dashboard"),
-            action=action,
-            lens=str(payload.get("lens") or target.lens),
-            topic=topic,
-            text=str(payload.get("text") or ""),
-            ref=claim_id,
-            reason=reason,
-            source="user_corrected" if action == "correct" else "user_said",
-            personal_model_id=personal_model_id,
-        )
-        return APIResponse(200, {"personal_model": result})
-
-    return APIResponse(404, {"error": "not_found"})
-
