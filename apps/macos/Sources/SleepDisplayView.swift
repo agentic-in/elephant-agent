@@ -302,39 +302,56 @@ private struct SleepAmbientGlass: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: paused)) { timeline in
-            Canvas { context, size in
-                let phase = paused ? 0 : timeline.date.timeIntervalSinceReferenceDate
-                let palette = [ElephantTheme.accent, ElephantTheme.mint, ElephantTheme.ember, ElephantTheme.green]
+            SleepAmbientCanvas(phase: paused ? 0 : timeline.date.timeIntervalSinceReferenceDate)
+                .blur(radius: 18)
+        }
+    }
+}
 
-                for index in 0..<7 {
-                    let progress = CGFloat((phase * (0.020 + Double(index) * 0.004) + Double(index) * 0.19).truncatingRemainder(dividingBy: 1))
-                    let x = size.width * (0.10 + 0.80 * progress)
-                    let y = size.height * (0.18 + 0.64 * CGFloat((sin(phase * 0.18 + Double(index)) + 1.0) / 2.0))
-                    let radius = min(size.width, size.height) * (0.10 + CGFloat(index % 3) * 0.035)
-                    let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(palette[index % palette.count].opacity(0.045))
-                    )
-                }
+private struct SleepAmbientCanvas: View {
+    var phase: TimeInterval
+    private let palette = [ElephantTheme.accent, ElephantTheme.mint, ElephantTheme.ember, ElephantTheme.green]
 
-                for index in 0..<4 {
-                    let y = size.height * (0.24 + CGFloat(index) * 0.17)
-                    var path = Path()
-                    path.move(to: CGPoint(x: -120, y: y))
-                    path.addCurve(
-                        to: CGPoint(x: size.width + 120, y: y + CGFloat(sin(phase * 0.22 + Double(index))) * 22),
-                        control1: CGPoint(x: size.width * 0.25, y: y - 74 + CGFloat(cos(phase * 0.21 + Double(index))) * 20),
-                        control2: CGPoint(x: size.width * 0.70, y: y + 74 + CGFloat(sin(phase * 0.17 + Double(index))) * 20)
-                    )
-                    context.stroke(
-                        path,
-                        with: .color(.white.opacity(0.18)),
-                        style: StrokeStyle(lineWidth: 1.1, lineCap: .round)
-                    )
-                }
-            }
-            .blur(radius: 18)
+    var body: some View {
+        Canvas { context, size in
+            drawOrbs(context: &context, size: size)
+            drawWaveLines(context: &context, size: size)
+        }
+    }
+
+    private func drawOrbs(context: inout GraphicsContext, size: CGSize) {
+        for index in 0..<7 {
+            let speed = 0.020 + Double(index) * 0.004
+            let offset = Double(index) * 0.19
+            let progress = CGFloat((phase * speed + offset).truncatingRemainder(dividingBy: 1))
+            let x = size.width * (0.10 + 0.80 * progress)
+            let wave = CGFloat((sin(phase * 0.18 + Double(index)) + 1.0) / 2.0)
+            let y = size.height * (0.18 + 0.64 * wave)
+            let radius = min(size.width, size.height) * (0.10 + CGFloat(index % 3) * 0.035)
+            let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
+            context.fill(
+                Path(ellipseIn: rect),
+                with: .color(palette[index % palette.count].opacity(0.045))
+            )
+        }
+    }
+
+    private func drawWaveLines(context: inout GraphicsContext, size: CGSize) {
+        for index in 0..<4 {
+            let y = size.height * (0.24 + CGFloat(index) * 0.17)
+            let indexPhase = Double(index)
+            var path = Path()
+            path.move(to: CGPoint(x: -120, y: y))
+            path.addCurve(
+                to: CGPoint(x: size.width + 120, y: y + CGFloat(sin(phase * 0.22 + indexPhase)) * 22),
+                control1: CGPoint(x: size.width * 0.25, y: y - 74 + CGFloat(cos(phase * 0.21 + indexPhase)) * 20),
+                control2: CGPoint(x: size.width * 0.70, y: y + 74 + CGFloat(sin(phase * 0.17 + indexPhase)) * 20)
+            )
+            context.stroke(
+                path,
+                with: .color(.white.opacity(0.18)),
+                style: StrokeStyle(lineWidth: 1.1, lineCap: .round)
+            )
         }
     }
 }
