@@ -3176,6 +3176,77 @@ private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr
     String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
 }
 
+private enum MacLocalDateTime {
+    static func formatted(_ raw: String, language: AppLanguage, fallback: String = "n/a") -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        guard let date = parse(trimmed) else { return trimmed }
+        return formatted(date, language: language)
+    }
+
+    static func formattedRange(_ raw: String, language: AppLanguage) -> String {
+        let parts = raw.components(separatedBy: " → ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return "" }
+        return parts.map { formatted($0, language: language, fallback: "") }
+            .filter { !$0.isEmpty }
+            .joined(separator: " → ")
+    }
+
+    static func formatted(_ date: Date, language: AppLanguage) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: date)
+    }
+
+    static func time(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale.current
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
+    }
+
+    static func parse(_ raw: String) -> Date? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        let candidates = [
+            text,
+            text.replacingOccurrences(
+                of: #"(\.\d{3})\d+(?=Z|[+-]\d{2}:?\d{2})"#,
+                with: "$1",
+                options: .regularExpression
+            )
+        ]
+
+        for candidate in candidates {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = fractional.date(from: candidate) { return date }
+
+            let plain = ISO8601DateFormatter()
+            plain.formatOptions = [.withInternetDateTime]
+            if let date = plain.date(from: candidate) { return date }
+        }
+
+        for pattern in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"] {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar.current
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone.current
+            formatter.dateFormat = pattern
+            if let date = formatter.date(from: text) { return date }
+        }
+        return nil
+    }
+}
+
 private func localizedLensTitle(_ lens: String, language: AppLanguage) -> String {
     switch lens {
     case "world":
@@ -3543,7 +3614,7 @@ struct QuestionLedgerRow: View {
                 }
 
                 if !question.lastAskedSurface.isEmpty || !question.lastAskedAt.isEmpty {
-                    Text([question.lastAskedSurface, question.lastAskedAt].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([question.lastAskedSurface, MacLocalDateTime.formatted(question.lastAskedAt, language: model.appLanguage, fallback: "")].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -6368,7 +6439,7 @@ struct HerdElephantCard: View {
                     Text(item.title)
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
-                    Text([item.subtitle, item.profileID].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text(item.subtitle)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -6417,10 +6488,8 @@ struct HerdElephantCard: View {
             }
 
             LazyVGrid(columns: metaColumns, spacing: 10) {
-                HerdMeta(label: localizedYouText(model.appLanguage, en: "Profile", zh: "Profile", fr: "Profil", de: "Profil"), value: item.profileID.isEmpty ? "n/a" : item.profileID)
-                HerdMeta(label: localizedYouText(model.appLanguage, en: "Created", zh: "创建时间", fr: "Créé", de: "Erstellt"), value: item.createdAt.isEmpty ? "n/a" : item.createdAt)
-                HerdMeta(label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"), value: sourceLabel)
-                HerdMeta(label: localizedYouText(model.appLanguage, en: "Updated", zh: "更新时间", fr: "Mis à jour", de: "Aktualisiert"), value: item.updatedAt.isEmpty ? "n/a" : item.updatedAt)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Created", zh: "创建时间", fr: "Créé", de: "Erstellt"), value: MacLocalDateTime.formatted(item.createdAt, language: model.appLanguage))
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Updated", zh: "更新时间", fr: "Mis à jour", de: "Aktualisiert"), value: MacLocalDateTime.formatted(item.updatedAt, language: model.appLanguage))
             }
 
             HStack {
@@ -6491,10 +6560,6 @@ struct HerdElephantCard: View {
             GridItem(.flexible(), spacing: 10, alignment: .leading),
             GridItem(.flexible(), spacing: 10, alignment: .leading)
         ]
-    }
-
-    private var sourceLabel: String {
-        item.source.isEmpty ? "n/a" : item.source.replacingOccurrences(of: "_", with: " ")
     }
 }
 
@@ -6828,7 +6893,7 @@ struct UsageEventRow: View {
                 }
             }
             .frame(height: 7)
-            Text([item.provider, item.subtitle].filter { !$0.isEmpty }.joined(separator: " · "))
+            Text([item.provider, MacLocalDateTime.formatted(item.subtitle, language: model.appLanguage, fallback: "")].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(ElephantTheme.muted)
                 .lineLimit(1)
@@ -6945,48 +7010,12 @@ struct CronCalendarEvent: Identifiable, Equatable {
     }
 
     var timeText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        MacLocalDateTime.time(date)
     }
 
     static func from(_ job: CronJobItem) -> CronCalendarEvent? {
-        guard let date = parseDate(job.nextRun) else { return nil }
+        guard let date = MacLocalDateTime.parse(job.nextRun) else { return nil }
         return CronCalendarEvent(job: job, date: date)
-    }
-
-    private static func parseDate(_ raw: String) -> Date? {
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
-
-        let candidates = [
-            text,
-            text.replacingOccurrences(
-                of: #"(\.\d{3})\d+(?=Z|[+-]\d{2}:?\d{2})"#,
-                with: "$1",
-                options: .regularExpression
-            )
-        ]
-
-        for candidate in candidates {
-            let fractional = ISO8601DateFormatter()
-            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = fractional.date(from: candidate) { return date }
-
-            let plain = ISO8601DateFormatter()
-            plain.formatOptions = [.withInternetDateTime]
-            if let date = plain.date(from: candidate) { return date }
-        }
-
-        for pattern in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"] {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = pattern
-            if let date = formatter.date(from: text) { return date }
-        }
-        return nil
     }
 }
 
@@ -7543,7 +7572,7 @@ struct CalendarEventPopover: View {
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(2)
-                    Text(event.job.isSystem ? localizedYouText(model.appLanguage, en: "System learning reminder", zh: "系统学习提醒", fr: "Rappel système Learn", de: "System-Learn-Erinnerung") : localizedYouText(model.appLanguage, en: "Reminder", zh: "提醒", fr: "Rappel", de: "Erinnerung"))
+                    Text(event.job.isSystem ? localizedYouText(model.appLanguage, en: "System evolution reminder", zh: "系统自我进化提醒", fr: "Rappel système d'évolution", de: "System-Evolutionserinnerung") : localizedYouText(model.appLanguage, en: "Reminder", zh: "提醒", fr: "Rappel", de: "Erinnerung"))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -7553,7 +7582,7 @@ struct CalendarEventPopover: View {
             }
 
             VStack(spacing: 0) {
-                popoverRow(localizedYouText(model.appLanguage, en: "Next run", zh: "下次运行", fr: "Prochaine exécution", de: "Nächster Lauf"), formattedDate(event.date))
+                popoverRow(localizedYouText(model.appLanguage, en: "Next run", zh: "下次运行", fr: "Prochaine exécution", de: "Nächster Lauf"), MacLocalDateTime.formatted(event.date, language: model.appLanguage))
                 Divider()
                 popoverRow(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann"), event.job.schedule.isEmpty ? "n/a" : event.job.schedule)
                 Divider()
@@ -7604,13 +7633,6 @@ struct CalendarEventPopover: View {
         .padding(.vertical, 8)
     }
 
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
 }
 
 struct ReminderComposerLauncher: View {
@@ -7889,7 +7911,7 @@ struct CronJobRow: View {
                 .frame(width: 220, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.nextRun.isEmpty ? localizedYouText(model.appLanguage, en: "Not planned", zh: "暂无计划", fr: "Non planifié", de: "Nicht geplant") : job.nextRun)
+                    Text(nextRunText)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
@@ -7976,7 +7998,7 @@ struct CronJobRow: View {
             zh: "上次：%@ · 已运行 %d 次",
             fr: "Dernier %@ · %d exécution(s)",
             de: "Zuletzt %@ · %d Lauf/Läufe",
-            job.lastRun.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : job.lastRun,
+            lastRunText,
             job.runCount
         )
     }
@@ -7988,10 +8010,22 @@ struct CronJobRow: View {
             zh: "下次：%@ · 上次：%@ · 已运行 %d 次",
             fr: "Prochain %@ · Dernier %@ · %d exécution(s)",
             de: "Nächste %@ · Zuletzt %@ · %d Lauf/Läufe",
-            job.nextRun.isEmpty ? localizedYouText(model.appLanguage, en: "not planned", zh: "暂无计划", fr: "non planifié", de: "nicht geplant") : job.nextRun,
-            job.lastRun.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : job.lastRun,
+            nextRunText.lowercased(),
+            lastRunText.lowercased(),
             job.runCount
         )
+    }
+
+    private var nextRunText: String {
+        job.nextRun.isEmpty
+            ? localizedYouText(model.appLanguage, en: "Not planned", zh: "暂无计划", fr: "Non planifié", de: "Nicht geplant")
+            : MacLocalDateTime.formatted(job.nextRun, language: model.appLanguage)
+    }
+
+    private var lastRunText: String {
+        job.lastRun.isEmpty
+            ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht")
+            : MacLocalDateTime.formatted(job.lastRun, language: model.appLanguage)
     }
 }
 
@@ -8020,17 +8054,23 @@ struct LearnView: View {
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionLabel(
-                        title: localizedYouText(model.appLanguage, en: "Learn History", zh: "整理历史", fr: "Historique Learn", de: "Learn-Verlauf"),
+                        title: localizedYouText(model.appLanguage, en: "Evolution History", zh: "自我进化历史", fr: "Historique d'évolution", de: "Evolutionsverlauf"),
                         subtitle: localizedFormat(model.appLanguage, en: "%d job(s)", zh: "%d 个任务", fr: "%d tâche(s)", de: "%d Job(s)", model.snapshot.learningItems.count)
                     )
                     if model.snapshot.learningItems.isEmpty {
-                        EmptyLine(symbol: "brain.head.profile", text: localizedYouText(model.appLanguage, en: "No learning jobs returned yet.", zh: "还没有记忆整理任务。", fr: "Aucune tâche Learn retournée.", de: "Noch keine Learn-Jobs zurückgegeben."))
+                        EmptyLine(symbol: "brain.head.profile", text: localizedYouText(model.appLanguage, en: "No evolution jobs returned yet.", zh: "还没有自我进化任务。", fr: "Aucune tâche d'évolution retournée.", de: "Noch keine Evolutionsjobs zurückgegeben."))
                     } else {
                         LearningJobSection(title: localizedYouText(model.appLanguage, en: "Active", zh: "进行中", fr: "Actifs", de: "Aktiv"), items: Array(model.snapshot.learningItems.filter { !$0.status.lowercased().contains("completed") && !$0.status.lowercased().contains("failed") }.prefix(8)))
                         LearningJobSection(title: localizedYouText(model.appLanguage, en: "Completed", zh: "已完成", fr: "Terminés", de: "Abgeschlossen"), items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("completed") }.prefix(10)))
                         LearningJobSection(title: localizedYouText(model.appLanguage, en: "Needs Attention", zh: "需要处理", fr: "À vérifier", de: "Prüfen"), items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("failed") || $0.status.lowercased().contains("cancel") }.prefix(8)))
                     }
                 }
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await model.refreshDashboard()
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
     }
@@ -8076,7 +8116,7 @@ struct LearnControlsPanel: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 14) {
                     SectionLabel(
-                        title: localizedYouText(model.appLanguage, en: "New Reflect Job", zh: "新建记忆整理", fr: "Nouveau job Reflect", de: "Neuer Reflect-Job"),
+                        title: localizedYouText(model.appLanguage, en: "New Evolution Job", zh: "新建自我进化任务", fr: "Nouveau job d'évolution", de: "Neuer Evolutionsjob"),
                         subtitle: localizedYouText(model.appLanguage, en: "Start a focused background pass when memory needs to catch up.", zh: "让后台把近期内容整理进记忆。", fr: "Lancez un passage en arrière-plan quand la mémoire doit rattraper.", de: "Starte einen fokussierten Hintergrundlauf, wenn das Gedächtnis aufholen soll.")
                     )
                     Spacer(minLength: 12)
@@ -8096,7 +8136,7 @@ struct LearnControlsPanel: View {
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(model.isReflecting ? ElephantTheme.accent : latestTint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.isReflecting ? localizedYouText(model.appLanguage, en: "Learning job is running", zh: "正在整理记忆", fr: "Tâche Learn en cours", de: "Learn-Job läuft") : localizedYouText(model.appLanguage, en: "Last completed", zh: "上次完成", fr: "Dernière fin", de: "Zuletzt abgeschlossen"))
+                        Text(model.isReflecting ? localizedYouText(model.appLanguage, en: "Evolution job is running", zh: "正在自我进化", fr: "Tâche d'évolution en cours", de: "Evolutionsjob läuft") : localizedYouText(model.appLanguage, en: "Last completed", zh: "上次完成", fr: "Dernière fin", de: "Zuletzt abgeschlossen"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.ink)
                         Text(latestCompletedText)
@@ -8145,17 +8185,13 @@ struct LearnControlsPanel: View {
 
     private var latestCompletedText: String {
         guard let date = latestCompletedDate else {
-            return localizedYouText(model.appLanguage, en: "No completed reflect job has been reported yet.", zh: "还没有完成过的记忆整理。", fr: "Aucun job Reflect terminé n'a été signalé.", de: "Noch kein abgeschlossener Reflect-Job gemeldet.")
+            return localizedYouText(model.appLanguage, en: "No completed evolution job has been reported yet.", zh: "还没有完成过的自我进化任务。", fr: "Aucun job d'évolution terminé n'a été signalé.", de: "Noch kein abgeschlossener Evolutionsjob gemeldet.")
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        return MacLocalDateTime.formatted(date, language: model.appLanguage)
     }
 
     private var latestCompletedDate: Date? {
-        ReflectTimestamp.parse(model.snapshot.latestCompletedAt)
+        MacLocalDateTime.parse(model.snapshot.latestCompletedAt)
     }
 }
 
@@ -8213,42 +8249,8 @@ private struct LearnActionButton: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.54 : 1)
-        .help(disabled ? localizedYouText(model.appLanguage, en: "A learning job is already running.", zh: "已经有记忆整理在运行。", fr: "Une tâche Learn est déjà en cours.", de: "Ein Learn-Job läuft bereits.") : localizedFormat(model.appLanguage, en: "Create %@ reflect job", zh: "开始 %@", fr: "Créer le job Reflect %@", de: "%@ Reflect-Job erstellen", action.title))
-        .accessibilityLabel(localizedFormat(model.appLanguage, en: "Create %@ reflect job", zh: "开始 %@", fr: "Créer le job Reflect %@", de: "%@ Reflect-Job erstellen", action.title))
-    }
-}
-
-private enum ReflectTimestamp {
-    static func parse(_ raw: String) -> Date? {
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
-
-        let candidates = [
-            text,
-            text.replacingOccurrences(
-                of: #"(\.\d{3})\d+(?=Z|[+-]\d{2}:?\d{2})"#,
-                with: "$1",
-                options: .regularExpression
-            )
-        ]
-
-        for candidate in candidates {
-            let fractional = ISO8601DateFormatter()
-            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = fractional.date(from: candidate) { return date }
-
-            let plain = ISO8601DateFormatter()
-            plain.formatOptions = [.withInternetDateTime]
-            if let date = plain.date(from: candidate) { return date }
-        }
-
-        for pattern in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"] {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = pattern
-            if let date = formatter.date(from: text) { return date }
-        }
-        return nil
+        .help(disabled ? localizedYouText(model.appLanguage, en: "An evolution job is already running.", zh: "已经有自我进化任务在运行。", fr: "Une tâche d'évolution est déjà en cours.", de: "Ein Evolutionsjob läuft bereits.") : localizedFormat(model.appLanguage, en: "Create %@ evolution job", zh: "开始 %@", fr: "Créer le job d'évolution %@", de: "%@ Evolutionsjob erstellen", action.title))
+        .accessibilityLabel(localizedFormat(model.appLanguage, en: "Create %@ evolution job", zh: "开始 %@", fr: "Créer le job d'évolution %@", de: "%@ Evolutionsjob erstellen", action.title))
     }
 }
 
@@ -8297,7 +8299,7 @@ struct LearningJobRow: View {
                     Text(item.title)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text([item.trigger, item.detail].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([item.trigger, formattedDetail].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -8314,6 +8316,10 @@ struct LearningJobRow: View {
         if status.contains("completed") { return ElephantTheme.green }
         if status.contains("failed") || status.contains("cancel") { return ElephantTheme.orange }
         return ElephantTheme.accent
+    }
+
+    private var formattedDetail: String {
+        MacLocalDateTime.formattedRange(item.detail, language: model.appLanguage)
     }
 }
 
@@ -10144,7 +10150,7 @@ struct ReflectSettingsContent: View {
         VStack(alignment: .leading, spacing: 10) {
             SettingsRow(label: "Questions", value: "\(model.snapshot.waitingQuestions) open")
             SettingsRow(label: "Worker", value: model.snapshot.workerStatus)
-            SettingsRow(label: "Latest", value: model.snapshot.latestCompletedAt.isEmpty ? "not yet" : model.snapshot.latestCompletedAt)
+            SettingsRow(label: "Latest", value: model.snapshot.latestCompletedAt.isEmpty ? "not yet" : MacLocalDateTime.formatted(model.snapshot.latestCompletedAt, language: model.appLanguage))
             SettingsActionBar {
                 Button(model.isReflecting ? "Reflecting..." : "Run Reflect") {
                     Task { await model.runReflect(trigger: "settings") }
@@ -11300,6 +11306,7 @@ struct LogsDiagnosticsSettingsContent: View {
 }
 
 struct LogFilePickerRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var item: LogFileItem
     var selected: Bool
 
@@ -11317,7 +11324,7 @@ struct LogFilePickerRow: View {
                 .foregroundStyle(ElephantTheme.muted)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text(item.detail)
+            Text(logDetail)
                 .font(.caption2)
                 .foregroundStyle(ElephantTheme.faint)
         }
@@ -11326,6 +11333,15 @@ struct LogFilePickerRow: View {
         .background(selected ? ElephantTheme.accent.opacity(0.10) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(selected ? ElephantTheme.accent.opacity(0.45) : ElephantTheme.line, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var logDetail: String {
+        [
+            item.size > 0 ? "\(item.size) bytes" : "",
+            MacLocalDateTime.formatted(item.updatedAt, language: model.appLanguage, fallback: "")
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " · ")
     }
 }
 
@@ -11453,10 +11469,10 @@ struct ReflectSettingsPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title: "Reflect", subtitle: "Background learning jobs")
+                SectionLabel(title: "Reflect", subtitle: localizedYouText(model.appLanguage, en: "Background evolution jobs", zh: "后台自我进化任务", fr: "Jobs d'évolution en arrière-plan", de: "Hintergrund-Evolutionsjobs"))
                 SettingsRow(label: "Questions", value: "\(model.snapshot.waitingQuestions) open")
                 SettingsRow(label: "Worker", value: model.snapshot.workerStatus)
-                SettingsRow(label: "Latest", value: model.snapshot.latestCompletedAt.isEmpty ? "not yet" : model.snapshot.latestCompletedAt)
+                SettingsRow(label: "Latest", value: model.snapshot.latestCompletedAt.isEmpty ? "not yet" : MacLocalDateTime.formatted(model.snapshot.latestCompletedAt, language: model.appLanguage))
 
                 Button(model.isReflecting ? "Reflecting..." : "Run Reflect") {
                     Task { await model.runReflect(trigger: "settings") }

@@ -591,9 +591,9 @@ enum AppText {
         case .learningStartReflect:
             return pick(language, en: "Starting the first learning pass", zh: "正在启动第一次学习", fr: "Lancement du premier apprentissage", de: "Ersten Lernlauf starten")
         case .learningFromAnswers:
-            return pick(language, en: "Learning from your setup answers", zh: "正在学习你的初始化答案", fr: "Apprentissage à partir de vos réponses", de: "Lernen aus deinen Einrichtungsantworten")
+            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
         case .learningFinishing:
-            return pick(language, en: "Finishing the first reflection", zh: "正在完成第一次 reflect", fr: "Finalisation de la première réflexion", de: "Erste Reflexion abschließen")
+            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
         case .learningReady:
             return pick(language, en: "Everything is ready", zh: "全部准备好了", fr: "Tout est prêt", de: "Alles ist bereit")
         case .learningNeedsAttention:
@@ -833,11 +833,11 @@ enum AppText {
         case .calendarPageSubtitle:
             return pick(language, en: "Reminders from Elephant, agents, and this app in one native calendar.", zh: "把 Elephant、agents 和本 app 的提醒放进一个原生日历。", fr: "Rappels d'Elephant, des agents et de l'app dans un calendrier natif.", de: "Erinnerungen von Elephant, Agents und App in einem nativen Kalender.")
         case .learnPageSubtitle:
-            return pick(language, en: "Background reflect jobs, diary learning, and memory consolidation.", zh: "后台 reflect jobs、日记学习和记忆巩固。", fr: "Reflect jobs en arrière-plan, apprentissage du journal et consolidation mémoire.", de: "Hintergrund-Reflect-Jobs, Tagebuchlernen und Gedächtniskonsolidierung.")
+            return pick(language, en: "Background self-evolution jobs, diary reflection, and memory consolidation.", zh: "后台自我进化、日记反思和记忆巩固。", fr: "Jobs d'auto-évolution en arrière-plan, réflexion du journal et consolidation mémoire.", de: "Hintergrund-Selbstentwicklung, Tagebuchreflexion und Gedächtniskonsolidierung.")
         case .learning:
-            return pick(language, en: "Learning", zh: "学习中", fr: "Apprentissage", de: "Lernt")
+            return pick(language, en: "Evolving", zh: "自我进化中", fr: "Évolution", de: "Entwickelt sich")
         case .runLearn:
-            return pick(language, en: "Run Learn", zh: "运行 Learn", fr: "Lancer Learn", de: "Learn starten")
+            return pick(language, en: "Run Evolution", zh: "运行自我进化", fr: "Lancer l'évolution", de: "Evolution starten")
         case .homeReadinessModel:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
         case .homeReadinessMemory:
@@ -845,7 +845,7 @@ enum AppText {
         case .homeReadinessMessaging:
             return pick(language, en: "Messaging", zh: "消息", fr: "Messagerie", de: "Nachrichten")
         case .homeReadinessLearn:
-            return pick(language, en: "Learn", zh: "学习", fr: "Apprendre", de: "Lernen")
+            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .chooseModel:
             return pick(language, en: "choose a model", zh: "选择一个模型", fr: "choisir un modèle", de: "Modell wählen")
         case .memorySummaryFormat:
@@ -853,7 +853,7 @@ enum AppText {
         case .messagingSummaryFormat:
             return pick(language, en: "%@ live · %@/%@ configured", zh: "%@ 个在线 · %@/%@ 已配置", fr: "%@ actifs · %@/%@ configurés", de: "%@ live · %@/%@ konfiguriert")
         case .activeJobsFormat:
-            return pick(language, en: "%@ active jobs", zh: "%@ 个学习任务", fr: "%@ tâches actives", de: "%@ aktive Jobs")
+            return pick(language, en: "%@ active jobs", zh: "%@ 个自我进化任务", fr: "%@ tâches actives", de: "%@ aktive Jobs")
         case .statusSetup:
             return pick(language, en: "setup", zh: "待设置", fr: "à configurer", de: "einrichten")
         case .statusConfigured:
@@ -969,7 +969,7 @@ enum AppText {
         case .sectionCalendar:
             return pick(language, en: "Calendar", zh: "日历", fr: "Calendrier", de: "Kalender")
         case .sectionLearn:
-            return pick(language, en: "Learn", zh: "学习", fr: "Apprendre", de: "Lernen")
+            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .sectionProvider:
             return pick(language, en: "Provider", zh: "Provider", fr: "Provider", de: "Provider")
         case .sectionSettings:
@@ -995,7 +995,7 @@ enum AppText {
         case .subtitleReminders:
             return pick(language, en: "Reminders", zh: "提醒", fr: "Rappels", de: "Erinnerungen")
         case .subtitleReflect:
-            return pick(language, en: "Reflect", zh: "Reflect", fr: "Reflect", de: "Reflect")
+            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .subtitleSystem:
             return pick(language, en: "System", zh: "系统", fr: "Système", de: "System")
         case .chatReady:
