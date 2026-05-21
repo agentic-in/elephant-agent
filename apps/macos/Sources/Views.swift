@@ -12293,6 +12293,284 @@ struct OnboardingMenuField: View {
     }
 }
 
+struct OnboardingDateField: View {
+    var title: String
+    var placeholder: String
+    @Binding var text: String
+    var language: AppLanguage
+    @State private var selectedDate = Self.defaultDate
+    @State private var hovering = false
+
+    private var hasValue: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Text(hasValue ? text : placeholder)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(hasValue ? ElephantTheme.ink.opacity(0.68) : ElephantTheme.faint)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if hasValue {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                }
+            }
+
+            HStack(spacing: 8) {
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { selectedDate },
+                        set: { date in
+                            selectedDate = Calendar(identifier: .gregorian).startOfDay(for: date)
+                            text = Self.storageFormatter.string(from: selectedDate)
+                        }
+                    ),
+                    in: Self.minimumDate...Date(),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: language.localeIdentifier))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(title)
+
+                if hasValue {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(ElephantTheme.faint)
+                    .help(clearTitle)
+                    .accessibilityLabel(clearTitle)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(hovering ? ElephantTheme.accent.opacity(0.46) : ElephantTheme.line.opacity(0.76), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onHover { hovering = $0 }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            syncSelectedDate()
+        }
+        .onChange(of: text) { _ in
+            syncSelectedDate()
+        }
+    }
+
+    private var clearTitle: String {
+        localizedYouText(language, en: "Clear birth date", zh: "清除生日", fr: "Effacer la date de naissance", de: "Geburtsdatum löschen")
+    }
+
+    private func syncSelectedDate() {
+        guard let parsed = Self.parseDate(text) else { return }
+        selectedDate = parsed
+    }
+
+    private static var defaultDate: Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.year = 1990
+        components.month = 1
+        components.day = 1
+        return components.date ?? Date()
+    }
+
+    private static var minimumDate: Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.year = 1900
+        components.month = 1
+        components.day = 1
+        return components.date ?? Date(timeIntervalSince1970: 0)
+    }
+
+    private static let storageFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy/MM/dd"
+        return formatter
+    }()
+
+    private static let inputFormatters: [DateFormatter] = {
+        ["yyyy/MM/dd", "yyyy-MM-dd", "yyyy.M.d", "yyyy/M/d"].map { pattern in
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = pattern
+            return formatter
+        }
+    }()
+
+    private static func parseDate(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        for formatter in inputFormatters {
+            if let date = formatter.date(from: trimmed) {
+                return Calendar(identifier: .gregorian).startOfDay(for: date)
+            }
+        }
+        return nil
+    }
+}
+
+struct OnboardingHobbyOption: Identifiable {
+    var value: String
+    var label: String
+    var detail: String
+    var id: String { value }
+}
+
+struct OnboardingMultiSelectMenuField: View {
+    var title: String
+    var placeholder: String
+    var options: [OnboardingHobbyOption]
+    @Binding var selection: String
+    var language: AppLanguage
+    @State private var hovering = false
+
+    private var selectedValues: [String] {
+        let parts = selection.components(separatedBy: CharacterSet(charactersIn: ",，、"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "skip" && $0 != "暂时留空" }
+        let knownValues = Set(options.map(\.value))
+        let known = options.map(\.value).filter { parts.contains($0) }
+        let unknown = parts.filter { !knownValues.contains($0) && !known.contains($0) }
+        return known + unknown
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Spacer(minLength: 0)
+                if !selectedValues.isEmpty {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                }
+            }
+
+            Menu {
+                Button(clearSelectionTitle) {
+                    selection = ""
+                }
+                .disabled(selectedValues.isEmpty)
+                Divider()
+                ForEach(options) { option in
+                    Button {
+                        toggle(option)
+                    } label: {
+                        Label(option.label, systemImage: selectedValues.contains(option.value) ? "checkmark.circle.fill" : "circle")
+                    }
+                    .help(option.detail)
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Text(selectionSummary)
+                        .font(.callout)
+                        .foregroundStyle(selectedValues.isEmpty ? ElephantTheme.faint : ElephantTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(selectedCountText)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(selectedValues.isEmpty ? ElephantTheme.faint : ElephantTheme.accent)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(hovering ? ElephantTheme.accent.opacity(0.46) : ElephantTheme.line.opacity(0.76), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .onHover { hovering = $0 }
+            .help(selectedValues.isEmpty ? placeholder : selectedLabels.joined(separator: delimiter))
+            .accessibilityLabel("\(title), \(selectionSummary)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var delimiter: String {
+        language == .zh ? "、" : ", "
+    }
+
+    private var selectedLabels: [String] {
+        selectedValues.map { value in
+            options.first(where: { $0.value == value })?.label ?? value
+        }
+    }
+
+    private var selectionSummary: String {
+        let labels = selectedLabels
+        guard !labels.isEmpty else { return placeholder }
+        if labels.count <= 3 {
+            return labels.joined(separator: delimiter)
+        }
+        let visible = labels.prefix(2).joined(separator: delimiter)
+        return "\(visible) +\(labels.count - 2)"
+    }
+
+    private var selectedCountText: String {
+        selectedValues.isEmpty
+            ? localizedYouText(language, en: "Optional", zh: "可选", fr: "Optionnel", de: "Optional")
+            : localizedFormat(language, en: "%d selected", zh: "已选 %d 项", fr: "%d sélectionnés", de: "%d ausgewählt", selectedValues.count)
+    }
+
+    private var clearSelectionTitle: String {
+        localizedYouText(language, en: "Leave blank", zh: "暂时留空", fr: "Laisser vide", de: "Leer lassen")
+    }
+
+    private func toggle(_ option: OnboardingHobbyOption) {
+        var values = selectedValues
+        if let index = values.firstIndex(of: option.value) {
+            values.remove(at: index)
+        } else {
+            values.append(option.value)
+        }
+        selection = joinedSelection(values)
+    }
+
+    private func joinedSelection(_ values: [String]) -> String {
+        let valueSet = Set(values)
+        let known = options.map(\.value).filter { valueSet.contains($0) }
+        let knownSet = Set(known)
+        let unknown = values.filter { !knownSet.contains($0) }
+        return (known + unknown).joined(separator: delimiter)
+    }
+}
+
 struct OnboardingChoiceButton: View {
     var title: String
     var subtitle: String? = nil
@@ -12550,7 +12828,12 @@ struct OnboardingIdentityStep: View {
                             options: genderOptions,
                             selection: $model.onboardingGender
                         )
-                        OnboardingField(title: model.text(.birthDate), placeholder: "YYYY-MM-DD", text: $model.onboardingBirthDate)
+                        OnboardingDateField(
+                            title: model.text(.birthDate),
+                            placeholder: model.text(.notSet),
+                            text: $model.onboardingBirthDate,
+                            language: model.appLanguage
+                        )
                     }
                     OnboardingMenuField(
                         title: "MBTI",
@@ -12725,15 +13008,45 @@ struct OnboardingInterestsStep: View {
                 subtitle: model.text(.interestsSubtitle),
                 symbol: "sparkles"
             )
-            OnboardingField(
+            OnboardingMultiSelectMenuField(
                 title: model.text(.hobbies),
                 placeholder: model.text(.hobbiesPlaceholder),
-                text: $model.onboardingHobbies,
-                suggestions: [model.text(.hobbiesSuggestionOne), model.text(.hobbiesSuggestionTwo), model.text(.hobbiesSuggestionThree)]
+                options: onboardingHobbyOptions(for: model.appLanguage),
+                selection: $model.onboardingHobbies,
+                language: model.appLanguage
             )
             OnboardingField(title: model.text(.longTermDirection), placeholder: model.text(.longTermDirectionPlaceholder), text: $model.onboardingDream, lines: 3...4)
         }
     }
+}
+
+private func onboardingHobbyOptions(for language: AppLanguage) -> [OnboardingHobbyOption] {
+    if language == .zh {
+        return [
+            OnboardingHobbyOption(value: "阅读", label: "阅读", detail: "书、文章、研究，或长期好奇的问题"),
+            OnboardingHobbyOption(value: "音乐", label: "音乐", detail: "听歌、演奏、收藏、演出"),
+            OnboardingHobbyOption(value: "影视/动画", label: "影视/动画", detail: "电影、剧集、动画、纪录片"),
+            OnboardingHobbyOption(value: "游戏", label: "游戏", detail: "电子游戏、桌游、解谜、好玩的系统"),
+            OnboardingHobbyOption(value: "运动/身体活动", label: "运动/身体活动", detail: "健身、跑步、攀岩、跳舞、散步"),
+            OnboardingHobbyOption(value: "美食/做饭", label: "美食/做饭", detail: "吃饭、做饭、烘焙、咖啡、探店"),
+            OnboardingHobbyOption(value: "旅行/城市漫步", label: "旅行/城市漫步", detail: "探索地方、路线、街区和旅程"),
+            OnboardingHobbyOption(value: "艺术/设计", label: "艺术/设计", detail: "绘画、摄影、审美、把东西做漂亮"),
+            OnboardingHobbyOption(value: "写作", label: "写作", detail: "日记、文章、小说、笔记、脚本"),
+            OnboardingHobbyOption(value: "技术/创造", label: "技术/创造", detail: "写代码、小工具、设备、搭系统")
+        ]
+    }
+    return [
+        OnboardingHobbyOption(value: "reading", label: "Reading", detail: "Books, essays, research, or long-form curiosity"),
+        OnboardingHobbyOption(value: "music", label: "Music", detail: "Listening, playing, collecting, or live shows"),
+        OnboardingHobbyOption(value: "films and shows", label: "Films / shows", detail: "Movies, series, anime, documentaries"),
+        OnboardingHobbyOption(value: "games", label: "Games", detail: "Video games, board games, puzzles, or playful systems"),
+        OnboardingHobbyOption(value: "sports and movement", label: "Sports / movement", detail: "Gym, running, climbing, dancing, walking"),
+        OnboardingHobbyOption(value: "food and cooking", label: "Food / cooking", detail: "Eating, cooking, baking, coffee, restaurants"),
+        OnboardingHobbyOption(value: "travel and city walks", label: "Travel / city walks", detail: "Exploring places, routes, neighborhoods, trips"),
+        OnboardingHobbyOption(value: "art and design", label: "Art / design", detail: "Drawing, photography, visual taste, making things beautiful"),
+        OnboardingHobbyOption(value: "writing", label: "Writing", detail: "Journaling, essays, fiction, notes, scripts"),
+        OnboardingHobbyOption(value: "technology and making", label: "Technology / making", detail: "Coding, gadgets, tools, building small systems")
+    ]
 }
 
 struct OnboardingLinksStep: View {

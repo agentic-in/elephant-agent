@@ -459,7 +459,7 @@ enum AppText {
         case .hobbies:
             return pick(language, en: "Hobbies", zh: "兴趣爱好", fr: "Centres d'intérêt", de: "Interessen")
         case .hobbiesPlaceholder:
-            return pick(language, en: "Comma separated", zh: "逗号分隔", fr: "Séparés par des virgules", de: "Durch Kommas getrennt")
+            return pick(language, en: "Choose one or more", zh: "选择一个或多个", fr: "Choisissez-en un ou plusieurs", de: "Eins oder mehrere wählen")
         case .hobbiesSuggestionOne:
             return pick(language, en: "Writing, design, AI", zh: "写作, 设计, AI", fr: "Écriture, design, IA", de: "Schreiben, Design, KI")
         case .hobbiesSuggestionTwo:

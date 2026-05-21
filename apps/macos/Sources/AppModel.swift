@@ -855,7 +855,8 @@ final class ElephantAppModel: ObservableObject {
                 if status.contains("completed") || status.contains("succeeded") || status == "success" {
                     onboardingFinalizationStatus = text(.learningReady)
                     onboardingFinalizationComplete = true
-                    onboardingStep = 16
+                    onboardingStep = 17
+                    scheduleOnboardingAutoCompletion()
                     return
                 }
                 if status.contains("failed") || status.contains("cancel") || status.contains("error") {
@@ -865,6 +866,19 @@ final class ElephantAppModel: ObservableObject {
             try await Task.sleep(nanoseconds: 2_000_000_000)
         }
         throw APIClientError.badStatus("The init learning job is still running. You can enter Elephant and review the learning queue later.")
+    }
+
+    private func scheduleOnboardingAutoCompletion() {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            await MainActor.run {
+                guard let self,
+                      self.showingOnboarding,
+                      self.onboardingFinalizationComplete
+                else { return }
+                self.completeOnboarding()
+            }
+        }
     }
 
     private func onboardingInitReflectJob(jobID: String) -> LearningJobItem? {
@@ -878,8 +892,9 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func completeOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
         showingOnboarding = false
-        selectedSection = .wake
+        selectedSection = .home
     }
 
     func startNewChat() {
