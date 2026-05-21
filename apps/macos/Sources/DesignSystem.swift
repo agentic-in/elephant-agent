@@ -321,18 +321,52 @@ struct SettingsRow: View {
     var value: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
+        HStack(alignment: .firstTextBaseline, spacing: 18) {
             Text(label)
                 .font(.callout)
                 .foregroundStyle(ElephantTheme.muted)
-                .frame(width: 116, alignment: .leading)
+                .frame(width: 148, alignment: .leading)
             Text(value)
                 .font(.callout)
                 .foregroundStyle(ElephantTheme.ink)
                 .textSelection(.enabled)
-                .lineLimit(2)
+                .lineLimit(3)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 7)
+    }
+}
+
+struct SettingsFieldRow<Accessory: View>: View {
+    var label: String
+    var value: String
+    var accessory: Accessory
+
+    init(
+        label: String,
+        value: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.label = label
+        self.value = value
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.muted)
+                .frame(width: 148, alignment: .leading)
+            Text(value)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.ink)
+                .textSelection(.enabled)
+                .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
+            accessory
         }
         .padding(.vertical, 7)
     }

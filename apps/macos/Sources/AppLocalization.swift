@@ -607,7 +607,7 @@ enum AppText {
         case .settingsTitle:
             return pick(language, en: "Settings", zh: "设置", fr: "Réglages", de: "Einstellungen")
         case .settingsSubtitle:
-            return pick(language, en: "Make Elephant feel right for you.", zh: "把 Elephant 调成真正适合你的样子。", fr: "Ajustez Elephant pour qu'il vous corresponde.", de: "Passe Elephant so an, dass es sich richtig anfühlt.")
+            return pick(language, en: "Shape the parts you feel every day.", zh: "把每天会用到的部分调成顺手、安心、像你。", fr: "Ajustez ce que vous utilisez chaque jour.", de: "Stimme ab, was du jeden Tag spürst.")
         case .restartCore:
             return pick(language, en: "Restart Core", zh: "重启 Core", fr: "Redémarrer le core", de: "Core neu starten")
         case .languageSettingsTitle:
@@ -615,7 +615,7 @@ enum AppText {
         case .languageSettingsSubtitle:
             return pick(language, en: "App language: ", zh: "当前语言：", fr: "Langue de l'app : ", de: "App-Sprache: ")
         case .languageSettingsDescription:
-            return pick(language, en: "Use the same language across onboarding, navigation, settings, and system copy.", zh: "onboarding、导航、设置和系统文案使用同一种语言。", fr: "Utiliser la même langue dans l'onboarding, la navigation, les réglages et les textes système.", de: "Dieselbe Sprache für Onboarding, Navigation, Einstellungen und Systemtexte verwenden.")
+            return pick(language, en: "Elephant will speak this language across setup, navigation, settings, and system messages.", zh: "初始化、导航、设置和系统提示都会使用这门语言。", fr: "Elephant utilisera cette langue dans la configuration, la navigation, les réglages et les messages système.", de: "Elephant verwendet diese Sprache für Einrichtung, Navigation, Einstellungen und Systemmeldungen.")
         case .runtimeConfig:
             return pick(language, en: "System Config", zh: "系统配置", fr: "Configuration système", de: "Systemkonfiguration")
         case .runtimeConfigMissing:

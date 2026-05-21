@@ -2074,9 +2074,11 @@ struct ThreadRow: View {
 
 struct WakeComposerPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var historyVisible: Bool
     @StateObject private var speech = SpeechInputController()
     @FocusState private var focused: Bool
+    @State private var lastScrollTargetID: UUID?
     private let chatBottomSpacerID = "chat-active-response-spacer"
 
     var body: some View {
@@ -2118,7 +2120,7 @@ struct WakeComposerPanel: View {
                                                 .id(message.id)
                                         }
                                         Color.clear
-                                            .frame(height: activeResponseBottomSpacing(in: geometry.size.height))
+                                            .frame(height: responseRunway(in: geometry.size.height))
                                             .id(chatBottomSpacerID)
                                     }
                                     .padding(.vertical, 8)
@@ -2130,13 +2132,14 @@ struct WakeComposerPanel: View {
                     }
                     .frame(minHeight: 320, maxHeight: .infinity)
                     .onChange(of: model.chatScrollRevision) { _ in
-                        withAnimation(.easeOut(duration: 0.20)) {
-                            if model.isWakeRunning {
-                                proxy.scrollTo(chatBottomSpacerID, anchor: .bottom)
-                            } else if let last = visibleMessages.last {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
+                        let targetID = visibleMessages.last?.id
+                        let targetChanged = targetID != nil && targetID != lastScrollTargetID
+                        scrollToTranscriptBottom(proxy: proxy, animated: targetChanged || !model.isWakeRunning)
+                        lastScrollTargetID = targetID
+                    }
+                    .onChange(of: model.isWakeRunning) { running in
+                        guard !running else { return }
+                        scrollToTranscriptBottom(proxy: proxy, animated: true)
                     }
                 }
 
@@ -2229,9 +2232,20 @@ struct WakeComposerPanel: View {
         model.messages.filter { $0.role != .system }
     }
 
-    private func activeResponseBottomSpacing(in transcriptHeight: CGFloat) -> CGFloat {
-        guard model.isWakeRunning else { return 12 }
-        return min(max(transcriptHeight * 0.54, 260), 560)
+    private func responseRunway(in transcriptHeight: CGFloat) -> CGFloat {
+        guard model.isWakeRunning else { return 14 }
+        return min(max(transcriptHeight * 0.20, 88), 168)
+    }
+
+    private func scrollToTranscriptBottom(proxy: ScrollViewProxy, animated: Bool) {
+        let action = {
+            proxy.scrollTo(chatBottomSpacerID, anchor: .bottom)
+        }
+        guard animated && !reduceMotion else {
+            action()
+            return
+        }
+        withAnimation(.easeOut(duration: 0.16), action)
     }
 }
 
@@ -2817,7 +2831,11 @@ struct MessageBubble: View, Equatable {
     private var bubbleCore: some View {
         VStack(alignment: .leading, spacing: 3) {
             if !message.text.isEmpty {
-                MarkdownBody(text: message.text, font: message.role == .system ? .callout : .body, color: textColor)
+                MarkdownBody(
+                    text: message.text,
+                    font: message.role == .system ? .callout : .body,
+                    color: textColor
+                )
                     .transaction { transaction in
                         transaction.animation = nil
                     }
@@ -8633,12 +8651,15 @@ struct ExpandableSettingsRow<Content: View>: View {
 
             if expanded {
                 HStack(alignment: .top, spacing: 0) {
-                    Color.clear
-                        .frame(width: 50)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(ElephantTheme.accent.opacity(0.16))
+                        .frame(width: 3)
+                        .padding(.top, 13)
+                        .padding(.trailing, 47)
                     content
-                        .padding(.top, 8)
-                        .padding(.bottom, 14)
-                        .frame(maxWidth: 720, alignment: .topLeading)
+                        .padding(.top, 14)
+                        .padding(.bottom, 18)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 12)
@@ -8712,8 +8733,8 @@ struct SettingsActionBar<Leading: View, Actions: View>: View {
             Spacer(minLength: 16)
             actions
         }
-        .frame(maxWidth: .infinity, minHeight: 34, alignment: .trailing)
-        .padding(.top, 4)
+        .frame(maxWidth: .infinity, minHeight: 38, alignment: .trailing)
+        .padding(.top, 10)
     }
 }
 
@@ -8728,7 +8749,7 @@ private struct SettingsActionButtonModifier: ViewModifier {
             .buttonStyle(PressablePlainButtonStyle())
             .foregroundStyle(foreground)
             .padding(.horizontal, 12)
-            .frame(minHeight: 32)
+            .frame(minWidth: kind == .secondary ? 86 : 104, minHeight: 34)
             .background(fill, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -8800,7 +8821,11 @@ struct LanguageSettingsContent: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            SettingsRow(label: model.text(.languageSettingsTitle), value: model.appLanguage.nativeName)
+            .frame(width: 360)
+            SettingsRow(
+                label: localizedYouText(model.appLanguage, en: "Current", zh: "当前", fr: "Actuelle", de: "Aktuell"),
+                value: model.appLanguage.nativeName
+            )
         }
     }
 }
@@ -10136,19 +10161,23 @@ struct RuntimeSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SettingsRow(label: "Core", value: model.corePhase.label)
-            SettingsRow(label: "API", value: model.snapshot.apiURL.isEmpty ? "starting" : model.snapshot.apiURL)
-            SettingsRow(label: "Database", value: model.snapshot.databasePath.isEmpty ? "not resolved" : model.snapshot.databasePath)
-            SettingsRow(label: "Provider", value: model.snapshot.providerStatus)
-            SettingsRow(label: "Semantic Index", value: model.snapshot.semanticStatus)
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Core", zh: "核心", fr: "Noyau", de: "Kern"), value: model.corePhase.label)
+            SettingsRow(label: "API", value: model.snapshot.apiURL.isEmpty ? localizedYouText(model.appLanguage, en: "starting", zh: "启动中", fr: "démarrage", de: "startet") : model.snapshot.apiURL)
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Database", zh: "数据库", fr: "Base de données", de: "Datenbank"), value: model.snapshot.databasePath.isEmpty ? localizedYouText(model.appLanguage, en: "not resolved", zh: "尚未定位", fr: "non résolue", de: "nicht aufgelöst") : model.snapshot.databasePath)
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Provider", zh: "模型服务", fr: "Provider", de: "Provider"), value: localizedRuntimeStatus(model.snapshot.providerStatus, language: model.appLanguage))
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Semantic index", zh: "语义索引", fr: "Index sémantique", de: "Semantischer Index"), value: localizedRuntimeStatus(model.snapshot.semanticStatus, language: model.appLanguage))
             SettingsActionBar {
-                Button("Refresh") {
+                Button {
                     Task { try? await model.refreshDashboard() }
+                } label: {
+                    Label(model.text(.refresh), systemImage: "arrow.clockwise")
                 }
                 .settingsActionButton()
 
-                Button("Reveal Database") {
+                Button {
                     model.revealDatabase()
+                } label: {
+                    Label(model.text(.revealDatabase), systemImage: "externaldrive")
                 }
                 .settingsActionButton(.primary)
                 .disabled(model.snapshot.databasePath.isEmpty)
@@ -10165,15 +10194,24 @@ struct SleepDisplaySettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Stepper(
-                value: Binding(
-                    get: { model.sleepIdleMinutes },
-                    set: { model.updateSleepIdleMinutes($0) }
-                ),
-                in: 1...120,
-                step: 1
+            SettingsFieldRow(
+                label: model.text(.sleepAutoSleep),
+                value: String(
+                    format: localizedYouText(model.appLanguage, en: "%@ min", zh: "%@ 分钟", fr: "%@ min", de: "%@ Min."),
+                    "\(model.sleepIdleMinutes)"
+                )
             ) {
-                SettingsRow(label: model.text(.sleepAutoSleep), value: "\(model.sleepIdleMinutes) min")
+                Stepper(
+                    "",
+                    value: Binding(
+                        get: { model.sleepIdleMinutes },
+                        set: { model.updateSleepIdleMinutes($0) }
+                    ),
+                    in: 1...120,
+                    step: 1
+                )
+                .labelsHidden()
+                .frame(width: 72)
             }
             SettingsRow(label: model.text(.sleepWake), value: model.hasAppLockPassword ? model.text(.sleepPasswordRequired) : model.text(.sleepNoPassword))
             Divider()
@@ -10194,11 +10232,11 @@ struct SleepDisplaySettingsContent: View {
                     confirmation = ""
                     result = model.text(.lockPasswordCleared)
                 } label: {
-                    Text(model.text(.clearLockPassword))
+                    Label(model.text(.clearLockPassword), systemImage: "trash")
                 }
                 .settingsActionButton(.destructive)
 
-                Button(model.text(.resetLockPassword)) {
+                Button {
                     let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
                     if trimmed.count >= 6 && trimmed == confirmation {
                         _ = model.setAppLockPassword(trimmed)
@@ -10210,6 +10248,8 @@ struct SleepDisplaySettingsContent: View {
                     } else {
                         result = model.text(.lockPasswordMismatch)
                     }
+                } label: {
+                    Label(model.text(.resetLockPassword), systemImage: "key")
                 }
                 .settingsActionButton(.primary)
                 .disabled(password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && confirmation.isEmpty)
@@ -10221,13 +10261,17 @@ struct SleepDisplaySettingsContent: View {
             }
             Divider()
             SettingsActionBar {
-                Button(model.text(.resetSleepTimer)) {
+                Button {
                     model.updateSleepIdleMinutes(10)
+                } label: {
+                    Label(model.text(.resetSleepTimer), systemImage: "timer")
                 }
                 .settingsActionButton()
 
-                Button(model.text(.enterSleepDisplay)) {
+                Button {
                     model.beginSleepDisplay(reason: "manual")
+                } label: {
+                    Label(model.text(.enterSleepDisplay), systemImage: "moon.zzz")
                 }
                 .settingsActionButton(.primary)
             }
@@ -10242,10 +10286,25 @@ struct ResetDataSettingsContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SettingsRow(
-                label: "Scope",
-                value: "Chats, Personal Model, provider keys, config, jobs, and local app state"
+                label: localizedYouText(model.appLanguage, en: "What resets", zh: "会清除", fr: "Éléments effacés", de: "Wird gelöscht"),
+                value: localizedYouText(
+                    model.appLanguage,
+                    en: "Chats, Personal Model, provider keys, config, jobs, and local app state",
+                    zh: "聊天、Personal Model、模型密钥、配置、任务和本机应用状态",
+                    fr: "Conversations, Personal Model, clés provider, configuration, tâches et état local",
+                    de: "Chats, Personal Model, Provider-Schlüssel, Konfiguration, Jobs und lokaler App-Zustand"
+                )
             )
-            SettingsRow(label: "After reset", value: "The setup flow opens again")
+            SettingsRow(
+                label: localizedYouText(model.appLanguage, en: "After reset", zh: "之后", fr: "Après", de: "Danach"),
+                value: localizedYouText(
+                    model.appLanguage,
+                    en: "Setup opens again so you can start clean.",
+                    zh: "会重新打开初始化流程，你可以从干净状态开始。",
+                    fr: "La configuration se rouvre pour repartir de zéro.",
+                    de: "Die Einrichtung öffnet sich erneut, damit du sauber starten kannst."
+                )
+            )
 
             if !model.resetDataResult.isEmpty {
                 Text(model.resetDataResult)
@@ -10257,7 +10316,12 @@ struct ResetDataSettingsContent: View {
                 Button(role: .destructive) {
                     showingResetPopover = true
                 } label: {
-                    Label(model.isResettingData ? "Resetting..." : "Reset All Data", systemImage: "trash")
+                    Label(
+                        model.isResettingData
+                            ? localizedYouText(model.appLanguage, en: "Resetting...", zh: "正在重置…", fr: "Réinitialisation…", de: "Wird zurückgesetzt…")
+                            : localizedYouText(model.appLanguage, en: "Reset all data", zh: "重置所有数据", fr: "Tout réinitialiser", de: "Alle Daten zurücksetzen"),
+                        systemImage: "trash"
+                    )
                 }
                 .settingsActionButton(.destructive)
                 .disabled(model.isResettingData)
@@ -10265,16 +10329,16 @@ struct ResetDataSettingsContent: View {
             .popover(isPresented: $showingResetPopover, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionLabel(
-                        title: "Reset Elephant Agent?",
-                        subtitle: "This cannot be undone."
+                        title: localizedYouText(model.appLanguage, en: "Reset Elephant Agent?", zh: "确定重置 Elephant Agent？", fr: "Réinitialiser Elephant Agent ?", de: "Elephant Agent zurücksetzen?"),
+                        subtitle: localizedYouText(model.appLanguage, en: "This cannot be undone.", zh: "这个操作无法撤销。", fr: "Cette action est irréversible.", de: "Das kann nicht rückgängig gemacht werden.")
                     )
                     VStack(alignment: .leading, spacing: 8) {
-                        EmptyLine(symbol: "message", text: "Chat history and episode records will be deleted.")
-                        EmptyLine(symbol: "person.crop.circle", text: "Personal Model facts, questions, profile photo, and herd data will be deleted.")
-                        EmptyLine(symbol: "key", text: "Provider keys, gateway secrets, global config, and jobs will be deleted.")
+                        EmptyLine(symbol: "message", text: localizedYouText(model.appLanguage, en: "Chat history and episodes will be deleted.", zh: "聊天历史和会话记录会被删除。", fr: "L'historique et les épisodes seront supprimés.", de: "Chatverlauf und Episoden werden gelöscht."))
+                        EmptyLine(symbol: "person.crop.circle", text: localizedYouText(model.appLanguage, en: "Personal Model facts and questions will be deleted.", zh: "Personal Model 事实和问题会被删除。", fr: "Les faits et questions du Personal Model seront supprimés.", de: "Personal-Model-Fakten und Fragen werden gelöscht."))
+                        EmptyLine(symbol: "key", text: localizedYouText(model.appLanguage, en: "Provider keys, config, and jobs will be deleted.", zh: "模型密钥、配置和任务会被删除。", fr: "Les clés provider, la configuration et les tâches seront supprimées.", de: "Provider-Schlüssel, Konfiguration und Jobs werden gelöscht."))
                     }
                     SettingsActionBar {
-                        Button("Cancel") {
+                        Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                             showingResetPopover = false
                         }
                         .settingsActionButton()
@@ -10283,7 +10347,7 @@ struct ResetDataSettingsContent: View {
                             showingResetPopover = false
                             Task { await model.resetAllData() }
                         } label: {
-                            Label("Reset All Data", systemImage: "trash")
+                            Label(localizedYouText(model.appLanguage, en: "Reset all data", zh: "重置所有数据", fr: "Tout réinitialiser", de: "Alle Daten zurücksetzen"), systemImage: "trash")
                         }
                         .settingsActionButton(.destructive)
                         .disabled(model.isResettingData)
@@ -11044,29 +11108,43 @@ struct CuriositySettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("How often should Elephant Agent ask?", selection: Binding(
-                get: { model.snapshot.questionIntensity },
-                set: { value in Task { await model.setCuriosityIntensity(value) } }
-            )) {
-                Text("Low").tag("low")
-                Text("Medium").tag("medium")
-                Text("High").tag("high")
+            HStack(alignment: .center, spacing: 18) {
+                Text(localizedYouText(model.appLanguage, en: "Ask rhythm", zh: "提问节奏", fr: "Rythme", de: "Fragerhythmus"))
+                    .font(.callout)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .frame(width: 148, alignment: .leading)
+                Picker("", selection: Binding(
+                    get: { model.snapshot.questionIntensity },
+                    set: { value in Task { await model.setCuriosityIntensity(value) } }
+                )) {
+                    Text(localizedYouText(model.appLanguage, en: "Low", zh: "低", fr: "Bas", de: "Niedrig")).tag("low")
+                    Text(localizedYouText(model.appLanguage, en: "Medium", zh: "适中", fr: "Moyen", de: "Mittel")).tag("medium")
+                    Text(localizedYouText(model.appLanguage, en: "High", zh: "高", fr: "Élevé", de: "Hoch")).tag("high")
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 300)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 360)
             SettingsRow(
-                label: "Effective cadence",
-                value: "\(model.snapshot.questionAskEnabled ? "on" : "off") · idle \(model.snapshot.questionIdleMinutes)m · max \(model.snapshot.questionDailyMax)/day · quiet \(model.snapshot.questionQuietStart):00-\(model.snapshot.questionQuietEnd):00"
+                label: localizedYouText(model.appLanguage, en: "Cadence", zh: "生效规则", fr: "Cadence", de: "Takt"),
+                value: curiosityCadence
             )
-            SettingsRow(label: "Open questions", value: "\(model.snapshot.waitingQuestions)")
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Open questions", zh: "待回答问题", fr: "Questions ouvertes", de: "Offene Fragen"), value: "\(model.snapshot.waitingQuestions)")
             if model.snapshot.sampleQuestions.isEmpty {
-                EmptyLine(symbol: "questionmark.bubble", text: "No Personal Model questions waiting right now.")
+                EmptyLine(symbol: "questionmark.bubble", text: localizedYouText(model.appLanguage, en: "No Personal Model questions are waiting right now.", zh: "现在没有待回答的 Personal Model 问题。", fr: "Aucune question Personal Model n'attend pour le moment.", de: "Gerade warten keine Personal-Model-Fragen."))
             } else {
                 ForEach(model.snapshot.sampleQuestions, id: \.self) { question in
-                    SettingsRow(label: "Question", value: question)
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Question", zh: "问题", fr: "Question", de: "Frage"), value: question)
                 }
             }
         }
+    }
+
+    private var curiosityCadence: String {
+        let enabled = model.snapshot.questionAskEnabled
+            ? localizedYouText(model.appLanguage, en: "on", zh: "开启", fr: "actif", de: "an")
+            : localizedYouText(model.appLanguage, en: "off", zh: "关闭", fr: "inactif", de: "aus")
+        return "\(enabled) · idle \(model.snapshot.questionIdleMinutes)m · max \(model.snapshot.questionDailyMax)/day · quiet \(model.snapshot.questionQuietStart):00-\(model.snapshot.questionQuietEnd):00"
     }
 }
 
@@ -11092,17 +11170,20 @@ struct HistoryUsageSettingsContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                MetricTile(label: "Episodes", value: "\(model.snapshot.episodes)", symbol: "rectangle.stack")
-                MetricTile(label: "Loops", value: "\(model.snapshot.loops)", symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.green)
-                MetricTile(label: "Steps", value: "\(model.snapshot.steps)", symbol: "point.topleft.down.curvedto.point.bottomright.up", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Episodes", zh: "会话", fr: "Épisodes", de: "Episoden"), value: "\(model.snapshot.episodes)", symbol: "rectangle.stack")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Loops", zh: "循环", fr: "Boucles", de: "Loops"), value: "\(model.snapshot.loops)", symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Steps", zh: "步骤", fr: "Étapes", de: "Schritte"), value: "\(model.snapshot.steps)", symbol: "point.topleft.down.curvedto.point.bottomright.up", tint: ElephantTheme.orange)
             }
 
-            SettingsRow(label: "Usage events", value: "\(model.snapshot.usageEvents)")
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Usage events", zh: "使用事件", fr: "Événements", de: "Nutzungsereignisse"), value: "\(model.snapshot.usageEvents)")
             SettingsRow(label: "Tokens", value: abbreviatedCount(model.snapshot.usageTokens))
 
             if !model.snapshot.episodeThreads.isEmpty {
                 Divider()
-                SectionLabel(title: "Recent Conversations", subtitle: "Read-only trace from runtime history")
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Recent Conversations", zh: "最近对话", fr: "Conversations récentes", de: "Letzte Unterhaltungen"),
+                    subtitle: localizedYouText(model.appLanguage, en: "Jump back into the traces that shaped Elephant.", zh: "回到那些正在塑造 Elephant 的对话。", fr: "Revenir aux traces qui façonnent Elephant.", de: "Zurück zu den Spuren, die Elephant prägen.")
+                )
                 ForEach(model.snapshot.episodeThreads.prefix(5)) { thread in
                     HStack(alignment: .top, spacing: 12) {
                         StatusDot(tint: thread.status == "open" ? ElephantTheme.green : ElephantTheme.faint)
@@ -11117,10 +11198,12 @@ struct HistoryUsageSettingsContent: View {
                                 .foregroundStyle(ElephantTheme.muted)
                         }
                         Spacer(minLength: 0)
-                        Button("Open") {
+                        Button {
                             model.openEpisodeThread(thread)
+                        } label: {
+                            Label(localizedYouText(model.appLanguage, en: "Open", zh: "打开", fr: "Ouvrir", de: "Öffnen"), systemImage: "arrow.up.right")
                         }
-                        .controlSize(.small)
+                        .settingsActionButton()
                     }
                     .padding(.vertical, 7)
                     if thread.id != model.snapshot.episodeThreads.prefix(5).last?.id {
@@ -11150,11 +11233,11 @@ struct LogsDiagnosticsSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsRow(label: "Log files", value: "\(model.snapshot.logs)")
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Log files", zh: "日志文件", fr: "Fichiers log", de: "Logdateien"), value: "\(model.snapshot.logs)")
             if model.snapshot.logFiles.isEmpty {
-                EmptyLine(symbol: "stethoscope", text: "No local log files found in the current state directory.")
+                EmptyLine(symbol: "stethoscope", text: localizedYouText(model.appLanguage, en: "No local log files were found.", zh: "当前没有找到本地日志。", fr: "Aucun fichier log local trouvé.", de: "Keine lokalen Logdateien gefunden."))
             } else {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(model.snapshot.logFiles) { item in
                             Button {
@@ -11166,11 +11249,14 @@ struct LogsDiagnosticsSettingsContent: View {
                             .buttonStyle(PressablePlainButtonStyle())
                         }
                     }
-                    .frame(width: 300)
+                    .frame(width: 330)
 
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            SectionLabel(title: selected.name.isEmpty ? "Log detail" : selected.name, subtitle: selected.detail)
+                            SectionLabel(
+                                title: selected.name.isEmpty ? localizedYouText(model.appLanguage, en: "Log detail", zh: "日志详情", fr: "Détail du log", de: "Logdetails") : selected.name,
+                                subtitle: selected.detail
+                            )
                             Spacer()
                             Button { page = max(0, page - 1) } label: { Image(systemName: "chevron.left") }
                                 .buttonStyle(.borderless)
@@ -11185,6 +11271,7 @@ struct LogsDiagnosticsSettingsContent: View {
                         LogTailView(lines: visibleLines)
                             .frame(minHeight: 220)
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         }
@@ -11247,7 +11334,7 @@ struct LogTailView: View {
 
     var body: some View {
         if lines.isEmpty {
-            EmptyLine(symbol: "doc.text", text: "No log tail available.")
+            EmptyLine(symbol: "doc.text", text: "No log preview available.")
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
