@@ -1146,6 +1146,8 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         )
 
     def _apply_extension_manifest(self, manifest: CliExtensionManifest) -> None:
+        from .operator_surface import build_cli_operator_surface
+
         def _elephant_file_root_for_session(session_id: str | None) -> Path:
             session = self.repository.load_episode_state(session_id) if session_id else None
             if session is not None and session.elephant_id:
@@ -1199,6 +1201,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
                     learning_result_surface=self,
                     diary_surface=self,
                     sub_agents_surface=self,
+                    operator_surface=build_cli_operator_surface(self),
                     todo_store=self.todo_store,
                     browser_backend=self.browser_backend,
                     clarify_surface=self.clarify_surface or StructuredClarifySurface(surface_label="cli"),

@@ -86,6 +86,7 @@ from . import api_runtime_http_methods as _http_methods
 from . import api_runtime_console as _console_methods
 from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
+from .operator_surface import build_api_operator_surface
 
 
 def _enabled_overrides(state_dir: Path, section: str) -> dict[str, bool]:
@@ -232,6 +233,15 @@ class ElephantAPIApp:
                 elephant_id=elephant_id,
                 episode_id=episode.episode_id,
             )
+        self.skill_management = RuntimeSkillManagementSurface(
+            skill_runtime=self.skill_runtime,
+            skill_hub=self.skill_hub,
+            profile_loader=self.profile_loader,
+            profile_dir=install_root,
+            skill_search_hub=self.skill_search_hub,
+            installed_skills_dir=install_root / "skills" / "installed",
+            authored_skills_dir=install_root / "skills" / "authored",
+        )
         self.tool_runtime = build_tool_runtime(
             enabled_overrides=_enabled_overrides(runtime_state_dir, "tool_overrides"),
             dependencies=BuiltinToolDependencies(
@@ -243,14 +253,10 @@ class ElephantAPIApp:
                     semantic_searcher=self.semantic_index_bundle.searcher,
                     embedding_service=_api_embedding_service,
                 ),
-                skill_management=RuntimeSkillManagementSurface(
-                    skill_runtime=self.skill_runtime,
-                    skill_hub=self.skill_hub,
-                    profile_loader=self.profile_loader,
-                    profile_dir=install_root,
-                    skill_search_hub=self.skill_search_hub,
-                    installed_skills_dir=install_root / "skills" / "installed",
-                    authored_skills_dir=install_root / "skills" / "authored",
+                skill_management=self.skill_management,
+                operator_surface=build_api_operator_surface(
+                    self,
+                    skill_management=self.skill_management,
                 ),
                 browser_backend=browser_backend,
                 message_delivery=DeliveryMessageSurfaceAdapter(

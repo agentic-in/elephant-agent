@@ -119,6 +119,10 @@ class OperatorToolsTest(unittest.TestCase):
         self.assertEqual(definitions["tool.operator.manage"].side_effects.approval_class, "strict")
         self.assertIn("plan", definitions["tool.operator.manage"].schema["properties"]["phase"]["enum"])
         self.assertIn("apply", definitions["tool.operator.manage"].schema["properties"]["phase"]["enum"])
+        self.assertEqual(
+            tuple(definitions["tool.operator.manage"].schema["properties"]["action"]["enum"]),
+            ("skill.enable", "skill.disable", "provider.set_default", "daemon.restart"),
+        )
 
     def test_operator_tools_are_unavailable_without_surface(self) -> None:
         definitions = {

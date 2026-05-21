@@ -1,5 +1,6 @@
 """Owner-aligned operator projections for CLI and API inspection surfaces."""
 
+from .management import OperatorRuntimeManagementSurface
 from .runtime import (
     DashboardAlert,
     DashboardCapabilityRecord,
@@ -64,6 +65,7 @@ __all__ = [
     "DashboardSessionRecord",
     "DashboardSurface",
     "DashboardTimelineEvent",
+    "OperatorRuntimeManagementSurface",
     "OperatorActionPlan",
     "OperatorActionReceipt",
     "OperatorActionResult",

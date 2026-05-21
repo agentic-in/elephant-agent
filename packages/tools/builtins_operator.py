@@ -68,7 +68,8 @@ def operator_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, ..
                     },
                     "action": {
                         "type": "string",
-                        "description": "Self-management action to plan, such as session_model_override, daemon_restart, or provider_default_update.",
+                        "enum": ["skill.enable", "skill.disable", "provider.set_default", "daemon.restart"],
+                        "description": "Self-management action to plan. Mutating actions are applied only through phase=apply after confirmation.",
                     },
                     "base_snapshot_id": {
                         "type": "string",

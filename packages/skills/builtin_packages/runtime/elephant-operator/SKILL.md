@@ -23,6 +23,7 @@ Use this built-in skill when the user asks Elephant Agent to inspect or safely o
 - Do not perform mutating self-management from skill text. Use `tool.operator.manage` only through the runtime tool layer.
 - For every mutating request, use `phase=plan` first and explain expected changes, risk, confirmation requirement, and rollback before any apply step.
 - Use `phase=apply` only after explicit user confirmation and only with the plan id returned by the plan step.
+- Supported mutating actions are `skill.enable`, `skill.disable`, `provider.set_default`, and `daemon.restart`.
 - After an apply step, inspect again or rely on the returned verification receipt before claiming the action succeeded.
 - Never expose raw secrets, tokens, API keys, passwords, credential material, or unredacted auth headers.
 - If an action is unsupported or unavailable on the current surface, say that plainly and report the structured error code or hint.
