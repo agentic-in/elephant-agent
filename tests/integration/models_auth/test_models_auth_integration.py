@@ -232,6 +232,10 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         openai_codex = next(record for record in catalog if record.provider_id == "openai-codex")
         google = next(record for record in catalog if record.provider_id == "google")
         google_oauth = next(record for record in catalog if record.provider_id == "google-gemini-cli")
+        perplexity = next(record for record in catalog if record.provider_id == "perplexity")
+        volcengine = next(record for record in catalog if record.provider_id == "volcengine")
+        qianfan = next(record for record in catalog if record.provider_id == "baidu-qianfan")
+        tokenhub = next(record for record in catalog if record.provider_id == "tencent-tokenhub")
         xiaomi = next(record for record in catalog if record.provider_id == "xiaomi")
         minimax = next(record for record in catalog if record.provider_id == "minimax")
         ollama = next(record for record in catalog if record.provider_id == "ollama")
@@ -251,10 +255,20 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                 "groq",
                 "deepseek",
                 "xai",
+                "cohere",
+                "perplexity",
+                "cerebras",
+                "nvidia",
                 "xiaomi",
                 "mistral",
                 "together",
                 "huggingface",
+                "siliconflow",
+                "volcengine",
+                "baidu-qianfan",
+                "tencent-hunyuan",
+                "tencent-tokenhub",
+                "stepfun",
                 "qwen-oauth",
                 "zai",
                 "alibaba",
@@ -262,6 +276,7 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
                 "moonshot-cn",
                 "minimax",
                 "minimax-cn",
+                "modelscope",
                 "opencode-zen",
                 "opencode-go",
                 "kilocode",
@@ -296,6 +311,12 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(google.transport_id, "openai_chat_compatible")
         self.assertEqual(google_oauth.auth_type, "oauth_external")
         self.assertEqual(google_oauth.default_base_url, "cloudcode-pa://google")
+        self.assertEqual(perplexity.transport_id, "openai_responses")
+        self.assertEqual(perplexity.default_base_url, "https://api.perplexity.ai/v1")
+        self.assertEqual(volcengine.metadata["endpoint_path"], "/chat/completions")
+        self.assertEqual(qianfan.metadata["endpoint_path"], "/chat/completions")
+        self.assertEqual(tokenhub.default_base_url, "https://tokenhub.tencentmaas.com/v1")
+        self.assertEqual(tokenhub.env_var_names, ("TOKENHUB_API_KEY", "TENCENT_TOKENHUB_API_KEY"))
         self.assertEqual(xiaomi.default_model_id, "mimo-v2-pro")
         self.assertEqual(xiaomi.model_hints, ("mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash"))
         self.assertEqual(minimax.transport_id, "anthropic_messages")

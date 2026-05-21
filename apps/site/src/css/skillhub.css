@@ -26,7 +26,7 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.56), transparent 24%),
     rgba(255, 255, 255, 0.82);
-  box-shadow: 0 18px 46px rgba(45, 92, 123, 0.1);
+  box-shadow: 0 18px 46px rgba(71, 83, 79, 0.1);
 }
 
 .skillhub-hero-panel {
@@ -34,7 +34,7 @@
     linear-gradient(90deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.84) 46%, rgba(255, 255, 255, 0.42)),
     linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.86)),
     url("/assets/brand/elephant-savanna-snr.jpg") center 46% / cover no-repeat;
-  box-shadow: 0 24px 72px rgba(45, 92, 123, 0.13);
+  box-shadow: 0 24px 72px rgba(71, 83, 79, 0.13);
 }
 
 .skillhub-hero-panel::before,
@@ -48,7 +48,7 @@
   pointer-events: none;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(125, 162, 214, 0.12), transparent 34%);
+    radial-gradient(circle at top right, rgba(142, 167, 161, 0.12), transparent 34%);
   opacity: 0.42;
 }
 
@@ -59,7 +59,7 @@
   pointer-events: none;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.18)),
-    radial-gradient(circle at 82% 42%, rgba(121, 175, 212, 0.18), transparent 34%);
+    radial-gradient(circle at 82% 42%, rgba(135, 169, 165, 0.18), transparent 34%);
   -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.34) 70%, transparent);
   mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.34) 70%, transparent);
 }
@@ -203,7 +203,7 @@
 
 .skillhub-tab:hover,
 .skillhub-tab:focus-visible {
-  border-color: rgba(121, 175, 212, 0.32);
+  border-color: rgba(135, 169, 165, 0.32);
   background: rgba(255, 255, 255, 0.84);
   outline: none;
   transform: translateY(-1px);
@@ -272,9 +272,9 @@
   border-radius: 1rem;
   color: var(--text-main);
   background:
-    linear-gradient(45deg, transparent 50%, rgba(54, 103, 135, 0.68) 50%) calc(100% - 1.2rem)
+    linear-gradient(45deg, transparent 50%, rgba(76, 91, 91, 0.68) 50%) calc(100% - 1.2rem)
       calc(50% - 0.14rem) / 0.4rem 0.4rem no-repeat,
-    linear-gradient(135deg, rgba(54, 103, 135, 0.68) 50%, transparent 50%) calc(100% - 0.95rem)
+    linear-gradient(135deg, rgba(76, 91, 91, 0.68) 50%, transparent 50%) calc(100% - 0.95rem)
       calc(50% - 0.14rem) / 0.4rem 0.4rem no-repeat,
     rgba(255, 255, 255, 0.72);
   font: inherit;
@@ -422,9 +422,9 @@
   align-items: center;
   min-height: 2rem;
   padding: 0.35rem 0.7rem;
-  border: 1px solid rgba(121, 175, 212, 0.28);
+  border: 1px solid rgba(135, 169, 165, 0.28);
   border-radius: 999px;
-  background: rgba(121, 175, 212, 0.1);
+  background: rgba(135, 169, 165, 0.1);
   color: var(--accent-light);
   font-size: 0.75rem;
   letter-spacing: 0.04em;

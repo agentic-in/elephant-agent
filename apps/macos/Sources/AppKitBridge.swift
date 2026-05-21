@@ -12,6 +12,7 @@ extension Notification.Name {
 
 struct WindowConfigurator: NSViewRepresentable {
     var language: AppLanguage
+    private static let legacyAutosaveName = "ElephantAgentMainWindow"
     private static var configuredWindowIDs = Set<ObjectIdentifier>()
     private static var titlebarLanguageByWindowID: [ObjectIdentifier: AppLanguage] = [:]
 
@@ -50,7 +51,8 @@ struct WindowConfigurator: NSViewRepresentable {
             window.backgroundColor = .windowBackgroundColor
             window.appearance = NSAppearance(named: .aqua)
             window.minSize = NSSize(width: 980, height: 700)
-            window.setFrameAutosaveName("ElephantAgentMainWindow")
+            clearLegacyAutosavedFrame()
+            centerMainWindow(window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             configuredWindowIDs.insert(windowID)
@@ -60,6 +62,27 @@ struct WindowConfigurator: NSViewRepresentable {
             installTitlebarActions(on: window, language: language)
             titlebarLanguageByWindowID[windowID] = language
         }
+    }
+
+    private static func clearLegacyAutosavedFrame() {
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame \(legacyAutosaveName)")
+    }
+
+    private static func centerMainWindow(_ window: NSWindow) {
+        guard let screen = window.screen ?? NSScreen.main else { return }
+        let visibleFrame = screen.visibleFrame
+        let padding: CGFloat = 48
+        let availableWidth = max(window.minSize.width, visibleFrame.width - padding)
+        let availableHeight = max(window.minSize.height, visibleFrame.height - padding)
+        let width = min(max(window.frame.width, window.minSize.width), availableWidth)
+        let height = min(max(window.frame.height, window.minSize.height), availableHeight)
+        let centeredFrame = NSRect(
+            x: visibleFrame.midX - width / 2,
+            y: visibleFrame.midY - height / 2,
+            width: width,
+            height: height
+        )
+        window.setFrame(centeredFrame.integral, display: true)
     }
 
     private static func installTitlebarActions(on window: NSWindow, language: AppLanguage) {

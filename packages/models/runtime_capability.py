@@ -28,6 +28,7 @@ from packages.contracts.runtime import (
     GenerationModelProfile,
     RuntimeModelChoice,
     PersonalModelRuntimeState,
+    PromptMessage,
     PromptEnvelope,
     SupportModelProfile,
 )
@@ -570,12 +571,18 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
             return "skip"
         return "embedded"
 
-    def ensure_embedding_bootstrap_state(self, *, source: str | None = None) -> EmbeddingBootstrapState:
+    def ensure_embedding_bootstrap_state(
+        self,
+        *,
+        source: str | None = None,
+        force_download: bool = False,
+    ) -> EmbeddingBootstrapState:
         self.state_focus_mode = self._embedding_bootstrap_state_focus_mode()
         return trigger_embedding_bootstrap(
             self.bootstrap_state_dir,
             state_focus_mode=self.state_focus_mode,
             source=source,
+            force_download=force_download,
         )
 
     def _embedding_bootstrap_state(self) -> EmbeddingBootstrapState:
@@ -598,6 +605,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
             summary["embedding_model_id"] = embedding_bootstrap.model_id
             summary["embedding_model_root"] = embedding_bootstrap.model_root
             summary["embedding_model_source_url"] = embedding_bootstrap.model_source_url
+            summary["embedding_bootstrap_source"] = embedding_bootstrap.source
             return summary
         summary = provider_profile_summary(profile)
         resolution = self.runtime_resolver.resolve(
@@ -623,6 +631,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
                 "embedding_model_id": embedding_bootstrap.model_id,
                 "embedding_model_root": embedding_bootstrap.model_root,
                 "embedding_model_source_url": embedding_bootstrap.model_source_url,
+                "embedding_bootstrap_source": embedding_bootstrap.source,
             }
         )
         return summary

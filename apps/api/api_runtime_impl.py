@@ -373,6 +373,7 @@ ElephantAPIApp._dispatch_episodes = _http_methods._dispatch_episodes
 ElephantAPIApp._dispatch_states = _http_methods._dispatch_states
 ElephantAPIApp.run_cron_job_now = _http_methods.run_cron_job_now
 ElephantAPIApp.run_proactive_ask_now = _cron_methods.run_proactive_ask_now
+ElephantAPIApp.run_dream_now = _cron_methods.run_dream_now
 ElephantAPIApp.__call__ = _http_methods.__call__
 
 def create_app(

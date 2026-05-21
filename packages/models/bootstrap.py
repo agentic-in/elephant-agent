@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -54,6 +55,10 @@ class EmbeddingBootstrapState:
     model_root: str = str(EMBEDDING_MODEL_ROOT)
     model_source_url: str = EMBEDDING_MODEL_SOURCE_URL
     source: str = "huggingface"
+
+
+def _embedding_source_url(source: str) -> str:
+    return EMBEDDING_MODEL_MODELSCOPE_URL if source == "modelscope" else EMBEDDING_MODEL_SOURCE_URL
 
 
 def _read_json_object(path: Path) -> dict[str, Any] | None:
@@ -119,6 +124,7 @@ def _embedding_bootstrap_summary(
     state_focus_mode: str,
     status: str,
     failure_message: str | None = None,
+    source: str = "huggingface",
 ) -> str:
     if state_focus_mode == "skip":
         return "local semantic-index bootstrap is skipped for this provider turn."
@@ -132,7 +138,7 @@ def _embedding_bootstrap_summary(
     if status == "downloading":
         return (
             "local semantic-index bootstrap is running; background "
-            f"model acquisition from {EMBEDDING_MODEL_SOURCE_URL} is in progress."
+            f"model acquisition from {_embedding_source_url(source)} is in progress."
         )
     if status == "failed":
         detail = str(failure_message or "embedding bootstrap request failed").strip() or "embedding bootstrap request failed"
@@ -147,6 +153,8 @@ def embedding_bootstrap_state_from_payload(payload: Mapping[str, Any]) -> Embedd
     status = _normalize_embedding_bootstrap_status(payload.get("status"))
     state_focus_mode = _normalize_state_focus_mode(payload.get("state_focus_mode"))
     failure_message = str(payload.get("failure_message") or "").strip() or None
+    source_raw = str(payload.get("source") or "huggingface").strip().lower()
+    source = source_raw if source_raw in _ALLOWED_EMBEDDING_SOURCES else "huggingface"
     stored_summary = str(payload.get("summary") or "").strip()
     if "state_focus_mode=" in stored_summary:
         stored_summary = ""
@@ -154,16 +162,15 @@ def embedding_bootstrap_state_from_payload(payload: Mapping[str, Any]) -> Embedd
         state_focus_mode=state_focus_mode,
         status=status,
         failure_message=failure_message,
+        source=source,
     )
     updated_at = str(payload.get("updated_at") or "").strip() or _utc_now_iso()
     model_id = str(payload.get("model_id") or EMBEDDING_MODEL_ID).strip() or EMBEDDING_MODEL_ID
     model_root = str(payload.get("model_root") or EMBEDDING_MODEL_ROOT).strip() or str(EMBEDDING_MODEL_ROOT)
     model_source_url = (
-        str(payload.get("model_source_url") or EMBEDDING_MODEL_SOURCE_URL).strip()
-        or EMBEDDING_MODEL_SOURCE_URL
+        str(payload.get("model_source_url") or _embedding_source_url(source)).strip()
+        or _embedding_source_url(source)
     )
-    source_raw = str(payload.get("source") or "huggingface").strip().lower()
-    source = source_raw if source_raw in _ALLOWED_EMBEDDING_SOURCES else "huggingface"
     background_pid = _embedding_bootstrap_pid_from_payload(payload.get("background_pid"))
     return EmbeddingBootstrapState(
         status=status,
@@ -206,7 +213,7 @@ def persist_embedding_bootstrap_state(
         "background_pid": state.background_pid,
         "model_id": state.model_id,
         "model_root": state.model_root,
-        "model_source_url": state.model_source_url,
+        "model_source_url": _embedding_source_url(state.source),
         "source": state.source,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -281,13 +288,23 @@ def _embedding_bootstrap_state_for_runtime(
             state_focus_mode="embedded",
             status=status,
             failure_message=failure_message,
+            source=source,
         ),
         state_focus_mode="embedded",
         updated_at=updated_at or _utc_now_iso(),
         failure_message=failure_message,
         background_pid=background_pid,
         source=source,
+        model_source_url=_embedding_source_url(source),
     )
+
+
+def _remove_embedding_model_root_for_redownload() -> None:
+    root = Path(EMBEDDING_MODEL_ROOT).expanduser()
+    if root.is_dir():
+        shutil.rmtree(root)
+    elif root.exists():
+        root.unlink()
 
 
 def resolve_embedding_bootstrap_state(
@@ -316,7 +333,8 @@ def resolve_embedding_bootstrap_state(
             if stored is not None and stored.state_focus_mode == "embedded" and stored.status == "ready"
             else _utc_now_iso()
         )
-        return _embedding_bootstrap_state_for_runtime(status="ready", updated_at=updated_at)
+        source = stored.source if stored is not None else "huggingface"
+        return _embedding_bootstrap_state_for_runtime(status="ready", updated_at=updated_at, source=source)
     if stored is not None and stored.state_focus_mode == "embedded" and stored.status == "failed":
         return stored
     active_pid = None
@@ -327,9 +345,11 @@ def resolve_embedding_bootstrap_state(
                 status=stored.status,
                 updated_at=stored.updated_at,
                 background_pid=active_pid,
+                source=stored.source,
             )
     status = "downloading" if sentence_transformers_dependencies_ready() else "pending"
-    return _embedding_bootstrap_state_for_runtime(status=status, background_pid=active_pid)
+    source = stored.source if stored is not None else "huggingface"
+    return _embedding_bootstrap_state_for_runtime(status=status, background_pid=active_pid, source=source)
 
 
 def run_embedding_bootstrap_worker(state_dir_arg: str) -> int:
@@ -412,21 +432,39 @@ def trigger_embedding_bootstrap(
     *,
     state_focus_mode: str,
     source: str | None = None,
+    force_download: bool = False,
 ) -> EmbeddingBootstrapState:
+    stored = load_embedding_bootstrap_state(state_dir)
+    effective_source = source if source is not None else (stored.source if stored is not None else "huggingface")
+    normalized_source = effective_source if effective_source in _ALLOWED_EMBEDDING_SOURCES else "huggingface"
+    if force_download and state_focus_mode == "embedded" and state_dir is not None:
+        active_pid = (
+            stored.background_pid
+            if stored is not None and _embedding_bootstrap_pid_is_active(stored.background_pid)
+            else None
+        )
+        if active_pid is None:
+            _remove_embedding_model_root_for_redownload()
     resolved = resolve_embedding_bootstrap_state(state_dir, state_focus_mode=state_focus_mode)
     if state_focus_mode != "embedded" or state_dir is None or resolved.status in {"ready", "skipped"}:
+        if state_focus_mode == "embedded" and state_dir is not None and resolved.status == "ready" and source is not None:
+            resolved = replace(
+                resolved,
+                source=normalized_source,
+                model_source_url=_embedding_source_url(normalized_source),
+            )
         return persist_embedding_bootstrap_state(state_dir, resolved)
     if resolved.background_pid is not None and _embedding_bootstrap_pid_is_active(resolved.background_pid):
         return persist_embedding_bootstrap_state(state_dir, resolved)
-    # When source is not explicitly provided, preserve previously stored source.
-    effective_source = source if source is not None else resolved.source
-    normalized_source = effective_source if effective_source in _ALLOWED_EMBEDDING_SOURCES else "huggingface"
     retryable = resolved
     if resolved.status == "failed":
         retryable = _embedding_bootstrap_state_for_runtime(status="pending", background_pid=None, source=normalized_source)
     else:
-        from dataclasses import replace as _dc_replace
-        retryable = _dc_replace(retryable, source=normalized_source)
+        retryable = replace(
+            retryable,
+            source=normalized_source,
+            model_source_url=_embedding_source_url(normalized_source),
+        )
     try:
         spawned = _spawn_embedding_bootstrap_worker(state_dir, retryable)
     except OSError as error:

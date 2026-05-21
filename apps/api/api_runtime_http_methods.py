@@ -608,6 +608,7 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
                 fields=payload.get("fields") if isinstance(payload.get("fields"), dict) else None,
                 append=bool(payload.get("append", False)),
                 clear=bool(payload.get("clear", False)),
+                split_personal_model_facts=bool(payload.get("split_personal_model_facts", False)),
             )
             return APIResponse(200, _jsonable({"state_id": state_id, "user": result}))
     if surface == "relationship":
@@ -690,7 +691,9 @@ def _dispatch_internal(self, method: str, parts: tuple[str, ...], body: bytes | 
 def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     if parts and parts[0] == "cron":
         if method.upper() == "GET" and len(parts) == 1:
-            return APIResponse(200, {"cron": {"jobs": [_cron_job_record(job) for job in self.cron_runtime.list_jobs()]}})
+            from .api_runtime_console import _cron_jobs
+
+            return APIResponse(200, {"cron": {"jobs": _cron_jobs(self)}})
         if method.upper() == "POST" and len(parts) == 1:
             payload = _read_json_bytes(body)
             job_payload = _cron_payload(payload)
@@ -706,10 +709,10 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
         if len(parts) == 2:
             job_id = parts[1]
             if method.upper() == "GET":
-                if job_id == "system:proactive-ask":
-                    from .api_runtime_console import _proactive_ask_system_job
+                if job_id in {"system:proactive-ask", "system:dream"}:
+                    from .api_runtime_console import _dream_system_job, _proactive_ask_system_job
 
-                    job = _proactive_ask_system_job(self)
+                    job = _dream_system_job(self) if job_id == "system:dream" else _proactive_ask_system_job(self)
                     if job is None:
                         raise ValueError(f"system cron job unavailable: {job_id}")
                     return APIResponse(200, {"cron": {"job": job}})
@@ -718,6 +721,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                 payload = _read_json_bytes(body)
                 action = str(payload.get("action") or "").strip().lower()
                 if action == "pause":
+                    if job_id == "system:dream":
+                        return APIResponse(403, {"error": "system_cron_job_cannot_be_paused"})
                     if job_id == "system:proactive-ask":
                         _persist_proactive_ask_config(self.repository.database_path.parent, {"enabled": False})
                         from .api_runtime_console import _proactive_ask_system_job
@@ -726,6 +731,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     else:
                         job = self.cron_runtime.pause_job(job_id)
                 elif action == "resume":
+                    if job_id == "system:dream":
+                        return APIResponse(403, {"error": "system_cron_job_cannot_be_resumed"})
                     if job_id == "system:proactive-ask":
                         _persist_proactive_ask_config(self.repository.database_path.parent, {"enabled": True})
                         from .api_runtime_console import _proactive_ask_system_job
@@ -739,7 +746,7 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
                     raise ValueError(f"system cron job unavailable: {job_id}")
                 return APIResponse(200, {"cron": {"job": job if isinstance(job, Mapping) else _cron_job_record(job)}})
             if method.upper() == "DELETE":
-                if job_id == "system:proactive-ask":
+                if job_id in {"system:proactive-ask", "system:dream"}:
                     return APIResponse(403, {"error": "system_cron_jobs_cannot_be_deleted"})
                 job = self.cron_runtime.inspect_job(job_id)
                 if _cron_job_system_kind(job) is not None:
@@ -752,6 +759,8 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
             # and returns the result synchronously so the dashboard can show it.
             if parts[1] == "system:proactive-ask":
                 return APIResponse(200, _jsonable(self.run_proactive_ask_now()))
+            if parts[1] == "system:dream":
+                return APIResponse(200, _jsonable(self.run_dream_now()))
             return APIResponse(200, _jsonable(self.run_cron_job_now(parts[1])))
     if method.upper() == "PATCH" and len(parts) == 1 and parts[0] == "settings":
         payload = _read_json_bytes(body)

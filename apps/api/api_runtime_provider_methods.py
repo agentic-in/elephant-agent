@@ -446,11 +446,19 @@ def embedding_provider_summary(self) -> dict[str, Any]:
         "secret_reference_id": "",
         "embedding_bootstrap_status": active_provider.get("embedding_bootstrap_status") or "unknown",
         "embedding_bootstrap_summary": active_provider.get("embedding_bootstrap_summary") or "",
+        "embedding_bootstrap_source": active_provider.get("embedding_bootstrap_source") or active_provider.get("embedding_source") or "",
+        "embedding_model_root": active_provider.get("embedding_model_root") or "",
+        "embedding_model_source_url": active_provider.get("embedding_model_source_url") or "",
         **runtime,
     }
 
 
-def set_local_embedding_provider(self) -> dict[str, Any]:
+def set_local_embedding_provider(
+    self,
+    *,
+    source: str | None = None,
+    force_download: bool = False,
+) -> dict[str, Any]:
     profile = self._embedding_provider_profile()
     if profile is not None and str(profile.metadata.get("embedding_active") or "").strip().lower() == "true":
         self.repository.upsert_auth_profile(
@@ -463,7 +471,10 @@ def set_local_embedding_provider(self) -> dict[str, Any]:
                 },
             )
         )
-    self.model_provider.ensure_embedding_bootstrap_state()
+    self.model_provider.ensure_embedding_bootstrap_state(
+        source=source,
+        force_download=force_download,
+    )
     return self.embedding_provider_summary()
 
 
@@ -513,7 +524,30 @@ def set_openai_compatible_embedding_provider(
 def set_embedding_provider(self, payload: Mapping[str, Any]) -> dict[str, Any]:
     source = str(payload.get("source") or payload.get("provider") or "").strip().lower()
     if source in {"", "local", "elephant-embed", "local-default"}:
-        return {"embedding_provider": self.set_local_embedding_provider()}
+        model_source = str(
+            payload.get("modelSource")
+            or payload.get("model_source")
+            or payload.get("embeddingSource")
+            or payload.get("embedding_source")
+            or ""
+        ).strip().lower()
+        if model_source not in {"huggingface", "modelscope"}:
+            model_source = None
+        force_download = _optional_bool(
+            payload.get("forceDownload")
+            if "forceDownload" in payload
+            else payload.get("force_download")
+            if "force_download" in payload
+            else payload.get("redownload")
+            if "redownload" in payload
+            else payload.get("reDownload")
+        ) or False
+        return {
+            "embedding_provider": self.set_local_embedding_provider(
+                source=model_source,
+                force_download=force_download,
+            )
+        }
     if source not in {"openai-compatible", "external", "provider"}:
         raise ValueError("embedding provider source must be elephant-embed or openai-compatible")
     dimensions_raw = payload.get("dimensions")

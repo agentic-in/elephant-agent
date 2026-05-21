@@ -13,7 +13,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ElephantAgentMac",
-            path: "Sources"
+            path: "Sources",
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )

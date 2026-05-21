@@ -134,6 +134,20 @@ struct APIClient {
         }
     }
 
+    func configureLocalEmbedding(source: String, forceDownload: Bool) async throws {
+        let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let resolvedSource = normalizedSource == "modelscope" ? "modelscope" : "huggingface"
+        _ = try await request(
+            path: "/v1/providers/embeddings",
+            method: "POST",
+            body: [
+                "source": "local",
+                "modelSource": resolvedSource,
+                "forceDownload": forceDownload
+            ]
+        )
+    }
+
     func createElephant(name: String, identityText: String) async throws -> String {
         let json = try await request(
             path: "/v1/herd",
@@ -256,6 +270,8 @@ struct APIClient {
             body: [
                 "append": true,
                 "fields": fields,
+                "durable_fields": durableNotes,
+                "split_personal_model_facts": true,
                 "text": lines
             ]
         )
@@ -1098,6 +1114,13 @@ enum SnapshotParser {
         snapshot.embeddingRuntimeStatus = string(embeddingProvider["embedding_runtime_status"] ?? embeddingProvider["runtime_status"])
         snapshot.embeddingRuntimeState = string(embeddingProvider["embedding_runtime_state"] ?? embeddingProvider["runtime_state"])
         snapshot.embeddingRuntimeSummary = string(embeddingProvider["embedding_runtime_summary"] ?? embeddingProvider["runtime_summary"])
+        snapshot.embeddingBootstrapSource = string(
+            embeddingProvider["embedding_bootstrap_source"]
+                ?? embeddingProvider["embeddingSource"]
+                ?? embeddingProvider["embedding_source"]
+        )
+        snapshot.embeddingModelRoot = string(embeddingProvider["embedding_model_root"] ?? embeddingProvider["model_root"])
+        snapshot.embeddingModelSourceURL = string(embeddingProvider["embedding_model_source_url"] ?? embeddingProvider["model_source_url"])
         snapshot.embeddingReady = bool(
             embeddingProvider["embedding_ready"]
                 ?? embeddingProvider["embedding_runtime_ready"]
@@ -1893,6 +1916,18 @@ enum SnapshotParser {
 
     private static func stripProfileFactPrefix(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferredNamePatterns = [
+            #"^(?:用户)?(?:偏好|希望|喜欢)?(?:被)?(?:称为|叫做|叫|称呼为)\s*"#,
+            #"^(?:Preferred name|Name|昵称|名字|称呼)[：:]\s*"#
+        ]
+        for pattern in preferredNamePatterns {
+            if let range = trimmed.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                let cleaned = String(trimmed[range.upperBound...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
         guard let range = trimmed.range(of: #"^[^:：]+[：:]\s*"#, options: .regularExpression) else {
             return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
         }

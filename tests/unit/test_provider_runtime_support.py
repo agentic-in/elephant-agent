@@ -59,8 +59,8 @@ class EmbeddingRuntimeLoggingTest(unittest.TestCase):
         existing_filters = list(logger.filters)
         try:
             logger.filters.clear()
-            embedding_runtime._SENTENCE_TRANSFORMERS_LOG_FILTER_INSTALLED = False
-            embedding_runtime._suppress_sentence_transformers_version_warning()
+            embedding_runtime._LOCAL_EMBEDDING_LOG_FILTER_INSTALLED = False
+            embedding_runtime._suppress_local_embedding_load_warnings()
             record = logger.makeRecord(
                 logger.name,
                 logging.WARNING,
@@ -74,7 +74,7 @@ class EmbeddingRuntimeLoggingTest(unittest.TestCase):
             self.assertFalse(logger.filter(record))
         finally:
             logger.filters[:] = existing_filters
-            embedding_runtime._SENTENCE_TRANSFORMERS_LOG_FILTER_INSTALLED = False
+            embedding_runtime._LOCAL_EMBEDDING_LOG_FILTER_INSTALLED = False
 
 
 class EmbeddingBootstrapStateTest(unittest.TestCase):
@@ -88,6 +88,29 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
         self.assertEqual(state.status, "ready")
         self.assertEqual(state.state_focus_mode, "embedded")
         self.assertIsNone(state.background_pid)
+
+    def test_resolve_embedding_bootstrap_state_preserves_ready_modelscope_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_dir = Path(tmpdir)
+            provider_runtime_support.persist_embedding_bootstrap_state(
+                state_dir,
+                provider_runtime_support.EmbeddingBootstrapState(
+                    status="ready",
+                    summary="local bootstrap is ready",
+                    state_focus_mode="embedded",
+                    updated_at="2026-04-17T00:00:00+00:00",
+                    source="modelscope",
+                ),
+            )
+            with mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True):
+                state = provider_runtime_support.resolve_embedding_bootstrap_state(
+                    state_dir,
+                    state_focus_mode="embedded",
+                )
+
+        self.assertEqual(state.status, "ready")
+        self.assertEqual(state.source, "modelscope")
+        self.assertEqual(state.model_source_url, model_bootstrap.EMBEDDING_MODEL_MODELSCOPE_URL)
 
     def test_resolve_embedding_bootstrap_state_uses_downloading_when_dependencies_exist(self) -> None:
         with (
@@ -155,6 +178,34 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             self.assertEqual(state.background_pid, os.getpid())
             popen.assert_not_called()
 
+    def test_trigger_embedding_bootstrap_updates_ready_source_preference_without_redownload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_dir = Path(tmpdir)
+            provider_runtime_support.persist_embedding_bootstrap_state(
+                state_dir,
+                provider_runtime_support.EmbeddingBootstrapState(
+                    status="ready",
+                    summary="local bootstrap is ready",
+                    state_focus_mode="embedded",
+                    updated_at="2026-04-17T00:00:00+00:00",
+                    source="huggingface",
+                ),
+            )
+            with (
+                mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True),
+                mock.patch.object(model_bootstrap.subprocess, "Popen") as popen,
+            ):
+                state = provider_runtime_support.trigger_embedding_bootstrap(
+                    state_dir,
+                    state_focus_mode="embedded",
+                    source="modelscope",
+                )
+
+            self.assertEqual(state.status, "ready")
+            self.assertEqual(state.source, "modelscope")
+            self.assertEqual(state.model_source_url, model_bootstrap.EMBEDDING_MODEL_MODELSCOPE_URL)
+            popen.assert_not_called()
+
     def test_trigger_embedding_bootstrap_surfaces_spawn_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             state_dir = Path(tmpdir)
@@ -204,6 +255,31 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             self.assertEqual(state.status, "pending")
             self.assertEqual(state.background_pid, 54321)
             self.assertIsNone(state.failure_message)
+            popen.assert_called_once()
+
+    def test_trigger_embedding_bootstrap_force_redownload_replaces_ready_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_dir = Path(tmpdir) / "state"
+            model_root = Path(tmpdir) / "models" / "elephant-embeddings-v1-text-small"
+            model_root.mkdir(parents=True)
+            (model_root / "modules.json").write_text("{}", encoding="utf-8")
+            fake_process = mock.Mock(pid=65432)
+            with (
+                mock.patch.object(model_bootstrap, "EMBEDDING_MODEL_ROOT", model_root),
+                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=False),
+                mock.patch.object(model_bootstrap.subprocess, "Popen", return_value=fake_process) as popen,
+            ):
+                state = provider_runtime_support.trigger_embedding_bootstrap(
+                    state_dir,
+                    state_focus_mode="embedded",
+                    source="modelscope",
+                    force_download=True,
+                )
+
+            self.assertEqual(state.status, "pending")
+            self.assertEqual(state.background_pid, 65432)
+            self.assertEqual(state.source, "modelscope")
+            self.assertFalse(model_root.exists())
             popen.assert_called_once()
 
 

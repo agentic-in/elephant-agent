@@ -241,6 +241,7 @@ def update_user_state(
     fields: dict[str, object] | None = None,
     append: bool = False,
     clear: bool = False,
+    split_personal_model_facts: bool = False,
 ):
     return self.personal_state.update_user_state(
         state_id=state_id,
@@ -250,6 +251,7 @@ def update_user_state(
         fields=fields,
         append=append,
         clear=clear,
+        split_personal_model_facts=split_personal_model_facts,
     )
 
 

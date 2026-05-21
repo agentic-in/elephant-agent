@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 struct AppActivityMonitor: NSViewRepresentable {
@@ -82,33 +83,47 @@ struct SleepDisplayView: View {
             let avatarSize = min(132, max(94, shortest * 0.13))
 
             ZStack {
-                AppBackground()
-                    .blur(radius: reduceMotion ? 0 : 20)
-                    .saturation(1.14)
-                    .brightness(-0.05)
-                    .opacity(0.96)
+                SleepVideoBackdrop(paused: reduceMotion)
+                    .saturation(1.08)
+                    .brightness(-0.04)
+                    .ignoresSafeArea()
 
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(0.18),
-                        ElephantTheme.accent.opacity(0.16),
-                        Color.black.opacity(0.22)
+                        Color.black.opacity(0.30),
+                        ElephantTheme.accent.opacity(0.10),
+                        Color.black.opacity(0.38)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
 
-                Rectangle()
-                    .fill(.thinMaterial)
-                    .overlay(
-                        Color.white.opacity(0.10)
-                    )
+                Color.black.opacity(0.08)
                     .ignoresSafeArea()
 
                 SleepAmbientGlass(paused: reduceMotion)
-                    .opacity(0.74)
+                    .opacity(0.56)
                     .allowsHitTesting(false)
+
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(model.text(.sleepBrandTitle))
+                                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.88))
+                            Text(model.text(.sleepBrandSlogan))
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.62))
+                                .lineLimit(2)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 34)
+                    .padding(.bottom, 28)
+                }
+                .allowsHitTesting(false)
 
                 VStack(spacing: 0) {
                     TimelineView(.periodic(from: Date(), by: 1.0)) { timeline in
@@ -200,6 +215,85 @@ struct SleepDisplayView: View {
         formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         formatter.setLocalizedDateFormatFromTemplate("MMMMdEEEE")
         return formatter.string(from: date)
+    }
+}
+
+private struct SleepVideoBackdrop: View {
+    var paused: Bool
+
+    var body: some View {
+        if let bundledURL = Bundle.main.url(forResource: "baby-el", withExtension: "mp4") {
+            LoopingVideoBackground(url: bundledURL, paused: paused)
+        } else {
+            AppBackground()
+                .blur(radius: paused ? 0 : 20)
+                .saturation(1.14)
+                .opacity(0.96)
+        }
+    }
+}
+
+private struct LoopingVideoBackground: NSViewRepresentable {
+    var url: URL
+    var paused: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> VideoLayerView {
+        let view = VideoLayerView()
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer(playerItem: item)
+        let looper = AVPlayerLooper(player: player, templateItem: item)
+        player.isMuted = true
+        player.actionAtItemEnd = .none
+        player.play()
+        view.playerLayer.player = player
+        context.coordinator.player = player
+        context.coordinator.looper = looper
+        return view
+    }
+
+    func updateNSView(_ nsView: VideoLayerView, context: Context) {
+        if paused {
+            context.coordinator.player?.pause()
+        } else {
+            context.coordinator.player?.play()
+        }
+    }
+
+    static func dismantleNSView(_ nsView: VideoLayerView, coordinator: Coordinator) {
+        coordinator.player?.pause()
+        nsView.playerLayer.player = nil
+    }
+
+    final class Coordinator {
+        var player: AVQueuePlayer?
+        var looper: AVPlayerLooper?
+    }
+}
+
+private final class VideoLayerView: NSView {
+    let playerLayer = AVPlayerLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
     }
 }
 

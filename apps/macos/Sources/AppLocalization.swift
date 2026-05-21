@@ -66,6 +66,10 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case .de: return "Onboarding und App auf Deutsch."
         }
     }
+
+    var defaultEmbeddingModelSource: String {
+        self == .zh ? "modelscope" : "huggingface"
+    }
 }
 
 enum AppText {
@@ -194,6 +198,8 @@ enum AppText {
     case curiositySubtitle
     case history
     case sleepDisplay
+    case sleepBrandTitle
+    case sleepBrandSlogan
     case sleepLockTitle
     case sleepLockSubtitle
     case sleepPasswordPlaceholder
@@ -595,7 +601,7 @@ enum AppText {
         case .languageSettingsDescription:
             return pick(language, en: "Use the same language across onboarding, navigation, settings, and system copy.", zh: "onboarding、导航、设置和系统文案使用同一种语言。", fr: "Utiliser la même langue dans l'onboarding, la navigation, les réglages et les textes système.", de: "Dieselbe Sprache für Onboarding, Navigation, Einstellungen und Systemtexte verwenden.")
         case .runtimeConfig:
-            return pick(language, en: "Runtime Config", zh: "运行配置", fr: "Configuration runtime", de: "Runtime-Konfiguration")
+            return pick(language, en: "System Config", zh: "系统配置", fr: "Configuration système", de: "Systemkonfiguration")
         case .runtimeConfigMissing:
             return pick(language, en: "global config not resolved", zh: "global config 尚未解析", fr: "configuration globale non résolue", de: "globale Konfiguration nicht aufgelöst")
         case .curiosity:
@@ -606,6 +612,16 @@ enum AppText {
             return pick(language, en: "History", zh: "历史", fr: "Historique", de: "Verlauf")
         case .sleepDisplay:
             return pick(language, en: "Sleep Display", zh: "睡眠显示", fr: "Affichage veille", de: "Schlafanzeige")
+        case .sleepBrandTitle:
+            return "Elephant Agent"
+        case .sleepBrandSlogan:
+            return pick(
+                language,
+                en: "Understand you first, then evolve with you.",
+                zh: "先懂你，再陪你一起进化。",
+                fr: "Vous comprendre d'abord, puis évoluer avec vous.",
+                de: "Erst dich verstehen, dann mit dir wachsen."
+            )
         case .sleepLockTitle:
             return pick(language, en: "Welcome back", zh: "欢迎回来", fr: "Bon retour", de: "Willkommen zurück")
         case .sleepLockSubtitle:
@@ -741,7 +757,13 @@ enum AppText {
         case .untitledChat:
             return pick(language, en: "Untitled chat", zh: "未命名对话", fr: "Chat sans titre", de: "Unbenannter Chat")
         case .youPageSubtitle:
-            return pick(language, en: "Personal Model facts and questions stay reviewable.", zh: "Personal Model 的 facts 和问题保持可回看。", fr: "Les facts et questions du Personal Model restent vérifiables.", de: "Personal-Model-Facts und Fragen bleiben überprüfbar.")
+            return pick(
+                language,
+                en: "What Elephant remembers about you stays visible, correctable, and yours.",
+                zh: "Elephant 记住的你，始终可查看、可修正、属于你。",
+                fr: "Ce qu'Elephant retient de vous reste visible, corrigeable et à vous.",
+                de: "Was Elephant über dich behält, bleibt sichtbar, korrigierbar und bei dir."
+            )
         case .diaryPageSubtitle:
             return pick(language, en: "Reflective entries written from reviewed episodes.", zh: "基于已回看的 episodes 写反思日记。", fr: "Entrées réflexives écrites à partir des épisodes revus.", de: "Reflektierende Einträge aus überprüften Episoden.")
         case .writeDiary:
@@ -799,9 +821,21 @@ enum AppText {
         case .statusStopped:
             return pick(language, en: "stopped", zh: "已停止", fr: "arrêté", de: "gestoppt")
         case .homeHeroTitle:
-            return pick(language, en: "Ask, remember, reflect.", zh: "提问、记住、反思。", fr: "Demandez, mémorisez, réfléchissez.", de: "Fragen, merken, reflektieren.")
+            return pick(
+                language,
+                en: "Understand you first, then evolve with you.",
+                zh: "先懂你，再陪你一起进化。",
+                fr: "Vous comprendre d'abord, puis évoluer avec vous.",
+                de: "Erst dich verstehen, dann mit dir wachsen."
+            )
         case .homeHeroSubtitle:
-            return pick(language, en: "Your Personal Model is the center. Chat adds context, Reflect turns it into reviewable memory.", zh: "Personal Model 是中心。对话补充上下文，Reflect 会把它变成可回看的记忆。", fr: "Votre Personal Model est au centre. Le chat ajoute du contexte, Reflect le transforme en mémoire vérifiable.", de: "Dein Personal Model steht im Zentrum. Chat ergänzt Kontext, Reflect macht daraus überprüfbare Erinnerung.")
+            return pick(
+                language,
+                en: "A correctable Personal Model keeps the right threads warm between chats.",
+                zh: "可修正的 Personal Model，会把重要线索留到下一次对话里。",
+                fr: "Un Personal Model corrigeable garde les bons fils entre vos conversations.",
+                de: "Ein korrigierbares Personal Model hält Wichtiges zwischen Gesprächen präsent."
+            )
         case .reviewedFactsLabel:
             return pick(language, en: "Reviewed facts", zh: "已回看的 facts", fr: "Facts vérifiés", de: "Geprüfte Facts")
         case .questionsWaitingLabel:
@@ -950,14 +984,58 @@ extension AppLanguage {
     var defaultElephantVibe: String {
         switch self {
         case .en:
-            return "Be warm, precise, curious, and direct. Protect continuity, ask useful questions, and keep the user's Personal Model correctable."
+            return """
+            You are this person's Elephant, a personal-model-first companion they can keep coming back to.
+
+            Stay recognizable across sessions. Use remembered context naturally, keep uncertainty visible, and make it easy for them to correct your read.
+
+            Understand through four lenses: Identity, World, Pulse, and Journey. Ask one gentle question only when the answer would change how you help. Honor silence.
+
+            Be concrete when the work needs precision, warm when the moment can carry it, and honest when you do not know.
+            """
         case .zh:
-            return "温暖、精准、好奇、直接。保护连续性，提出有用的问题，并让用户的 Personal Model 始终可修正。"
+            return """
+            你是这个人的 Elephant，一个以 Personal Model 为中心、可以长期回来找的 companion。
+
+            跨会话保持可辨认。自然使用已经记住的上下文，显露不确定性，并让对方随时能修正你的理解。
+
+            通过四个 lens 理解：Identity、World、Pulse、Journey。只有当答案会改变你如何帮助时，才温和地问一个问题；沉默也被尊重。
+
+            需要精确时具体，需要承接时温暖；不知道就诚实说不知道。
+            """
         case .fr:
-            return "Être chaleureux, précis, curieux et direct. Protéger la continuité, poser des questions utiles et garder le Personal Model corrigeable."
+            return """
+            Vous êtes l'Elephant de cette personne, un compagnon personal-model-first vers lequel elle peut revenir.
+
+            Restez reconnaissable d'une session à l'autre. Utilisez le contexte mémorisé naturellement, gardez l'incertitude visible et facilitez la correction de votre lecture.
+
+            Comprenez à travers quatre lenses : Identity, World, Pulse et Journey. Ne posez une question douce que si la réponse change vraiment votre manière d'aider. Respectez le silence.
+
+            Soyez concret quand le travail demande de la précision, chaleureux quand le moment le permet, et honnête quand vous ne savez pas.
+            """
         case .de:
-            return "Warm, präzise, neugierig und direkt sein. Kontinuität schützen, nützliche Fragen stellen und das Personal Model korrigierbar halten."
+            return """
+            Du bist der Elephant dieser Person: ein personal-model-first Companion, zu dem sie immer wieder zurückkehren kann.
+
+            Bleib über Sitzungen hinweg wiedererkennbar. Nutze erinnerten Kontext natürlich, mach Unsicherheit sichtbar und erleichtere es, dein Verständnis zu korrigieren.
+
+            Verstehe durch vier Lenses: Identity, World, Pulse und Journey. Stelle nur dann eine sanfte Frage, wenn die Antwort verändert, wie du hilfst. Respektiere Stille.
+
+            Sei konkret, wenn Arbeit Präzision braucht, warm, wenn der Moment es tragen kann, und ehrlich, wenn du etwas nicht weißt.
+            """
         }
+    }
+
+    func defaultElephantMarkdown(name: String) -> String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? "Elephant" : trimmedName
+        return """
+        # \(resolvedName)
+
+        ## Vibe
+
+        \(defaultElephantVibe)
+        """
     }
 
     var surveyOptions: [OnboardingSurveyKind: [String]] {

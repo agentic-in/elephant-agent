@@ -363,6 +363,9 @@ struct DashboardSnapshot: Equatable {
     var embeddingRuntimeStatus = ""
     var embeddingRuntimeState = ""
     var embeddingRuntimeSummary = ""
+    var embeddingBootstrapSource = ""
+    var embeddingModelRoot = ""
+    var embeddingModelSourceURL = ""
     var embeddingReady = false
     var semanticStatus = "unknown"
     var workerStatus = "unknown"
@@ -504,6 +507,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var showingCommandPalette = false
     @Published var lastError = ""
     @Published var providerTestResult = ""
+    @Published var embeddingActionResult = ""
     @Published var gatewayActionResult = ""
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
     @Published var gatewayQR = GatewayQRState()
@@ -550,12 +554,31 @@ final class ElephantAppModel: ObservableObject {
 
     var userDisplayName: String {
         if let name = snapshot.profileFacts.first(where: { $0.label == "Name" })?.value,
-           !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return name
+           let normalized = Self.normalizedPreferredName(name),
+           !normalized.isEmpty {
+            return normalized
         }
         let preferred = onboardingPreferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !preferred.isEmpty { return preferred }
         return "You"
+    }
+
+    private static func normalizedPreferredName(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let patterns = [
+            #"^(?:用户)?(?:偏好|希望|喜欢)?(?:被)?(?:称为|叫做|叫|称呼为)\s*"#,
+            #"^(?:Preferred name|Name|昵称|名字|称呼)[：:]\s*"#
+        ]
+        for pattern in patterns {
+            if let range = trimmed.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                let cleaned = String(trimmed[range.upperBound...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
+        return trimmed
     }
 
     var userAvatarURL: URL? {
@@ -578,7 +601,7 @@ final class ElephantAppModel: ObservableObject {
             ? "Elephant"
             : onboardingName.trimmingCharacters(in: .whitespacesAndNewlines)
         let vibe = onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Be warm, precise, curious, and direct."
+            ? appLanguage.defaultElephantVibe
             : onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
         return """
         # \(name)
@@ -739,6 +762,10 @@ final class ElephantAppModel: ObservableObject {
                 contextWindow: onboardingContextWindow
             )
         }
+        try await client.configureLocalEmbedding(
+            source: appLanguage.defaultEmbeddingModelSource,
+            forceDownload: false
+        )
         let stateID: String
         if onboardingCreatedStateID.isEmpty {
             stateID = try await client.createElephant(name: onboardingName, identityText: onboardingElephantMarkdown)
@@ -1104,6 +1131,32 @@ final class ElephantAppModel: ObservableObject {
         } catch {
             providerTestResult = ""
             lastError = error.localizedDescription
+        }
+    }
+
+    func saveLocalEmbeddingSettings(source: String, forceDownload: Bool) async {
+        do {
+            try await client.configureLocalEmbedding(source: source, forceDownload: forceDownload)
+            try await refreshDashboard()
+            let normalized = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let label = normalized == "modelscope" ? "ModelScope" : "HuggingFace"
+            embeddingActionResult = localizedEmbeddingActionResult(label: label, forceDownload: forceDownload)
+        } catch {
+            embeddingActionResult = ""
+            lastError = error.localizedDescription
+        }
+    }
+
+    private func localizedEmbeddingActionResult(label: String, forceDownload: Bool) -> String {
+        switch appLanguage {
+        case .zh:
+            return forceDownload ? "已从 \(label) 重新开始下载记忆模型。" : "记忆模型来源已切换为 \(label)。"
+        case .fr:
+            return forceDownload ? "Téléchargement du modèle mémoire relancé depuis \(label)." : "Source du modèle mémoire définie sur \(label)."
+        case .de:
+            return forceDownload ? "Download des Speichermodells von \(label) neu gestartet." : "Quelle des Speichermodells auf \(label) gesetzt."
+        case .en:
+            return forceDownload ? "Memory model download restarted from \(label)." : "Memory model source set to \(label)."
         }
     }
 
@@ -1754,6 +1807,7 @@ final class ElephantAppModel: ObservableObject {
 
         wakeDraft = ""
         providerTestResult = ""
+        embeddingActionResult = ""
         gatewayActionResult = ""
         gatewaySecretDrafts.removeAll()
         gatewayQR = GatewayQRState()
