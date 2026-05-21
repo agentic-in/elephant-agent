@@ -539,21 +539,21 @@ enum AppText {
         case .vibeSuggestionThree:
             return pick(language, en: "Curious, questioning, concise", zh: "好奇、会追问、少废话", fr: "Curieux, questionnant, concis", de: "Neugierig, nachfragend, knapp")
         case .providerTitle:
-            return pick(language, en: "Model Provider", zh: "模型 Provider", fr: "Provider de modèle", de: "Modell-Provider")
+            return pick(language, en: "Model Provider", zh: "模型服务", fr: "Provider de modèle", de: "Modell-Provider")
         case .providerSubtitle:
-            return pick(language, en: "Uses the same provider catalog and model picker as Settings.", zh: "和 Settings 使用同一套 provider catalog 与模型选择。", fr: "Utilise le même catalogue de providers et le même choix de modèle que Settings.", de: "Nutzt denselben Provider-Katalog und Modellwähler wie Settings.")
+            return pick(language, en: "Uses the same provider catalog and model picker as Settings.", zh: "这里和设置里使用同一套模型服务与模型列表。", fr: "Utilise le même catalogue de providers et le même choix de modèle que Settings.", de: "Nutzt denselben Provider-Katalog und Modellwähler wie Settings.")
         case .providerFactory:
-            return pick(language, en: "Provider factory", zh: "Provider factory", fr: "Catalogue provider", de: "Provider-Katalog")
+            return pick(language, en: "Provider factory", zh: "模型服务", fr: "Catalogue provider", de: "Provider-Katalog")
         case .providerFactorySubtitle:
-            return pick(language, en: "providers · connected first", zh: "个 providers · 已连接优先", fr: "providers · connectés d'abord", de: "Provider · verbundene zuerst")
+            return pick(language, en: "providers · connected first", zh: "个服务 · 已连接优先", fr: "providers · connectés d'abord", de: "Provider · verbundene zuerst")
         case .providerSearchPlaceholder:
-            return pick(language, en: "Search provider, model, or source", zh: "搜索 provider、模型或来源", fr: "Rechercher provider, modèle ou source", de: "Provider, Modell oder Quelle suchen")
+            return pick(language, en: "Search provider, model, or source", zh: "搜索服务、模型或来源", fr: "Rechercher provider, modèle ou source", de: "Provider, Modell oder Quelle suchen")
         case .modelSection:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
         case .activeModelSubtitle:
-            return pick(language, en: "Active model for the current provider", zh: "当前 provider 的 active model", fr: "Modèle actif pour le provider actuel", de: "Aktives Modell für den aktuellen Provider")
+            return pick(language, en: "Active model for the current provider", zh: "当前正在使用的模型", fr: "Modèle actif pour le provider actuel", de: "Aktives Modell für den aktuellen Provider")
         case .modelPickerSubtitle:
-            return pick(language, en: "Choose a catalog hint, live-discovered model, or custom ID.", zh: "选择 catalog hint、实时发现的模型或自定义 ID。", fr: "Choisissez un indice du catalogue, un modèle découvert en direct ou un ID personnalisé.", de: "Wähle Kataloghinweis, live gefundenes Modell oder eigene ID.")
+            return pick(language, en: "Choose a catalog hint, live-discovered model, or custom ID.", zh: "从推荐模型、在线拉取的模型里选，也可以手动填写模型 ID。", fr: "Choisissez un indice du catalogue, un modèle découvert en direct ou un ID personnalisé.", de: "Wähle Kataloghinweis, live gefundenes Modell oder eigene ID.")
         case .fetching:
             return pick(language, en: "Fetching", zh: "正在获取", fr: "Chargement", de: "Lädt")
         case .fetch:
@@ -567,19 +567,19 @@ enum AppText {
         case .customModelID:
             return pick(language, en: "Custom model ID", zh: "自定义模型 ID", fr: "ID de modèle personnalisé", de: "Eigene Modell-ID")
         case .endpointTitle:
-            return pick(language, en: "Endpoint and Credentials", zh: "Endpoint 和凭证", fr: "Endpoint et identifiants", de: "Endpoint und Zugangsdaten")
+            return pick(language, en: "Endpoint and Credentials", zh: "接口与凭证", fr: "Endpoint et identifiants", de: "Endpoint und Zugangsdaten")
         case .endpointSubtitle:
-            return pick(language, en: "Matches the Model Provider settings inside the app.", zh: "字段和内部 Settings 的 Model Provider 设置保持一致。", fr: "Correspond aux réglages Model Provider dans l'app.", de: "Entspricht den Model-Provider-Einstellungen in der App.")
+            return pick(language, en: "Matches the Model Provider settings inside the app.", zh: "和应用设置里的模型服务配置一致。", fr: "Correspond aux réglages Model Provider dans l'app.", de: "Entspricht den Model-Provider-Einstellungen in der App.")
         case .contextWindowTokens:
-            return pick(language, en: "Context window tokens", zh: "Context window tokens", fr: "Tokens de fenêtre de contexte", de: "Kontextfenster-Tokens")
+            return pick(language, en: "Context window tokens", zh: "上下文窗口", fr: "Tokens de fenêtre de contexte", de: "Kontextfenster-Tokens")
         case .apiKey:
-            return pick(language, en: "API key or token", zh: "API key / token", fr: "Clé API ou token", de: "API-Key oder Token")
+            return pick(language, en: "API key or token", zh: "API Key 或 Token", fr: "Clé API ou token", de: "API-Key oder Token")
         case .apiKeyPlaceholder:
             return pick(language, en: "Leave empty to reuse existing configuration", zh: "可留空以复用已有配置", fr: "Laisser vide pour réutiliser la configuration existante", de: "Leer lassen, um bestehende Konfiguration zu verwenden")
         case .providerReady:
-            return pick(language, en: "Provider details are ready.", zh: "Provider 信息已足够，可以继续。", fr: "Les informations du provider sont prêtes.", de: "Provider-Daten sind bereit.")
+            return pick(language, en: "Provider details are ready.", zh: "模型服务已经配置好，可以继续。", fr: "Les informations du provider sont prêtes.", de: "Provider-Daten sind bereit.")
         case .providerNeedsDetails:
-            return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "需要 provider 和模型 ID；OpenAI Compatible 还需要 Base URL，除非复用已有配置。", fr: "Provider et ID de modèle sont requis ; OpenAI Compatible nécessite aussi une Base URL sauf si vous réutilisez une configuration.", de: "Provider und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
+            return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "请选择模型服务并填写模型 ID；OpenAI Compatible 通常还需要 Base URL，除非复用已有配置。", fr: "Provider et ID de modèle sont requis ; OpenAI Compatible nécessite aussi une Base URL sauf si vous réutilisez une configuration.", de: "Provider und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
         case .learningTitle:
             return pick(language, en: "Building Your Elephant", zh: "正在建立你的 Elephant", fr: "Construction de votre Elephant", de: "Dein Elephant wird aufgebaut")
         case .learningPreparing:
@@ -757,7 +757,7 @@ enum AppText {
         case .send:
             return pick(language, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden")
         case .providerSetup:
-            return pick(language, en: "provider setup", zh: "设置 provider", fr: "configuration provider", de: "Provider einrichten")
+            return pick(language, en: "provider setup", zh: "配置模型服务", fr: "configuration provider", de: "Provider einrichten")
         case .askElephant:
             return pick(language, en: "Ask Elephant", zh: "问 Elephant", fr: "Demander à Elephant", de: "Elephant fragen")
         case .chatEmptySubtitle:
@@ -775,7 +775,7 @@ enum AppText {
         case .quickReviewDraft:
             return pick(language, en: "What should I review from today?", zh: "今天有哪些值得回顾？", fr: "Que devrais-je revoir aujourd'hui ?", de: "Was sollte ich von heute prüfen?")
         case .toolActivity:
-            return pick(language, en: "Tool activity", zh: "工具记录", fr: "Activité des outils", de: "Tool-Aktivität")
+            return pick(language, en: "Tools", zh: "工具", fr: "Outils", de: "Tools")
         case .live:
             return pick(language, en: "live", zh: "进行中", fr: "en direct", de: "live")
         case .toolInput:

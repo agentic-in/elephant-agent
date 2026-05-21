@@ -733,8 +733,20 @@ struct HomeContinuityPanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(
-                        title: "Carry into the next reply",
-                        subtitle: "The personal context Elephant should keep warm before it answers."
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Carry into the next reply",
+                            zh: "下次回复会用到",
+                            fr: "À garder pour la prochaine réponse",
+                            de: "In die nächste Antwort mitnehmen"
+                        ),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "The personal context Elephant should keep warm before it answers.",
+                            zh: "这些上下文会帮助 Elephant 接上话题。",
+                            fr: "Le contexte personnel qu'Elephant doit garder prêt avant de répondre.",
+                            de: "Persönlicher Kontext, den Elephant vor der Antwort bereithalten soll."
+                        )
                     )
                     Spacer(minLength: 0)
                     if let question = nextQuestion {
@@ -744,21 +756,21 @@ struct HomeContinuityPanel: View {
 
                 HStack(alignment: .top, spacing: 0) {
                     HomeContinuityColumn(
-                        title: "Alive now",
+                        title: localizedYouText(model.appLanguage, en: "Alive now", zh: "当前重点", fr: "En ce moment", de: "Gerade aktiv"),
                         symbol: "waveform.path.ecg",
                         tint: ElephantTheme.orange,
                         text: aliveNow
                     )
                     VerticalHairline()
                     HomeContinuityColumn(
-                        title: "How to be with you",
+                        title: localizedYouText(model.appLanguage, en: "How to be with you", zh: "相处偏好", fr: "Comment être avec vous", de: "Wie mit dir sein"),
                         symbol: "person.wave.2",
                         tint: ElephantTheme.accent,
                         text: relationshipMode
                     )
                     VerticalHairline()
                     HomeContinuityColumn(
-                        title: "Care to remember",
+                        title: localizedYouText(model.appLanguage, en: "Care to remember", zh: "注意事项", fr: "Soin à retenir", de: "Wichtige Fürsorge"),
                         symbol: "lock.shield",
                         tint: ElephantTheme.green,
                         text: careBoundary
@@ -773,7 +785,16 @@ struct HomeContinuityPanel: View {
                 if let question = nextQuestion {
                     HomeContinuityQuestionRow(question: question)
                 } else {
-                    EmptyLine(symbol: "questionmark.bubble", text: "No open question is waiting for review.")
+                    EmptyLine(
+                        symbol: "questionmark.bubble",
+                        text: localizedYouText(
+                            model.appLanguage,
+                            en: "No open question is waiting for review.",
+                            zh: "现在没有待回看的问题。",
+                            fr: "Aucune question ouverte n'attend une revue.",
+                            de: "Keine offene Frage wartet auf Prüfung."
+                        )
+                    )
                 }
             }
         }
@@ -782,19 +803,37 @@ struct HomeContinuityPanel: View {
     private var aliveNow: String {
         firstProfileValue(["Working on", "Current focus", "Now"])
             ?? firstFactText(lens: "pulse")
-            ?? "No current focus yet. Start a chat or diary entry and Elephant will keep the thread visible."
+            ?? localizedYouText(
+                model.appLanguage,
+                en: "No current focus yet. Start a chat or diary entry and Elephant will keep the thread visible.",
+                zh: "还没有当前重点。聊一聊或写篇日记后，这里会自动整理线索。",
+                fr: "Aucun focus actuel. Lancez un chat ou un journal, et Elephant gardera le fil visible.",
+                de: "Noch kein aktueller Fokus. Starte Chat oder Tagebuch, dann hält Elephant den Faden sichtbar."
+            )
     }
 
     private var relationshipMode: String {
         firstProfileValue(["Relationship mode", "Communication", "Speaks"])
             ?? firstFactText(lens: "identity", topicContains: ["style", "companion", "language"])
-            ?? "Be specific, calm, and easy to correct."
+            ?? localizedYouText(
+                model.appLanguage,
+                en: "Be specific, calm, and easy to correct.",
+                zh: "说具体一点，语气放轻，也方便你随时纠正。",
+                fr: "Être précis, calme et facile à corriger.",
+                de: "Konkret, ruhig und leicht korrigierbar sein."
+            )
     }
 
     private var careBoundary: String {
         firstProfileValue(["Safety boundaries", "Care context", "Medication allergies", "Health notes", "Food allergies"])
             ?? firstFactText(lens: "identity", topicContains: ["boundary", "care", "allergy", "health"])
-            ?? "No care boundary has been written yet."
+            ?? localizedYouText(
+                model.appLanguage,
+                en: "No care boundary has been written yet.",
+                zh: "还没记录需要特别注意的边界。",
+                fr: "Aucune limite de soin n'a encore été écrite.",
+                de: "Noch keine Fürsorgegrenze notiert."
+            )
     }
 
     private var nextQuestion: PersonalModelQuestionItem? {
@@ -879,7 +918,7 @@ private struct HomeContinuityQuestionRow: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Next useful question")
+                Text(localizedYouText(model.appLanguage, en: "Next useful question", zh: "接下来可以问", fr: "Prochaine question utile", de: "Nächste nützliche Frage"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                 Text(question.text)
@@ -891,7 +930,7 @@ private struct HomeContinuityQuestionRow: View {
 
             Spacer(minLength: 0)
 
-            Button("Review") {
+            Button(localizedYouText(model.appLanguage, en: "Review", zh: "回看", fr: "Revoir", de: "Prüfen")) {
                 model.selectedSection = .you
             }
             .controlSize(.small)
@@ -1464,7 +1503,7 @@ struct CommandCenterPanel: View {
                         .lineLimit(1)
                         .help(model.userDisplayName)
 
-                    Text("Personal Model")
+                    Text(model.text(.personalModelMapTitle))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                         .textCase(.uppercase)
@@ -1480,9 +1519,9 @@ struct CommandCenterPanel: View {
                         .padding(.top, 4)
 
                     VStack(spacing: 9) {
-                        TodaySignalRow(value: "\(model.snapshot.facts)", label: "Reviewed facts", symbol: "checkmark.seal")
-                        TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: "Questions waiting", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                        TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: "Evidence points", symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
+                        TodaySignalRow(value: "\(model.snapshot.facts)", label: model.text(.reviewedFactsLabel), symbol: "checkmark.seal")
+                        TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: model.text(.questionsWaitingLabel), symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+                        TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: model.text(.evidencePointsLabel), symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
                     }
                 }
                 .frame(width: 250)
@@ -1670,7 +1709,7 @@ struct PromptStagePanel: View {
             HStack {
                 Pill(text: "Local-first", symbol: "lock.shield", tint: phaseTint)
                 Spacer()
-                Text(model.snapshot.latestCompletedAt.isEmpty ? "Reflect when ready" : "Last reflect complete")
+                Text(model.snapshot.latestCompletedAt.isEmpty ? localizedYouText(model.appLanguage, en: "Reflect when ready", zh: "准备好后整理记忆", fr: "Reflect quand prêt", de: "Reflect, wenn bereit") : localizedYouText(model.appLanguage, en: "Last reflect complete", zh: "上次整理已完成", fr: "Dernier Reflect terminé", de: "Letzter Reflect abgeschlossen"))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -1690,7 +1729,7 @@ struct PromptStagePanel: View {
                 model.focusComposer()
             } label: {
                 HStack {
-                    Text("Ask your assistant anything...")
+                    Text(model.text(.typeMessagePlaceholder))
                         .font(.headline.weight(.semibold))
                     Spacer()
                     Image(systemName: "arrow.right")
@@ -1705,10 +1744,10 @@ struct PromptStagePanel: View {
             .tint(ElephantTheme.accent)
 
             HStack(spacing: 12) {
-                TodayCommand(title: "Review questions", symbol: "questionmark.bubble") {
+                TodayCommand(title: model.text(.reviewQuestions), symbol: "questionmark.bubble") {
                     model.selectedSection = .you
                 }
-                TodayCommand(title: "Run reflect", symbol: "brain.head.profile") {
+                TodayCommand(title: model.text(.reflect), symbol: "brain.head.profile") {
                     Task { await model.runReflect(trigger: "home") }
                 }
             }
@@ -1764,7 +1803,10 @@ struct ReviewQueuePanel: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    SectionLabel(title: "Respond Queue", subtitle: "\(model.snapshot.waitingQuestions) open")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Respond Queue", zh: "待回答的问题", fr: "File de réponse", de: "Antwort-Warteschlange"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d open", zh: "%d 个待回答", fr: "%d ouvertes", de: "%d offen", model.snapshot.waitingQuestions)
+                    )
                     Spacer()
                     Button {
                         model.selectedSection = .you
@@ -1775,7 +1817,7 @@ struct ReviewQueuePanel: View {
                 }
 
                 if model.snapshot.sampleQuestions.isEmpty {
-                    EmptyLine(symbol: "questionmark.bubble", text: "No questions waiting right now.")
+                    EmptyLine(symbol: "questionmark.bubble", text: localizedYouText(model.appLanguage, en: "No questions waiting right now.", zh: "现在没有待回答的问题。", fr: "Aucune question en attente.", de: "Gerade keine wartenden Fragen."))
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(model.snapshot.sampleQuestions.prefix(3), id: \.self) { question in
@@ -1798,12 +1840,12 @@ struct NextActionsPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title: "Next", subtitle: "High-signal actions")
-                NextActionRow(symbol: "bubble.left.and.bubble.right", title: "Chat", detail: "Continue the current thread") {
+                SectionLabel(title: localizedYouText(model.appLanguage, en: "Next", zh: "下一步", fr: "Suivant", de: "Nächstes"), subtitle: localizedYouText(model.appLanguage, en: "High-signal actions", zh: "现在最值得做", fr: "Actions les plus utiles", de: "Wichtige Aktionen"))
+                NextActionRow(symbol: "bubble.left.and.bubble.right", title: AppSection.wake.title(language: model.appLanguage), detail: localizedYouText(model.appLanguage, en: "Continue the current thread", zh: "继续当前对话", fr: "Continuer le fil actuel", de: "Aktuellen Thread fortsetzen")) {
                     model.selectedSection = .wake
                     model.focusComposer()
                 }
-                NextActionRow(symbol: "brain.head.profile", title: "Reflect", detail: model.isReflecting ? "Running" : "Update the queue") {
+                NextActionRow(symbol: "brain.head.profile", title: model.text(.reflect), detail: model.isReflecting ? model.text(.statusRunning) : localizedYouText(model.appLanguage, en: "Update the queue", zh: "更新队列", fr: "Mettre la file à jour", de: "Warteschlange aktualisieren")) {
                     Task { await model.runReflect(trigger: "next") }
                 }
             }
@@ -1848,10 +1890,10 @@ struct RuntimeMiniPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title: "Quiet System", subtitle: "Details live in Settings")
-                SettingsRow(label: "Core", value: model.corePhase.label)
-                SettingsRow(label: "Provider", value: model.snapshot.providerStatus)
-                SettingsRow(label: "Worker", value: model.snapshot.workerStatus)
+                SectionLabel(title: localizedYouText(model.appLanguage, en: "Quiet System", zh: "后台状态", fr: "Système discret", de: "Ruhiges System"), subtitle: localizedYouText(model.appLanguage, en: "Details live in Settings", zh: "更多细节在设置里", fr: "Détails dans Réglages", de: "Details in Einstellungen"))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Core", zh: "核心", fr: "Noyau", de: "Kern"), value: model.corePhase.label)
+                SettingsRow(label: model.text(.providerTitle), value: localizedRuntimeStatus(model.snapshot.providerStatus, language: model.appLanguage))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: localizedRuntimeStatus(model.snapshot.workerStatus, language: model.appLanguage))
             }
         }
         .frame(width: 340)
@@ -2035,6 +2077,7 @@ struct WakeComposerPanel: View {
     @Binding var historyVisible: Bool
     @StateObject private var speech = SpeechInputController()
     @FocusState private var focused: Bool
+    private let chatBottomSpacerID = "chat-active-response-spacer"
 
     var body: some View {
         NativePanel {
@@ -2066,24 +2109,33 @@ struct WakeComposerPanel: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                                 .padding(.horizontal, 28)
                         } else {
-                            ScrollView {
-                                LazyVStack(alignment: .leading, spacing: 4) {
-                                    ForEach(visibleMessages) { message in
-                                        MessageBubble(message: message)
-                                            .equatable()
-                                            .id(message.id)
+                            GeometryReader { geometry in
+                                ScrollView {
+                                    LazyVStack(alignment: .leading, spacing: 4) {
+                                        ForEach(visibleMessages) { message in
+                                            MessageBubble(message: message)
+                                                .equatable()
+                                                .id(message.id)
+                                        }
+                                        Color.clear
+                                            .frame(height: activeResponseBottomSpacing(in: geometry.size.height))
+                                            .id(chatBottomSpacerID)
                                     }
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 24)
+                                    .frame(maxWidth: .infinity, alignment: .top)
                                 }
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 24)
-                                .frame(maxWidth: .infinity, alignment: .top)
                             }
                         }
                     }
                     .frame(minHeight: 320, maxHeight: .infinity)
                     .onChange(of: model.chatScrollRevision) { _ in
-                        if let last = visibleMessages.last {
-                            proxy.scrollTo(last.id, anchor: .bottom)
+                        withAnimation(.easeOut(duration: 0.20)) {
+                            if model.isWakeRunning {
+                                proxy.scrollTo(chatBottomSpacerID, anchor: .bottom)
+                            } else if let last = visibleMessages.last {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
                         }
                     }
                 }
@@ -2175,6 +2227,11 @@ struct WakeComposerPanel: View {
 
     private var visibleMessages: [ChatMessage] {
         model.messages.filter { $0.role != .system }
+    }
+
+    private func activeResponseBottomSpacing(in transcriptHeight: CGFloat) -> CGFloat {
+        guard model.isWakeRunning else { return 12 }
+        return min(max(transcriptHeight * 0.54, 260), 560)
     }
 }
 
@@ -2562,8 +2619,7 @@ private struct MarkdownTableView: View {
             }
             .fixedSize(horizontal: true, vertical: false)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.46))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.78), lineWidth: 1))
+            .overlay(Rectangle().stroke(ElephantTheme.line.opacity(0.78), lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -2587,7 +2643,7 @@ private struct MarkdownTableView: View {
                     }
             }
         }
-        .background(header ? ElephantTheme.accent.opacity(0.08) : Color.clear)
+        .background(header ? Color(nsColor: .controlBackgroundColor).opacity(0.72) : Color.clear)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ElephantTheme.line.opacity(header ? 0.72 : 0.34))
@@ -2614,28 +2670,74 @@ private struct MarkdownTableView: View {
 
     private func columnWidth(at index: Int) -> CGFloat {
         if isIndexColumn(index) {
-            return 54
+            return 46
         }
-        let header = index < table.headers.count ? table.headers[index].lowercased() : ""
-        if header.contains("detail") || header.contains("详情") || header.contains("résultat") || header.contains("ergebnis") {
+        let header = normalizedHeader(at: index)
+        if header.contains("result")
+            || header.contains("output")
+            || header.contains("return")
+            || header.contains("detail")
+            || header.contains("结果")
+            || header.contains("返回")
+            || header.contains("详情")
+            || header.contains("résultat")
+            || header.contains("ergebnis") {
+            return 420
+        }
+        if header.contains("query")
+            || header.contains("mode")
+            || header.contains("查询")
+            || header.contains("模式") {
+            return 300
+        }
+        let maxLength = maxContentLength(at: index)
+        if maxLength > 80 {
             return 360
         }
-        if header.count <= 3 {
-            return 138
+        if maxLength > 40 {
+            return 300
         }
-        return 190
+        if maxLength > 20 {
+            return 240
+        }
+        if header.count <= 3 {
+            return 150
+        }
+        return 210
     }
 
     private func isIndexColumn(_ index: Int) -> Bool {
-        guard index == 0, table.headers.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true else {
+        guard index == 0 else {
             return false
         }
+        let header = normalizedHeader(at: index)
+        let headerLooksLikeIndex = header.isEmpty || ["#", "no", "number", "index", "序号", "编号"].contains(header)
+        guard headerLooksLikeIndex else { return false }
         return table.rows.allSatisfy { row in
-            guard let value = row.first?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            guard let value = row.first.map(normalizedTableText), !value.isEmpty else {
                 return true
             }
             return Int(value) != nil
         }
+    }
+
+    private func normalizedHeader(at index: Int) -> String {
+        guard index < table.headers.count else { return "" }
+        return normalizedTableText(table.headers[index]).lowercased()
+    }
+
+    private func normalizedTableText(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func maxContentLength(at index: Int) -> Int {
+        let headerLength = index < table.headers.count ? normalizedTableText(table.headers[index]).count : 0
+        let rowLength = table.rows
+            .map { row in index < row.count ? normalizedTableText(row[index]).count : 0 }
+            .max() ?? 0
+        return max(headerLength, rowLength)
     }
 }
 
@@ -2647,11 +2749,9 @@ private struct MarkdownTableCell: View {
     var header: Bool
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            InlineMarkdownText(text: value, font: font, color: color, fixedHorizontal: true, lineLimit: 1)
-                .padding(.horizontal, header ? 12 : 10)
-                .padding(.vertical, header ? 9 : 8)
-        }
+        InlineMarkdownText(text: value, font: font, color: color)
+            .padding(.horizontal, header ? 12 : 10)
+            .padding(.vertical, header ? 9 : 8)
         .frame(width: width, alignment: .leading)
         .frame(minHeight: header ? 38 : 36, alignment: .topLeading)
     }
@@ -2757,20 +2857,20 @@ struct ToolUseStack: View {
     var isLive = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: "wrench.and.screwdriver")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(ElephantTheme.accent)
-                    .frame(width: 18, height: 18)
-                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .frame(width: 16, height: 16)
+                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                 Text(model.text(.toolActivity))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.ink.opacity(0.78))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink.opacity(0.72))
                 Text("\(events.count)")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                     .background(Color(nsColor: .controlBackgroundColor).opacity(0.74), in: Capsule())
                 if isLive && hasRunningEvent {
@@ -2784,11 +2884,12 @@ struct ToolUseStack: View {
                 Spacer(minLength: 0)
             }
 
-            ForEach(events.suffix(6)) { event in
+            ForEach(events.suffix(5)) { event in
                 ToolUseEventRow(event: event)
             }
         }
-        .padding(7)
+        .padding(6)
+        .frame(maxWidth: 480, alignment: .leading)
         .background(Color(nsColor: .textBackgroundColor).opacity(0.66), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -2846,7 +2947,7 @@ struct ToolUseEventRow: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             header
 
             if expanded && hasDetails {
@@ -2861,12 +2962,12 @@ struct ToolUseEventRow: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.38), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.30), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .stroke(ElephantTheme.line.opacity(0.42), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.34), lineWidth: 1)
         )
         .animation(.easeInOut(duration: 0.16), value: expanded)
     }
@@ -2888,12 +2989,12 @@ struct ToolUseEventRow: View {
     }
 
     private var headerContent: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(statusTint)
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
             Text(displayName)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(ElephantTheme.ink)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -2902,8 +3003,8 @@ struct ToolUseEventRow: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(statusTint)
                 .lineLimit(1)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
                 .background(statusTint.opacity(0.10), in: Capsule())
             if hasDetails {
                 Image(systemName: "chevron.right")
@@ -2918,12 +3019,16 @@ struct ToolUseEventRow: View {
 
     private var displayName: String {
         let value = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? model.text(.toolFallback) : value
+        guard !value.isEmpty else { return model.text(.toolFallback) }
+        if value.hasPrefix("tool.") {
+            return String(value.dropFirst("tool.".count))
+        }
+        return value
     }
 
     private var statusText: String {
         let value = event.status.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? model.text(.toolDone) : value
+        return localizedToolStatus(value.isEmpty ? "completed" : value, language: model.appLanguage)
     }
 
     private var argumentsText: String {
@@ -3049,6 +3154,10 @@ private func localizedYouText(_ language: AppLanguage, en: String, zh: String, f
     }
 }
 
+private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
+    String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
+}
+
 private func localizedLensTitle(_ lens: String, language: AppLanguage) -> String {
     switch lens {
     case "world":
@@ -3060,6 +3169,61 @@ private func localizedLensTitle(_ lens: String, language: AppLanguage) -> String
     default:
         return localizedYouText(language, en: "Identity", zh: "身份", fr: "Identité", de: "Identität")
     }
+}
+
+private func localizedToolStatus(_ rawValue: String, language: AppLanguage) -> String {
+    let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if value.contains("fail") || value.contains("error") {
+        return localizedYouText(language, en: "fail", zh: "失败", fr: "échec", de: "Fehler")
+    }
+    if value.contains("run") || value.contains("start") || value.contains("prepar") || value.contains("request") || value.contains("classif") {
+        return localizedYouText(language, en: "run", zh: "运行", fr: "actif", de: "läuft")
+    }
+    if value.contains("cancel") || value.contains("stop") {
+        return localizedYouText(language, en: "stop", zh: "停止", fr: "arrêt", de: "Stopp")
+    }
+    return localizedYouText(language, en: "done", zh: "完成", fr: "fait", de: "fertig")
+}
+
+private func localizedRuntimeStatus(_ rawValue: String, language: AppLanguage) -> String {
+    let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if value.contains("schedule") {
+        return localizedYouText(language, en: "scheduled", zh: "已计划", fr: "planifié", de: "geplant")
+    }
+    if value.contains("pause") {
+        return localizedYouText(language, en: "paused", zh: "已暂停", fr: "en pause", de: "pausiert")
+    }
+    if value.contains("ready") {
+        return localizedYouText(language, en: "ready", zh: "就绪", fr: "prêt", de: "bereit")
+    }
+    if value.contains("complete") || value.contains("done") {
+        return localizedYouText(language, en: "completed", zh: "已完成", fr: "terminé", de: "abgeschlossen")
+    }
+    if value.contains("fail") || value.contains("error") || value.contains("cancel") {
+        return localizedYouText(language, en: "needs attention", zh: "需要处理", fr: "à vérifier", de: "prüfen")
+    }
+    if value.contains("run") || value.contains("active") || value.contains("start") {
+        return localizedYouText(language, en: "running", zh: "运行中", fr: "en cours", de: "läuft")
+    }
+    return rawValue.isEmpty ? localizedYouText(language, en: "unknown", zh: "未知", fr: "inconnu", de: "unbekannt") : rawValue
+}
+
+private func localizedProviderState(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw.lowercased()
+    if value.isEmpty || value == "unknown" {
+        return localizedYouText(language, en: "setup", zh: "待设置", fr: "à configurer", de: "einrichten")
+    }
+    if value.contains("in use") || value.contains("active") {
+        return localizedYouText(language, en: "In use", zh: "使用中", fr: "actif", de: "aktiv")
+    }
+    if value.contains("connected") || value.contains("configured") {
+        return localizedYouText(language, en: "Connected", zh: "已连接", fr: "connecté", de: "verbunden")
+    }
+    if value == "use" || value.contains("setup") || value.contains("missing") || value.contains("needed") {
+        return localizedYouText(language, en: "Use", zh: "使用", fr: "Utiliser", de: "Nutzen")
+    }
+    return raw
 }
 
 private func localizedEmbeddingState(_ rawValue: String, language: AppLanguage) -> String {
@@ -5276,13 +5440,16 @@ struct SkillAffinityPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
-                SectionLabel(title: "Skills Affinity", subtitle: "\(model.snapshot.skillAffinityRows.count) learned affinities")
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Skills Affinity", zh: "常用技能倾向", fr: "Affinité des skills", de: "Skill-Affinität"),
+                    subtitle: localizedFormat(model.appLanguage, en: "%d learned affinities", zh: "%d 条已学习偏好", fr: "%d affinités apprises", de: "%d gelernte Affinitäten", model.snapshot.skillAffinityRows.count)
+                )
                 if model.snapshot.skillAffinityRows.isEmpty {
                     EmptyLine(
                         symbol: "wand.and.stars",
                         text: model.snapshot.skillAffinities > 0
-                            ? "\(model.snapshot.skillAffinities) affinities detected."
-                            : "No skill affinity facts yet."
+                            ? localizedFormat(model.appLanguage, en: "%d affinities detected.", zh: "已经识别出 %d 条技能偏好。", fr: "%d affinités détectées.", de: "%d Affinitäten erkannt.", model.snapshot.skillAffinities)
+                            : localizedYouText(model.appLanguage, en: "No skill affinity facts yet.", zh: "还没学到你常用哪些技能。", fr: "Aucune affinité de skill pour l'instant.", de: "Noch keine Skill-Affinitäten.")
                     )
                     if !model.snapshot.skillNames.isEmpty {
                         FlowLayout(items: model.snapshot.skillNames)
@@ -5323,14 +5490,26 @@ struct DiaryPanel: View {
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
-                SectionLabel(title: "Diary", subtitle: "\(model.snapshot.diaryEntries.count) entries")
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch"),
+                    subtitle: localizedFormat(model.appLanguage, en: "%d entries", zh: "%d 篇", fr: "%d entrées", de: "%d Einträge", model.snapshot.diaryEntries.count)
+                )
                 if model.snapshot.diaryEntries.isEmpty {
-                    EmptyLine(symbol: "book.closed", text: "No diary entries yet. Run Reflect with diary enabled after there is enough context.")
+                    EmptyLine(
+                        symbol: "book.closed",
+                        text: localizedYouText(
+                            model.appLanguage,
+                            en: "No diary entries yet. Run Reflect with diary enabled after there is enough context.",
+                            zh: "还没有日记。等上下文足够后，可以运行带日记的 Reflect。",
+                            fr: "Aucune entrée pour l'instant. Lancez Reflect avec le journal quand il y a assez de contexte.",
+                            de: "Noch keine Tagebucheinträge. Starte Reflect mit Tagebuch, sobald genug Kontext da ist."
+                        )
+                    )
                 } else {
                     ForEach(model.snapshot.diaryEntries) { entry in
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
-                                Label(entry.date.isEmpty ? "Diary entry" : entry.date, systemImage: "book.closed")
+                                Label(entry.date.isEmpty ? localizedYouText(model.appLanguage, en: "Diary entry", zh: "日记", fr: "Entrée de journal", de: "Tagebucheintrag") : entry.date, systemImage: "book.closed")
                                     .font(.headline)
                                     .foregroundStyle(ElephantTheme.ink)
                                 Spacer()
@@ -5379,8 +5558,14 @@ struct DiaryView: View {
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 3) {
                             SectionLabel(
-                                title: "Write Diary",
-                                subtitle: "Pick a day with reviewed episodes. Yesterday is selected by default."
+                                title: model.text(.writeDiary),
+                                subtitle: localizedYouText(
+                                    model.appLanguage,
+                                    en: "Pick a day with reviewed episodes. Yesterday is selected by default.",
+                                    zh: "选择有已回看 episodes 的日期。默认选昨天。",
+                                    fr: "Choisissez un jour avec des épisodes revus. Hier est sélectionné par défaut.",
+                                    de: "Wähle einen Tag mit geprüften Episoden. Gestern ist vorausgewählt."
+                                )
                             )
                             Text(selectedDateDisplay)
                                 .font(.caption.weight(.medium))
@@ -5453,19 +5638,19 @@ struct DiaryView: View {
             .buttonStyle(PressablePlainButtonStyle())
             .popover(isPresented: $showsDatePicker, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 12) {
-                    DatePicker("Diary day", selection: $targetDate, displayedComponents: .date)
+                    DatePicker(localizedYouText(model.appLanguage, en: "Diary day", zh: "日记日期", fr: "Jour du journal", de: "Tagebuchtag"), selection: $targetDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                         .frame(width: 300)
                     HStack(spacing: 8) {
-                        Button("Yesterday") {
+                        Button(localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern")) {
                             setTargetDate(relativeToTodayBy: -1)
                         }
-                        Button("Today") {
+                        Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
                             setTargetDate(relativeToTodayBy: 0)
                         }
                         Spacer()
-                        Button("Done") {
+                        Button(localizedYouText(model.appLanguage, en: "Done", zh: "完成", fr: "Terminé", de: "Fertig")) {
                             showsDatePicker = false
                         }
                         .keyboardShortcut(.defaultAction)
@@ -5489,13 +5674,13 @@ struct DiaryView: View {
             Divider()
                 .frame(height: 24)
 
-            Button("Yesterday") {
+            Button(localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern")) {
                 setTargetDate(relativeToTodayBy: -1)
             }
             .buttonStyle(.bordered)
             .help("Select yesterday")
 
-            Button("Today") {
+            Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
                 setTargetDate(relativeToTodayBy: 0)
             }
             .buttonStyle(.bordered)
@@ -5507,7 +5692,12 @@ struct DiaryView: View {
         Button {
             writeDiaryForSelectedDate()
         } label: {
-            Label(model.isReflecting ? "Writing" : "Write for \(requestDateString)", systemImage: "square.and.pencil")
+            Label(
+                model.isReflecting
+                    ? model.text(.writing)
+                    : localizedFormat(model.appLanguage, en: "Write for %@", zh: "写 %@", fr: "Écrire pour %@", de: "Schreiben für %@", requestDateString),
+                systemImage: "square.and.pencil"
+            )
                 .lineLimit(1)
         }
         .buttonStyle(.borderedProminent)
@@ -5522,7 +5712,7 @@ struct DiaryView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Writing diary")
+                Text(localizedYouText(model.appLanguage, en: "Writing diary", zh: "正在写日记", fr: "Écriture du journal", de: "Tagebuch wird geschrieben"))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -5611,9 +5801,9 @@ struct SkillsView: View {
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Installed", value: "\(model.snapshot.skills)", symbol: "wand.and.stars")
-                MetricTile(label: "Affinity", value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
-                MetricTile(label: "Enabled", value: "\(enabledSkills)", symbol: "checkmark.seal", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Installed", zh: "已安装", fr: "Installés", de: "Installiert"), value: "\(model.snapshot.skills)", symbol: "wand.and.stars")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Affinity", zh: "亲和", fr: "Affinité", de: "Affinität"), value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activés", de: "Aktiviert"), value: "\(enabledSkills)", symbol: "checkmark.seal", tint: ElephantTheme.green)
             }
 
             SkillAffinityPanel()
@@ -5645,9 +5835,9 @@ struct ToolsView: View {
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Built-in", value: "\(model.snapshot.enabledTools)/\(model.snapshot.tools)", symbol: "wrench.and.screwdriver")
-                MetricTile(label: "MCP Servers", value: "\(model.snapshot.mcpServers)", symbol: "server.rack", tint: ElephantTheme.green)
-                MetricTile(label: "MCP Tools", value: "\(model.snapshot.mcpTools)", symbol: "point.3.connected.trianglepath.dotted", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Built-in", zh: "内置", fr: "Intégrés", de: "Eingebaut"), value: "\(model.snapshot.enabledTools)/\(model.snapshot.tools)", symbol: "wrench.and.screwdriver")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "MCP Servers", zh: "MCP 服务", fr: "Serveurs MCP", de: "MCP-Server"), value: "\(model.snapshot.mcpServers)", symbol: "server.rack", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "MCP Tools", zh: "MCP 工具", fr: "Outils MCP", de: "MCP-Tools"), value: "\(model.snapshot.mcpTools)", symbol: "point.3.connected.trianglepath.dotted", tint: ElephantTheme.orange)
             }
 
             ToolsCatalogPanel()
@@ -5670,21 +5860,33 @@ struct MessagingView: View {
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Services", value: "\(model.snapshot.gatewayServices)", symbol: "message.badge")
-                MetricTile(label: "Configured", value: "\(model.snapshot.gatewayConfigured)", symbol: "checkmark.seal", tint: ElephantTheme.green)
-                MetricTile(label: "Running", value: "\(model.snapshot.gatewayRunning)", symbol: "bolt.horizontal", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Services", zh: "服务", fr: "Services", de: "Dienste"), value: "\(model.snapshot.gatewayServices)", symbol: "message.badge")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Configured", zh: "已配置", fr: "Configurés", de: "Konfiguriert"), value: "\(model.snapshot.gatewayConfigured)", symbol: "checkmark.seal", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Running", zh: "运行中", fr: "Actifs", de: "Läuft"), value: "\(model.snapshot.gatewayRunning)", symbol: "bolt.horizontal", tint: ElephantTheme.orange)
             }
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionLabel(title: "IM Bridge Cards", subtitle: "Configure credentials, start bridges, and scan WeChat QR from the desktop app.")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "IM Bridge Cards", zh: "消息渠道", fr: "Cartes de passerelles IM", de: "IM-Brückenkarten"),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Configure credentials, start bridges, and scan WeChat QR from the desktop app.",
+                            zh: "在这里连接微信、飞书、Discord 等账号。",
+                            fr: "Configurez les identifiants, lancez les passerelles et scannez le QR WeChat depuis l'app.",
+                            de: "Zugangsdaten konfigurieren, Brücken starten und WeChat-QR in der Desktop-App scannen."
+                        )
+                    )
                     if !model.gatewayActionResult.isEmpty {
                         Text(model.gatewayActionResult)
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.green)
                     }
                     if model.snapshot.gatewayItems.isEmpty {
-                        EmptyLine(symbol: "message.badge", text: "No messaging adapters were returned by the local runtime.")
+                        EmptyLine(
+                            symbol: "message.badge",
+                            text: localizedYouText(model.appLanguage, en: "No messaging adapters were returned by the local runtime.", zh: "本地运行时还没有返回可用的消息渠道。", fr: "Aucun adaptateur de messagerie retourné par le runtime local.", de: "Keine Nachrichtenadapter von der lokalen Runtime.")
+                        )
                     } else {
                         ForEach(model.snapshot.gatewayItems) { service in
                             GatewayServiceCard(service: service)
@@ -5734,10 +5936,10 @@ struct GatewayServiceCard: View {
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.muted)
                     }
-                    SettingsRow(label: "Account", value: service.accountID)
-                    SettingsRow(label: "Transport", value: service.transport.isEmpty ? "default" : service.transport)
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Account", zh: "账号", fr: "Compte", de: "Konto"), value: service.accountID)
+                    SettingsRow(label: localizedYouText(model.appLanguage, en: "Transport", zh: "传输", fr: "Transport", de: "Transport"), value: service.transport.isEmpty ? localizedYouText(model.appLanguage, en: "default", zh: "默认", fr: "défaut", de: "Standard") : service.transport)
                     if !service.eventPath.isEmpty {
-                        SettingsRow(label: "Event path", value: service.eventPath)
+                        SettingsRow(label: localizedYouText(model.appLanguage, en: "Event path", zh: "事件路径", fr: "Chemin d'événements", de: "Ereignispfad"), value: service.eventPath)
                     }
                     if service.id == "weixin" {
                         WeixinQRPanel()
@@ -5746,19 +5948,19 @@ struct GatewayServiceCard: View {
                     }
                     HStack(spacing: 8) {
                         if service.configured {
-                            Button(service.running ? "Restart" : "Start") {
+                            Button(service.running ? localizedYouText(model.appLanguage, en: "Restart", zh: "重启", fr: "Redémarrer", de: "Neu starten") : localizedYouText(model.appLanguage, en: "Start", zh: "启动", fr: "Démarrer", de: "Starten")) {
                                 Task { await model.runGatewayAction(service: service, action: service.running ? "restart" : "start") }
                             }
-                            Button("Stop") {
+                            Button(localizedYouText(model.appLanguage, en: "Stop", zh: "停止", fr: "Arrêter", de: "Stoppen")) {
                                 Task { await model.runGatewayAction(service: service, action: "stop") }
                             }
                             .disabled(!service.running && !service.starting)
                         } else if service.id == "weixin" {
-                            Button("Connect with QR") {
+                            Button(localizedYouText(model.appLanguage, en: "Connect with QR", zh: "扫码连接", fr: "Connecter par QR", de: "Per QR verbinden")) {
                                 Task { await model.startWeixinQR() }
                             }
                         } else {
-                            Button("Save Configuration") {
+                            Button(localizedYouText(model.appLanguage, en: "Save Configuration", zh: "保存配置", fr: "Enregistrer la configuration", de: "Konfiguration speichern")) {
                                 Task { await model.configureGatewayService(service) }
                             }
                         }
@@ -5773,7 +5975,10 @@ struct GatewayServiceCard: View {
     }
 
     private var statusLabel: String {
-        service.running ? "running" : service.starting ? "starting" : service.configured ? "configured" : "setup"
+        if service.running { return model.text(.statusRunning) }
+        if service.starting { return localizedYouText(model.appLanguage, en: "starting", zh: "启动中", fr: "démarrage", de: "startet") }
+        if service.configured { return model.text(.statusConfigured) }
+        return model.text(.statusSetup)
     }
 
     private var statusTint: Color {
@@ -5784,7 +5989,10 @@ struct GatewayServiceCard: View {
     }
 
     private var detailLine: String {
-        [service.detail, "\(service.accountCount) account(s)"].filter { !$0.isEmpty }.joined(separator: " · ")
+        [
+            service.detail,
+            localizedFormat(model.appLanguage, en: "%d account(s)", zh: "%d 个账号", fr: "%d compte(s)", de: "%d Konto(s)", service.accountCount)
+        ].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
@@ -5972,19 +6180,31 @@ struct HerdView: View {
             NativePanel {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(title: "Local Elephants", subtitle: "\(model.snapshot.herdItems.count) state(s)")
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "Local Elephants", zh: "本机 Elephants", fr: "Elephants locaux", de: "Lokale Elephants"),
+                            subtitle: localizedFormat(model.appLanguage, en: "%d state(s)", zh: "%d 个状态", fr: "%d état(s)", de: "%d Status", model.snapshot.herdItems.count)
+                        )
                         Spacer(minLength: 0)
                         Button {
                             Task { try? await model.refreshDashboard() }
                         } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
+                            Label(model.text(.refresh), systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.borderless)
                         .controlSize(.small)
                     }
 
                     if model.snapshot.herdItems.isEmpty {
-                        EmptyLine(symbol: "person.3", text: "No local elephant has been created yet. Run onboarding from Settings after provider setup.")
+                        EmptyLine(
+                            symbol: "person.3",
+                            text: localizedYouText(
+                                model.appLanguage,
+                                en: "No local elephant has been created yet. Run onboarding from Settings after provider setup.",
+                                zh: "还没有创建本机 Elephant。先配好模型，再从设置里重新初始化。",
+                                fr: "Aucun elephant local créé. Lancez l'onboarding depuis Réglages après le provider.",
+                                de: "Noch kein lokaler Elephant. Starte Onboarding nach Provider-Setup in den Einstellungen."
+                            )
+                        )
                     } else {
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                             ForEach(model.snapshot.herdItems) { item in
@@ -6015,10 +6235,10 @@ struct HerdCreateSheet: View {
             HStack(alignment: .center, spacing: 14) {
                 HerdAvatarImage(size: 82, name: name, url: avatarURL)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Create Elephant")
+                    Text(localizedYouText(model.appLanguage, en: "Create Elephant", zh: "创建 Elephant", fr: "Créer Elephant", de: "Elephant erstellen"))
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text("Create a local Elephant with a name and an authored ELEPHANT.md voice file.")
+                    Text(localizedYouText(model.appLanguage, en: "Create a local Elephant with a name and an authored ELEPHANT.md voice file.", zh: "给这个本机 Elephant 起个名字，并写好 ELEPHANT.md。", fr: "Créez un Elephant local avec un nom et un fichier vocal ELEPHANT.md.", de: "Erstelle einen lokalen Elephant mit Name und ELEPHANT.md-Stimme."))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
                     HStack(spacing: 8) {
@@ -6035,7 +6255,7 @@ struct HerdCreateSheet: View {
                 Spacer(minLength: 0)
             }
 
-            TextField("Name", text: $name)
+            TextField(localizedYouText(model.appLanguage, en: "Name", zh: "名称", fr: "Nom", de: "Name"), text: $name)
                 .textFieldStyle(.roundedBorder)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -6044,7 +6264,7 @@ struct HerdCreateSheet: View {
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                     Spacer()
-                    Button(showingSource ? "Preview" : "Edit") {
+                    Button(showingSource ? localizedYouText(model.appLanguage, en: "Preview", zh: "预览", fr: "Aperçu", de: "Vorschau") : localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten")) {
                         showingSource.toggle()
                     }
                     .controlSize(.small)
@@ -6064,10 +6284,10 @@ struct HerdCreateSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") {
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                     isPresented = false
                 }
-                Button("Create Elephant") {
+                Button(localizedYouText(model.appLanguage, en: "Create Elephant", zh: "创建 Elephant", fr: "Créer Elephant", de: "Elephant erstellen")) {
                     Task {
                         await model.createHerdElephant(
                             name: name,
@@ -6139,19 +6359,19 @@ struct HerdElephantCard: View {
             }
 
             HStack(spacing: 8) {
-                Pill(text: item.status.isEmpty ? "ready" : item.status, symbol: "circle.fill", tint: item.current ? ElephantTheme.green : ElephantTheme.accent)
+                Pill(text: item.status.isEmpty ? model.text(.ready) : item.status, symbol: "circle.fill", tint: item.current ? ElephantTheme.green : ElephantTheme.accent)
                 if item.level > 0 || !item.stage.isEmpty {
-                    Pill(text: item.stage.isEmpty ? "level \(item.level)" : item.stage, symbol: "sparkles", tint: ElephantTheme.accent)
+                    Pill(text: item.stage.isEmpty ? localizedFormat(model.appLanguage, en: "level %d", zh: "%d 级", fr: "niveau %d", de: "Level %d", item.level) : item.stage, symbol: "sparkles", tint: ElephantTheme.accent)
                 }
                 if item.current {
-                    Pill(text: "current", symbol: "checkmark", tint: ElephantTheme.green)
+                    Pill(text: model.text(.phaseStatusCurrent), symbol: "checkmark", tint: ElephantTheme.green)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
 
-            TextField("Name", text: $name)
+            TextField(localizedYouText(model.appLanguage, en: "Name", zh: "名称", fr: "Nom", de: "Name"), text: $name)
                 .textFieldStyle(.roundedBorder)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -6160,7 +6380,7 @@ struct HerdElephantCard: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                     Spacer()
-                    Button(editingIdentity ? "Preview" : "Edit") {
+                    Button(editingIdentity ? localizedYouText(model.appLanguage, en: "Preview", zh: "预览", fr: "Aperçu", de: "Vorschau") : localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten")) {
                         editingIdentity.toggle()
                     }
                     .controlSize(.small)
@@ -6179,14 +6399,14 @@ struct HerdElephantCard: View {
             }
 
             LazyVGrid(columns: metaColumns, spacing: 10) {
-                HerdMeta(label: "Profile", value: item.profileID.isEmpty ? "n/a" : item.profileID)
-                HerdMeta(label: "Created", value: item.createdAt.isEmpty ? "n/a" : item.createdAt)
-                HerdMeta(label: "Source", value: sourceLabel)
-                HerdMeta(label: "Updated", value: item.updatedAt.isEmpty ? "n/a" : item.updatedAt)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Profile", zh: "Profile", fr: "Profil", de: "Profil"), value: item.profileID.isEmpty ? "n/a" : item.profileID)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Created", zh: "创建时间", fr: "Créé", de: "Erstellt"), value: item.createdAt.isEmpty ? "n/a" : item.createdAt)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"), value: sourceLabel)
+                HerdMeta(label: localizedYouText(model.appLanguage, en: "Updated", zh: "更新时间", fr: "Mis à jour", de: "Aktualisiert"), value: item.updatedAt.isEmpty ? "n/a" : item.updatedAt)
             }
 
             HStack {
-                Button("Save Changes") {
+                Button(localizedYouText(model.appLanguage, en: "Save Changes", zh: "保存修改", fr: "Enregistrer", de: "Änderungen speichern")) {
                     Task {
                         await model.updateHerdElephant(
                             item,
@@ -6195,13 +6415,13 @@ struct HerdElephantCard: View {
                         )
                     }
                 }
-                Button("Delete", role: .destructive) {
+                Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"), role: .destructive) {
                     confirmDelete = true
                 }
                 .disabled(item.current)
                 Spacer()
                 if item.current {
-                    Text("Current elephant is protected.")
+                    Text(localizedYouText(model.appLanguage, en: "Current elephant is protected.", zh: "当前使用中的 Elephant 不能删除。", fr: "L'Elephant actuel est protégé.", de: "Der aktuelle Elephant ist geschützt."))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -6222,12 +6442,15 @@ struct HerdElephantCard: View {
                 ? model.appLanguage.defaultElephantMarkdown(name: item.title)
                 : renderedText
         }
-        .confirmationDialog("Delete \(item.title)?", isPresented: $confirmDelete) {
-            Button("Delete Elephant", role: .destructive) {
+        .confirmationDialog(
+            localizedFormat(model.appLanguage, en: "Delete %@?", zh: "删除 %@？", fr: "Supprimer %@ ?", de: "%@ löschen?", item.title),
+            isPresented: $confirmDelete
+        ) {
+            Button(localizedYouText(model.appLanguage, en: "Delete Elephant", zh: "删除 Elephant", fr: "Supprimer Elephant", de: "Elephant löschen"), role: .destructive) {
                 Task { await model.deleteHerdElephant(item) }
             }
         } message: {
-            Text("This removes the local Elephant state. The current Elephant is protected.")
+            Text(localizedYouText(model.appLanguage, en: "This removes the local Elephant state. The current Elephant is protected.", zh: "这会删除本地 Elephant 状态。当前 Elephant 受保护。", fr: "Cela supprime l'état local d'Elephant. L'Elephant actuel est protégé.", de: "Das entfernt den lokalen Elephant-Status. Der aktuelle Elephant ist geschützt."))
         }
     }
 
@@ -6319,6 +6542,17 @@ enum UsagePeriod: String, CaseIterable, Identifiable {
     case month = "Month"
 
     var id: String { rawValue }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .day:
+            return localizedYouText(language, en: "Day", zh: "日", fr: "Jour", de: "Tag")
+        case .week:
+            return localizedYouText(language, en: "Week", zh: "周", fr: "Semaine", de: "Woche")
+        case .month:
+            return localizedYouText(language, en: "Month", zh: "月", fr: "Mois", de: "Monat")
+        }
+    }
 }
 
 struct UsageView: View {
@@ -6337,20 +6571,23 @@ struct UsageView: View {
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Total Tokens", value: abbreviatedCount(model.snapshot.usageTokens), symbol: "sum")
-                MetricTile(label: "Prompt", value: abbreviatedCount(model.snapshot.usagePromptTokens), symbol: "arrow.down.doc", tint: ElephantTheme.accent)
-                MetricTile(label: "Completion", value: abbreviatedCount(model.snapshot.usageCompletionTokens), symbol: "arrow.up.doc", tint: ElephantTheme.green)
-                MetricTile(label: "Events", value: "\(model.snapshot.usageEvents)", symbol: "waveform.path", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Total Tokens", zh: "Token 总量", fr: "Tokens totaux", de: "Tokens gesamt"), value: abbreviatedCount(model.snapshot.usageTokens), symbol: "sum")
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Prompt", zh: "输入", fr: "Prompt", de: "Prompt"), value: abbreviatedCount(model.snapshot.usagePromptTokens), symbol: "arrow.down.doc", tint: ElephantTheme.accent)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Completion", zh: "输出", fr: "Réponse", de: "Antwort"), value: abbreviatedCount(model.snapshot.usageCompletionTokens), symbol: "arrow.up.doc", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Events", zh: "事件", fr: "Événements", de: "Ereignisse"), value: "\(model.snapshot.usageEvents)", symbol: "waveform.path", tint: ElephantTheme.orange)
             }
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        SectionLabel(title: "Token Flow", subtitle: "Usage grouped by day, week, or month")
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "Token Flow", zh: "Token 用量", fr: "Flux de tokens", de: "Token-Fluss"),
+                            subtitle: localizedYouText(model.appLanguage, en: "Usage grouped by day, week, or month", zh: "按日、周或月查看用量。", fr: "Usage groupé par jour, semaine ou mois.", de: "Nutzung nach Tag, Woche oder Monat gruppiert.")
+                        )
                         Spacer()
-                        Picker("Period", selection: $period) {
+                        Picker(localizedYouText(model.appLanguage, en: "Period", zh: "周期", fr: "Période", de: "Zeitraum"), selection: $period) {
                             ForEach(UsagePeriod.allCases) { item in
-                                Text(item.rawValue).tag(item)
+                                Text(item.title(language: model.appLanguage)).tag(item)
                             }
                         }
                         .pickerStyle(.segmented)
@@ -6364,9 +6601,12 @@ struct UsageView: View {
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionLabel(title: "Recent Token Events", subtitle: "\(model.snapshot.usageItems.count) shown")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Recent Token Events", zh: "最近用量记录", fr: "Événements token récents", de: "Letzte Token-Ereignisse"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d shown", zh: "显示 %d 条", fr: "%d affichés", de: "%d gezeigt", model.snapshot.usageItems.count)
+                    )
                     if model.snapshot.usageItems.isEmpty {
-                        EmptyLine(symbol: "chart.xyaxis.line", text: "No token usage rows yet.")
+                        EmptyLine(symbol: "chart.xyaxis.line", text: localizedYouText(model.appLanguage, en: "No token usage rows yet.", zh: "还没有模型用量记录。", fr: "Aucune ligne d'usage token.", de: "Noch keine Token-Nutzungszeilen."))
                     } else {
                         ForEach(model.snapshot.usageItems.prefix(12)) { item in
                             UsageEventRow(item: item, maxTokens: maxTokenEvent)
@@ -6486,18 +6726,19 @@ struct UsageChartView: View {
 }
 
 struct UsageTotalsTable: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var points: [UsageTrendPoint]
 
     var body: some View {
         if points.isEmpty {
-            EmptyLine(symbol: "chart.xyaxis.line", text: "No token flow rows yet.")
+            EmptyLine(symbol: "chart.xyaxis.line", text: localizedYouText(model.appLanguage, en: "No token flow rows yet.", zh: "还没有可汇总的用量。", fr: "Aucune ligne de flux token.", de: "Noch keine Token-Flusszeilen."))
         } else {
             VStack(spacing: 0) {
                 HStack {
-                    tableHeader("Period")
-                    tableHeader("Tokens")
-                    tableHeader("Input")
-                    tableHeader("Output")
+                    tableHeader(localizedYouText(model.appLanguage, en: "Period", zh: "周期", fr: "Période", de: "Zeitraum"))
+                    tableHeader(localizedYouText(model.appLanguage, en: "Tokens", zh: "Tokens", fr: "Tokens", de: "Tokens"))
+                    tableHeader(localizedYouText(model.appLanguage, en: "Input", zh: "输入", fr: "Entrée", de: "Eingabe"))
+                    tableHeader(localizedYouText(model.appLanguage, en: "Output", zh: "输出", fr: "Sortie", de: "Ausgabe"))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -6543,6 +6784,7 @@ struct UsageTotalsTable: View {
 }
 
 struct UsageEventRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var item: UsageEventItem
     var maxTokens: Int
 
@@ -6553,7 +6795,7 @@ struct UsageEventRow: View {
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
                 Spacer()
-                Text("\(item.totalTokens) tokens")
+                Text(localizedFormat(model.appLanguage, en: "%d tokens", zh: "%d tokens", fr: "%d tokens", de: "%d Tokens", item.totalTokens))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -6653,6 +6895,17 @@ enum ScheduleCalendarScope: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .week:
+            return localizedYouText(language, en: "Week", zh: "周", fr: "Semaine", de: "Woche")
+        case .month:
+            return localizedYouText(language, en: "Month", zh: "月", fr: "Mois", de: "Monat")
+        case .year:
+            return localizedYouText(language, en: "Year", zh: "年", fr: "Année", de: "Jahr")
+        }
+    }
+
     var stepComponent: Calendar.Component {
         switch self {
         case .week: return .weekOfYear
@@ -6749,6 +7002,7 @@ struct CronView: View {
 }
 
 struct ScheduleCalendarPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
     @Binding var scope: ScheduleCalendarScope
     @Binding var focusedDate: Date
     var jobs: [CronJobItem]
@@ -6768,16 +7022,16 @@ struct ScheduleCalendarPanel: View {
 
                     HStack(spacing: 8) {
                         StatusDot(tint: ElephantTheme.green)
-                        Text("\(events.count) dated")
+                        Text(localizedFormat(model.appLanguage, en: "%d dated", zh: "%d 条有日期", fr: "%d datés", de: "%d datiert", events.count))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.muted)
                     }
 
                     Spacer(minLength: 12)
 
-                    Picker("Calendar view", selection: $scope) {
+                    Picker(localizedYouText(model.appLanguage, en: "Calendar view", zh: "日历视图", fr: "Vue calendrier", de: "Kalenderansicht"), selection: $scope) {
                         ForEach(ScheduleCalendarScope.allCases) { item in
-                            Text(item.rawValue).tag(item)
+                            Text(item.title(language: model.appLanguage)).tag(item)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -6793,9 +7047,9 @@ struct ScheduleCalendarPanel: View {
                                 .frame(width: 28, height: 28)
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help("Previous \(scope.rawValue.lowercased())")
+                        .help(localizedFormat(model.appLanguage, en: "Previous %@", zh: "上一个%@", fr: "%@ précédent", de: "Vorherige %@", scope.title(language: model.appLanguage)))
 
-                        Button("Today") {
+                        Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
                             focusedDate = Date()
                         }
                         .controlSize(.small)
@@ -6807,7 +7061,7 @@ struct ScheduleCalendarPanel: View {
                                 .frame(width: 28, height: 28)
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help("Next \(scope.rawValue.lowercased())")
+                        .help(localizedFormat(model.appLanguage, en: "Next %@", zh: "下一个%@", fr: "%@ suivant", de: "Nächste %@", scope.title(language: model.appLanguage)))
                     }
                 }
 
@@ -6827,7 +7081,7 @@ struct ScheduleCalendarPanel: View {
 
     private var title: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         switch scope {
         case .week:
             let interval = Calendar.current.dateInterval(of: .weekOfYear, for: focusedDate)
@@ -7271,21 +7525,21 @@ struct CalendarEventPopover: View {
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(2)
-                    Text(event.job.isSystem ? "System learning reminder" : "Reminder")
+                    Text(event.job.isSystem ? localizedYouText(model.appLanguage, en: "System learning reminder", zh: "系统学习提醒", fr: "Rappel système Learn", de: "System-Learn-Erinnerung") : localizedYouText(model.appLanguage, en: "Reminder", zh: "提醒", fr: "Rappel", de: "Erinnerung"))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
 
                 Spacer(minLength: 8)
-                Pill(text: event.job.status, tint: event.tint)
+                Pill(text: localizedRuntimeStatus(event.job.status, language: model.appLanguage), tint: event.tint)
             }
 
             VStack(spacing: 0) {
-                popoverRow("Next run", formattedDate(event.date))
+                popoverRow(localizedYouText(model.appLanguage, en: "Next run", zh: "下次运行", fr: "Prochaine exécution", de: "Nächster Lauf"), formattedDate(event.date))
                 Divider()
-                popoverRow("When", event.job.schedule.isEmpty ? "n/a" : event.job.schedule)
+                popoverRow(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann"), event.job.schedule.isEmpty ? "n/a" : event.job.schedule)
                 Divider()
-                popoverRow("Runs", "\(event.job.runCount)")
+                popoverRow(localizedYouText(model.appLanguage, en: "Runs", zh: "运行次数", fr: "Exécutions", de: "Läufe"), "\(event.job.runCount)")
             }
             .background(ElephantTheme.panel.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
@@ -7299,13 +7553,13 @@ struct CalendarEventPopover: View {
             }
 
             HStack(spacing: 8) {
-                Button("Run") { Task { await model.runCronJob(event.job) } }
+                Button(localizedYouText(model.appLanguage, en: "Run", zh: "运行", fr: "Lancer", de: "Starten")) { Task { await model.runCronJob(event.job) } }
                     .disabled(!event.job.canRunNow)
-                Button(event.job.status == "paused" ? "Resume" : "Pause") {
+                Button(event.job.status == "paused" ? localizedYouText(model.appLanguage, en: "Resume", zh: "恢复", fr: "Reprendre", de: "Fortsetzen") : localizedYouText(model.appLanguage, en: "Pause", zh: "暂停", fr: "Pause", de: "Pausieren")) {
                     Task { await model.setCronJob(event.job, paused: event.job.status != "paused") }
                 }
                 .disabled(!event.job.canPause)
-                Button("Delete") { Task { await model.deleteCronJob(event.job) } }
+                Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen")) { Task { await model.deleteCronJob(event.job) } }
                     .disabled(!event.job.canDelete)
                 Spacer(minLength: 0)
             }
@@ -7334,7 +7588,7 @@ struct CalendarEventPopover: View {
 
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
@@ -7361,8 +7615,8 @@ struct ReminderComposerLauncher: View {
                 .frame(width: 42, height: 42)
 
                 SectionLabel(
-                    title: "Reminders",
-                    subtitle: "Ask Elephant to remind you or do something later."
+                    title: localizedYouText(model.appLanguage, en: "Reminders", zh: "提醒", fr: "Rappels", de: "Erinnerungen"),
+                    subtitle: localizedYouText(model.appLanguage, en: "Ask Elephant to remind you or do something later.", zh: "让 Elephant 到点提醒你，或稍后接着做。", fr: "Demandez à Elephant de vous rappeler ou de faire quelque chose plus tard.", de: "Bitte Elephant, dich später zu erinnern oder etwas zu erledigen.")
                 )
 
                 Spacer(minLength: 16)
@@ -7377,7 +7631,7 @@ struct ReminderComposerLauncher: View {
                 Button {
                     showingComposer = true
                 } label: {
-                    Label("New Reminder", systemImage: "plus")
+                    Label(localizedYouText(model.appLanguage, en: "New Reminder", zh: "新提醒", fr: "Nouveau rappel", de: "Neue Erinnerung"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -7385,6 +7639,14 @@ struct ReminderComposerLauncher: View {
                 .popover(isPresented: $showingComposer, arrowEdge: .bottom) {
                     reminderComposer
                 }
+            }
+        }
+        .onAppear {
+            if name == "Daily Elephant reminder" {
+                name = localizedYouText(model.appLanguage, en: "Daily Elephant reminder", zh: "每日提醒", fr: "Rappel quotidien Elephant", de: "Tägliche Elephant-Erinnerung")
+            }
+            if prompt == "Review current priorities and suggest the next grounded step." {
+                prompt = localizedYouText(model.appLanguage, en: "Review current priorities and suggest the next grounded step.", zh: "回看今天的重点，给我一个下一步建议。", fr: "Revoir les priorités et proposer la prochaine étape.", de: "Prioritäten prüfen und den nächsten Schritt vorschlagen.")
             }
         }
     }
@@ -7402,10 +7664,10 @@ struct ReminderComposerLauncher: View {
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("New Reminder")
+                    Text(localizedYouText(model.appLanguage, en: "New Reminder", zh: "新提醒", fr: "Nouveau rappel", de: "Neue Erinnerung"))
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
-                    Text("Choose when and what Elephant should do.")
+                    Text(localizedYouText(model.appLanguage, en: "Choose when and what Elephant should do.", zh: "写清楚什么时候提醒，以及要做什么。", fr: "Choisissez quand et ce qu'Elephant doit faire.", de: "Wähle, wann und was Elephant tun soll."))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                 }
@@ -7413,23 +7675,23 @@ struct ReminderComposerLauncher: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                labeledField("Title") {
-                    TextField("Daily Elephant reminder", text: $name)
+                labeledField(localizedYouText(model.appLanguage, en: "Title", zh: "标题", fr: "Titre", de: "Titel")) {
+                    TextField(localizedYouText(model.appLanguage, en: "Daily Elephant reminder", zh: "每日提醒", fr: "Rappel quotidien Elephant", de: "Tägliche Elephant-Erinnerung"), text: $name)
                         .textFieldStyle(.roundedBorder)
                 }
-                labeledField("When") {
-                    TextField("daily at 09:00", text: $schedule)
+                labeledField(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann")) {
+                    TextField(localizedYouText(model.appLanguage, en: "daily at 09:00", zh: "每天 09:00", fr: "tous les jours à 09:00", de: "täglich um 09:00"), text: $schedule)
                         .textFieldStyle(.roundedBorder)
                 }
-                labeledField("What should Elephant do?") {
-                    TextField("Review priorities and suggest the next grounded step.", text: $prompt, axis: .vertical)
+                labeledField(localizedYouText(model.appLanguage, en: "What should Elephant do?", zh: "要提醒什么？", fr: "Que doit faire Elephant ?", de: "Was soll Elephant tun?")) {
+                    TextField(localizedYouText(model.appLanguage, en: "Review priorities and suggest the next grounded step.", zh: "回看今天的重点，给我一个下一步建议。", fr: "Revoir les priorités et proposer la prochaine étape.", de: "Prioritäten prüfen und den nächsten Schritt vorschlagen."), text: $prompt, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(3...5)
                 }
             }
 
             HStack(spacing: 8) {
-                Button("Cancel") {
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                     showingComposer = false
                 }
                 Spacer(minLength: 0)
@@ -7439,7 +7701,7 @@ struct ReminderComposerLauncher: View {
                         await MainActor.run { showingComposer = false }
                     }
                 } label: {
-                    Label("Create Reminder", systemImage: "plus")
+                    Label(localizedYouText(model.appLanguage, en: "Create Reminder", zh: "保存提醒", fr: "Créer le rappel", de: "Erinnerung erstellen"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(ElephantTheme.accent)
@@ -7470,10 +7732,13 @@ struct CalendarJobsPanel: View {
         NativePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    SectionLabel(title: "All Reminders", subtitle: "\(jobs.count) reminder(s)")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "All Reminders", zh: "所有提醒", fr: "Tous les rappels", de: "Alle Erinnerungen"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d reminder(s)", zh: "%d 条提醒", fr: "%d rappel(s)", de: "%d Erinnerung(en)", jobs.count)
+                    )
                     Spacer(minLength: 12)
                     if !jobs.isEmpty {
-                        Text("Page \(safePage + 1) of \(pageCount)")
+                        Text(localizedFormat(model.appLanguage, en: "Page %d of %d", zh: "第 %d / %d 页", fr: "Page %d sur %d", de: "Seite %d von %d", safePage + 1, pageCount))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.muted)
                         HStack(spacing: 6) {
@@ -7501,14 +7766,14 @@ struct CalendarJobsPanel: View {
                 }
 
                 if jobs.isEmpty {
-                    EmptyLine(symbol: "calendar.badge.clock", text: "No reminders yet.")
+                    EmptyLine(symbol: "calendar.badge.clock", text: localizedYouText(model.appLanguage, en: "No reminders yet.", zh: "还没有提醒。", fr: "Aucun rappel pour l'instant.", de: "Noch keine Erinnerungen."))
                 } else {
                     VStack(spacing: 0) {
                         HStack(spacing: 12) {
-                            tableHeader("Reminder")
-                            tableHeader("When")
+                            tableHeader(localizedYouText(model.appLanguage, en: "Reminder", zh: "提醒", fr: "Rappel", de: "Erinnerung"))
+                            tableHeader(localizedYouText(model.appLanguage, en: "When", zh: "时间", fr: "Quand", de: "Wann"))
                                 .frame(width: 220, alignment: .leading)
-                            tableHeader("Next")
+                            tableHeader(localizedYouText(model.appLanguage, en: "Next", zh: "下次", fr: "Prochain", de: "Nächste"))
                                 .frame(width: 210, alignment: .leading)
                             Text("")
                                 .frame(width: 164)
@@ -7594,11 +7859,11 @@ struct CronJobRow: View {
                 jobIdentity
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.schedule.isEmpty ? "No time set" : job.schedule)
+                    Text(job.schedule.isEmpty ? localizedYouText(model.appLanguage, en: "No time set", zh: "还没设置时间", fr: "Aucun horaire", de: "Keine Zeit gesetzt") : job.schedule)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
-                    Text(job.detail.isEmpty ? "No reminder detail" : job.detail)
+                    Text(job.detail.isEmpty ? localizedYouText(model.appLanguage, en: "No reminder detail", zh: "没有说明", fr: "Aucun détail de rappel", de: "Kein Erinnerungsdetail") : job.detail)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -7606,12 +7871,12 @@ struct CronJobRow: View {
                 .frame(width: 220, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.nextRun.isEmpty ? "Not planned" : job.nextRun)
+                    Text(job.nextRun.isEmpty ? localizedYouText(model.appLanguage, en: "Not planned", zh: "暂无计划", fr: "Non planifié", de: "Nicht geplant") : job.nextRun)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text("Last \(job.lastRun.isEmpty ? "not yet" : job.lastRun) · \(job.runCount) run(s)")
+                    Text(lastRunLine)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.faint)
                         .lineLimit(1)
@@ -7630,7 +7895,7 @@ struct CronJobRow: View {
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .lineLimit(3)
-                Text("Next \(job.nextRun.isEmpty ? "not planned" : job.nextRun) · Last \(job.lastRun.isEmpty ? "not yet" : job.lastRun) · \(job.runCount) run(s)")
+                Text(nextRunLine)
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.faint)
                     .lineLimit(2)
@@ -7652,9 +7917,9 @@ struct CronJobRow: View {
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
                     if job.isSystem {
-                        Pill(text: "system", symbol: "gearshape", tint: ElephantTheme.green)
+                        Pill(text: localizedYouText(model.appLanguage, en: "system", zh: "系统", fr: "système", de: "System"), symbol: "gearshape", tint: ElephantTheme.green)
                     }
-                    Pill(text: job.status, tint: statusTint)
+                    Pill(text: localizedRuntimeStatus(job.status, language: model.appLanguage), tint: statusTint)
                 }
                 Text(job.id)
                     .font(.caption)
@@ -7669,13 +7934,13 @@ struct CronJobRow: View {
 
     private var jobActions: some View {
         HStack(spacing: 6) {
-            Button("Run") { Task { await model.runCronJob(job) } }
+            Button(localizedYouText(model.appLanguage, en: "Run", zh: "运行", fr: "Lancer", de: "Starten")) { Task { await model.runCronJob(job) } }
                 .disabled(!job.canRunNow)
-            Button(job.status == "paused" ? "Resume" : "Pause") {
+            Button(job.status == "paused" ? localizedYouText(model.appLanguage, en: "Resume", zh: "恢复", fr: "Reprendre", de: "Fortsetzen") : localizedYouText(model.appLanguage, en: "Pause", zh: "暂停", fr: "Pause", de: "Pausieren")) {
                 Task { await model.setCronJob(job, paused: job.status != "paused") }
             }
             .disabled(!job.canPause)
-            Button("Delete") { Task { await model.deleteCronJob(job) } }
+            Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen")) { Task { await model.deleteCronJob(job) } }
                 .disabled(!job.canDelete)
         }
         .controlSize(.small)
@@ -7684,6 +7949,31 @@ struct CronJobRow: View {
 
     private var statusTint: Color {
         job.status == "paused" ? ElephantTheme.orange : ElephantTheme.green
+    }
+
+    private var lastRunLine: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "Last %@ · %d run(s)",
+            zh: "上次：%@ · 已运行 %d 次",
+            fr: "Dernier %@ · %d exécution(s)",
+            de: "Zuletzt %@ · %d Lauf/Läufe",
+            job.lastRun.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : job.lastRun,
+            job.runCount
+        )
+    }
+
+    private var nextRunLine: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "Next %@ · Last %@ · %d run(s)",
+            zh: "下次：%@ · 上次：%@ · 已运行 %d 次",
+            fr: "Prochain %@ · Dernier %@ · %d exécution(s)",
+            de: "Nächste %@ · Zuletzt %@ · %d Lauf/Läufe",
+            job.nextRun.isEmpty ? localizedYouText(model.appLanguage, en: "not planned", zh: "暂无计划", fr: "non planifié", de: "nicht geplant") : job.nextRun,
+            job.lastRun.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : job.lastRun,
+            job.runCount
+        )
     }
 }
 
@@ -7702,22 +7992,25 @@ struct LearnView: View {
             }
 
             HStack(spacing: 12) {
-                MetricTile(label: "Questions", value: "\(model.snapshot.waitingQuestions)", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                MetricTile(label: "Worker", value: model.snapshot.workerStatus, symbol: "gearshape.2", tint: ElephantTheme.accent)
-                MetricTile(label: "Jobs", value: "\(model.snapshot.learningItems.count)", symbol: "brain.head.profile", tint: ElephantTheme.green)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Questions", zh: "问题", fr: "Questions", de: "Fragen"), value: "\(model.snapshot.waitingQuestions)", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: localizedRuntimeStatus(model.snapshot.workerStatus, language: model.appLanguage), symbol: "gearshape.2", tint: ElephantTheme.accent)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Jobs", zh: "任务", fr: "Tâches", de: "Jobs"), value: "\(model.snapshot.learningItems.count)", symbol: "brain.head.profile", tint: ElephantTheme.green)
             }
 
             LearnControlsPanel()
 
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionLabel(title: "Learn History", subtitle: "\(model.snapshot.learningItems.count) job(s)")
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Learn History", zh: "整理历史", fr: "Historique Learn", de: "Learn-Verlauf"),
+                        subtitle: localizedFormat(model.appLanguage, en: "%d job(s)", zh: "%d 个任务", fr: "%d tâche(s)", de: "%d Job(s)", model.snapshot.learningItems.count)
+                    )
                     if model.snapshot.learningItems.isEmpty {
-                        EmptyLine(symbol: "brain.head.profile", text: "No learning jobs returned yet.")
+                        EmptyLine(symbol: "brain.head.profile", text: localizedYouText(model.appLanguage, en: "No learning jobs returned yet.", zh: "还没有记忆整理任务。", fr: "Aucune tâche Learn retournée.", de: "Noch keine Learn-Jobs zurückgegeben."))
                     } else {
-                        LearningJobSection(title: "Active", items: Array(model.snapshot.learningItems.filter { !$0.status.lowercased().contains("completed") && !$0.status.lowercased().contains("failed") }.prefix(8)))
-                        LearningJobSection(title: "Completed", items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("completed") }.prefix(10)))
-                        LearningJobSection(title: "Needs Attention", items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("failed") || $0.status.lowercased().contains("cancel") }.prefix(8)))
+                        LearningJobSection(title: localizedYouText(model.appLanguage, en: "Active", zh: "进行中", fr: "Actifs", de: "Aktiv"), items: Array(model.snapshot.learningItems.filter { !$0.status.lowercased().contains("completed") && !$0.status.lowercased().contains("failed") }.prefix(8)))
+                        LearningJobSection(title: localizedYouText(model.appLanguage, en: "Completed", zh: "已完成", fr: "Terminés", de: "Abgeschlossen"), items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("completed") }.prefix(10)))
+                        LearningJobSection(title: localizedYouText(model.appLanguage, en: "Needs Attention", zh: "需要处理", fr: "À vérifier", de: "Prüfen"), items: Array(model.snapshot.learningItems.filter { $0.status.lowercased().contains("failed") || $0.status.lowercased().contains("cancel") }.prefix(8)))
                     }
                 }
             }
@@ -7728,11 +8021,12 @@ struct LearnView: View {
 struct LearnControlsPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
 
-    private let actions = [
+    private var actions: [LearnActionSpec] {
+        [
         LearnActionSpec(
             id: "reflect",
-            title: "Reflect",
-            subtitle: "Review conversations, questions, and evidence into memory.",
+            title: model.text(.reflect),
+            subtitle: localizedYouText(model.appLanguage, en: "Review conversations, questions, and evidence into memory.", zh: "把最近的对话、问题和证据整理成记忆。", fr: "Réviser conversations, questions et preuves vers la mémoire.", de: "Gespräche, Fragen und Belege ins Gedächtnis übernehmen."),
             symbol: "brain.head.profile",
             tint: ElephantTheme.accent,
             trigger: "manual",
@@ -7740,8 +8034,8 @@ struct LearnControlsPanel: View {
         ),
         LearnActionSpec(
             id: "dream",
-            title: "Dream",
-            subtitle: "Look for quiet patterns, loose threads, and useful next questions.",
+            title: localizedYouText(model.appLanguage, en: "Dream", zh: "Dream", fr: "Dream", de: "Dream"),
+            subtitle: localizedYouText(model.appLanguage, en: "Look for quiet patterns, loose threads, and useful next questions.", zh: "找出安静的模式、未完的线索，以及下一步该问什么。", fr: "Repérer les motifs discrets, fils ouverts et prochaines questions utiles.", de: "Leise Muster, lose Fäden und nützliche nächste Fragen finden."),
             symbol: "moon.stars",
             tint: ElephantTheme.green,
             trigger: "dream",
@@ -7749,22 +8043,23 @@ struct LearnControlsPanel: View {
         ),
         LearnActionSpec(
             id: "diary",
-            title: "Diary",
-            subtitle: "Write a reflective entry from recent reviewed context.",
+            title: localizedYouText(model.appLanguage, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch"),
+            subtitle: localizedYouText(model.appLanguage, en: "Write a reflective entry from recent reviewed context.", zh: "用最近回看过的内容写一篇日记。", fr: "Écrire une entrée réflexive depuis le contexte récemment revu.", de: "Einen reflektierten Eintrag aus zuletzt geprüftem Kontext schreiben."),
             symbol: "book.closed",
             tint: ElephantTheme.orange,
             trigger: "diary",
             features: "diary"
         )
-    ]
+        ]
+    }
 
     var body: some View {
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 14) {
                     SectionLabel(
-                        title: "New Reflect Job",
-                        subtitle: "Start a focused background pass when memory needs to catch up."
+                        title: localizedYouText(model.appLanguage, en: "New Reflect Job", zh: "新建记忆整理", fr: "Nouveau job Reflect", de: "Neuer Reflect-Job"),
+                        subtitle: localizedYouText(model.appLanguage, en: "Start a focused background pass when memory needs to catch up.", zh: "让后台把近期内容整理进记忆。", fr: "Lancez un passage en arrière-plan quand la mémoire doit rattraper.", de: "Starte einen fokussierten Hintergrundlauf, wenn das Gedächtnis aufholen soll.")
                     )
                     Spacer(minLength: 12)
                     statusSummary
@@ -7783,7 +8078,7 @@ struct LearnControlsPanel: View {
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(model.isReflecting ? ElephantTheme.accent : latestTint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.isReflecting ? "Learning job is running" : "Last completed")
+                        Text(model.isReflecting ? localizedYouText(model.appLanguage, en: "Learning job is running", zh: "正在整理记忆", fr: "Tâche Learn en cours", de: "Learn-Job läuft") : localizedYouText(model.appLanguage, en: "Last completed", zh: "上次完成", fr: "Dernière fin", de: "Zuletzt abgeschlossen"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.ink)
                         Text(latestCompletedText)
@@ -7814,7 +8109,7 @@ struct LearnControlsPanel: View {
     @ViewBuilder
     private var statusSummary: some View {
         if model.isReflecting {
-            Pill(text: "running", symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.accent)
+            Pill(text: model.text(.statusRunning), symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.accent)
         } else {
             Pill(text: latestBadgeText, symbol: latestCompletedDate == nil ? "clock" : "checkmark", tint: latestTint)
         }
@@ -7825,12 +8120,14 @@ struct LearnControlsPanel: View {
     }
 
     private var latestBadgeText: String {
-        latestCompletedDate == nil ? "not run yet" : "ready"
+        latestCompletedDate == nil
+            ? localizedYouText(model.appLanguage, en: "not run yet", zh: "还没运行过", fr: "pas encore lancé", de: "noch nicht gelaufen")
+            : model.text(.ready)
     }
 
     private var latestCompletedText: String {
         guard let date = latestCompletedDate else {
-            return "No completed reflect job has been reported yet."
+            return localizedYouText(model.appLanguage, en: "No completed reflect job has been reported yet.", zh: "还没有完成过的记忆整理。", fr: "Aucun job Reflect terminé n'a été signalé.", de: "Noch kein abgeschlossener Reflect-Job gemeldet.")
         }
         let formatter = DateFormatter()
         formatter.locale = Locale.current
@@ -7855,6 +8152,7 @@ private struct LearnActionSpec: Identifiable {
 }
 
 private struct LearnActionButton: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var action: LearnActionSpec
     var disabled: Bool
     var onRun: () -> Void
@@ -7897,8 +8195,8 @@ private struct LearnActionButton: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.54 : 1)
-        .help(disabled ? "A learning job is already running." : "Create \(action.title) reflect job")
-        .accessibilityLabel("Create \(action.title) reflect job")
+        .help(disabled ? localizedYouText(model.appLanguage, en: "A learning job is already running.", zh: "已经有记忆整理在运行。", fr: "Une tâche Learn est déjà en cours.", de: "Ein Learn-Job läuft bereits.") : localizedFormat(model.appLanguage, en: "Create %@ reflect job", zh: "开始 %@", fr: "Créer le job Reflect %@", de: "%@ Reflect-Job erstellen", action.title))
+        .accessibilityLabel(localizedFormat(model.appLanguage, en: "Create %@ reflect job", zh: "开始 %@", fr: "Créer le job Reflect %@", de: "%@ Reflect-Job erstellen", action.title))
     }
 }
 
@@ -7959,12 +8257,13 @@ struct LearningJobSection: View {
 }
 
 struct LearningJobRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var item: LearningJobItem
 
     var body: some View {
         DisclosureGroup {
             if item.markdown.isEmpty {
-                Text("No rendered result returned yet.")
+                Text(localizedYouText(model.appLanguage, en: "No rendered result returned yet.", zh: "还没有可显示的结果。", fr: "Aucun résultat rendu pour l'instant.", de: "Noch kein gerendertes Ergebnis."))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .padding(.top, 6)
@@ -7986,7 +8285,7 @@ struct LearningJobRow: View {
                         .lineLimit(2)
                 }
                 Spacer()
-                Pill(text: item.status, tint: statusTint)
+                Pill(text: localizedRuntimeStatus(item.status, language: model.appLanguage), tint: statusTint)
             }
         }
         .padding(.vertical, 7)
@@ -8694,6 +8993,9 @@ struct ProviderSettingsContent: View {
     @State private var loaded = false
     @State private var showingProviderConfig = false
     @State private var providerSearch = ""
+    @State private var providerPage = 0
+
+    private let providerPageSize = 16
 
     var body: some View {
         providerFactoryContent
@@ -8728,18 +9030,23 @@ struct ProviderSettingsContent: View {
                 providerConfigurationForm
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    SectionLabel(title: "Provider factory", subtitle: "\(filteredProviderOptions.count)/\(model.snapshot.providerOptions.count) providers · connected first")
+                    SectionLabel(
+                        title: model.text(.providerFactory),
+                        subtitle: providerFactorySubtitle
+                    )
                     ProviderSearchField(text: $providerSearch, placeholder: model.text(.providerSearchPlaceholder))
-                    HStack(alignment: .top, spacing: 14) {
+
+                    ZStack(alignment: .topTrailing) {
                         ProviderFactoryGrid(
-                            options: filteredProviderOptions,
+                            options: pagedProviderOptions,
                             selectedID: providerID,
                             activeID: model.snapshot.providerID,
-                            columnsCount: showingProviderConfig ? 2 : 4
+                            columnsCount: 4,
+                            emptyText: localizedYouText(model.appLanguage, en: "No provider matches this search.", zh: "没有找到匹配的服务。", fr: "Aucun provider ne correspond.", de: "Kein passender Provider.")
                         ) { option in
                             selectProvider(option, openConfig: true)
                         }
-                        .layoutPriority(1)
+                        .frame(maxWidth: .infinity)
 
                         if showingProviderConfig, let option = selectedOption {
                             ProviderConfigurationDropCard(option: option) {
@@ -8747,12 +9054,30 @@ struct ProviderSettingsContent: View {
                             } content: {
                                 providerConfigurationForm
                             }
-                            .frame(width: 560)
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .frame(maxWidth: 620)
+                            .padding(.top, 8)
+                            .padding(.trailing, 8)
+                            .transition(.scale(scale: 0.96, anchor: .topTrailing).combined(with: .opacity))
+                            .zIndex(2)
+                        }
+                    }
+
+                    if providerPageCount > 1 {
+                        HStack {
+                            Text(localizedFormat(model.appLanguage, en: "%d-%d of %d providers", zh: "第 %d-%d 个 / 共 %d 个", fr: "%d-%d sur %d providers", de: "%d-%d von %d Providern", providerRangeStart, providerRangeEnd, filteredProviderOptions.count))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(ElephantTheme.muted)
+                            Spacer()
+                            PageStepper(page: currentProviderPage, pageCount: providerPageCount) { direction in
+                                providerPage = min(max(0, currentProviderPage + direction), providerPageCount - 1)
+                            }
                         }
                     }
                 }
             }
+        }
+        .onChange(of: providerSearch) { _ in
+            providerPage = 0
         }
     }
 
@@ -8760,12 +9085,17 @@ struct ProviderSettingsContent: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    SectionLabel(title: "Model", subtitle: selectedOption?.active == true ? "Active model for the current provider" : "Select a catalog hint, live-discovered model, or type a custom ID.")
+                    SectionLabel(title: model.text(.modelSection), subtitle: selectedOption?.active == true ? model.text(.activeModelSubtitle) : model.text(.modelPickerSubtitle))
                     Spacer()
                     Button {
                         Task { await loadLiveModels() }
                     } label: {
-                        Label(loadingModels ? "Fetching" : "Fetch models", systemImage: "arrow.clockwise")
+                        Label(
+                            loadingModels
+                                ? model.text(.fetching)
+                                : localizedYouText(model.appLanguage, en: "Fetch models", zh: "刷新模型列表", fr: "Charger les modèles", de: "Modelle laden"),
+                            systemImage: "arrow.clockwise"
+                        )
                     }
                     .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loadingModels)
                     .controlSize(.small)
@@ -8778,8 +9108,8 @@ struct ProviderSettingsContent: View {
                     activeModelID: model.snapshot.providerModelID
                 )
 
-                LabeledContent("Custom model") {
-                    TextField("model id", text: $modelID)
+                LabeledContent(model.text(.customModelID)) {
+                    TextField(model.text(.modelID), text: $modelID)
                         .textFieldStyle(.roundedBorder)
                 }
             }
@@ -8788,23 +9118,28 @@ struct ProviderSettingsContent: View {
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
 
             LabeledContent("Base URL") {
-                TextField("optional endpoint", text: $baseURL)
+                TextField(localizedYouText(model.appLanguage, en: "optional endpoint", zh: "可选接口地址", fr: "endpoint optionnel", de: "optionaler Endpoint"), text: $baseURL)
                     .textFieldStyle(.roundedBorder)
             }
-            LabeledContent("API Key") {
-                SecureField("stored locally", text: $apiKey)
+            LabeledContent(model.text(.apiKey)) {
+                SecureField(localizedYouText(model.appLanguage, en: "stored locally", zh: "只保存在本机", fr: "stocké localement", de: "lokal gespeichert"), text: $apiKey)
                     .textFieldStyle(.roundedBorder)
             }
-            LabeledContent("Context Window") {
-                TextField("auto", text: $contextWindow)
+            LabeledContent(model.text(.contextWindowTokens)) {
+                TextField(localizedYouText(model.appLanguage, en: "auto", zh: "自动", fr: "auto", de: "auto"), text: $contextWindow)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 160)
             }
 
-            SettingsRow(label: "Source", value: model.snapshot.providerSource.isEmpty ? "not configured" : model.snapshot.providerSource)
+            SettingsRow(
+                label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"),
+                value: model.snapshot.providerSource.isEmpty
+                    ? localizedYouText(model.appLanguage, en: "not configured", zh: "尚未配置", fr: "non configuré", de: "nicht konfiguriert")
+                    : model.snapshot.providerSource
+            )
 
             HStack {
-                Button("Save Provider") {
+                Button(localizedYouText(model.appLanguage, en: "Save Provider", zh: "保存模型服务", fr: "Enregistrer le provider", de: "Provider speichern")) {
                     Task {
                         await model.saveProviderSettings(
                             providerID: providerID,
@@ -8817,12 +9152,12 @@ struct ProviderSettingsContent: View {
                 }
                 .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                Button("Test") {
+                Button(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen")) {
                     Task { await model.testProvider() }
                 }
                 .disabled(model.snapshot.providerID.isEmpty && providerID.isEmpty)
 
-                Button("Refresh") {
+                Button(model.text(.refresh)) {
                     Task { try? await model.refreshDashboard() }
                 }
             }
@@ -8852,16 +9187,54 @@ struct ProviderSettingsContent: View {
             }
     }
 
+    private var providerPageCount: Int {
+        max(1, (filteredProviderOptions.count + providerPageSize - 1) / providerPageSize)
+    }
+
+    private var currentProviderPage: Int {
+        min(max(providerPage, 0), providerPageCount - 1)
+    }
+
+    private var pagedProviderOptions: [ProviderOption] {
+        Array(filteredProviderOptions.dropFirst(currentProviderPage * providerPageSize).prefix(providerPageSize))
+    }
+
+    private var providerRangeStart: Int {
+        guard !filteredProviderOptions.isEmpty else { return 0 }
+        return currentProviderPage * providerPageSize + 1
+    }
+
+    private var providerRangeEnd: Int {
+        min(filteredProviderOptions.count, (currentProviderPage + 1) * providerPageSize)
+    }
+
+    private var providerFactorySubtitle: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "%d of %d providers · connected first",
+            zh: "显示 %d / %d 个，已连接优先",
+            fr: "%d sur %d providers · connectés d'abord",
+            de: "%d von %d Providern · verbundene zuerst",
+            filteredProviderOptions.count,
+            model.snapshot.providerOptions.count
+        )
+    }
+
     private var providerStatusLabel: String {
         if model.snapshot.providerStatus == "unknown", !model.snapshot.providerID.isEmpty {
-            return "configured"
+            return localizedProviderState("configured", language: model.appLanguage)
         }
-        return model.snapshot.providerStatus == "unknown" ? "setup needed" : model.snapshot.providerStatus
+        return localizedProviderState(
+            model.snapshot.providerStatus == "unknown" ? "setup needed" : model.snapshot.providerStatus,
+            language: model.appLanguage
+        )
     }
 
     private var providerTint: Color {
-        let value = providerStatusLabel.lowercased()
-        return value.contains("setup") || value.contains("missing") ? ElephantTheme.orange : ElephantTheme.green
+        let value = model.snapshot.providerStatus.lowercased()
+        return model.snapshot.providerID.isEmpty || value == "unknown" || value.contains("setup") || value.contains("missing")
+            ? ElephantTheme.orange
+            : ElephantTheme.green
     }
 
     private func loadFromSnapshot() {
@@ -8943,6 +9316,7 @@ struct ProviderConfigurationModalBackdrop: View {
 }
 
 struct ProviderConfigurationModal<Content: View>: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
     var close: () -> Void
     var content: Content
@@ -8977,8 +9351,8 @@ struct ProviderConfigurationModal<Content: View>: View {
                 }
                 .buttonStyle(PressablePlainButtonStyle())
                 .foregroundStyle(ElephantTheme.muted)
-                .help("Close")
-                .accessibilityLabel("Close provider configuration")
+                .help(localizedYouText(model.appLanguage, en: "Close", zh: "关闭", fr: "Fermer", de: "Schließen"))
+                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Close provider configuration", zh: "关闭模型服务设置", fr: "Fermer la configuration du provider", de: "Provider-Konfiguration schließen"))
             }
             Divider()
             ScrollView {
@@ -9000,6 +9374,7 @@ struct ProviderConfigurationModal<Content: View>: View {
 }
 
 struct ProviderConfigurationDropCard<Content: View>: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
     var close: () -> Void
     var content: Content
@@ -9034,8 +9409,8 @@ struct ProviderConfigurationDropCard<Content: View>: View {
                 }
                 .buttonStyle(PressablePlainButtonStyle())
                 .foregroundStyle(ElephantTheme.muted)
-                .help("Collapse")
-                .accessibilityLabel("Collapse provider configuration")
+                .help(localizedYouText(model.appLanguage, en: "Collapse", zh: "收起", fr: "Réduire", de: "Einklappen"))
+                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Collapse provider configuration", zh: "收起模型服务设置", fr: "Réduire la configuration du provider", de: "Provider-Konfiguration einklappen"))
             }
             Divider()
             ScrollView {
@@ -9055,16 +9430,18 @@ struct ProviderConfigurationDropCard<Content: View>: View {
 }
 
 struct ProviderFactoryGrid: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var options: [ProviderOption]
     var selectedID: String
     var activeID: String
     var columnsCount: Int = 4
+    var emptyText: String = "No provider matches this search."
     var select: (ProviderOption) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             if options.isEmpty {
-                EmptyLine(symbol: "magnifyingglass", text: "No provider matches this search.")
+                EmptyLine(symbol: "magnifyingglass", text: emptyText)
                     .padding(.vertical, 28)
                     .frame(maxWidth: .infinity)
             } else {
@@ -9082,8 +9459,8 @@ struct ProviderFactoryGrid: View {
                                     )
                                 }
                                 .buttonStyle(PressablePlainButtonStyle())
-                                .help("Configure \(option.displayName)")
-                                .accessibilityLabel("Configure \(option.displayName)")
+                                .help(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
+                                .accessibilityLabel(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
                                 .frame(maxWidth: .infinity)
                             }
                             ForEach(0..<max(0, max(1, columnsCount) - providerRows[rowIndex].count), id: \.self) { _ in
@@ -9112,6 +9489,7 @@ struct ProviderFactoryGrid: View {
 }
 
 struct ProviderSearchField: View {
+    @EnvironmentObject private var model: ElephantAppModel
     @Binding var text: String
     var placeholder: String
     @FocusState private var focused: Bool
@@ -9134,7 +9512,7 @@ struct ProviderSearchField: View {
                         .foregroundStyle(ElephantTheme.faint)
                 }
                 .buttonStyle(.plain)
-                .help("Clear search")
+                .help(localizedYouText(model.appLanguage, en: "Clear search", zh: "清空搜索", fr: "Effacer la recherche", de: "Suche löschen"))
             }
         }
         .padding(.horizontal, 10)
@@ -9151,6 +9529,7 @@ struct ProviderSearchField: View {
 }
 
 struct ProviderFactoryList: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var options: [ProviderOption]
     var selectedID: String
     var activeID: String
@@ -9160,7 +9539,7 @@ struct ProviderFactoryList: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 if options.isEmpty {
-                    EmptyLine(symbol: "magnifyingglass", text: "No provider matches this search.")
+                    EmptyLine(symbol: "magnifyingglass", text: localizedYouText(model.appLanguage, en: "No provider matches this search.", zh: "没有找到匹配的服务。", fr: "Aucun provider ne correspond.", de: "Kein passender Provider."))
                         .padding(.vertical, 20)
                 } else {
                     ForEach(options) { option in
@@ -9174,8 +9553,8 @@ struct ProviderFactoryList: View {
                             )
                         }
                         .buttonStyle(PressablePlainButtonStyle())
-                        .help("Configure \(option.displayName)")
-                        .accessibilityLabel("Configure \(option.displayName)")
+                        .help(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
+                        .accessibilityLabel(localizedFormat(model.appLanguage, en: "Configure %@", zh: "配置 %@", fr: "Configurer %@", de: "%@ konfigurieren", option.displayName))
                         if option.id != options.last?.id {
                             Divider()
                                 .padding(.leading, 54)
@@ -9260,6 +9639,7 @@ struct ProviderFactoryListRow: View {
 }
 
 struct ProviderFactoryCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
     var selected: Bool
     var active: Bool
@@ -9315,7 +9695,7 @@ struct ProviderFactoryCard: View {
         if !option.summary.isEmpty {
             return option.summary
         }
-        return option.authKind.isEmpty ? "provider setup" : option.authKind
+        return option.authKind.isEmpty ? model.text(.providerSetup) : option.authKind
     }
 
     private var background: Color {
@@ -9356,6 +9736,7 @@ struct ProviderFactoryCard: View {
 }
 
 struct ProviderStatePill: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
 
     var body: some View {
@@ -9371,15 +9752,15 @@ struct ProviderStatePill: View {
 
     private var label: String {
         if option.active {
-            return "In use"
+            return localizedProviderState("In use", language: model.appLanguage)
         }
         if option.connected {
-            return "Connected"
+            return localizedProviderState("Connected", language: model.appLanguage)
         }
         if option.storedKeyCount > 0 {
-            return "\(option.storedKeyCount) key"
+            return localizedFormat(model.appLanguage, en: "%d key", zh: "%d 个密钥", fr: "%d clé", de: "%d Key", option.storedKeyCount)
         }
-        return "Use"
+        return localizedProviderState("Use", language: model.appLanguage)
     }
 
     private var tint: Color {
@@ -9563,6 +9944,7 @@ private struct LobeHubIconAsset {
 }
 
 struct ModelOptionPicker: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var options: [ProviderModelOption]
     @Binding var selectedID: String
     var loading: Bool
@@ -9572,7 +9954,9 @@ struct ModelOptionPicker: View {
         if options.isEmpty {
             EmptyLine(
                 symbol: loading ? "arrow.clockwise" : "sparkles",
-                text: loading ? "Fetching models from the provider..." : "No model list yet. Use Fetch models or type a custom model ID."
+                text: loading
+                    ? localizedYouText(model.appLanguage, en: "Fetching models from the provider...", zh: "正在从模型服务拉取列表...", fr: "Chargement des modèles depuis le provider...", de: "Modelle werden vom Provider geladen...")
+                    : localizedYouText(model.appLanguage, en: "No model list yet. Use Fetch models or type a custom model ID.", zh: "还没有模型列表。可以刷新模型列表，或手动填写模型 ID。", fr: "Aucune liste de modèles. Chargez les modèles ou saisissez un ID personnalisé.", de: "Noch keine Modellliste. Modelle laden oder eigene Modell-ID eingeben.")
             )
         } else {
             LazyVGrid(columns: columns, spacing: 8) {
@@ -9600,6 +9984,7 @@ struct ModelOptionPicker: View {
 }
 
 struct ModelOptionCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderModelOption
     var selected: Bool
     var active: Bool
@@ -9619,7 +10004,7 @@ struct ModelOptionCard: View {
                 HStack(spacing: 6) {
                     Text(option.source)
                     if active {
-                        Text("active")
+                        Text(localizedProviderState("active", language: model.appLanguage))
                     }
                 }
                 .font(.caption.weight(.semibold))
@@ -9664,6 +10049,7 @@ struct ProviderSectionBlock: View {
 }
 
 struct ProviderChoiceCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var option: ProviderOption
     var selected: Bool
 
@@ -9691,12 +10077,12 @@ struct ProviderChoiceCard: View {
             VStack(alignment: .trailing, spacing: 5) {
                 HStack(spacing: 5) {
                     if option.active {
-                        Pill(text: "active", symbol: "checkmark", tint: ElephantTheme.green)
+                        Pill(text: localizedProviderState("active", language: model.appLanguage), symbol: "checkmark", tint: ElephantTheme.green)
                     } else if option.connected {
-                        Pill(text: "connected", symbol: "bolt.horizontal", tint: ElephantTheme.accent)
+                        Pill(text: localizedProviderState("connected", language: model.appLanguage), symbol: "bolt.horizontal", tint: ElephantTheme.accent)
                     }
                     if option.storedKeyCount > 0 {
-                        Pill(text: "\(option.storedKeyCount) key", symbol: "key", tint: ElephantTheme.green)
+                        Pill(text: localizedFormat(model.appLanguage, en: "%d key", zh: "%d 个密钥", fr: "%d clé", de: "%d Key", option.storedKeyCount), symbol: "key", tint: ElephantTheme.green)
                     }
                 }
                 Text([option.source, option.authKind].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -9716,9 +10102,13 @@ struct ProviderChoiceCard: View {
     }
 
     private var providerSummary: String {
-        let model = option.defaultModel.isEmpty ? "model not selected" : option.defaultModel
-        let endpoint = option.defaultBaseURL.isEmpty ? "default endpoint" : option.defaultBaseURL
-        return "\(model) · \(endpoint)"
+        let modelName = option.defaultModel.isEmpty
+            ? localizedYouText(model.appLanguage, en: "model not selected", zh: "未选择模型", fr: "modèle non choisi", de: "Modell nicht gewählt")
+            : option.defaultModel
+        let endpoint = option.defaultBaseURL.isEmpty
+            ? localizedYouText(model.appLanguage, en: "default endpoint", zh: "默认接口", fr: "endpoint par défaut", de: "Standard-Endpoint")
+            : option.defaultBaseURL
+        return "\(modelName) · \(endpoint)"
     }
 }
 
@@ -9913,11 +10303,13 @@ struct SkillLibraryPanel: View {
         NativePanel {
             OperatorCatalogContent(
                 kind: "skills",
-                title: "Skill Library",
-                subtitle: "Enable only what should be available in normal agent loops.",
-                searchPrompt: "Search skills",
+                title: localizedYouText(model.appLanguage, en: "Skill Library", zh: "技能库", fr: "Bibliothèque de skills", de: "Skill-Bibliothek"),
+                subtitle: localizedYouText(model.appLanguage, en: "Enable only what normal agent loops should use.", zh: "只打开日常对话里真的会用到的技能。", fr: "Activez seulement ce que les boucles agent normales doivent utiliser.", de: "Aktiviere nur, was normale Agent-Loops nutzen sollen."),
+                searchPrompt: localizedYouText(model.appLanguage, en: "Search skills", zh: "搜索技能", fr: "Rechercher des skills", de: "Skills suchen"),
                 emptySymbol: "wand.and.stars",
-                emptyText: model.snapshot.skills > 0 ? "\(model.snapshot.skills) skills detected." : "No skills returned yet.",
+                emptyText: model.snapshot.skills > 0
+                    ? localizedFormat(model.appLanguage, en: "%d skills detected.", zh: "已经识别出 %d 个技能。", fr: "%d skills détectés.", de: "%d Skills erkannt.", model.snapshot.skills)
+                    : localizedYouText(model.appLanguage, en: "No skills returned yet.", zh: "本地运行时还没有返回技能列表。", fr: "Aucun skill retourné.", de: "Noch keine Skills zurückgegeben."),
                 items: model.snapshot.skillItems,
                 fallbackNames: model.snapshot.skillNames,
                 totalCount: model.snapshot.skills,
@@ -9945,11 +10337,13 @@ struct ToolsCatalogPanel: View {
         NativePanel {
             OperatorCatalogContent(
                 kind: "tools",
-                title: "Tool Library",
-                subtitle: "Built-in and MCP actions available to the local runtime.",
-                searchPrompt: "Search tools",
+                title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Tool-Bibliothek"),
+                subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
+                searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Tools suchen"),
                 emptySymbol: "wrench.and.screwdriver",
-                emptyText: model.snapshot.tools > 0 ? "\(model.snapshot.tools) tools detected." : "No tools returned yet.",
+                emptyText: model.snapshot.tools > 0
+                    ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Tools erkannt.", model.snapshot.tools)
+                    : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Tools zurückgegeben."),
                 items: model.snapshot.toolItems,
                 fallbackNames: model.snapshot.toolNames,
                 totalCount: model.snapshot.tools,
@@ -9968,11 +10362,13 @@ struct SkillsSettingsContent: View {
     var body: some View {
         OperatorCatalogContent(
             kind: "skills",
-            title: "Skill Library",
-            subtitle: "Enable only what should be available in normal agent loops.",
-            searchPrompt: "Search skills",
+            title: localizedYouText(model.appLanguage, en: "Skill Library", zh: "技能库", fr: "Bibliothèque de skills", de: "Skill-Bibliothek"),
+            subtitle: localizedYouText(model.appLanguage, en: "Enable only what normal agent loops should use.", zh: "只打开日常对话里真的会用到的技能。", fr: "Activez seulement ce que les boucles agent normales doivent utiliser.", de: "Aktiviere nur, was normale Agent-Loops nutzen sollen."),
+            searchPrompt: localizedYouText(model.appLanguage, en: "Search skills", zh: "搜索技能", fr: "Rechercher des skills", de: "Skills suchen"),
             emptySymbol: "wand.and.stars",
-            emptyText: model.snapshot.skills > 0 ? "\(model.snapshot.skills) skills detected." : "No skills returned yet.",
+            emptyText: model.snapshot.skills > 0
+                ? localizedFormat(model.appLanguage, en: "%d skills detected.", zh: "已经识别出 %d 个技能。", fr: "%d skills détectés.", de: "%d Skills erkannt.", model.snapshot.skills)
+                : localizedYouText(model.appLanguage, en: "No skills returned yet.", zh: "本地运行时还没有返回技能列表。", fr: "Aucun skill retourné.", de: "Noch keine Skills zurückgegeben."),
             items: model.snapshot.skillItems,
             fallbackNames: model.snapshot.skillNames,
             totalCount: model.snapshot.skills,
@@ -9990,11 +10386,13 @@ struct ToolsSettingsContent: View {
     var body: some View {
         OperatorCatalogContent(
             kind: "tools",
-            title: "Tool Library",
-            subtitle: "Built-in and MCP actions available to the local runtime.",
-            searchPrompt: "Search tools",
+            title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Tool-Bibliothek"),
+            subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
+            searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Tools suchen"),
             emptySymbol: "wrench.and.screwdriver",
-            emptyText: model.snapshot.tools > 0 ? "\(model.snapshot.tools) tools detected." : "No tools returned yet.",
+            emptyText: model.snapshot.tools > 0
+                ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Tools erkannt.", model.snapshot.tools)
+                : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Tools zurückgegeben."),
             items: model.snapshot.toolItems,
             fallbackNames: model.snapshot.toolNames,
             totalCount: model.snapshot.tools,
@@ -10007,6 +10405,7 @@ struct ToolsSettingsContent: View {
 }
 
 private struct OperatorCatalogContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var kind: String
     var title: String
     var subtitle: String
@@ -10033,8 +10432,16 @@ private struct OperatorCatalogContent: View {
                 )
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
-                    Pill(text: "\(enabledCount) enabled", symbol: "checkmark.seal", tint: ElephantTheme.green)
-                    Pill(text: "\(totalCount) total", symbol: kind == "tools" ? "wrench.and.screwdriver" : "wand.and.stars", tint: logoTint)
+                    Pill(
+                        text: localizedFormat(model.appLanguage, en: "%d enabled", zh: "%d 已启用", fr: "%d activés", de: "%d aktiv", enabledCount),
+                        symbol: "checkmark.seal",
+                        tint: ElephantTheme.green
+                    )
+                    Pill(
+                        text: localizedFormat(model.appLanguage, en: "%d total", zh: "%d 总计", fr: "%d au total", de: "%d gesamt", totalCount),
+                        symbol: kind == "tools" ? "wrench.and.screwdriver" : "wand.and.stars",
+                        tint: logoTint
+                    )
                 }
             }
 
@@ -10045,7 +10452,7 @@ private struct OperatorCatalogContent: View {
                 TextField(searchPrompt, text: $query)
                     .textFieldStyle(.plain)
                 Spacer(minLength: 8)
-                Text("\(filteredCount) shown")
+                Text(localizedFormat(model.appLanguage, en: "%d shown", zh: "显示 %d 个", fr: "%d affichés", de: "%d gezeigt", filteredCount))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -10055,12 +10462,24 @@ private struct OperatorCatalogContent: View {
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(items.isEmpty ? "Catalog" : "\(enabledPageItems.count) enabled · \(availablePageItems.count) available on this page")
+                Text(
+                    items.isEmpty
+                        ? localizedYouText(model.appLanguage, en: "Catalog", zh: "目录", fr: "Catalogue", de: "Katalog")
+                        : localizedFormat(
+                            model.appLanguage,
+                            en: "%d enabled · %d available on this page",
+                            zh: "本页已启用 %d 个 · 还可启用 %d 个",
+                            fr: "%d activés · %d disponibles sur cette page",
+                            de: "%d aktiv · %d auf dieser Seite verfügbar",
+                            enabledPageItems.count,
+                            availablePageItems.count
+                        )
+                )
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                     .textCase(.uppercase)
                 Spacer(minLength: 0)
-                Text("Page \(currentPage + 1) of \(pageCount)")
+                Text(localizedFormat(model.appLanguage, en: "Page %d of %d", zh: "第 %d / %d 页", fr: "Page %d sur %d", de: "Seite %d von %d", currentPage + 1, pageCount))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                 PageStepper(page: currentPage, pageCount: pageCount) { direction in
@@ -10209,7 +10628,11 @@ private struct OperatorCatalogRow: View {
                             .truncationMode(.middle)
                     }
                 }
-                Text(item.detail.isEmpty ? "No description returned by the local runtime." : item.detail)
+                Text(
+                    item.detail.isEmpty
+                        ? localizedYouText(model.appLanguage, en: "No description returned by the local runtime.", zh: "本地运行时没有提供说明。", fr: "Aucune description retournée par le runtime local.", de: "Keine Beschreibung von der lokalen Runtime.")
+                        : item.detail
+                )
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .lineLimit(2)
@@ -10220,11 +10643,17 @@ private struct OperatorCatalogRow: View {
 
             HStack(spacing: 8) {
                 Pill(
-                    text: item.enabled ? "enabled" : "available",
+                    text: item.enabled
+                        ? localizedYouText(model.appLanguage, en: "enabled", zh: "已启用", fr: "activé", de: "aktiv")
+                        : localizedYouText(model.appLanguage, en: "available", zh: "可启用", fr: "disponible", de: "verfügbar"),
                     symbol: item.enabled ? "checkmark" : "circle",
                     tint: item.enabled ? ElephantTheme.green : ElephantTheme.faint
                 )
-                Button(item.enabled ? "Disable" : "Enable") {
+                Button(
+                    item.enabled
+                        ? localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren")
+                        : localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+                ) {
                     Task { await model.setConsoleItem(kind: kind, id: item.id, enabled: !item.enabled) }
                 }
                 .controlSize(.small)
@@ -10496,7 +10925,11 @@ struct OperatorItemRows: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    Button(item.enabled ? "Disable" : "Enable") {
+                    Button(
+                        item.enabled
+                            ? localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren")
+                            : localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+                    ) {
                         Task { await model.setConsoleItem(kind: kind, id: item.id, enabled: !item.enabled) }
                     }
                     .controlSize(.small)

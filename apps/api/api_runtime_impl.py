@@ -16,7 +16,7 @@ from packages.runtime_config import global_config_path_for_state_dir
 from packages.models import SurfaceModelProviderCapability
 from packages.auth import AuthProfile, PersistentAuthProfileStore
 from packages.context import ContextRuntime
-from packages.cron import CronRuntime
+from packages.cron import CronRuntime, ensure_nightly_learning_crons
 from packages.contracts import (
     ContextBundle,
     EventEnvelope,
@@ -121,6 +121,14 @@ def _steady_embedding_runtime(embedding_service: Any) -> None:
         return
 
 
+def _ensure_system_cron_jobs(cron_runtime: CronRuntime) -> None:
+    """Best-effort startup self-heal for built-in durable cron rows."""
+    try:
+        ensure_nightly_learning_crons(cron_runtime)
+    except Exception:
+        return
+
+
 class ElephantAPIApp:
     def __init__(self, config: APIAppConfig) -> None:
         self.config = config
@@ -155,6 +163,7 @@ class ElephantAPIApp:
             output_dir=cron_dir / "output",
             lock_path=cron_dir / "cron.lock",
         )
+        _ensure_system_cron_jobs(self.cron_runtime)
         loaded_profile = self.profile_loader.load()
         prompt_contract = build_prompt_contract(loaded_profile, prompt_mode="full")
         context_instruction_refs = prompt_contract.instruction_refs or config.instruction_refs

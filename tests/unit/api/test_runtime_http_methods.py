@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 import json
 from pathlib import Path
+import tempfile
 from threading import Lock
 import time
 from types import SimpleNamespace
@@ -11,8 +12,18 @@ import unittest
 from unittest import mock
 
 from apps.api.api_runtime_http_methods import __call__ as wsgi_call
-from apps.api.api_runtime_http_methods import _dispatch_internal, _dispatch_operator, stream_loop_events
+from apps.api.api_runtime_context_compression import (
+    compact_context_after_usage,
+)
+from apps.api.api_runtime_http_methods import (
+    _dispatch_internal,
+    _dispatch_operator,
+    stream_loop_events,
+)
 from apps.api.capabilities import APITelemetrySink
+from packages.context.epoch_store import FileEpochStore
+from packages.context.session_projection import SessionContextEpoch
+from packages.contracts.runtime import PromptMessage
 from packages.tools.runtime import ToolInvocation, ToolLifecycleEvent, ToolRuntimeContext
 
 
@@ -118,6 +129,62 @@ class OperatorCronDispatchTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(calls, ["run"])
         self.assertEqual(response.payload["cron"]["run"]["outcome"], "success")
+
+
+class APIContextCompressionTest(unittest.TestCase):
+    def test_after_turn_high_usage_compacts_epoch_like_chat_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            store = FileEpochStore(state_dir)
+            episode_id = "episode-api-compress"
+            store.save(
+                SessionContextEpoch(
+                    session_id=episode_id,
+                    frozen=True,
+                    frozen_prefix="## Stable prefix",
+                    base_loop_context="",
+                    thread_focus="High usage API chat",
+                    history_messages=tuple(
+                        PromptMessage(
+                            role="user" if index % 2 == 0 else "assistant",
+                            content=f"message {index} " + ("payload " * 200),
+                        )
+                        for index in range(18)
+                    ),
+                )
+            )
+            telemetry = APITelemetrySink()
+            app = SimpleNamespace(
+                repository=SimpleNamespace(
+                    database_path=state_dir / "elephant.sqlite3"
+                ),
+                telemetry=telemetry,
+                context=SimpleNamespace(runtime=SimpleNamespace(total_tokens=1000)),
+            )
+            outcome = SimpleNamespace(
+                execution=SimpleNamespace(prompt_tokens=900, total_tokens=900),
+                context=SimpleNamespace(token_budget=1000),
+                event=SimpleNamespace(event_id="event:api-compress"),
+                stages=(),
+            )
+
+            compact_context_after_usage(app, episode_id, outcome)
+
+            updated = store.load(episode_id)
+            self.assertIsNotNone(updated)
+            assert updated is not None
+            self.assertEqual(updated.compaction_count, 1)
+            self.assertLess(len(updated.history_messages), 18)
+            self.assertTrue(updated.compacted_history_summary.strip())
+            self.assertTrue(
+                any(
+                    event.get("event_type") == "kernel.stage"
+                    and (event.get("payload") or {}).get("stage") == "context-compact"
+                    and "reason=usage"
+                    in str((event.get("payload") or {}).get("detail") or "")
+                    for event in telemetry.events
+                )
+            )
 
 
 class InternalDiaryDispatchTest(unittest.TestCase):
@@ -252,6 +319,40 @@ class LoopEventStreamTest(unittest.TestCase):
         self.assertEqual(events[-1]["reply"]["text"], "stream complete")
         self.assertNotIn("inspection", events[-1]["reply"])
         self.assertNotIn("outcome", events[-1]["reply"])
+
+    def test_stream_loop_events_exposes_context_compact_stage(self) -> None:
+        model_provider = _StreamModelProvider()
+        tool_runtime = _StreamToolRuntime()
+        telemetry = APITelemetrySink()
+
+        def run_loop(episode_id: str, **_kwargs):
+            telemetry.emit(
+                {
+                    "event_id": "context-compact-1",
+                    "event_type": "kernel.stage",
+                    "episode_id": episode_id,
+                    "payload": {
+                        "stage": "context-compact",
+                        "detail": "reason=usage tokens=900->300",
+                    },
+                }
+            )
+            return _LoopResult()
+
+        app = SimpleNamespace(
+            model_provider=model_provider,
+            tool_runtime=tool_runtime,
+            telemetry=telemetry,
+            run_loop=run_loop,
+            _loop_stream_lock=Lock(),
+        )
+
+        events = list(stream_loop_events(app, "session-stream", prompt="hello"))
+        stage_event = next(event for event in events if event["type"] == "kernel.stage")
+
+        self.assertEqual(stage_event["stage"], "context-compact")
+        self.assertEqual(stage_event["detail"], "reason=usage tokens=900->300")
+        self.assertEqual(stage_event["status"], "running")
 
     def test_stream_loop_events_emits_heartbeat_while_loop_is_quiet(self) -> None:
         model_provider = _StreamModelProvider()

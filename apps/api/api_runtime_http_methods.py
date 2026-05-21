@@ -45,6 +45,9 @@ from .api_runtime_personal_model_methods import (
     _dispatch_personal_model,
     _persist_proactive_ask_config,
 )
+from .api_runtime_context_compression import (
+    compact_context_after_usage as _compact_context_after_usage,
+)
 
 _STREAM_KEEPALIVE_SECONDS = 15.0
 
@@ -130,6 +133,7 @@ def run_loop(
     )
     if updated_epoch != existing_epoch:
         _epoch_store.save(updated_epoch)
+    outcome = _compact_context_after_usage(self, episode.episode_id, outcome)
     record = APILoopRecord(
         request={
             "prompt": prompt,
@@ -149,6 +153,7 @@ def run_loop(
         latest_loop=record,
         inspection=inspection,
     )
+
 
 def stream_loop_events(
     self,

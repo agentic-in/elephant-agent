@@ -1429,9 +1429,9 @@ final class ElephantAppModel: ObservableObject {
         let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isWakeRunning else { return }
         wakeDraft = ""
+        isWakeRunning = true
         messages.append(ChatMessage(role: .user, text: text))
         chatScrollRevision += 1
-        isWakeRunning = true
 
         var assistantMessageID: UUID?
         var currentAssistantTextMessageID: UUID?
