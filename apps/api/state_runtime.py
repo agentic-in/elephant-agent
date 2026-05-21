@@ -168,6 +168,8 @@ class APIStateService:
         episode_id: str | None = None,
         personal_model_id: str | None = None,
         display_name: str | None = None,
+        personality_preset: str | None = None,
+        initiative: str | None = None,
         elephant_identity_text: str | None = None,
         clear_elephant_identity: bool = False,
     ) -> ElephantIdentityRecord:
@@ -187,6 +189,10 @@ class APIStateService:
         identity_record = replace(
             current.identity,
             display_name=display_name if display_name is not None else current.identity.display_name,
+            personality_preset=(
+                personality_preset if personality_preset is not None else current.identity.personality_preset
+            ),
+            initiative=initiative if initiative is not None else current.identity.initiative,
         )
         loaded = build_loaded_profile_from_state(
             personal_model,

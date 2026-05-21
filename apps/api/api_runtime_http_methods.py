@@ -364,6 +364,9 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             state_anchor=f"elephant:{elephant_id}",
             elephant_id=elephant_id,
             elephant_name=display_name,
+            identity_mode=_optional_str(payload.get("mode") or payload.get("identity_mode")) or "",
+            initiative=_optional_str(payload.get("initiative")) or "",
+            working_style=_optional_str(payload.get("personality_preset") or payload.get("working_style")) or "",
             surface_bindings=("api", "dashboard"),
             elephant_identity_text=identity_text,
             summary=f"{display_name} is ready to continue this elephant line.",
@@ -381,9 +384,15 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
         payload = _read_json_bytes(body)
         display_name = _optional_str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name"))
         identity_text = _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
+        personality_preset = _optional_str(payload.get("personality_preset") or payload.get("working_style"))
+        initiative = _optional_str(payload.get("initiative"))
+        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode"))
         updated = replace(
             state,
             elephant_name=display_name or state.elephant_name,
+            identity_mode=identity_mode if identity_mode is not None else state.identity_mode,
+            initiative=initiative if initiative is not None else state.initiative,
+            working_style=personality_preset if personality_preset is not None else state.working_style,
             elephant_identity_text=identity_text if identity_text is not None else state.elephant_identity_text,
             summary=f"{display_name or state.elephant_name} is ready to continue this elephant line.",
             metadata={**dict(state.metadata), "profile_id": state.personal_model_id},
@@ -603,6 +612,8 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
             result = self.update_identity_state(
                 state_id=state_id,
                 display_name=_optional_str(payload.get("display_name") or payload.get("name")),
+                personality_preset=_optional_str(payload.get("personality_preset") or payload.get("working_style")),
+                initiative=_optional_str(payload.get("initiative")),
                 elephant_identity_text=_optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content")),
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
             )
