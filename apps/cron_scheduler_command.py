@@ -139,11 +139,12 @@ def _namespace(**kwargs: object) -> Namespace:
 
 
 def _cron_start_via_daemon(args: Namespace) -> int:
-    """Start the unified Elephant daemon for cron --detach.
+    """Start the unified Elephant daemon for cron management commands.
 
-    The cron scheduler runs inside the unified daemon alongside IM adapters,
-    supervisor, and learning worker. When ``cron start --detach`` is invoked
-    we redirect to the daemon.
+    The cron scheduler now runs inside the unified daemon alongside IM
+    adapters, supervisor, and learning worker. ``elephant cron start`` is
+    therefore a daemon-management command; use ``elephant cron run`` for an
+    explicit standalone foreground scheduler loop.
     """
     from apps.daemon_command import (
         daemon_is_running,
@@ -163,6 +164,27 @@ def _cron_start_via_daemon(args: Namespace) -> int:
 
     print("Starting unified Elephant daemon (cron, adapters, supervisor, learning)...")
     return start_daemon_detached(state_dir, cli_state_dir)
+
+
+def _run_daemon_command(args: Namespace, argv: Sequence[str]) -> int:
+    """Delegate cron management to the unified daemon CLI."""
+    from apps.daemon_command import command_main as daemon_command_main
+
+    return daemon_command_main(list(argv), default_state_dir=args.state_dir)
+
+
+def _cron_status_via_daemon(args: Namespace) -> int:
+    print("Cron is managed by the unified daemon.")
+    return _run_daemon_command(args, ["status"])
+
+
+def _cron_logs_via_daemon(args: Namespace) -> int:
+    argv = ["logs", "--tail", str(args.tail)]
+    if args.follow:
+        argv.append("--follow")
+    if args.path:
+        argv.append("--path")
+    return _run_daemon_command(args, argv)
 
 
 def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
@@ -200,18 +222,14 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         cli_state_dir: Path | None = typer.Option(None, "--cli-state-dir", hidden=True),
         elephant_id: str = typer.Option("elephant:gateway", "--elephant-id", help="Scoped runtime elephant id for scheduler operations."),
         target: str = typer.Option("scheduler", "--target", help="Runtime target to inspect or launch."),
-        detach: bool = typer.Option(False, "--detach", help="Start in a background process and return immediately."),
-        interval_seconds: float = typer.Option(60.0, "--interval-seconds", help="Seconds between scheduler ticks."),
+        detach: bool = typer.Option(False, "--detach", help="Compatibility flag. Cron starts are managed by the unified daemon; use `elephant cron run` for a foreground scheduler loop."),
+        interval_seconds: float = typer.Option(60.0, "--interval-seconds", help="Seconds between scheduler ticks for `elephant cron run`."),
     ) -> None:
         args = _common_args(state_dir, cli_state_dir, elephant_id)
         args.runtime_target = target
         args.detach = detach
         args.interval_seconds = interval_seconds
-        if detach:
-            # Cron now runs inside the unified daemon
-            raise typer.Exit(_cron_start_via_daemon(args))
-        service = _build_service(args)
-        raise typer.Exit(int(service.run_scheduler(interval_seconds=float(interval_seconds), once=False) or 0))
+        raise typer.Exit(_cron_start_via_daemon(args))
 
     @app.command("run")
     def run_command(
@@ -239,6 +257,8 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
     ) -> None:
         args = _common_args(state_dir, cli_state_dir, elephant_id)
         args.runtime_target = target
+        if daemon_is_running(args.state_dir):
+            raise typer.Exit(_cron_status_via_daemon(args))
         service = _build_service(args)
         raise typer.Exit(_run_status(args, service=service))
 
@@ -304,6 +324,8 @@ def build_typer_app(*, defaults: dict[str, Path]) -> typer.Typer:
         args.tail = tail
         args.follow = follow
         args.path = path
+        if daemon_is_running(args.state_dir):
+            raise typer.Exit(_cron_logs_via_daemon(args))
         service = _build_service(args)
         raise typer.Exit(_run_logs(args, service=service))
 

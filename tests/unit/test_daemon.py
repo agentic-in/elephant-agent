@@ -324,6 +324,87 @@ class TestDaemonLogsCommand:
         assert output.getvalue().splitlines() == ["existing line", "followed line"]
 
 
+class TestCronSchedulerCommand:
+    """Tests for cron command delegation to the unified daemon."""
+
+    def test_start_routes_to_daemon_even_without_detach(self, tmp_path: Path) -> None:
+        from apps import cron_scheduler_command
+
+        with (
+            patch.object(cron_scheduler_command, "_cron_start_via_daemon", return_value=0) as start_via_daemon,
+            patch.object(cron_scheduler_command, "_build_service") as build_service,
+        ):
+            result = cron_scheduler_command.command_main(
+                ["start"],
+                default_state_dir=tmp_path,
+                default_control_state_dir=tmp_path,
+            )
+
+        assert result == 0
+        start_via_daemon.assert_called_once()
+        build_service.assert_not_called()
+
+    def test_run_keeps_explicit_foreground_scheduler_loop(self, tmp_path: Path) -> None:
+        from apps import cron_scheduler_command
+
+        service = SimpleNamespace(run_scheduler=lambda **_: 0)
+        with (
+            patch.object(cron_scheduler_command, "_build_service", return_value=service) as build_service,
+            patch.object(cron_scheduler_command, "_cron_start_via_daemon") as start_via_daemon,
+        ):
+            result = cron_scheduler_command.command_main(
+                ["run", "--once", "--interval-seconds", "5"],
+                default_state_dir=tmp_path,
+                default_control_state_dir=tmp_path,
+            )
+
+        assert result == 0
+        build_service.assert_called_once()
+        start_via_daemon.assert_not_called()
+
+    def test_status_routes_to_daemon_when_daemon_running(self, tmp_path: Path) -> None:
+        from apps import cron_scheduler_command
+
+        output = io.StringIO()
+        with (
+            patch.object(cron_scheduler_command, "daemon_is_running", return_value=True),
+            patch("apps.daemon_command.command_main", return_value=0) as daemon_command,
+            patch.object(cron_scheduler_command, "_build_service") as build_service,
+            redirect_stdout(output),
+        ):
+            result = cron_scheduler_command.command_main(
+                ["status"],
+                default_state_dir=tmp_path,
+                default_control_state_dir=tmp_path,
+            )
+
+        assert result == 0
+        daemon_command.assert_called_once_with(["status"], default_state_dir=tmp_path)
+        build_service.assert_not_called()
+        assert "Cron is managed by the unified daemon." in output.getvalue()
+
+    def test_logs_route_to_daemon_when_daemon_running(self, tmp_path: Path) -> None:
+        from apps import cron_scheduler_command
+
+        with (
+            patch.object(cron_scheduler_command, "daemon_is_running", return_value=True),
+            patch("apps.daemon_command.command_main", return_value=0) as daemon_command,
+            patch.object(cron_scheduler_command, "_build_service") as build_service,
+        ):
+            result = cron_scheduler_command.command_main(
+                ["logs", "--tail", "5", "--follow"],
+                default_state_dir=tmp_path,
+                default_control_state_dir=tmp_path,
+            )
+
+        assert result == 0
+        daemon_command.assert_called_once_with(
+            ["logs", "--tail", "5", "--follow"],
+            default_state_dir=tmp_path,
+        )
+        build_service.assert_not_called()
+
+
 # ── daemon task guard tests ──────────────────────────────────────
 
 
