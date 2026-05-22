@@ -871,18 +871,18 @@ enum AppText {
         case .homeHeroTitle:
             return pick(
                 language,
-                en: "What should Elephant hold with you today?",
-                zh: "今天想让 Elephant 陪你抓住什么？",
-                fr: "Que doit garder Elephant avec vous aujourd'hui ?",
-                de: "Was soll Elephant heute mit dir festhalten?"
+                en: "Where should Elephant start with you today?",
+                zh: "今天想和 Elephant 从哪件事开始？",
+                fr: "Par où Elephant commence avec vous aujourd'hui ?",
+                de: "Womit soll Elephant heute mit dir anfangen?"
             )
         case .homeHeroSubtitle:
             return pick(
                 language,
-                en: "Start with a thought, a decision, or a memory worth keeping. Elephant will keep it visible and correctable.",
-                zh: "从一个想法、一个决定，或一段值得留下的记忆开始。Elephant 会把它保持可见、可修正。",
-                fr: "Commencez par une idée, une décision ou un souvenir à garder. Elephant le gardera visible et corrigeable.",
-                de: "Beginne mit einem Gedanken, einer Entscheidung oder einer Erinnerung. Elephant hält sie sichtbar und korrigierbar."
+                en: "Bring a thought, a decision, or something worth remembering. Elephant will keep the useful parts visible and correctable.",
+                zh: "可以是一段想法、一个决定，或一件值得记住的事。Elephant 会把重要线索留在这里，也方便你随时修正。",
+                fr: "Apportez une idée, une décision ou quelque chose à retenir. Elephant gardera l'essentiel visible et corrigeable.",
+                de: "Bring einen Gedanken, eine Entscheidung oder etwas Erinnernswertes mit. Elephant hält das Nützliche sichtbar und korrigierbar."
             )
         case .reviewedFactsLabel:
             return pick(language, en: "About you", zh: "关于你", fr: "À propos de vous", de: "Über dich")

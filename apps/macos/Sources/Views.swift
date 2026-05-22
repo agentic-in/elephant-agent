@@ -430,6 +430,9 @@ struct HomeFirstLookPanel: View {
                                     .foregroundStyle(phaseTint)
                                     .lineLimit(2)
                             }
+                            if let companionText = companionDayText(snapshot: model.snapshot, language: model.appLanguage) {
+                                Pill(text: companionText, symbol: "heart", tint: ElephantTheme.gold)
+                            }
                         }
                     }
 
@@ -2306,9 +2309,15 @@ struct ChatEmptyState: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
+        let companionText = companionDayText(snapshot: model.snapshot, language: model.appLanguage)
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                Pill(text: localizedYouText(model.appLanguage, en: "Private memory, ready to work", zh: "私有记忆，随时开始", fr: "Mémoire privée, prête à agir", de: "Privates Gedächtnis, bereit"), symbol: "lock.shield", tint: ElephantTheme.green)
+                Pill(
+                    text: companionText
+                        ?? localizedYouText(model.appLanguage, en: "Private memory, ready to work", zh: "私有记忆，随时开始", fr: "Mémoire privée, prête à agir", de: "Privates Gedächtnis, bereit"),
+                    symbol: companionText == nil ? "lock.shield" : "heart",
+                    tint: companionText == nil ? ElephantTheme.green : ElephantTheme.gold
+                )
                 ElephantMascotView(
                     mood: model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .idle : .listening,
                     size: 248,
@@ -3241,6 +3250,44 @@ private func localizedYouText(_ language: AppLanguage, en: String, zh: String, f
 
 private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
     String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
+}
+
+private func companionDayText(snapshot: DashboardSnapshot, language: AppLanguage) -> String? {
+    guard let days = companionDayCount(snapshot: snapshot) else { return nil }
+    return localizedFormat(
+        language,
+        en: "Day %d together",
+        zh: "共同陪伴第 %d 天",
+        fr: "Jour %d ensemble",
+        de: "Tag %d zusammen",
+        days
+    )
+}
+
+private func companionDayCount(snapshot: DashboardSnapshot) -> Int? {
+    guard let startDate = companionStartDate(snapshot: snapshot) else { return nil }
+    let calendar = Calendar.current
+    let start = calendar.startOfDay(for: startDate)
+    let today = calendar.startOfDay(for: Date())
+    let dayDelta = calendar.dateComponents([.day], from: start, to: today).day ?? 0
+    return max(1, dayDelta + 1)
+}
+
+private func companionStartDate(snapshot: DashboardSnapshot) -> Date? {
+    let currentStateID = snapshot.currentStateID.replacingOccurrences(of: "state:", with: "")
+    let current = snapshot.herdItems.first { item in
+        let itemID = item.id.replacingOccurrences(of: "state:", with: "")
+        let elephantID = item.elephantID.replacingOccurrences(of: "state:", with: "")
+        return item.current || (!currentStateID.isEmpty && (itemID == currentStateID || elephantID == currentStateID))
+    }
+    let currentCreatedAt = current?.createdAt.trimmingCharacters(in: .whitespacesAndNewlines)
+    let rawDate = currentCreatedAt?.isEmpty == false ? currentCreatedAt : snapshot.herdItems.compactMap { item in
+        MacLocalDateTime.parse(item.createdAt).map { (date: $0, raw: item.createdAt) }
+    }
+    .min { $0.date < $1.date }?
+    .raw
+    guard let rawDate else { return nil }
+    return MacLocalDateTime.parse(rawDate)
 }
 
 private func formattedTokenWindow(_ tokens: Int) -> String {
