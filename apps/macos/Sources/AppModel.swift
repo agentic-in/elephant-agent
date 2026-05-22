@@ -1991,7 +1991,7 @@ final class ElephantAppModel: ObservableObject {
                     completed = true
                     finishLiveMessages()
                     messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(detail: event.error)))
-                    lastError = event.error
+                    lastError = chatLoopFailureDetail(event.error)
                     break streamLoop
                 default:
                     continue
@@ -2030,7 +2030,7 @@ final class ElephantAppModel: ObservableObject {
                         toolEvents: nil,
                         isStreaming: false
                     )
-                    lastError = error.localizedDescription
+                    lastError = chatLoopFailureDetail(error.localizedDescription)
                 }
             } else if !receivedStreamEvent, !activeEpisodeID.isEmpty {
                 let episodeID = activeEpisodeID
@@ -2039,7 +2039,7 @@ final class ElephantAppModel: ObservableObject {
                     messages.append(ChatMessage(role: .assistant, text: reply.text, toolEvents: reply.toolEvents))
                 } catch {
                     messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(error)))
-                    lastError = error.localizedDescription
+                    lastError = chatLoopFailureDetail(error.localizedDescription)
                 }
             } else if let assistantMessageID {
                 finishLiveMessages()
@@ -2056,10 +2056,10 @@ final class ElephantAppModel: ObservableObject {
                 } else {
                     messages.append(ChatMessage(role: .assistant, text: self.text(.liveConnectionStopped)))
                 }
-                lastError = error.localizedDescription
+                lastError = chatLoopFailureDetail(error.localizedDescription)
             } else {
                 messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(error)))
-                lastError = error.localizedDescription
+                lastError = chatLoopFailureDetail(error.localizedDescription)
             }
         }
         isWakeRunning = false
@@ -2099,11 +2099,38 @@ final class ElephantAppModel: ObservableObject {
     }
 
     private func chatLoopFailureMessage(detail: String) -> String {
-        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = chatLoopFailureDetail(detail)
         guard !trimmed.isEmpty else {
             return text(.chatLoopFailureGeneric)
         }
         return String(format: text(.chatLoopFailureDetail), trimmed)
+    }
+
+    private func chatLoopFailureDetail(_ detail: String) -> String {
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let normalized = trimmed.lowercased()
+        let providerIsCopilot = snapshot.providerID.lowercased().contains("copilot")
+        let authorizationMissing = normalized.contains("missing required authorization")
+            || normalized.contains("authorization header")
+            || normalized.contains("missing runtime secret")
+        if providerIsCopilot && authorizationMissing {
+            return localizedCopilotAuthorizationRecoveryMessage()
+        }
+        return trimmed
+    }
+
+    private func localizedCopilotAuthorizationRecoveryMessage() -> String {
+        switch appLanguage {
+        case .zh:
+            return "GitHub Copilot 已在列表中，但这次对话没有拿到可用授权。重新保存 GitHub Copilot 或重启 Elephant 后再发送，Elephant 会复用本机 GitHub 登录。"
+        case .fr:
+            return "GitHub Copilot est visible, mais ce chat n'a pas reçu d'autorisation utilisable. Enregistrez à nouveau GitHub Copilot ou redémarrez Elephant, puis renvoyez le message."
+        case .de:
+            return "GitHub Copilot ist sichtbar, aber dieser Chat hat keine nutzbare Autorisierung erhalten. Speichere GitHub Copilot erneut oder starte Elephant neu und sende dann noch einmal."
+        case .en:
+            return "GitHub Copilot is visible, but this chat did not receive usable authorization. Save GitHub Copilot again or restart Elephant, then send the message again."
+        }
     }
 
     private static func toolEventSignature(_ events: [ToolUseEvent]) -> String {

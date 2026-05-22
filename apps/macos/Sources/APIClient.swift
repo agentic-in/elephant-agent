@@ -97,7 +97,10 @@ struct APIClient {
             providerProfile["default_model"] = trimmedModelID
         }
 
-        let needsSecret = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secretMetadata = Self.defaultProviderSecretMetadata(providerID: resolvedProviderID)
+        let needsSecret = !trimmedKey.isEmpty
+            || secretMetadata != nil
             || resolvedProviderID == "openai-compatible"
             || resolvedProviderID.contains("openai")
         if needsSecret {
@@ -106,7 +109,8 @@ struct APIClient {
                 "provider_id": resolvedProviderID,
                 "secret_name": "api_token",
                 "secret_key": "api_key",
-                "metadata": ["storage": "local-vault"]
+                "source": "workspace",
+                "metadata": secretMetadata ?? ["storage": "local-vault"]
             ]]
         }
 
@@ -116,7 +120,6 @@ struct APIClient {
             body: ["provider_profile": providerProfile]
         )
 
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedKey.isEmpty {
             _ = try await request(
                 path: "/v1/providers/keys",
@@ -131,6 +134,15 @@ struct APIClient {
                     "metadata": ["storage": "local-vault"]
                 ]
             )
+        }
+    }
+
+    private static func defaultProviderSecretMetadata(providerID: String) -> [String: String]? {
+        switch providerID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "copilot":
+            return ["storage": "local-vault", "env_var": "COPILOT_GITHUB_TOKEN"]
+        default:
+            return nil
         }
     }
 

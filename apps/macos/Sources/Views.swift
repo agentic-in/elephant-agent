@@ -405,112 +405,187 @@ struct HomeFirstLookPanel: View {
 
     var body: some View {
         NativePanel {
-            HStack(alignment: .top, spacing: 22) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .center, spacing: 14) {
-                        Button {
-                            model.pickUserAvatar()
-                        } label: {
-                            UserAvatarOrbitView(size: 122, editable: true)
-                        }
-                        .buttonStyle(PressablePlainButtonStyle())
-                        .help(model.text(.changeProfilePhoto))
-                        .accessibilityLabel(model.text(.changeProfilePhoto))
+            GeometryReader { geometry in
+                let spacing: CGFloat = 22
+                let dividerWidth: CGFloat = 1
+                let panelHeight: CGFloat = 438
+                let availableWidth = max(0, geometry.size.width - (spacing * 2) - dividerWidth)
+                let leftWidth = max(360, availableWidth / 3)
+                let rightWidth = max(0, availableWidth - leftWidth)
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            Pill(text: localizedYouText(model.appLanguage, en: "Local Personal Model", zh: "本地个人模型", fr: "Personal Model local", de: "Lokales Personal Model"), symbol: "lock.shield", tint: ElephantTheme.green)
-                            Text(model.userDisplayName)
-                                .font(.title2.weight(.semibold))
+                HStack(alignment: .top, spacing: spacing) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .center, spacing: 14) {
+                            Button {
+                                model.pickUserAvatar()
+                            } label: {
+                                UserAvatarOrbitView(size: 122, editable: true)
+                            }
+                            .buttonStyle(PressablePlainButtonStyle())
+                            .help(model.text(.changeProfilePhoto))
+                            .accessibilityLabel(model.text(.changeProfilePhoto))
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Text(model.userDisplayName)
+                                        .font(.title2.weight(.semibold))
+                                        .foregroundStyle(ElephantTheme.ink)
+                                        .lineLimit(1)
+                                    HomeIdentityBadge(
+                                        text: companionDayText(snapshot: model.snapshot, language: model.appLanguage)
+                                            ?? localizedYouText(model.appLanguage, en: "Private memory", zh: "私有记忆", fr: "Mémoire privée", de: "Privates Gedächtnis"),
+                                        symbol: "heart"
+                                    )
+                                }
+                                HomeIdentityStatusRow(
+                                    connectionText: connectionText,
+                                    phaseTint: phaseTint,
+                                    companionText: nil
+                                )
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 9) {
+                            Text(model.text(.homeHeroTitle))
+                                .font(.system(size: 28, weight: .semibold))
                                 .foregroundStyle(ElephantTheme.ink)
-                                .lineLimit(1)
-                            HStack(spacing: 8) {
-                                StatusDot(tint: phaseTint)
-                                Text(connectionText)
-                                    .font(.callout.weight(.semibold))
-                                    .foregroundStyle(phaseTint)
-                                    .lineLimit(2)
-                            }
-                            if let companionText = companionDayText(snapshot: model.snapshot, language: model.appLanguage) {
-                                Pill(text: companionText, symbol: "heart", tint: ElephantTheme.gold)
-                            }
+                                .lineLimit(2)
+                            Text(model.text(.homeHeroSubtitle))
+                                .font(.callout)
+                                .foregroundStyle(ElephantTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                    }
 
-                    VStack(alignment: .leading, spacing: 9) {
-                        Text(model.text(.homeHeroTitle))
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(ElephantTheme.ink)
-                            .lineLimit(2)
-                        Text(model.text(.homeHeroSubtitle))
-                            .font(.callout)
-                            .foregroundStyle(ElephantTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    SurfaceActionButton(
-                        title: AppSection.wake.title(language: model.appLanguage),
-                        subtitle: model.text(.typeMessagePlaceholder),
-                        symbol: "bubble.left.and.bubble.right.fill",
-                        tint: ElephantTheme.accent,
-                        isProminent: true
-                    ) {
-                        model.selectedSection = .wake
-                        model.focusComposer()
-                    }
-
-                    HomeMemoryPulseRow()
-
-                    HStack(spacing: 10) {
                         SurfaceActionButton(
-                            title: model.text(.reviewQuestions),
-                            symbol: "person.crop.circle",
-                            tint: ElephantTheme.orange
+                            title: AppSection.wake.title(language: model.appLanguage),
+                            subtitle: model.text(.typeMessagePlaceholder),
+                            symbol: "bubble.left.and.bubble.right.fill",
+                            tint: ElephantTheme.accent,
+                            isProminent: true
                         ) {
-                            model.selectedSection = .you
+                            model.selectedSection = .wake
+                            model.focusComposer()
                         }
-                        SurfaceActionButton(
-                            title: AppSection.diary.title(language: model.appLanguage),
-                            symbol: "book.closed",
-                            tint: ElephantTheme.green
-                        ) {
-                            model.selectedSection = .diary
+
+                        HomeMemoryPulseRow()
+
+                        HStack(spacing: 10) {
+                            SurfaceActionButton(
+                                title: model.text(.reviewQuestions),
+                                symbol: "person.crop.circle",
+                                tint: ElephantTheme.orange
+                            ) {
+                                model.selectedSection = .you
+                            }
+                            SurfaceActionButton(
+                                title: AppSection.diary.title(language: model.appLanguage),
+                                symbol: "book.closed",
+                                tint: ElephantTheme.green
+                            ) {
+                                model.selectedSection = .diary
+                            }
                         }
                     }
-                }
-                .frame(width: 334, alignment: .topLeading)
+                    .frame(width: leftWidth, alignment: .topLeading)
 
-                Divider()
-                    .frame(height: 438)
+                    Divider()
+                        .frame(width: dividerWidth, height: panelHeight)
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(
-                            title: model.text(.personalModelMapTitle),
-                            subtitle: model.text(.homeMapSubtitle)
-                        )
-                        Spacer(minLength: 0)
-                        Pill(
-                            text: String(
-                                format: model.text(.mapNodeCountFormat),
-                                "\(model.snapshot.personalModelFacts.filter { $0.status.lowercased() != "deleted" }.count)"
-                            ),
-                            symbol: "point.3.connected.trianglepath.dotted",
-                            tint: ElephantTheme.accent
-                        )
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .firstTextBaseline) {
+                            SectionLabel(
+                                title: model.text(.personalModelMapTitle),
+                                subtitle: model.text(.homeMapSubtitle)
+                            )
+                            Spacer(minLength: 0)
+                            Pill(
+                                text: String(
+                                    format: model.text(.mapNodeCountFormat),
+                                    "\(model.snapshot.personalModelFacts.filter { $0.status.lowercased() != "deleted" }.count)"
+                                ),
+                                symbol: "point.3.connected.trianglepath.dotted",
+                                tint: ElephantTheme.accent
+                            )
+                        }
+
+                        PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode)
+                            .frame(height: 360)
+
+                        if let selectedNode {
+                            PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
+                        } else {
+                            EmptyLine(symbol: "circle.hexagongrid", text: model.text(.mapClickHint))
+                        }
                     }
-
-                    PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode)
-                        .frame(height: 360)
-
-                    if let selectedNode {
-                        PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
-                    } else {
-                        EmptyLine(symbol: "circle.hexagongrid", text: model.text(.mapClickHint))
-                    }
+                    .frame(width: rightWidth, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(width: geometry.size.width, height: panelHeight, alignment: .topLeading)
             }
-            .frame(minHeight: 438, alignment: .top)
+            .frame(height: 438)
+        }
+    }
+}
+
+struct HomeIdentityBadge: View {
+    var text: String
+    var symbol: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.bold))
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(ElephantTheme.green)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(ElephantTheme.green.opacity(0.09), in: Capsule())
+        .overlay(Capsule().stroke(ElephantTheme.green.opacity(0.20), lineWidth: 1))
+    }
+}
+
+struct HomeIdentityStatusRow: View {
+    var connectionText: String
+    var phaseTint: Color
+    var companionText: String?
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                connectionLabel
+                if companionText != nil {
+                    Divider()
+                        .frame(height: 14)
+                    companionLabel
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                connectionLabel
+                companionLabel
+            }
+        }
+    }
+
+    private var connectionLabel: some View {
+        HStack(spacing: 8) {
+            StatusDot(tint: phaseTint)
+            Text(connectionText)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(phaseTint)
+                .lineLimit(2)
+        }
+    }
+
+    @ViewBuilder
+    private var companionLabel: some View {
+        if let companionText {
+            Label(companionText, systemImage: "heart")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(ElephantTheme.green)
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
         }
     }
 }
@@ -2316,7 +2391,7 @@ struct ChatEmptyState: View {
                     text: companionText
                         ?? localizedYouText(model.appLanguage, en: "Private memory, ready to work", zh: "私有记忆，随时开始", fr: "Mémoire privée, prête à agir", de: "Privates Gedächtnis, bereit"),
                     symbol: companionText == nil ? "lock.shield" : "heart",
-                    tint: companionText == nil ? ElephantTheme.green : ElephantTheme.gold
+                    tint: ElephantTheme.green
                 )
                 ElephantMascotView(
                     mood: model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .idle : .listening,
@@ -15280,7 +15355,7 @@ struct OnboardingLearningLivePanel: View {
                     tint: statusTint
                 )
                 OnboardingLearningToolTrace(
-                    title: localizedYouText(model.appLanguage, en: "Tool calls", zh: "工具调用", fr: "Appels d'outils", de: "Tool-Aufrufe"),
+                    title: localizedYouText(model.appLanguage, en: "Learning steps", zh: "学习步骤", fr: "Étapes d'apprentissage", de: "Lernschritte"),
                     items: toolTraceItems
                 )
             }
@@ -15289,6 +15364,9 @@ struct OnboardingLearningLivePanel: View {
                 Image(systemName: "sparkles")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(ElephantTheme.accent)
+                Text(localizedYouText(model.appLanguage, en: "Getting ready:", zh: "正在整理：", fr: "Préparation :", de: "Bereitet vor:"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
                 ForEach(featureTags, id: \.self) { feature in
                     Text(feature)
                         .font(.caption2.weight(.semibold))
@@ -15323,7 +15401,7 @@ struct OnboardingLearningLivePanel: View {
         case "queued":
             return localizedYouText(model.appLanguage, en: "Queued for learning", zh: "学习任务已排队", fr: "Tâche en file", de: "Lernjob wartet")
         case "starting":
-            return localizedYouText(model.appLanguage, en: "Worker accepted the job", zh: "Worker 已接收任务", fr: "Worker prêt", de: "Worker hat übernommen")
+            return localizedYouText(model.appLanguage, en: "Elephant is getting ready", zh: "Elephant 正在准备", fr: "Elephant se prépare", de: "Elephant bereitet sich vor")
         case "agent_starting":
             return localizedYouText(model.appLanguage, en: "Starting the learning pass", zh: "正在启动学习过程", fr: "Démarrage du passage", de: "Lernlauf startet")
         case "agent_running":
@@ -15357,7 +15435,7 @@ struct OnboardingLearningLivePanel: View {
     private var featureTags: [String] {
         let features = job?.resolvedFeatures ?? []
         let resolved = features.isEmpty ? ["pm", "questions", "skills", "init_links"] : features
-        return Array(resolved.prefix(4))
+        return Array(resolved.prefix(4)).map(featureDisplayName)
     }
 
     private var toolTraceItems: [OnboardingLearningToolTraceItem] {
@@ -15441,6 +15519,21 @@ struct OnboardingLearningLivePanel: View {
         }
     }
 
+    private func featureDisplayName(_ feature: String) -> String {
+        switch feature {
+        case "pm":
+            return localizedYouText(model.appLanguage, en: "Memory", zh: "记忆", fr: "Mémoire", de: "Gedächtnis")
+        case "questions":
+            return localizedYouText(model.appLanguage, en: "Questions", zh: "问题", fr: "Questions", de: "Fragen")
+        case "skills":
+            return localizedYouText(model.appLanguage, en: "Skills", zh: "技能", fr: "Skills", de: "Skills")
+        case "init_links":
+            return localizedYouText(model.appLanguage, en: "Links", zh: "链接", fr: "Liens", de: "Links")
+        default:
+            return feature.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
     private var statusTint: Color {
         let status = (job?.status ?? "").lowercased()
         if status.contains("completed") { return ElephantTheme.green }
@@ -15449,7 +15542,17 @@ struct OnboardingLearningLivePanel: View {
     }
 
     private func cleanProgress(_ value: String) -> String {
-        value
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized.isEmpty {
+            return ""
+        }
+        if normalized.contains("starting background learning agent") {
+            return localizedYouText(model.appLanguage, en: "Turning your setup answers into the first version of memory.", zh: "正在把刚填写的信息整理成第一版记忆。", fr: "Transforme vos réponses en première mémoire.", de: "Macht aus deinen Antworten die erste Erinnerung.")
+        }
+        if normalized.contains("tool_event") || normalized.contains("called=") {
+            return localizedYouText(model.appLanguage, en: "Checking memory, questions, skills, and links.", zh: "正在检查记忆、问题、技能和链接。", fr: "Vérifie mémoire, questions, skills et liens.", de: "Prüft Gedächtnis, Fragen, Skills und Links.")
+        }
+        return value
             .replacingOccurrences(of: "tool_event=", with: "")
             .replacingOccurrences(of: "called=", with: "called ")
             .replacingOccurrences(of: "tool.", with: "")
@@ -15484,7 +15587,7 @@ struct OnboardingLearningStatusCard: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
         .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.18), lineWidth: 1))
     }
@@ -15527,7 +15630,7 @@ struct OnboardingLearningToolTrace: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
         .background(ElephantTheme.green.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.green.opacity(0.16), lineWidth: 1))
     }

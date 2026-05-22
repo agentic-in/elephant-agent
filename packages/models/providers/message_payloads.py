@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
+from hashlib import sha256
+import json
 
 from packages.contracts.runtime import PromptMessage
 
@@ -35,7 +36,7 @@ def openai_responses_input_payload(
                 payload.append(
                     {
                         "type": "function_call_output",
-                        "call_id": message.tool_call_id,
+                        "call_id": _provider_call_id(str(message.tool_call_id)),
                         "output": str(message.content or ""),
                     }
                 )
@@ -72,8 +73,7 @@ def _openai_chat_message_payload(
     if role == "tool":
         payload["content"] = str(message.content or "")
         if message.tool_call_id:
-            tool_call_id = str(message.tool_call_id)
-            payload["tool_call_id"] = tool_call_id[:64] if len(tool_call_id) > 64 else tool_call_id
+            payload["tool_call_id"] = _provider_call_id(str(message.tool_call_id))
         return payload
     payload["content"] = str(message.content or "")
     if role == "assistant" and message.tool_calls:
@@ -91,8 +91,7 @@ def _openai_chat_tool_call_payload(
     tool_name_map: Mapping[str, str],
 ) -> dict[str, object]:
     call_id = str(call.get("id") or call.get("call_id") or "").strip() or "call_context"
-    if len(call_id) > 64:
-        call_id = call_id[:64]
+    call_id = _provider_call_id(call_id)
     name = _provider_tool_alias_for_message(str(call.get("name") or call.get("tool_name") or ""), tool_name_map=tool_name_map)
     arguments = _tool_call_arguments(call.get("arguments"))
     return {
@@ -111,8 +110,7 @@ def _openai_responses_function_call_payload(
     tool_name_map: Mapping[str, str],
 ) -> dict[str, object]:
     call_id = str(call.get("id") or call.get("call_id") or "").strip() or "call_context"
-    if len(call_id) > 64:
-        call_id = call_id[:64]
+    call_id = _provider_call_id(call_id)
     name = _provider_tool_alias_for_message(str(call.get("name") or call.get("tool_name") or ""), tool_name_map=tool_name_map)
     return {
         "type": "function_call",
@@ -128,6 +126,14 @@ def _provider_tool_alias_for_message(tool_name: str, *, tool_name_map: Mapping[s
         return "tool_context"
     inverse = {original: alias for alias, original in tool_name_map.items()}
     return inverse.get(normalized, normalized)
+
+
+def _provider_call_id(call_id: str) -> str:
+    normalized = str(call_id or "").strip() or "call_context"
+    if len(normalized) <= 64:
+        return normalized
+    digest = sha256(normalized.encode("utf-8")).hexdigest()[:23]
+    return f"{normalized[:40]}-{digest}"
 
 
 def _tool_call_arguments(arguments: object) -> str:

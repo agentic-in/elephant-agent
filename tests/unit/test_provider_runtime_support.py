@@ -52,6 +52,28 @@ class ProviderSelectionPayloadTest(unittest.TestCase):
         self.assertEqual(profile.profile_id, "provider-openrouter")
         self.assertEqual(profile.provider_id, "openai-compatible")
 
+    def test_provider_profile_payload_adds_default_secret_reference_for_copilot(self) -> None:
+        profile = provider_runtime_support.provider_profile_from_payload(
+            {
+                "profile_id": "provider-copilot",
+                "provider_id": "copilot",
+                "base_url": "https://api.githubcopilot.com",
+                "default_model": "gpt-5.4-mini",
+                "metadata": {"configured_from": "macos"},
+            }
+        )
+
+        self.assertEqual(profile.provider_id, "copilot")
+        self.assertEqual(len(profile.secret_references), 1)
+        reference = profile.secret_references[0]
+        self.assertEqual(reference.reference_id, "secret-provider-copilot-api-key")
+        self.assertEqual(reference.secret_key, "api_key")
+        self.assertEqual(reference.metadata["env_var"], "COPILOT_GITHUB_TOKEN")
+        credentials = provider_runtime_support.ProfileCredentialResolver(
+            provider_runtime_support.EnvironmentSecretStore({"COPILOT_GITHUB_TOKEN": "ghu-test"})
+        ).resolve(profile)
+        self.assertEqual(credentials.as_mapping()["api_key"], "ghu-test")
+
 
 class EmbeddingRuntimeLoggingTest(unittest.TestCase):
     def test_sentence_transformer_version_warning_is_filtered(self) -> None:

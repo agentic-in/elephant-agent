@@ -162,6 +162,18 @@ def _profile_payload_with_metadata(payload: Mapping[str, Any], profile: AuthProf
         **{str(key): str(value) for key, value in dict(payload.get("metadata", {})).items()},
         **{str(key): str(value) for key, value in dict(profile.metadata).items()},
     }
+    if profile.secret_references and not payload.get("secret_references"):
+        next_payload["secret_references"] = [
+            {
+                "reference_id": reference.reference_id,
+                "provider_id": reference.provider_id,
+                "secret_name": reference.secret_name,
+                "secret_key": reference.secret_key,
+                "source": reference.source,
+                "metadata": dict(reference.metadata),
+            }
+            for reference in profile.secret_references
+        ]
     return next_payload
 
 

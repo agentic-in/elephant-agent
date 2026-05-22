@@ -512,30 +512,65 @@ def _provider_base_url_from_env(provider_id: str, primary_env_var: str | None) -
     return None
 
 
+def _default_secret_references_for_provider(
+    *,
+    profile_id: str,
+    provider_id: str,
+    catalog: ProviderCatalog,
+) -> tuple[SecretReference, ...]:
+    provider_defaults = catalog.get(provider_id)
+    if provider_defaults is None or "api_key" not in provider_defaults.required_secret_keys:
+        return ()
+    normalized_profile_id = "".join(
+        character if character.isalnum() or character in {"_", "-"} else "-"
+        for character in profile_id
+    )
+    metadata = {"storage": "local-vault"}
+    if provider_defaults.env_var_names:
+        metadata["env_var"] = provider_defaults.env_var_names[0]
+    return (
+        SecretReference(
+            reference_id=f"secret-{normalized_profile_id}-api-key",
+            provider_id=provider_id,
+            secret_name="api_token",
+            secret_key="api_key",
+            source="workspace",
+            metadata=metadata,
+        ),
+    )
+
+
 def provider_profile_from_payload(payload: Mapping[str, Any]) -> AuthProfile:
     if "profile_id" not in payload or "provider_id" not in payload:
         raise ValueError("provider_profile must include profile_id and provider_id")
+    catalog = ProviderCatalog.with_defaults()
+    profile_id = str(payload["profile_id"])
+    provider_id = str(payload["provider_id"])
     secret_references = tuple(
         secret_reference_from_payload(item)
         for item in payload.get("secret_references", ())
     )
+    if not secret_references:
+        secret_references = _default_secret_references_for_provider(
+            profile_id=profile_id,
+            provider_id=provider_id,
+            catalog=catalog,
+        )
     profile_input = ProviderProfileInput(
-        profile_id=str(payload["profile_id"]),
-        provider_id=str(payload["provider_id"]),
+        profile_id=profile_id,
+        provider_id=provider_id,
         secret_references=secret_references,
         priority=int(payload.get("priority", 0)),
         session_pin=str(payload["session_pin"]) if payload.get("session_pin") is not None else None,
         cooldown_until=None,
         metadata={str(key): str(value) for key, value in dict(payload.get("metadata", {})).items()},
     )
-    provider_id = profile_input.provider_id
     base_url = payload.get("base_url")
     default_model = payload.get("default_model")
     transport_id = payload.get("transport_id")
     auth_method = payload.get("auth_method")
     provider_kind = payload.get("provider_kind")
     extra_headers = payload.get("extra_headers")
-    catalog = ProviderCatalog.with_defaults()
     provider_defaults = catalog.get(provider_id)
     if provider_id == "openai-compatible" and (base_url is None or default_model is None):
         raise ValueError("openai-compatible provider profiles require base_url and default_model")

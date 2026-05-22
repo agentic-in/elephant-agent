@@ -590,12 +590,12 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(plan.headers["x-session-id"], "session-1")
         self.assertEqual(plan.payload["model"], "openai/gpt-4o-mini")
         self.assertEqual(plan.payload["messages"][0]["role"], "system")
-        self.assertIn("### System Layer Contract", plan.payload["messages"][0]["content"])
-        self.assertIn("You are the active elephant identity", plan.payload["messages"][0]["content"])
-        self.assertIn("### Episode Continuity", plan.payload["messages"][0]["content"])
+        self.assertIn("#### Understanding System", plan.payload["messages"][0]["content"])
+        self.assertIn("You are the active Elephant Agent identity", plan.payload["messages"][0]["content"])
+        self.assertIn("#### Episode Continuity", plan.payload["messages"][0]["content"])
         self.assertIn("Stay truthful and bounded", plan.payload["messages"][0]["content"])
-        self.assertIn("### Loop Execution Board", plan.payload["messages"][0]["content"])
-        self.assertIn("### Understanding tools", plan.payload["messages"][0]["content"])
+        self.assertIn("#### Session Work", plan.payload["messages"][0]["content"])
+        self.assertIn("#### Understanding tools", plan.payload["messages"][0]["content"])
         self.assertEqual(plan.payload["messages"][1]["role"], "user")
         self.assertEqual(plan.payload["messages"][1]["content"], request.prompt)
         self.assertNotIn("metadata", plan.payload)
@@ -1119,6 +1119,65 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(len(result.tool_calls), 1)
         self.assertEqual(result.tool_calls[0].tool_name, "tool.web.search")
         self.assertEqual(result.tool_calls[0].arguments, {"query": "responses tools"})
+
+    def test_responses_transport_shortens_long_tool_call_ids_consistently(self) -> None:
+        adapter = OpenAICompatibleProviderAdapter(
+            config=OpenAICompatibleProviderConfig(
+                provider_id="copilot",
+                base_url=self.server.openai_base_url,
+                model_id="gpt-5.4",
+            ),
+            runtime_resolver=ProviderRuntimeResolver.default(),
+            credential_source=_StaticCredentialSource({"copilot": {"api_key": "ghu-copilot"}}),
+        )
+        long_call_id = "call-" + ("x" * 407)
+        request = ModelRequest(
+            request_id="request-responses-long-call-id",
+            profile_id="profile-companion",
+            session_id="session-responses-long-call-id",
+            provider_id="copilot",
+            model_id="gpt-5.4",
+            prompt="Use the tool result.",
+            messages=(
+                PromptMessage(
+                    role="assistant",
+                    content="",
+                    tool_calls=(
+                        {
+                            "id": long_call_id,
+                            "name": "tool.web.search",
+                            "arguments": {"query": "responses tools"},
+                        },
+                    ),
+                ),
+                PromptMessage(
+                    role="tool",
+                    content="tool result",
+                    tool_call_id=long_call_id,
+                    tool_name="tool.web.search",
+                ),
+            ),
+            tools=(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "tool.web.search",
+                        "description": "Search the web.",
+                        "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+                    },
+                },
+            ),
+        )
+
+        plan = adapter.plan_request(request)
+        function_call = next(item for item in plan.payload["input"] if item.get("type") == "function_call")
+        function_output = next(item for item in plan.payload["input"] if item.get("type") == "function_call_output")
+
+        self.assertEqual(plan.endpoint_path, "/v1/responses")
+        self.assertEqual(function_call["call_id"], function_output["call_id"])
+        self.assertLessEqual(len(function_call["call_id"]), 64)
+        self.assertNotEqual(function_call["call_id"], long_call_id)
+        self.assertTrue(str(function_call["call_id"]).startswith(long_call_id[:40]))
 
     def test_responses_transport_includes_reasoning_effort_when_supported(self) -> None:
         adapter = OpenAICompatibleProviderAdapter(
