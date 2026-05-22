@@ -394,7 +394,7 @@ def run_upgrade(args: Namespace) -> int:
 
         if not args.skip_browser_install:
             print("\nRefreshing browser runtime")
-            command = [sys.executable, "-m", "playwright", "install", "chromium"]
+            command = [sys.executable, "-m", "playwright", "install", "--only-shell", "chromium"]
             print(f"  $ {' '.join(command)}")
             if not dry_run:
                 subprocess.run(command, env=env, check=False)
@@ -439,7 +439,7 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--no-force-stop", action="store_false", dest="force_stop", help="Fail instead of sending SIGKILL after --timeout.")
     parser.add_argument("--no-backup", action="store_true", help="Skip the pre-upgrade state backup.")
     parser.add_argument("--skip-restart", action="store_true", help="Do not restart runtimes that were running before the upgrade.")
-    parser.add_argument("--skip-browser-install", action="store_true", default=os.environ.get("ELEPHANT_SKIP_BROWSER_INSTALL") == "1", help="Skip Playwright Chromium refresh.")
+    parser.add_argument("--skip-browser-install", action="store_true", default=os.environ.get("ELEPHANT_SKIP_BROWSER_INSTALL") == "1", help="Skip Playwright Chromium headless shell refresh.")
     parser.add_argument("--dry-run", action="store_true", help="Print the planned upgrade without changing files or processes.")
     return parser
 

@@ -345,7 +345,7 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         except Exception as exc:
             if not _should_auto_install_playwright_browser(exc):
                 raise
-            _install_playwright_chromium()
+            _install_playwright_chromium(headless_only=self.config.headless)
             return self._playwright.chromium.launch(headless=self.config.headless)
 
     def _configured_cloud_provider(self) -> CloudBrowserProvider | None:
@@ -849,10 +849,14 @@ def _should_auto_install_playwright_browser(error: BaseException) -> bool:
     return "executable doesn't exist" in message or "playwright install" in message or "browserType.launch" in message
 
 
-def _install_playwright_chromium() -> None:
+def _install_playwright_chromium(*, headless_only: bool = True) -> None:
+    command = [sys.executable, "-m", "playwright", "install"]
+    if headless_only:
+        command.append("--only-shell")
+    command.append("chromium")
     try:
         subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
+            command,
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -860,9 +864,10 @@ def _install_playwright_chromium() -> None:
             timeout=300,
         )
     except Exception as exc:
+        install_hint = "python -m playwright install --only-shell chromium" if headless_only else "python -m playwright install chromium"
         raise RuntimeError(
             "Playwright is installed, but Chromium is missing and automatic installation failed. "
-            "Run `python -m playwright install chromium` or set ELEPHANT_BROWSER_CDP_URL/CAMOFOX_URL."
+            f"Run `{install_hint}` or set ELEPHANT_BROWSER_CDP_URL/CAMOFOX_URL."
         ) from exc
 
 

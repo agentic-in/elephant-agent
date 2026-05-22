@@ -205,11 +205,11 @@ ensure_browser_runtime() {
   if [ "${ELEPHANT_SKIP_BROWSER_INSTALL:-0}" = "1" ]; then
     return
   fi
-  if "${venv_python}" -m playwright install chromium >/dev/null 2>&1; then
+  if "${venv_python}" -m playwright install --only-shell chromium >/dev/null 2>&1; then
     return
   fi
   echo "Warning: browser runtime install failed; browser tools will retry on first use." >&2
-  echo "         To repair manually, run: ${venv_python} -m playwright install chromium" >&2
+  echo "         To repair manually, run: ${venv_python} -m playwright install --only-shell chromium" >&2
 }
 
 write_launcher() {

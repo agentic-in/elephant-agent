@@ -390,7 +390,7 @@ class BrowserBackendTest(unittest.TestCase):
             result = backend.invoke("snapshot", self._invoke("tool.browser.snapshot", {}))
 
         self.assertEqual(result["outcome"], "success")
-        install.assert_called_once_with()
+        install.assert_called_once_with(headless_only=True)
 
     def test_network_handler_passes_optional_vision_analyzer_to_backend(self) -> None:
         backend = _RecordingBackend()

@@ -89,7 +89,7 @@ class PublicInstallScriptSmokeTest(unittest.TestCase):
         self.assertIn("--pip-spec SPEC", content)
         self.assertIn('"${venv_python}" -m pip install --upgrade --pre "${package_name}"', content)
         self.assertIn('"${venv_python}" -m pip install --upgrade "${package_name}"', content)
-        self.assertIn('"${venv_python}" -m playwright install chromium', content)
+        self.assertIn('"${venv_python}" -m playwright install --only-shell chromium', content)
         self.assertIn("ELEPHANT_SKIP_BROWSER_INSTALL", content)
         self.assertIn("has_uv", content)
         self.assertIn("uv pip install --python", content)
