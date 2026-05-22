@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 import json
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol
 
 from packages.auth import AuthProfile
 from packages.contracts import Episode, State
@@ -100,12 +100,20 @@ def _optional_bool(value: Any) -> bool | None:
     raise ValueError(f"invalid boolean value: {value}")
 
 
+class GatewayRuntimeBridge(Protocol):
+    """Optional in-proc bridge that exposes daemon runtime snapshots to the API surface."""
+
+    def gateway_runtime_snapshot(self) -> Mapping[str, Any]:
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class APIAppConfig:
     database_path: Path
     install_root: Path | None = None
     instruction_refs: tuple[str, ...] = ("apps/api",)
     total_tokens: int = 2048
+    gateway_runtime_bridge: GatewayRuntimeBridge | None = None
 
 
 @dataclass(frozen=True, slots=True)

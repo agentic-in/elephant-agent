@@ -436,15 +436,16 @@ def _gateway_services(
             "running": is_running,
             "starting": is_starting,
             "lastError": last_error,
+            "runtimeStatus": "running" if is_running else "starting" if is_starting else "failed" if last_error else "stopped",
+            "runtimeSource": "files" if service_runtime_files else "config",
+            "runtimeDetails": {},
+            "startedAt": None,
         })
     return rows
 
 
-def _gateway(state_dir: Path) -> dict[str, Any]:
-    # Gateway shares CLI's state dir — runtime status files sit directly in it
-    # (no legacy `<state_dir>/gateway` subdir).
-    gateway_dir = state_dir
-    runtime_files = []
+def _gateway_runtime_files(gateway_dir: Path) -> list[dict[str, Any]]:
+    runtime_files: list[dict[str, Any]] = []
     for path in sorted((*gateway_dir.glob("*.runtime.json"), *gateway_dir.glob("*.pid"))):
         if not path.is_file():
             continue
@@ -456,7 +457,87 @@ def _gateway(state_dir: Path) -> dict[str, Any]:
                 "content": _read_json_file(path) if path.suffix == ".json" else _read_text_file(path, max_chars=4_000),
             }
         )
+    return runtime_files
+
+
+def _gateway_runtime_bridge_services(runtime_bridge: Any | None) -> dict[str, dict[str, Any]]:
+    if runtime_bridge is None or not hasattr(runtime_bridge, "gateway_runtime_snapshot"):
+        return {}
+    try:
+        snapshot = runtime_bridge.gateway_runtime_snapshot()
+    except Exception:
+        return {}
+    if not isinstance(snapshot, Mapping):
+        return {}
+    services_payload = snapshot.get("services")
+    if not isinstance(services_payload, Mapping):
+        return {}
+    rows: dict[str, dict[str, Any]] = {}
+    for key, raw in services_payload.items():
+        if not isinstance(raw, Mapping):
+            continue
+        status_text = str(raw.get("status") or "").strip().lower()
+        if status_text not in {"idle", "running", "starting", "failed", "stopped", "skipped"}:
+            status_text = "stopped"
+        details = raw.get("details")
+        rows[str(key)] = {
+            "service": str(raw.get("service") or key).strip() or str(key),
+            "status": status_text,
+            "startedAt": str(raw.get("startedAt") or raw.get("started_at") or "").strip() or None,
+            "lastError": str(raw.get("lastError") or raw.get("last_error") or "").strip(),
+            "details": dict(details) if isinstance(details, Mapping) else {},
+            "runtimeSource": str(raw.get("runtimeSource") or "daemon").strip() or "daemon",
+        }
+    return rows
+
+
+def _merge_gateway_runtime(
+    services: list[dict[str, Any]],
+    *,
+    runtime_bridge: Any | None,
+) -> list[dict[str, Any]]:
+    bridge_rows = _gateway_runtime_bridge_services(runtime_bridge)
+    if not bridge_rows:
+        return services
+    merged: list[dict[str, Any]] = []
+    for row in services:
+        service = str(row.get("service") or "")
+        bridge_row = bridge_rows.get(service)
+        if bridge_row is None:
+            merged.append(row)
+            continue
+        status_text = str(bridge_row.get("status") or "stopped")
+        merged.append(
+            {
+                **row,
+                "running": status_text == "running",
+                "starting": status_text == "starting",
+                "lastError": str(bridge_row.get("lastError") or ""),
+                "runtimeStatus": status_text,
+                "runtimeSource": bridge_row.get("runtimeSource") or "daemon",
+                "runtimeDetails": bridge_row.get("details") if isinstance(bridge_row.get("details"), Mapping) else {},
+                "startedAt": bridge_row.get("startedAt"),
+            }
+        )
+    return merged
+
+
+def _gateway_runtime_bridge_for_app(app: Any) -> Any | None:
+    bridge = getattr(app, "gateway_runtime_bridge", None)
+    return bridge if hasattr(bridge, "gateway_runtime_snapshot") else None
+
+
+def _gateway_view(app: Any, state_dir: Path) -> dict[str, Any]:
+    return _gateway(state_dir, runtime_bridge=_gateway_runtime_bridge_for_app(app))
+
+
+def _gateway(state_dir: Path, *, runtime_bridge: Any | None = None) -> dict[str, Any]:
+    # Gateway shares CLI's state dir — runtime status files sit directly in it
+    # (no legacy `<state_dir>/gateway` subdir).
+    gateway_dir = state_dir
+    runtime_files = _gateway_runtime_files(gateway_dir)
     services = _gateway_services(gateway_dir=gateway_dir, state_dir=state_dir, runtime_files=runtime_files)
+    services = _merge_gateway_runtime(services, runtime_bridge=runtime_bridge)
     return {
         "gatewayDir": str(gateway_dir),
         "exists": gateway_dir.exists(),
@@ -466,6 +547,7 @@ def _gateway(state_dir: Path) -> dict[str, Any]:
         "configuredServiceCount": sum(1 for service in services if service["configured"]),
         "runningServiceCount": sum(1 for service in services if service["running"]),
         "startingServiceCount": sum(1 for service in services if service.get("starting")),
+        "runtimeBridgeConnected": bool(_gateway_runtime_bridge_services(runtime_bridge)),
     }
 
 
@@ -655,7 +737,7 @@ def _gateway_persist_weixin_credentials(self, credentials: Mapping[str, Any], co
     manifest_path = _write_manifest_to_config(state_dir, manifest)
     return {
         "profileManifestPath": str(manifest_path),
-        "gateway": _gateway(state_dir),
+        "gateway": _gateway_view(self, state_dir),
     }
 
 
@@ -782,7 +864,7 @@ def _gateway_configure_service(self, payload: Mapping[str, Any], *, service: str
         "action": "configured",
         "profileManifestPath": str(manifest_path),
         "secretPath": str(secret_path) if secret_path is not None else None,
-        "gateway": _gateway(state_dir),
+        "gateway": _gateway_view(self, state_dir),
     }
 
 
@@ -906,7 +988,7 @@ def _gateway_remove_service_account(self, payload: Mapping[str, Any], *, service
                 "reason": "no accounts configured",
                 "profileManifestPath": "",
                 "secretPath": None,
-                "gateway": _gateway(state_dir),
+                "gateway": _gateway_view(self, state_dir),
             }
         return {
             "status": "failed",
@@ -915,7 +997,7 @@ def _gateway_remove_service_account(self, payload: Mapping[str, Any], *, service
             "accountId": requested_id,
             "reason": f"accountId {requested_id!r} not found",
             "remainingAccounts": existing_ids,
-            "gateway": _gateway(state_dir),
+            "gateway": _gateway_view(self, state_dir),
         }
 
     account_id = resolved_id
@@ -973,7 +1055,7 @@ def _gateway_remove_service_account(self, payload: Mapping[str, Any], *, service
         "reason": reason,
         "profileManifestPath": str(manifest_path),
         "secretPath": str(secret_path) if secret_path is not None else None,
-        "gateway": _gateway(state_dir),
+        "gateway": _gateway_view(self, state_dir),
     }
 
 
@@ -1030,7 +1112,7 @@ def gateway_action(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         "returnCode": result.returncode,
         "stdout": result.stdout[-8_000:],
         "stderr": result.stderr[-8_000:],
-        "gateway": _gateway(state_dir),
+        "gateway": _gateway_view(self, state_dir),
     }
 
 

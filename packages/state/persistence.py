@@ -296,6 +296,12 @@ def sync_canonical_profile_state(
             relationship=bundle.relationship,
         )
     upsert_elephant_identity(bundle.elephant_identity, updated_at=synced_at)
+    _sync_elephant_identity(
+        repository,
+        bundle.elephant_identity,
+        synced_at=synced_at,
+        state_id=state_id,
+    )
     metadata = {
         "profile_id": profile_id,
         "sync_source": sync_source,
@@ -536,7 +542,27 @@ def _sync_elephant_identity(
     identity: ElephantIdentityRecord,
     *,
     synced_at: datetime,
+    state_id: str | None = None,
 ) -> str | None:
+    explicit_state_id = str(state_id or "").strip()
+    if explicit_state_id:
+        explicit_state = repository.load_state(explicit_state_id)
+        if explicit_state is not None:
+            repository.upsert_state(
+                replace(
+                    explicit_state,
+                    elephant_name=identity.display_name,
+                    identity_mode=identity.identity_mode,
+                    initiative=identity.initiative,
+                    posture=identity.relational_stance,
+                    working_style=identity.personality_preset or explicit_state.working_style,
+                    elephant_identity_text=identity.elephant_identity_text or explicit_state.elephant_identity_text,
+                    source_manifest=identity.source_manifest_path or explicit_state.source_manifest,
+                    metadata={**dict(explicit_state.metadata), "profile_id": identity.profile_id},
+                ),
+                updated_at=synced_at,
+            )
+            return explicit_state.state_id
     for state in repository.list_states():
         if state.elephant_id != identity.elephant_id:
             continue

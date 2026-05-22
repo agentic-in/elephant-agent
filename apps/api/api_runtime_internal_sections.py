@@ -857,7 +857,10 @@ def _fill_gateway(dashboard: dict[str, Any], self) -> None:
     database_path = self.repository.database_path
     dashboard["operations"] = {
         **dashboard["operations"],
-        "gateway": _gateway(database_path.parent),
+        "gateway": _gateway(
+            database_path.parent,
+            runtime_bridge=getattr(self, "gateway_runtime_bridge", None),
+        ),
     }
 
 

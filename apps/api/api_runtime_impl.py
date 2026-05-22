@@ -79,11 +79,13 @@ from .api_runtime_support import (
     APIEpisodeTransitionResult,
     APILoopRecord,
     APILoopResult,
+    GatewayRuntimeBridge,
 )
 from . import api_runtime_provider_methods as _provider_methods
 from . import api_runtime_surface_methods as _surface_methods
 from . import api_runtime_recall_methods as _recall_methods
 from . import api_runtime_http_methods as _http_methods
+from . import api_runtime_http_io_methods as _http_io_methods
 from . import api_runtime_console as _console_methods
 from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
@@ -148,6 +150,7 @@ def _ensure_system_cron_jobs(cron_runtime: CronRuntime) -> None:
 class ElephantAPIApp:
     def __init__(self, config: APIAppConfig) -> None:
         self.config = config
+        self.gateway_runtime_bridge = config.gateway_runtime_bridge
         self.repository = RuntimeStorageRepository(config.database_path)
         self.repository.bootstrap()
         runtime_state_dir = self.repository.database_path.parent
@@ -399,10 +402,10 @@ ElephantAPIApp._dispatch_internal = _http_methods._dispatch_internal
 ElephantAPIApp._dispatch_operator = _http_methods._dispatch_operator
 ElephantAPIApp._dispatch_episodes = _http_methods._dispatch_episodes
 ElephantAPIApp._dispatch_states = _http_methods._dispatch_states
-ElephantAPIApp.run_cron_job_now = _http_methods.run_cron_job_now
+ElephantAPIApp.run_cron_job_now = _http_io_methods.run_cron_job_now
 ElephantAPIApp.run_proactive_ask_now = _cron_methods.run_proactive_ask_now
 ElephantAPIApp.run_dream_now = _cron_methods.run_dream_now
-ElephantAPIApp.__call__ = _http_methods.__call__
+ElephantAPIApp.__call__ = _http_io_methods.__call__
 
 def create_app(
     *,
@@ -410,6 +413,7 @@ def create_app(
     install_root: str | Path | None = None,
     instruction_refs: tuple[str, ...] = ("apps/api",),
     total_tokens: int = 2048,
+    gateway_runtime_bridge: GatewayRuntimeBridge | None = None,
 ) -> ElephantAPIApp:
     return ElephantAPIApp(
         APIAppConfig(
@@ -417,6 +421,7 @@ def create_app(
             install_root=Path(install_root) if install_root is not None else None,
             instruction_refs=instruction_refs,
             total_tokens=total_tokens,
+            gateway_runtime_bridge=gateway_runtime_bridge,
         )
     )
 

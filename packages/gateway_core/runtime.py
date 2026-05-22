@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import threading
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
@@ -353,35 +354,40 @@ class InMemoryGatewayIdentityStore:
 @dataclass(slots=True)
 class FileGatewayIdentityStore:
     path: Path
+    _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def lookup(self, key: GatewayIdentityKey) -> GatewayIdentityRecord | None:
-        return self._load_records().get(key)
+        with self._lock:
+            return self._load_records().get(key)
 
     def save(self, record: GatewayIdentityRecord) -> None:
-        records = self._load_records()
-        records[record.key] = record
-        self._write_records(records)
+        with self._lock:
+            records = self._load_records()
+            records[record.key] = record
+            self._write_records(records)
 
     def lookup_by_elephant_id(self, elephant_id: str) -> tuple[GatewayIdentityRecord, ...]:
-        return tuple(
-            sorted(
-                (r for r in self._load_records().values() if r.elephant_id == elephant_id),
-                key=lambda r: (r.updated_at or r.created_at or _utc_now()),
-                reverse=True,
+        with self._lock:
+            return tuple(
+                sorted(
+                    (r for r in self._load_records().values() if r.elephant_id == elephant_id),
+                    key=lambda r: (r.updated_at or r.created_at or _utc_now()),
+                    reverse=True,
+                )
             )
-        )
 
     def list_records(self) -> tuple[GatewayIdentityRecord, ...]:
-        return tuple(
-            sorted(
-                self._load_records().values(),
-                key=lambda record: (
-                    record.key.adapter_id,
-                    record.key.account_id,
-                    record.key.conversation_id,
-                ),
+        with self._lock:
+            return tuple(
+                sorted(
+                    self._load_records().values(),
+                    key=lambda record: (
+                        record.key.adapter_id,
+                        record.key.account_id,
+                        record.key.conversation_id,
+                    ),
+                )
             )
-        )
 
     def _load_records(self) -> dict[GatewayIdentityKey, GatewayIdentityRecord]:
         if not self.path.exists():
@@ -479,26 +485,30 @@ class InMemoryGatewaySessionStore:
 @dataclass(slots=True)
 class FileGatewaySessionStore:
     path: Path
+    _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def lookup(self, session_id: str) -> GatewayRouteState | None:
-        return self._load_records().get(session_id)
+        with self._lock:
+            return self._load_records().get(session_id)
 
     def save(self, session: GatewayRouteState) -> None:
-        records = self._load_records()
-        records[session.session_id] = session
-        self._write_records(records)
+        with self._lock:
+            records = self._load_records()
+            records[session.session_id] = session
+            self._write_records(records)
 
     def list_records(self) -> tuple[GatewayRouteState, ...]:
-        return tuple(
-            sorted(
-                self._load_records().values(),
-                key=lambda session: (
-                    session.updated_at,
-                    session.started_at,
-                    session.session_id,
-                ),
+        with self._lock:
+            return tuple(
+                sorted(
+                    self._load_records().values(),
+                    key=lambda session: (
+                        session.updated_at,
+                        session.started_at,
+                        session.session_id,
+                    ),
+                )
             )
-        )
 
     def _load_records(self) -> dict[str, GatewayRouteState]:
         if not self.path.exists():

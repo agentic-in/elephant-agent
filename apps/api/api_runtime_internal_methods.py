@@ -416,7 +416,10 @@ def _operation_snapshot(self, *, active_provider: Mapping[str, Any], provider_do
         "tools": tuple(_tools(self, tool_overrides=tool_overrides)),
         "mcp": mcp,
         "cron": {"jobs": tuple(_cron_jobs(self))},
-        "gateway": _gateway(state_dir),
+        "gateway": _gateway(
+            state_dir,
+            runtime_bridge=getattr(self, "gateway_runtime_bridge", None),
+        ),
         "settings": settings,
         "usage": _canonical_usage(database_path),
         "logs": tuple(_logs(state_dir)),

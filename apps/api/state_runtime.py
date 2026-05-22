@@ -13,7 +13,7 @@ from packages.contracts import ElephantIdentityRecord, Episode, Fact
 from packages.state.rendered_views import RenderedRelationshipView, RenderedUserProfileView
 from packages.contracts.runtime import PersonalModelRuntimeState
 from packages.evidence.recall_runtime import RecallRuntime
-from packages.state import CompanionSettings, resolve_personality_preset, user_profile_updates
+from packages.state import CompanionSettings, is_companion_mode, resolve_personality_preset, user_profile_updates
 from packages.state.canonical import build_canonical_profile_state
 from packages.state.persistence import (
     load_persisted_canonical_state,
@@ -186,31 +186,46 @@ class APIStateService:
             required=False,
         )
         current = self.ensure_personal_model_state(personal_model, state_id=state_id, episode_id=episode_id)
+        next_mode = personal_model.mode
+        if (personality_preset is not None or initiative is not None) and not is_companion_mode(next_mode):
+            next_mode = "companion"
+        updated_personal_model = replace(
+            personal_model,
+            mode=next_mode,
+        )
+        if updated_personal_model != personal_model:
+            self.repository.upsert_personal_model_runtime_state(updated_personal_model)
         identity_record = replace(
             current.identity,
             display_name=display_name if display_name is not None else current.identity.display_name,
+            identity_mode=updated_personal_model.mode,
             personality_preset=(
                 personality_preset if personality_preset is not None else current.identity.personality_preset
             ),
             initiative=initiative if initiative is not None else current.identity.initiative,
         )
         loaded = build_loaded_profile_from_state(
-            personal_model,
+            updated_personal_model,
             identity_record=identity_record,
             user_profile=current.user,
             relationship_record=current.relationship,
         )
         companion = loaded.companion or CompanionSettings()
-        if personality_preset is not None:
-            resolved_preset = resolve_personality_preset(personality_preset, mode=personal_model.mode)
-            companion = replace(
-                companion,
-                personality_preset=resolved_preset.preset_id,
-                personality=resolved_preset.traits,
+        if personality_preset is not None or initiative is not None:
+            resolved_preset = (
+                companion.personality_preset
+                if personality_preset is None
+                else resolve_personality_preset(personality_preset, mode=updated_personal_model.mode).preset_id
             )
-        if initiative is not None:
-            companion = replace(companion, initiative=initiative)
-        loaded = replace(loaded, companion=companion)
+            loaded = replace(
+                loaded,
+                companion=replace(
+                    companion,
+                    personality_preset=resolved_preset,
+                    personality=resolve_personality_preset(resolved_preset, mode=updated_personal_model.mode).traits,
+                    initiative=initiative if initiative is not None else companion.initiative,
+                ),
+            )
         if clear_elephant_identity or elephant_identity_text is not None:
             loaded = replace(
                 loaded,
@@ -223,7 +238,7 @@ class APIStateService:
         synced = sync_canonical_profile_state(
             self.repository,
             bundle,
-            previous=load_persisted_canonical_state(self.repository, canonical_personal_model_id(personal_model.profile_id)),
+            previous=load_persisted_canonical_state(self.repository, canonical_personal_model_id(updated_personal_model.profile_id)),
             sync_source="api.identity.update",
             recall_runtime=self.recall_runtime,
             surface="api",
