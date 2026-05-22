@@ -10,6 +10,8 @@ BUNDLE_IDENTIFIER="${MACOS_BUNDLE_IDENTIFIER:-ai.agentic.elephant.mac}"
 DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET:-13.0}"
 SIGNING_IDENTITY="${MACOS_SIGNING_IDENTITY:--}"
 NOTARIZE="${MACOS_NOTARIZE:-0}"
+SIGNING_ENTITLEMENTS="${MACOS_CODESIGN_ENTITLEMENTS:-${APP_DIR}/Entitlements.plist}"
+BUNDLE_RUNTIME_REQUEST="${MACOS_BUNDLE_RUNTIME:-auto}"
 
 host_target() {
   case "$(uname -m)" in
@@ -97,6 +99,49 @@ RESOURCES="${CONTENTS}/Resources"
 ARTIFACT_PREFIX="ElephantAgent_${APP_VERSION_SAFE}_${ARTIFACT_TARGET}"
 ARTIFACT_DMG="${ARTIFACT_DIR}/${ARTIFACT_PREFIX}.dmg"
 ARTIFACT_APP_ZIP="${ARTIFACT_DIR}/${ARTIFACT_PREFIX}.app.zip"
+RUNTIME_ROOT="${RESOURCES}/Runtime"
+RUNTIME_BUILD_CACHE="${MACOS_RUNTIME_BUILD_CACHE:-${BUILD_DIR}/runtime-cache}"
+
+can_auto_bundle_runtime() {
+  if [[ -n "${MACOS_RUNTIME_PYTHON:-}" ]]; then
+    return 0
+  fi
+  if [[ "${ARTIFACT_TARGET}" != "$(host_target)" ]]; then
+    return 1
+  fi
+  command -v uv >/dev/null 2>&1
+}
+
+resolve_bundle_runtime() {
+  case "${BUNDLE_RUNTIME_REQUEST}" in
+    1|true|yes|on)
+      if [[ -z "${MACOS_RUNTIME_PYTHON:-}" && "${ARTIFACT_TARGET}" != "$(host_target)" ]]; then
+        echo "MACOS_BUNDLE_RUNTIME=1 requires a matching host target or MACOS_RUNTIME_PYTHON for ${ARTIFACT_TARGET}." >&2
+        exit 1
+      fi
+      printf '%s\n' "1"
+      ;;
+    0|false|no|off)
+      printf '%s\n' "0"
+      ;;
+    auto|"")
+      if [[ -n "${MACOS_RUNTIME_PYTHON:-}" ]]; then
+        printf '%s\n' "1"
+      elif can_auto_bundle_runtime; then
+        printf '%s\n' "1"
+      else
+        echo "Bundled runtime unavailable for ${ARTIFACT_TARGET}; falling back to installer bootstrap." >&2
+        printf '%s\n' "0"
+      fi
+      ;;
+    *)
+      echo "Unsupported MACOS_BUNDLE_RUNTIME: ${BUNDLE_RUNTIME_REQUEST}" >&2
+      exit 2
+      ;;
+  esac
+}
+
+BUNDLE_RUNTIME="$(resolve_bundle_runtime)"
 
 if [[ "${NOTARIZE}" == "auto" ]]; then
   if [[ "${SIGNING_IDENTITY}" != "-" \
@@ -138,10 +183,38 @@ sign_path() {
   local path="$1"
   require_macos_tool codesign
   if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
-    codesign --force --deep --sign - "${path}" >/dev/null
+    codesign --force --sign - "${path}" >/dev/null
   else
-    codesign --force --deep --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+    if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
+      codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+    else
+      codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+    fi
   fi
+}
+
+sign_macho_file() {
+  local path="$1"
+  require_macos_tool codesign
+  if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
+    codesign --force --sign - "${path}" >/dev/null
+  else
+    if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
+      codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+    else
+      codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+    fi
+  fi
+}
+
+sign_nested_macho_files() {
+  local root="$1"
+  require_macos_tool file
+  while IFS= read -r -d '' path; do
+    if file "${path}" | grep -q "Mach-O"; then
+      sign_macho_file "${path}"
+    fi
+  done < <(find "${root}" -type f -print0)
 }
 
 notarize_submission() {
@@ -211,9 +284,13 @@ fi
 mkdir -p "${MACOS}" "${RESOURCES}/Brand" "${RESOURCES}/Resources" "${RESOURCES}/Install"
 install -m 755 "${BINARY}" "${MACOS}/${APP_NAME}"
 
-printf "%s\n" "${REPO_ROOT}" > "${RESOURCES}/RepoRoot.txt"
-if command -v python3 >/dev/null 2>&1; then
-  command -v python3 > "${RESOURCES}/PythonPath.txt"
+if [[ "${BUNDLE_RUNTIME}" == "1" && "${MACOS_INCLUDE_DEV_PATHS:-0}" != "1" ]]; then
+  rm -f "${RESOURCES}/RepoRoot.txt" "${RESOURCES}/PythonPath.txt"
+else
+  printf "%s\n" "${REPO_ROOT}" > "${RESOURCES}/RepoRoot.txt"
+  if command -v python3 >/dev/null 2>&1; then
+    command -v python3 > "${RESOURCES}/PythonPath.txt"
+  fi
 fi
 install -m 755 "${REPO_ROOT}/install.sh" "${RESOURCES}/Install/install.sh"
 
@@ -236,6 +313,12 @@ fi
 MACOS_RESOURCES_DIR="${APP_DIR}/Sources/Resources"
 if [[ -d "${MACOS_RESOURCES_DIR}" ]]; then
   ditto "${MACOS_RESOURCES_DIR}" "${RESOURCES}"
+fi
+
+if [[ "${BUNDLE_RUNTIME}" == "1" ]]; then
+  bash "${SCRIPT_DIR}/package-runtime.sh" "${RUNTIME_ROOT}" "${REPO_ROOT}" "${ARTIFACT_TARGET}" "${RUNTIME_BUILD_CACHE}"
+else
+  echo "Bundled runtime: disabled. This build will use Install/install.sh bootstrap on machines without a developer repo."
 fi
 
 ICON_SOURCE="${RESOURCES}/Brand/favicon.png"
@@ -300,6 +383,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
 </plist>
 PLIST
 
+sign_nested_macho_files "${CONTENTS}"
 sign_path "${BUNDLE}"
 codesign --verify --deep --strict --verbose=2 "${BUNDLE}"
 
@@ -323,6 +407,8 @@ hdiutil create -volname "${APP_NAME}" -srcfolder "${STAGE}" -ov -format UDZO "${
 if [[ "${SIGNING_IDENTITY}" != "-" ]]; then
   codesign --force --timestamp --sign "${SIGNING_IDENTITY}" "${DMG}" >/dev/null
   notarize_path "${DMG}" "${APP_NAME}.dmg"
+else
+  echo "DMG signing/notarization skipped: MACOS_SIGNING_IDENTITY is ad-hoc."
 fi
 
 ditto -c -k --keepParent "${BUNDLE}" "${ARTIFACT_APP_ZIP}"
@@ -337,3 +423,4 @@ printf '  artifact_dmg: %s\n' "${ARTIFACT_DMG}"
 printf '  artifact_dmg_sha256: %s\n' "${ARTIFACT_DMG}.sha256"
 printf '  artifact_app_zip: %s\n' "${ARTIFACT_APP_ZIP}"
 printf '  artifact_app_zip_sha256: %s\n' "${ARTIFACT_APP_ZIP}.sha256"
+printf '  bundled_runtime: %s\n' "${BUNDLE_RUNTIME}"

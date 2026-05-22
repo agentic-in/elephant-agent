@@ -21,6 +21,9 @@ MACOS_APP_BUILD_NUMBER ?=
 MACOS_SIGNING_IDENTITY ?=
 MACOS_NOTARIZE ?=
 MACOS_ASSET_DIR ?=
+MACOS_BUNDLE_RUNTIME ?= auto
+MACOS_RUNTIME_PYTHON_VERSION ?= 3.12
+MACOS_RUNTIME_PYTHON ?=
 MACOS_RELEASE_TAG ?= latest
 MACOS_RELEASE_TITLE ?= Elephant Agent latest
 RESET_API_E2E_TARGETS = \
@@ -107,6 +110,8 @@ macos-help:
 	@echo "  make macos-build MACOS_TARGET=x86_64-apple-darwin"
 	@echo "  make macos-build-all"
 	@echo "  make macos-release-latest"
+	@echo "  MACOS_BUNDLE_RUNTIME=auto|1|0"
+	@echo "  MACOS_RUNTIME_PYTHON=/path/to/python3.12"
 	@echo ""
 	@echo "Signing/notarization variables:"
 	@echo "  MACOS_SIGNING_IDENTITY='Developer ID Application: ...'"
@@ -121,6 +126,9 @@ macos-build:
 		MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
 		MACOS_NOTARIZE="$(MACOS_NOTARIZE)" \
 		MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)" \
+		MACOS_BUNDLE_RUNTIME="$(MACOS_BUNDLE_RUNTIME)" \
+		MACOS_RUNTIME_PYTHON_VERSION="$(MACOS_RUNTIME_PYTHON_VERSION)" \
+		MACOS_RUNTIME_PYTHON="$(MACOS_RUNTIME_PYTHON)" \
 		bash apps/macos/Scripts/build-app.sh
 
 macos-build-all:
@@ -132,7 +140,10 @@ macos-build-all:
 			MACOS_APP_BUILD_NUMBER="$(MACOS_APP_BUILD_NUMBER)" \
 			MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
 			MACOS_NOTARIZE="$(MACOS_NOTARIZE)" \
-			MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)"; \
+			MACOS_ASSET_DIR="$(MACOS_ASSET_DIR)" \
+			MACOS_BUNDLE_RUNTIME="$(MACOS_BUNDLE_RUNTIME)" \
+			MACOS_RUNTIME_PYTHON_VERSION="$(MACOS_RUNTIME_PYTHON_VERSION)" \
+			MACOS_RUNTIME_PYTHON="$(MACOS_RUNTIME_PYTHON)"; \
 	done
 
 macos-release-latest: macos-build-all

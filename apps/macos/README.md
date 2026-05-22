@@ -7,12 +7,19 @@ The mac app does not replace the Python core. It starts the existing `apps.api` 
 ## Build
 
 ```bash
-swift build --package-path apps/macos
-apps/macos/Scripts/build-app.sh
-open -n "apps/macos/.build/release/Elephant Agent.app"
+make macos-build
+open -n "apps/macos/.build/release/$(uname -m | sed 's/arm64/aarch64/')-apple-darwin/Elephant Agent.app"
 ```
 
 Full Xcode is not required when the installed Command Line Tools and macOS SDK match. The packaging script creates a local `.app`, copies the site brand assets into the bundle resources, signs ad hoc by default, and emits a `.dmg`, `.app.zip`, and SHA256 files under `apps/macos/.build/artifacts/<target>/`.
+
+By default, `make macos-build` attempts to produce a self-contained app on the current Mac architecture. When `uv` is available and the requested `MACOS_TARGET` matches the host architecture, the bundle includes:
+
+- `Contents/Resources/Runtime/python`: managed CPython 3.12
+- `Contents/Resources/Runtime/site-packages`: Elephant Agent and Python dependencies
+- `Contents/Resources/Runtime/ms-playwright`: Playwright Chromium headless shell
+
+Set `MACOS_BUNDLE_RUNTIME=0` for a lightweight bootstrap build that falls back to the bundled `Install/install.sh` on machines without a developer repo. Set `MACOS_BUNDLE_RUNTIME=1` to require the embedded runtime and fail instead of falling back. Cross-architecture self-contained builds should run on a matching macOS runner or pass `MACOS_RUNTIME_PYTHON=/path/to/python3.12` for the target architecture.
 
 The repo-level Makefile wraps the release paths:
 
@@ -21,17 +28,21 @@ make macos-build
 make macos-build MACOS_TARGET=aarch64-apple-darwin
 make macos-build MACOS_TARGET=x86_64-apple-darwin
 make macos-build-all
+make macos-build MACOS_BUNDLE_RUNTIME=1
 ```
 
 Developer ID distribution builds can opt into signing and notarization:
 
 ```bash
 make macos-build-all \
+  MACOS_BUNDLE_RUNTIME=1 \
   MACOS_SIGNING_IDENTITY="Developer ID Application: Example Team (TEAMID)" \
   MACOS_NOTARIZE=1 \
   APPLE_ID="apple-id@example.com" \
   APPLE_PASSWORD="app-specific-password" \
   APPLE_TEAM_ID="TEAMID"
 ```
+
+Without `MACOS_SIGNING_IDENTITY`, builds remain ad-hoc signed and notarization is skipped so local developers can still build a DMG. Ad-hoc artifacts are useful for testing but are not Gatekeeper-clean for broad distribution. Official shareable releases should use Developer ID signing and notarization.
 
 `make macos-release-latest` expects `gh` authentication and replaces the GitHub `latest` release/tag with the current local artifacts. The CI workflow `.github/workflows/macos-latest-release.yml` runs the same build on each push to `main`, uploads both macOS architecture artifacts, writes `latest.json`, and replaces the `latest` GitHub release.
