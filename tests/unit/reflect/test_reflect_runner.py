@@ -83,6 +83,18 @@ class RecordingToolRuntime:
             observer(event)
 
 
+class RecordingModelProvider:
+    def __init__(self) -> None:
+        self._stream_observer = None
+
+    def set_stream_observer(self, observer) -> None:
+        self._stream_observer = observer
+
+    def emit(self, delta: str) -> None:
+        if self._stream_observer is not None:
+            self._stream_observer(delta)
+
+
 class ReflectRunnerTest(unittest.TestCase):
     def test_unpersisted_reflect_invocation_can_return_summary_without_learning_job_row(self) -> None:
         runtime = SimpleNamespace(
@@ -151,6 +163,33 @@ class ReflectRunnerTest(unittest.TestCase):
         self.assertIn('"phase":"execution.completed"', detail)
         self.assertIn('"completed_tools":["tool.personal_model.search"]', detail)
         self.assertIn('"events":[', detail)
+
+    def test_reflect_runner_persists_streamed_model_preview(self) -> None:
+        repository = RecordingRepository()
+        model_provider = RecordingModelProvider()
+
+        def run_sub_agent(**_: object) -> dict[str, object]:
+            model_provider.emit("I will turn these onboarding answers into durable memory.")
+            return {"summary": "Updated memory", "status": "completed", "side_effects": ()}
+
+        runtime = SimpleNamespace(
+            repository=repository,
+            model_provider=model_provider,
+            run_sub_agent=run_sub_agent,
+        )
+
+        run_reflect_agent(runtime, _learning_job("learning-job:model-stream"), explicit_features=("compress",))
+
+        structured = [
+            update
+            for update in repository.progress_updates
+            if str(update.get("progress_detail", "")).startswith("tool_event_v1=")
+        ]
+        self.assertTrue(structured)
+        self.assertIn(
+            '"model_preview":"I will turn these onboarding answers into durable memory."',
+            str(structured[-1]["progress_detail"]),
+        )
 
 
 if __name__ == "__main__":

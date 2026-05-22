@@ -61,6 +61,19 @@ class _ChildToolRuntime:
         )
 
 
+class _ChildModelProvider:
+    def __init__(self, tool_runtime: _ChildToolRuntime) -> None:
+        self.tool_runtime = tool_runtime
+        self._stream_observer = None
+
+    def set_stream_observer(self, observer) -> None:
+        self._stream_observer = observer
+
+    def emit(self, delta: str) -> None:
+        if self._stream_observer is not None:
+            self._stream_observer(delta, session_id="episode:child")
+
+
 class RuntimeSubAgentTest(unittest.TestCase):
     def test_learning_sub_agent_relays_allowed_tool_events_to_parent_runtime(self) -> None:
         parent_tool_runtime = _ParentToolRuntime()
@@ -118,6 +131,56 @@ class RuntimeSubAgentTest(unittest.TestCase):
                 for event in parent_tool_runtime.events
             )
         )
+
+    def test_learning_sub_agent_relays_model_stream_to_parent_runtime(self) -> None:
+        parent_tool_runtime = _ParentToolRuntime()
+        parent_stream: list[str] = []
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        parent_runtime = SimpleNamespace(
+            tool_runtime=parent_tool_runtime,
+            model_provider=SimpleNamespace(_stream_observer=lambda delta, **_: parent_stream.append(delta)),
+            paths=SimpleNamespace(state_dir=Path(tempdir.name)),
+        )
+        child_tool_runtime = _ChildToolRuntime()
+        child_model_provider = _ChildModelProvider(child_tool_runtime)
+        child_runtime = SimpleNamespace(
+            tool_runtime=child_tool_runtime,
+            model_provider=child_model_provider,
+            prepare_session_surface=mock.Mock(),
+            close=mock.Mock(),
+        )
+
+        def run_turn(**kwargs):
+            child_model_provider.emit("I'll inspect the onboarding facts before updating memory.")
+            return SimpleNamespace(
+                execution=ExecutionResult(
+                    execution_id="exec:learning-child",
+                    episode_id=str(kwargs["session_id"]),
+                    outcome="success",
+                    summary="learning result written",
+                )
+            )
+
+        child_runtime._run_turn = mock.Mock(side_effect=run_turn)
+        prepared_child = {
+            "session_id": "episode:child",
+            "parent_session_id": "episode:parent",
+            "task": "Mode: init\nLearning context packet: compact facts",
+            "name": "Init learning",
+            "skills": (),
+            "allowed_tools": (),
+            "system_prompt": "[SYSTEM: Background Learning Agent]",
+            "learning_agent": True,
+            "child_metadata": {},
+        }
+
+        with mock.patch("apps.cli.runtime_cron_sub_agents._create_child_runtime", return_value=child_runtime):
+            result = _run_prepared_sub_agent_child(parent_runtime, prepared_child=prepared_child)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(parent_stream, ["I'll inspect the onboarding facts before updating memory."])
+        self.assertIsNone(child_model_provider._stream_observer)
 
 
 if __name__ == "__main__":

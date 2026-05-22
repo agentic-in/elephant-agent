@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from threading import Lock
 from typing import Any
 
 from packages.contracts.runtime import LearningJob
+from packages.models.reasoning_parser import split_reasoning_and_content
 
 from .evidence import build_evidence, build_skill_optimization_context
 from .features import TRIGGER_CONSERVATISM, resolve_features
@@ -18,6 +19,8 @@ from .prompts import BOUNDARIES, CLAIM_TEXT_RULE, CONSERVATISM_PROMPTS, LANGUAGE
 
 _TOOL_EVENT_PROGRESS_PREFIX = "tool_event_v1="
 _TOOL_EVENT_PROGRESS_LIMIT = 8
+_MODEL_PROGRESS_BUFFER_LIMIT = 12000
+_MODEL_PROGRESS_PREVIEW_LIMIT = 420
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +33,17 @@ class ReflectResult:
     tool_calls_total: int = 0
     tool_names: tuple[str, ...] = ()
     features: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class _LearningProgressState:
+    completed_tools: list[str] = field(default_factory=list)
+    failed_tools: list[str] = field(default_factory=list)
+    events: list[dict[str, str]] = field(default_factory=list)
+    active_tool: str = ""
+    model_preview: str = ""
+    model_phase: str = ""
+    lock: Lock = field(default_factory=Lock)
 
 
 def _assemble_system_prompt(features: tuple[Feature, ...], *, conservatism: str) -> str:
@@ -114,6 +128,8 @@ def _tool_event_progress_detail(
     completed_tools: list[str],
     failed_tools: list[str],
     events: list[dict[str, str]],
+    model_preview: str = "",
+    model_phase: str = "",
 ) -> str:
     payload = {
         "version": "tool_event_v1",
@@ -124,6 +140,8 @@ def _tool_event_progress_detail(
         "completed_tools": completed_tools[-_TOOL_EVENT_PROGRESS_LIMIT:],
         "failed_tools": failed_tools[-_TOOL_EVENT_PROGRESS_LIMIT:],
         "events": events[-_TOOL_EVENT_PROGRESS_LIMIT:],
+        "model_preview": model_preview[-_MODEL_PROGRESS_PREVIEW_LIMIT:],
+        "model_phase": model_phase,
     }
     return _TOOL_EVENT_PROGRESS_PREFIX + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
@@ -138,16 +156,11 @@ def _tool_event_progress_stage(phase: str) -> str:
     return "tool_running"
 
 
-def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[Any, list[str]]:
+def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob, state: _LearningProgressState) -> Any:
     tool_runtime = getattr(runtime, "tool_runtime", None)
     subscribe = getattr(tool_runtime, "subscribe", None)
     if not callable(subscribe):
-        return None, []
-
-    seen: list[str] = []
-    failed: list[str] = []
-    events: list[dict[str, str]] = []
-    lock = Lock()
+        return None
 
     def observer(event: Any) -> None:
         invocation = getattr(event, "invocation", None)
@@ -161,21 +174,23 @@ def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[A
         if not isinstance(arguments, Mapping):
             arguments = {}
         preview = _tool_event_preview(arguments)
-        with lock:
-            active_tool = tool_id if phase in {"requested", "execution.started"} else ""
-            events.append({"tool_id": tool_id, "phase": phase, "preview": preview})
-            if tool_id not in seen and phase == "execution.completed":
-                seen.append(tool_id)
-            if tool_id not in failed and phase == "execution.failed":
-                failed.append(tool_id)
+        with state.lock:
+            state.active_tool = tool_id if phase in {"requested", "execution.started"} else ""
+            state.events.append({"tool_id": tool_id, "phase": phase, "preview": preview})
+            if tool_id not in state.completed_tools and phase == "execution.completed":
+                state.completed_tools.append(tool_id)
+            if tool_id not in state.failed_tools and phase == "execution.failed":
+                state.failed_tools.append(tool_id)
             detail = _tool_event_progress_detail(
                 tool_id=tool_id,
                 phase=phase,
                 preview=preview,
-                active_tool=active_tool,
-                completed_tools=seen,
-                failed_tools=failed,
-                events=events,
+                active_tool=state.active_tool,
+                completed_tools=state.completed_tools,
+                failed_tools=state.failed_tools,
+                events=state.events,
+                model_preview=state.model_preview,
+                model_phase=state.model_phase,
             )
         try:
             runtime.repository.update_learning_job_progress(
@@ -187,7 +202,84 @@ def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[A
         except Exception:
             return
 
-    return subscribe(observer), seen
+    return subscribe(observer)
+
+
+def _model_stream_preview(stream_text: str) -> str:
+    parsed = split_reasoning_and_content(stream_text, streaming=True)
+    content = " ".join(parsed.content.replace("\r\n", "\n").replace("\r", "\n").split())
+    if not content:
+        return ""
+    return content[-_MODEL_PROGRESS_PREVIEW_LIMIT:]
+
+
+def _call_stream_observer(observer: Any, delta: str, metadata: Mapping[str, Any]) -> None:
+    if not callable(observer):
+        return
+    try:
+        observer(delta, **metadata)
+    except TypeError:
+        observer(delta)
+
+
+def _subscribe_learning_model_progress(runtime: Any, job: LearningJob, state: _LearningProgressState) -> Any:
+    model_provider = getattr(runtime, "model_provider", None)
+    set_observer = getattr(model_provider, "set_stream_observer", None)
+    if not callable(set_observer):
+        return None
+
+    previous_observer = getattr(model_provider, "_stream_observer", None)
+    stream_buffer = ""
+    last_emitted_preview = ""
+
+    def observer(delta: str, **metadata: Any) -> None:
+        nonlocal stream_buffer, last_emitted_preview
+        if previous_observer is not None:
+            _call_stream_observer(previous_observer, delta, metadata)
+        if not delta:
+            return
+        stream_buffer = f"{stream_buffer}{delta}"[-_MODEL_PROGRESS_BUFFER_LIMIT:]
+        preview = _model_stream_preview(stream_buffer)
+        if not preview:
+            return
+        should_emit = (
+            not last_emitted_preview
+            or len(preview) - len(last_emitted_preview) >= 24
+            or preview[-1] in ".!?。！？\n"
+        )
+        if not should_emit or preview == last_emitted_preview:
+            return
+        last_emitted_preview = preview
+        with state.lock:
+            state.model_preview = preview
+            state.model_phase = "streaming"
+            detail = _tool_event_progress_detail(
+                tool_id="",
+                phase="model.streaming",
+                preview="",
+                active_tool=state.active_tool,
+                completed_tools=state.completed_tools,
+                failed_tools=state.failed_tools,
+                events=state.events,
+                model_preview=state.model_preview,
+                model_phase=state.model_phase,
+            )
+        try:
+            runtime.repository.update_learning_job_progress(
+                job.job_id,
+                worker_id=str(job.worker_id or "reflect-agent"),
+                progress_stage="agent_running",
+                progress_detail=detail,
+            )
+        except Exception:
+            return
+
+    set_observer(observer)
+
+    def unsubscribe() -> None:
+        set_observer(previous_observer)
+
+    return unsubscribe
 
 
 def _dedupe_tool_names(*groups: tuple[str, ...]) -> tuple[str, ...]:
@@ -301,7 +393,9 @@ def run_reflect_agent(
     except KeyError:
         pass
 
-    unsubscribe, captured_tool_names = _subscribe_learning_tool_progress(runtime, job)
+    progress_state = _LearningProgressState()
+    unsubscribe_tool_progress = _subscribe_learning_tool_progress(runtime, job, progress_state)
+    unsubscribe_model_progress = _subscribe_learning_model_progress(runtime, job, progress_state)
     try:
         result = runtime.run_sub_agent(
             session_id=job.episode_id,
@@ -316,13 +410,15 @@ def run_reflect_agent(
     except Exception as exc:
         raise RuntimeError(f"reflect agent failed: {exc}") from exc
     finally:
-        if callable(unsubscribe):
-            unsubscribe()
+        if callable(unsubscribe_model_progress):
+            unsubscribe_model_progress()
+        if callable(unsubscribe_tool_progress):
+            unsubscribe_tool_progress()
 
     summary = str(result.get("summary") if isinstance(result, Mapping) else "")
     agent_status = str(result.get("status") if isinstance(result, Mapping) else "completed")
     tool_calls_total, tool_names = _extract_tool_stats(result)
-    captured_tools = tuple(captured_tool_names)
+    captured_tools = tuple(progress_state.completed_tools)
     if captured_tools:
         tool_names = _dedupe_tool_names(captured_tools, tool_names)
         tool_calls_total = max(tool_calls_total, len(captured_tools))

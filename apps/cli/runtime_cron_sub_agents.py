@@ -387,6 +387,7 @@ def _run_prepared_sub_agent_child(
     started_at = datetime.now(timezone.utc)
     child_runtime = None
     unsubscribe = None
+    unsubscribe_model_stream = None
     _emit_sub_agent_event(
         runtime,
         prepared_child=prepared_child,
@@ -410,6 +411,7 @@ def _run_prepared_sub_agent_child(
             object.__setattr__(child_runtime, "tool_runtime", scoped_tool_runtime)
             child_runtime.model_provider.tool_runtime = scoped_tool_runtime
         unsubscribe = _relay_child_tool_events(runtime, child_runtime)
+        unsubscribe_model_stream = _relay_child_model_stream(runtime, child_runtime)
         if learning_agent_turn:
             outcome = child_runtime._run_turn(
                 session_id=child_session_id,
@@ -460,6 +462,8 @@ def _run_prepared_sub_agent_child(
     finally:
         if unsubscribe is not None:
             unsubscribe()
+        if unsubscribe_model_stream is not None:
+            unsubscribe_model_stream()
         close = getattr(child_runtime, "close", None)
         if callable(close):
             try:
@@ -507,6 +511,33 @@ def _relay_child_tool_events(parent_runtime: Any, child_runtime: Any):
         emitter(event)
 
     return subscribe(_observer)
+
+
+def _relay_child_model_stream(parent_runtime: Any, child_runtime: Any):
+    parent_provider = getattr(parent_runtime, "model_provider", None)
+    child_provider = getattr(child_runtime, "model_provider", None)
+    set_child_observer = getattr(child_provider, "set_stream_observer", None)
+    if parent_provider is None or not callable(set_child_observer):
+        return None
+
+    previous_child_observer = getattr(child_provider, "_stream_observer", None)
+
+    def _observer(delta: str, **metadata: Any) -> None:
+        parent_observer = getattr(parent_provider, "_stream_observer", None)
+        for observer in (parent_observer, previous_child_observer):
+            if not callable(observer):
+                continue
+            try:
+                observer(delta, **metadata)
+            except TypeError:
+                observer(delta)
+
+    set_child_observer(_observer)
+
+    def _unsubscribe() -> None:
+        set_child_observer(previous_child_observer)
+
+    return _unsubscribe
 
 
 def _normalize_sub_agent_task(item: Mapping[str, Any]) -> Mapping[str, Any]:

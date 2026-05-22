@@ -1113,6 +1113,7 @@ enum SnapshotParser {
             let tools = learningTools(from: row, metadata: metadata, features: features)
             let usedTools = learningUsedTools(from: row)
             let toolProgress = learningToolProgress(from: progressDetail, progressStage: progressStage, usedTools: usedTools)
+            let modelProgress = learningModelProgress(from: progressDetail)
             let resultText = learningMarkdown(from: row)
             return LearningJobItem(
                 id: id,
@@ -1126,6 +1127,7 @@ enum SnapshotParser {
                 resolvedTools: tools,
                 usedTools: usedTools,
                 toolProgress: toolProgress,
+                modelProgress: modelProgress,
                 markdown: resultText
             )
         }
@@ -1889,11 +1891,18 @@ enum SnapshotParser {
         return []
     }
 
+    private static func learningProgressPayload(from progressDetail: String) -> [String: Any]? {
+        let trimmed = progressDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["tool_event_v1=", "learning_event_v1="] {
+            guard trimmed.hasPrefix(prefix) else { continue }
+            return object(String(trimmed.dropFirst(prefix.count)))
+        }
+        return nil
+    }
+
     private static func learningToolProgress(from progressDetail: String, progressStage: String, usedTools: [String]) -> LearningToolCallProgress {
         let trimmed = progressDetail.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("tool_event_v1=") {
-            let payloadText = String(trimmed.dropFirst("tool_event_v1=".count))
-            let payload = object(payloadText)
+        if let payload = learningProgressPayload(from: trimmed) {
             let activeTool = string(payload["active_tool"] ?? payload["activeTool"])
             let completedTools = deduplicated(listStrings(payload["completed_tools"] ?? payload["completedTools"]))
             let failedTools = deduplicated(listStrings(payload["failed_tools"] ?? payload["failedTools"]))
@@ -1932,6 +1941,35 @@ enum SnapshotParser {
             )
         }
         return LearningToolCallProgress(activeToolID: "", completedToolIDs: completedTools, failedToolIDs: [], events: events)
+    }
+
+    private static func learningModelProgress(from progressDetail: String) -> LearningModelProgress {
+        guard let payload = learningProgressPayload(from: progressDetail) else {
+            return .empty
+        }
+        let text = compactLearningModelPreview(
+            string(
+                payload["model_preview"]
+                    ?? payload["modelPreview"]
+                    ?? payload["model_text"]
+                    ?? payload["modelText"]
+            )
+        )
+        guard !text.isEmpty else { return .empty }
+        let phase = string(payload["model_phase"] ?? payload["modelPhase"], fallback: "streaming")
+        return LearningModelProgress(text: text, phase: phase)
+    }
+
+    private static func compactLearningModelPreview(_ value: String) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > 420 else { return normalized }
+        let start = normalized.index(normalized.endIndex, offsetBy: -417)
+        return "...\(normalized[start...])"
     }
 
     private static func legacyLearningToolProgress(from progressDetail: String, progressStage: String) -> LearningToolCallProgress {

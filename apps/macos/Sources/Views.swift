@@ -12724,6 +12724,7 @@ struct OnboardingFlow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onComplete: () -> Void
     @State private var transitionForward = true
+    @State private var showLearningSkip = false
     private let welcomeStep = 0
     private let languageStep = 1
     private let groundingDepthStep = 8
@@ -12864,6 +12865,9 @@ struct OnboardingFlow: View {
         .onExitCommand {
             goBackIfPossible()
         }
+        .task(id: learningSkipTaskKey) {
+            await refreshLearningSkipVisibility()
+        }
     }
 
     @ViewBuilder
@@ -12971,6 +12975,21 @@ struct OnboardingFlow: View {
                         .accessibilityHint(nextRequirement ?? nextTitle)
                         .keyboardShortcut(.defaultAction)
                     }
+                } else if model.onboardingStep == learnStep && showLearningSkip && !model.onboardingFinalizationComplete {
+                    Button {
+                        model.skipOnboardingLearningAndContinue()
+                    } label: {
+                        Label(
+                            localizedYouText(model.appLanguage, en: "Skip and continue", zh: "跳过，后台继续学习", fr: "Passer et continuer", de: "Überspringen und weiter"),
+                            systemImage: "arrow.right.circle.fill"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(ElephantTheme.accent)
+                    .help(localizedYouText(model.appLanguage, en: "Enter Elephant now; learning keeps running in the background.", zh: "现在进入 Elephant，学习任务会在后台继续。", fr: "Entrer maintenant ; l'apprentissage continue en arrière-plan.", de: "Jetzt öffnen; Lernen läuft im Hintergrund weiter."))
+                    .keyboardShortcut(.defaultAction)
+                    .transition(stepTransition)
                 } else if model.onboardingStep == readyStep {
                     Button {
                         onComplete()
@@ -13027,6 +13046,22 @@ struct OnboardingFlow: View {
         transitionForward = phase.range.lowerBound >= model.onboardingStep
         withAnimation(stepAnimation) {
             model.onboardingStep = phase.range.lowerBound
+        }
+    }
+
+    private var learningSkipTaskKey: String {
+        "\(model.onboardingStep)|\(model.onboardingFinalizationComplete)|\(model.onboardingFinalizationStarted)|\(model.onboardingInitReflectJobID)"
+    }
+
+    @MainActor
+    private func refreshLearningSkipVisibility() async {
+        showLearningSkip = false
+        guard model.onboardingStep == learnStep, !model.onboardingFinalizationComplete else { return }
+        try? await Task.sleep(nanoseconds: 60_000_000_000)
+        guard !Task.isCancelled else { return }
+        guard model.onboardingStep == learnStep, !model.onboardingFinalizationComplete else { return }
+        withAnimation(stepAnimation) {
+            showLearningSkip = true
         }
     }
 
@@ -16276,34 +16311,12 @@ struct OnboardingLearningStep: View {
                 Text(model.text(.learningTitle))
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text(model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.muted)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .frame(maxWidth: 430)
             }
             OnboardingLearningToolTimeline(
                 job: model.onboardingLearningJob,
                 statusText: model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus
             )
             .frame(maxWidth: 560)
-            if model.onboardingFinalizationFailed {
-                HStack(spacing: 10) {
-                    Text(model.lastError)
-                        .font(.caption2)
-                        .foregroundStyle(ElephantTheme.orange)
-                        .lineLimit(2)
-                    Button {
-                        Task { await model.startOnboardingFinalization() }
-                    } label: {
-                        Label(model.text(.tryAgain), systemImage: "arrow.clockwise")
-                    }
-                    .controlSize(.small)
-                }
-            } else {
-                EmptyView()
-            }
         }
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -16325,29 +16338,23 @@ struct OnboardingLearningToolTimeline: View {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(statusTint)
-                Text(localizedYouText(model.appLanguage, en: "Live tool activity", zh: "实时工具调用", fr: "Activité outil en direct", de: "Live-Toolaktivität"))
+                Text(localizedYouText(model.appLanguage, en: "Live learning activity", zh: "实时学习动态", fr: "Activité d'apprentissage", de: "Live-Lernaktivität"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
                 Spacer(minLength: 0)
                 Pill(text: statusLabel, tint: statusTint)
             }
 
-            HStack(alignment: .top, spacing: 9) {
+            HStack(alignment: .center, spacing: 9) {
                 Image(systemName: "waveform.path.ecg")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(statusTint)
                     .frame(width: 18, height: 18)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(stageTitle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(ElephantTheme.ink)
-                        .lineLimit(1)
-                    Text(stageDetail)
-                        .font(.caption2)
-                        .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                Text(statusLine)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
@@ -16355,31 +16362,78 @@ struct OnboardingLearningToolTimeline: View {
             .background(statusTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(statusTint.opacity(0.18), lineWidth: 1))
 
-            ZStack {
-                if let item = latestToolItem {
-                    OnboardingLearningToolLiveSlot(item: item)
-                        .id(item.id)
-                        .transition(toolSlotTransition)
-                } else {
-                    OnboardingLearningToolTimelineEmpty(
-                        text: localizedYouText(model.appLanguage, en: "Waiting for the first tool call", zh: "等待第一次工具调用", fr: "En attente du premier appel d'outil", de: "Wartet auf den ersten Tool-Aufruf"),
-                        detail: statusText,
-                        tint: statusTint,
-                        isActive: isActive
-                    )
-                    .id("waiting")
-                    .transition(toolSlotTransition)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    VStack(spacing: 8) {
+                        if !modelProgress.isEmpty {
+                            OnboardingLearningModelLiveSlot(progress: modelProgress)
+                                .id("model")
+                                .transition(toolSlotTransition)
+                        }
+                        if let item = latestToolItem {
+                            OnboardingLearningToolLiveSlot(item: item)
+                                .id(item.id)
+                                .transition(toolSlotTransition)
+                        } else if modelProgress.isEmpty {
+                            OnboardingLearningToolTimelineEmpty(
+                                text: localizedYouText(model.appLanguage, en: "Waiting for the first activity", zh: "等待第一次实时动态", fr: "En attente de la première activité", de: "Wartet auf die erste Aktivität"),
+                                detail: statusText,
+                                tint: statusTint,
+                                isActive: isActive
+                            )
+                            .id("waiting")
+                            .transition(toolSlotTransition)
+                        }
+                        Color.clear
+                            .frame(height: 1)
+                            .id("activity-bottom")
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .onAppear { scrollActivityToBottom(proxy) }
+                .onChange(of: activityScrollKey) { _ in
+                    scrollActivityToBottom(proxy)
                 }
             }
-            .frame(height: 76)
+            .frame(height: liveContentHeight, alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .top)
             .clipped()
         }
         .padding(11)
-        .frame(maxWidth: .infinity, minHeight: 184, maxHeight: 184, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: timelineHeight, maxHeight: timelineHeight, alignment: .top)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.line.opacity(0.68), lineWidth: 1))
         .clipped()
-        .animation(toolSlotAnimation, value: latestToolItem?.id ?? "waiting")
+        .animation(toolSlotAnimation, value: "\(latestToolItem?.id ?? "waiting")-\(modelProgress.text)")
+    }
+
+    private var modelProgress: LearningModelProgress {
+        job?.modelProgress ?? .empty
+    }
+
+    private var statusLine: String {
+        let title = stageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = stageDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !detail.isEmpty, detail != title else { return title }
+        return "\(title) · \(detail)"
+    }
+
+    private var liveContentHeight: CGFloat { 154 }
+
+    private var timelineHeight: CGFloat { 248 }
+
+    private var activityScrollKey: String {
+        "\(modelProgress.text)|\(latestToolItem?.id ?? "")|\(job?.progressStage ?? "")|\(job?.progressDetail ?? "")"
+    }
+
+    private func scrollActivityToBottom(_ proxy: ScrollViewProxy) {
+        if reduceMotion {
+            proxy.scrollTo("activity-bottom", anchor: .bottom)
+        } else {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo("activity-bottom", anchor: .bottom)
+            }
+        }
     }
 
     private var statusLabel: String {
@@ -16429,6 +16483,9 @@ struct OnboardingLearningToolTimeline: View {
         if isToolProgressDetail(job?.progressDetail ?? ""), let latest = latestToolItem {
             let suffix = latest.preview.isEmpty ? "" : " · \(latest.preview)"
             return "\(latest.name) · \(latest.detail)\(suffix)"
+        }
+        if isToolProgressDetail(job?.progressDetail ?? ""), !modelProgress.isEmpty {
+            return localizedYouText(model.appLanguage, en: "Receiving model reply", zh: "正在接收模型回复", fr: "Réponse du modèle en cours", de: "Modellantwort wird empfangen")
         }
         return detail.isEmpty ? statusText : detail
     }
@@ -16581,7 +16638,8 @@ struct OnboardingLearningToolTimeline: View {
     }
 
     private func isToolProgressDetail(_ value: String) -> Bool {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("tool_event_v1=")
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("tool_event_v1=") || trimmed.hasPrefix("learning_event_v1=")
     }
 }
 
@@ -16631,6 +16689,59 @@ struct OnboardingLearningToolTimelineEmpty: View {
         .frame(maxWidth: .infinity, minHeight: 76, maxHeight: 76, alignment: .leading)
         .background(ElephantTheme.canvas.opacity(0.48), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.line.opacity(0.42), lineWidth: 1))
+    }
+}
+
+struct OnboardingLearningModelLiveSlot: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var progress: LearningModelProgress
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(ElephantTheme.accent.opacity(0.12))
+                    Circle()
+                        .fill(ElephantTheme.accent.opacity(pulse ? 0.20 : 0.42))
+                        .frame(width: 7, height: 7)
+                }
+                .frame(width: 28, height: 28)
+
+                Text(localizedYouText(model.appLanguage, en: "Elephant", zh: "Elephant", fr: "Elephant", de: "Elephant"))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Text(localizedYouText(model.appLanguage, en: "writing", zh: "正在回复", fr: "écrit", de: "schreibt"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(ElephantTheme.accent.opacity(0.10), in: Capsule())
+                Spacer(minLength: 0)
+            }
+
+            Text(progress.text)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: progress.text)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
+        .background(ElephantTheme.canvas.opacity(0.52), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.accent.opacity(0.18), lineWidth: 1))
+        .onAppear {
+            guard !reduceMotion else { return }
+            pulse = true
+        }
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.75).repeatForever(autoreverses: true),
+            value: pulse
+        )
     }
 }
 

@@ -314,6 +314,17 @@ struct LearningToolCallProgress: Equatable {
     static let empty = LearningToolCallProgress(activeToolID: "", completedToolIDs: [], failedToolIDs: [], events: [])
 }
 
+struct LearningModelProgress: Equatable {
+    var text: String
+    var phase: String
+
+    var isEmpty: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    static let empty = LearningModelProgress(text: "", phase: "")
+}
+
 struct LearningJobItem: Identifiable, Equatable {
     var id: String
     var title: String
@@ -326,6 +337,7 @@ struct LearningJobItem: Identifiable, Equatable {
     var resolvedTools: [String]
     var usedTools: [String]
     var toolProgress: LearningToolCallProgress
+    var modelProgress: LearningModelProgress
     var markdown: String
 }
 
@@ -925,7 +937,10 @@ final class ElephantAppModel: ObservableObject {
             }
             try await Task.sleep(nanoseconds: 1_000_000_000)
         }
-        throw APIClientError.badStatus("The init learning job is still running. You can enter Elephant and review the learning queue later.")
+        onboardingFinalizationStatus = text(.learningReady)
+        onboardingFinalizationComplete = true
+        onboardingStep = 17
+        scheduleOnboardingAutoCompletion()
     }
 
     private func scheduleOnboardingAutoCompletion() {
@@ -959,6 +974,13 @@ final class ElephantAppModel: ObservableObject {
         UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
         showingOnboarding = false
         selectedSection = .home
+    }
+
+    func skipOnboardingLearningAndContinue() {
+        onboardingFinalizationFailed = false
+        onboardingFinalizationComplete = true
+        onboardingFinalizationStatus = text(.learningReady)
+        completeOnboarding()
     }
 
     func startNewChat() {
