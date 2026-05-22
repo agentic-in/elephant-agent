@@ -402,7 +402,6 @@ def _run_prepared_sub_agent_child(
         isolated_snapshot.parent.mkdir(parents=True, exist_ok=True)
         object.__setattr__(child_runtime, "snapshot_path", isolated_snapshot)
         object.__setattr__(child_runtime, "sub_agent_active", True)
-        unsubscribe = _relay_child_tool_events(runtime, child_runtime)
         child_runtime.prepare_session_surface(child_session_id)
         if allowed_tools or learning_agent_turn:
             # Scope tool runtime: learning agents with empty allowed_tools get NO
@@ -410,6 +409,7 @@ def _run_prepared_sub_agent_child(
             scoped_tool_runtime = _AllowedToolRuntime(child_runtime.tool_runtime, allowed_tools)
             object.__setattr__(child_runtime, "tool_runtime", scoped_tool_runtime)
             child_runtime.model_provider.tool_runtime = scoped_tool_runtime
+        unsubscribe = _relay_child_tool_events(runtime, child_runtime)
         if learning_agent_turn:
             outcome = child_runtime._run_turn(
                 session_id=child_session_id,

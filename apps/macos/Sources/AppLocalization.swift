@@ -381,7 +381,7 @@ enum AppText {
         case .setupTitle:
             return pick(language, en: "Make Elephant Yours", zh: "让 Elephant 认识你", fr: "Adoptez Elephant", de: "Mach Elephant zu deinem Begleiter")
         case .setupSubtitle:
-            return pick(language, en: "Shape the private memory, voice, and model that will grow with you on this Mac.", zh: "在这台 Mac 上塑造会陪你成长的私有记忆、性格和模型。", fr: "Façonnez la mémoire privée, la voix et le modèle qui évolueront avec vous sur ce Mac.", de: "Forme das private Gedächtnis, die Stimme und das Modell, das auf diesem Mac mit dir wächst.")
+            return pick(language, en: "Set the language, boundaries, and first memories Elephant should begin with.", zh: "先设定 Elephant 开始理解你所需要的语言、边界和第一批记忆。", fr: "Définissez la langue, les limites et les premières mémoires d'Elephant.", de: "Lege Sprache, Grenzen und erste Erinnerungen für Elephant fest.")
         case .back:
             return pick(language, en: "Back", zh: "返回", fr: "Retour", de: "Zurück")
         case .next:
@@ -499,11 +499,11 @@ enum AppText {
         case .leaveEmptyIfNone:
             return pick(language, en: "Leave empty if none", zh: "没有可留空", fr: "Laisser vide si aucune", de: "Leer lassen, falls keine")
         case .surveyTitle:
-            return pick(language, en: "Personal Model Survey", zh: "个人模型问卷", fr: "Questionnaire Personal Model", de: "Personal-Model-Fragebogen")
+            return pick(language, en: "Personal Model Grounding", zh: "Personal Model grounding", fr: "Grounding Personal Model", de: "Personal-Model-Grounding")
         case .surveySubtitle:
-            return pick(language, en: "Choose the closest answer. You can revise it later.", zh: "选择最接近的一项。后续可以随时修正。", fr: "Choisissez la réponse la plus proche. Vous pourrez la corriger plus tard.", de: "Wähle die passendste Antwort. Du kannst sie später ändern.")
+            return pick(language, en: "Choose the closest answer. Add a note if context matters.", zh: "选择最接近的一项。如果有关键背景，可以补一句。", fr: "Choisissez la réponse la plus proche. Ajoutez une note si le contexte compte.", de: "Wähle die passendste Antwort. Füge Kontext hinzu, wenn er wichtig ist.")
         case .innerLandscapeTitle:
-            return pick(language, en: "Recent inner weather", zh: "最近的内在天气", fr: "Météo intérieure récente", de: "Jüngeres inneres Wetter")
+            return pick(language, en: "Inner state", zh: "内在状态", fr: "État intérieur", de: "Innerer Zustand")
         case .valueAnchorTitle:
             return pick(language, en: "Trade-off anchor", zh: "取舍时的锚点", fr: "Ancre de choix", de: "Anker bei Abwägungen")
         case .pressurePatternTitle:
@@ -921,7 +921,7 @@ enum AppText {
         case .phaseProfile:
             return pick(language, en: "Profile", zh: "个人资料", fr: "Profil", de: "Profil")
         case .phasePattern:
-            return pick(language, en: "Patterns", zh: "个人模型", fr: "Schémas", de: "Muster")
+            return pick(language, en: "Grounding", zh: "建模", fr: "Grounding", de: "Grounding")
         case .phaseElephant:
             return pick(language, en: "Elephant", zh: "Elephant", fr: "Elephant", de: "Elephant")
         case .phaseModel:
@@ -943,7 +943,7 @@ enum AppText {
         case .requirementPreferredName:
             return pick(language, en: "Add your preferred name to continue.", zh: "填写你的称呼后继续。", fr: "Ajoutez votre nom d'usage pour continuer.", de: "Füge deine Anrede hinzu, um fortzufahren.")
         case .requirementSurveyChoice:
-            return pick(language, en: "Choose one answer to continue.", zh: "选择一个答案后继续。", fr: "Choisissez une réponse pour continuer.", de: "Wähle eine Antwort, um fortzufahren.")
+            return pick(language, en: "Choose one answer or skip this question.", zh: "选择一个答案，或暂时跳过这道题。", fr: "Choisissez une réponse ou passez cette question.", de: "Wähle eine Antwort oder überspringe diese Frage.")
         case .requirementElephantIdentity:
             return pick(language, en: "Complete Elephant name and vibe.", zh: "填写 Elephant 名字和默认 vibe。", fr: "Complétez le nom et le style d'Elephant.", de: "Vervollständige Elephant-Name und Vibe.")
         case .requirementProviderDetails:
@@ -1107,7 +1107,7 @@ extension AppLanguage {
                 .innerLandscape: ["Clear but busy", "Foggy and seeking clarity", "Recovering after a storm", "Quietly gathering energy"],
                 .valueAnchor: ["Long-term creativity", "Relationships and commitments", "Health and energy", "Freedom and exploration"],
                 .pressurePattern: ["Accelerate and solve", "Check details repeatedly", "Step back temporarily", "Seek confirmation"],
-                .recoveryStyle: ["Solitude and sleep", "Movement and body cues", "Friends or close conversation", "Organizing space or plans"],
+                .recoveryStyle: ["Quiet, lower input, and real rest", "Movement and body rhythm", "Trusted conversation", "A small completed action"],
                 .decisionCompass: ["It makes me more honest", "It expands future options", "It reduces inner friction", "It serves people who matter"]
             ]
         case .zh:
@@ -1115,7 +1115,7 @@ extension AppLanguage {
                 .innerLandscape: ["晴朗但忙碌", "有雾，需要澄清", "暴雨后恢复", "安静蓄力"],
                 .valueAnchor: ["长期创造力", "关系与承诺", "健康与精力", "自由与探索"],
                 .pressurePattern: ["加速解决问题", "反复检查细节", "暂时抽离", "找人确认"],
-                .recoveryStyle: ["独处和睡眠", "运动和身体感", "朋友或亲密对话", "整理空间或计划"],
+                .recoveryStyle: ["安静下来，减少输入，真正休息", "让身体换个节奏", "和信任的人轻轻聊一会儿", "完成一个很小的动作"],
                 .decisionCompass: ["它让我更诚实", "它扩大长期选择", "它减少内耗", "它服务重要的人"]
             ]
         case .fr:

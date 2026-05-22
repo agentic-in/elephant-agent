@@ -232,7 +232,7 @@ struct SleepDisplayView: View {
     }
 }
 
-private struct SleepVideoBackdrop: View {
+struct SleepVideoBackdrop: View {
     var paused: Bool
 
     var body: some View {
@@ -311,7 +311,7 @@ private final class VideoLayerView: NSView {
     }
 }
 
-private struct SleepAmbientGlass: View {
+struct SleepAmbientGlass: View {
     var paused: Bool
 
     var body: some View {

@@ -147,6 +147,12 @@ struct ChatMessage: Identifiable, Equatable {
     var isStreaming = false
 }
 
+struct WakeQueuedPrompt: Identifiable, Equatable {
+    var id = UUID()
+    var text: String
+    var date = Date()
+}
+
 struct PersonalModelFact: Identifiable, Equatable {
     var id: String
     var text: String
@@ -292,6 +298,22 @@ struct UsageTrendPoint: Identifiable, Equatable {
     var totalTokens: Int
 }
 
+struct LearningToolCallEvent: Identifiable, Equatable {
+    var id: String
+    var toolID: String
+    var phase: String
+    var preview: String
+}
+
+struct LearningToolCallProgress: Equatable {
+    var activeToolID: String
+    var completedToolIDs: [String]
+    var failedToolIDs: [String]
+    var events: [LearningToolCallEvent]
+
+    static let empty = LearningToolCallProgress(activeToolID: "", completedToolIDs: [], failedToolIDs: [], events: [])
+}
+
 struct LearningJobItem: Identifiable, Equatable {
     var id: String
     var title: String
@@ -303,6 +325,7 @@ struct LearningJobItem: Identifiable, Equatable {
     var resolvedFeatures: [String]
     var resolvedTools: [String]
     var usedTools: [String]
+    var toolProgress: LearningToolCallProgress
     var markdown: String
 }
 
@@ -470,6 +493,7 @@ final class ElephantAppModel: ObservableObject {
     ]
     @Published var chatScrollRevision = 0
     @Published var wakeDraft = ""
+    @Published var wakeQueue: [WakeQueuedPrompt] = []
     @Published var onboardingName = "Elephant"
     @Published var onboardingPurpose = ElephantAppModel.persistedAppLanguage().defaultElephantVibe
     @Published var onboardingPreferredName = ""
@@ -493,6 +517,8 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingBlogURL = ""
     @Published var onboardingLinkedInURL = ""
     @Published var onboardingTwitterURL = ""
+    @Published var onboardingGroundingDepth = OnboardingGroundingDepth.standard.rawValue
+    @Published var onboardingGroundingAnswers: [String: OnboardingGroundingAnswerDraft] = [:]
     @Published var onboardingInnerLandscape = ""
     @Published var onboardingValueAnchor = ""
     @Published var onboardingPressurePattern = ""
@@ -511,7 +537,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingFinalizationFailed = false
     @Published var onboardingFinalizationStatus = ""
     @Published var onboardingInitReflectJobID = ""
-    @Published var showingOnboarding = false
+    @Published var showingOnboarding = ElephantAppModel.onboardingPreviewMode
     @Published var showingCommandPalette = false
     @Published var lastError = ""
     @Published var providerTestResult = ""
@@ -536,7 +562,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var userAvatarPath = UserDefaults.standard.string(forKey: ElephantAppModel.userAvatarPathKey) ?? ""
     @Published var herdAvatarPaths: [String: String] = UserDefaults.standard.dictionary(forKey: ElephantAppModel.herdAvatarPathsKey) as? [String: String] ?? [:]
     @Published var hiddenEpisodeIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ElephantAppModel.hiddenEpisodeIDsKey) ?? [])
-    @Published var isSleepDisplayPresented = ElephantAppModel.storedAppLockPasswordRecord() != nil
+    @Published var isSleepDisplayPresented = false
     @Published var sleepDisplayReason = "manual"
     @Published var sleepUnlockPassword = ""
     @Published var sleepUnlockError = ""
@@ -559,6 +585,7 @@ final class ElephantAppModel: ObservableObject {
     private static let sleepIdleMinutesKey = "elephant.mac.sleepIdleMinutes"
     private static let appLockPasswordRecordKey = "elephant.mac.appLockPasswordRecord"
     private static let defaultSleepIdleMinutes = 10
+    private static let onboardingPreviewMode = ProcessInfo.processInfo.environment["ELEPHANT_MAC_ONBOARDING_PREVIEW"] == "1"
 
     static func persistedAppLanguage() -> AppLanguage {
         if let code = UserDefaults.standard.string(forKey: appLanguageKey) {
@@ -639,8 +666,11 @@ final class ElephantAppModel: ObservableObject {
             try await refreshDashboard()
             corePhase = .ready
             startReadinessPollingIfNeeded()
-            if !snapshot.hasElephant || snapshot.providerID.isEmpty {
+            if Self.onboardingPreviewMode || !snapshot.hasElephant || snapshot.providerID.isEmpty {
+                isSleepDisplayPresented = false
                 showingOnboarding = true
+            } else if hasAppLockPassword {
+                beginSleepDisplay(reason: "launch")
             }
         } catch {
             corePhase = .failed(error.localizedDescription)
@@ -664,6 +694,21 @@ final class ElephantAppModel: ObservableObject {
             readinessPollTask = nil
         } else if corePhase == .ready {
             startReadinessPollingIfNeeded()
+        }
+    }
+
+    func refreshProviderCatalogForOnboarding() async {
+        if !snapshot.providerOptions.isEmpty { return }
+        do {
+            if client.baseURL == nil {
+                let runtime = try await runner.start()
+                client = APIClient(baseURL: runtime.baseURL)
+                snapshot.apiURL = runtime.baseURL.absoluteString
+                snapshot.databasePath = runtime.databasePath.path
+            }
+            try await refreshDashboard()
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
@@ -812,7 +857,8 @@ final class ElephantAppModel: ObservableObject {
             valueAnchor: onboardingValueAnchor,
             pressurePattern: onboardingPressurePattern,
             recoveryStyle: onboardingRecoveryStyle,
-            decisionCompass: onboardingDecisionCompass
+            decisionCompass: onboardingDecisionCompass,
+            groundingAnswers: onboardingGroundingAnswerRecords()
         )
         return stateID
     }
@@ -947,6 +993,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func beginSleepDisplay(reason: String = "manual") {
+        guard !showingOnboarding else { return }
         sleepDisplayReason = reason
         sleepUnlockPassword = ""
         sleepUnlockError = ""
@@ -1755,9 +1802,31 @@ final class ElephantAppModel: ObservableObject {
 
     func sendWakeMessage() async {
         let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isWakeRunning else { return }
+        guard !text.isEmpty else { return }
         wakeDraft = ""
+        wakeQueue.append(WakeQueuedPrompt(text: text))
+        focusComposer()
+        await drainWakeQueueIfNeeded()
+    }
+
+    func removeQueuedWakeMessage(_ item: WakeQueuedPrompt) {
+        wakeQueue.removeAll { $0.id == item.id }
+    }
+
+    private func drainWakeQueueIfNeeded() async {
+        guard !isWakeRunning else { return }
         isWakeRunning = true
+        defer {
+            isWakeRunning = false
+            focusComposer()
+        }
+        while !wakeQueue.isEmpty {
+            let item = wakeQueue.removeFirst()
+            await runWakeMessage(item.text)
+        }
+    }
+
+    private func runWakeMessage(_ text: String) async {
         messages.append(ChatMessage(role: .user, text: text))
         chatScrollRevision += 1
 
@@ -2062,7 +2131,6 @@ final class ElephantAppModel: ObservableObject {
                 lastError = chatLoopFailureDetail(error.localizedDescription)
             }
         }
-        isWakeRunning = false
     }
 
     func focusComposer() {
@@ -2216,6 +2284,8 @@ final class ElephantAppModel: ObservableObject {
         onboardingBlogURL = ""
         onboardingLinkedInURL = ""
         onboardingTwitterURL = ""
+        onboardingGroundingDepth = OnboardingGroundingDepth.standard.rawValue
+        onboardingGroundingAnswers = [:]
         onboardingInnerLandscape = ""
         onboardingValueAnchor = ""
         onboardingPressurePattern = ""
