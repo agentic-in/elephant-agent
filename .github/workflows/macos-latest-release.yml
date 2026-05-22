@@ -105,7 +105,18 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "${keychain_password}" "${keychain_path}"
           security list-keychains -d user -s "${keychain_path}" $(security list-keychains -d user | tr -d '"')
 
-          echo "MACOS_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY}" >> "$GITHUB_ENV"
+          echo "Available codesigning identities:"
+          security find-identity -v -p codesigning "${keychain_path}"
+          resolved_identity="$(
+            security find-identity -v -p codesigning "${keychain_path}" \
+              | awk '/Developer ID Application|Mac Developer ID Application/ { print $2; exit }'
+          )"
+          if [ -z "${resolved_identity}" ]; then
+            echo "::error::No Developer ID Application identity is available after importing the p12 certificate."
+            exit 1
+          fi
+
+          echo "MACOS_SIGNING_IDENTITY=${resolved_identity}" >> "$GITHUB_ENV"
           echo "MACOS_NOTARIZE=1" >> "$GITHUB_ENV"
           echo "MACOS_RELEASE_SIGNING_MODE=developer-id-notarized" >> "$GITHUB_ENV"
           echo "signing_mode=developer-id-notarized" >> "$GITHUB_OUTPUT"
