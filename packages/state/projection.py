@@ -107,6 +107,19 @@ def _project_companion_settings(
     relationship_record: RenderedRelationshipView | None,
 ) -> CompanionSettings:
     resolved_current = current or _default_companion_settings(mode)
+    if identity_record is not None and current is None:
+        resolved_preset = resolve_personality_preset(identity_record.personality_preset, mode=mode)
+        resolved_current = CompanionSettings(
+            text_first=resolved_current.text_first,
+            personality_preset=resolved_preset.preset_id,
+            personality=resolved_preset.traits,
+            initiative=identity_record.initiative or resolved_current.initiative,
+            preserve_relationship_timeline=resolved_current.preserve_relationship_timeline,
+            preserve_preferences=resolved_current.preserve_preferences,
+            preserve_corrections=resolved_current.preserve_corrections,
+            preserve_emotional_context=resolved_current.preserve_emotional_context,
+            notes=resolved_current.notes,
+        )
     if identity_record is None and relationship_record is None:
         return resolved_current
     governance_flags = set(identity_record.governance_flags if identity_record is not None else ())

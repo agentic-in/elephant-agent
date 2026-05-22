@@ -108,11 +108,12 @@ def run_sub_agent_task(
     allowed_tools: tuple[str, ...] = (),
     system_prompt: str = "",
     learning_agent: bool = False,
+    child_metadata: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
     result = run_sub_agent_tasks(
         runtime,
         session_id=session_id,
-        tasks=({"task": task, "name": name, "skills": skills, "allowed_tools": allowed_tools, "system_prompt": system_prompt, "learning_agent": learning_agent},),
+        tasks=({"task": task, "name": name, "skills": skills, "allowed_tools": allowed_tools, "system_prompt": system_prompt, "learning_agent": learning_agent, "child_metadata": dict(child_metadata or {})},),
         max_concurrency=1,
     )
     results = tuple(result.get("results") or ())
@@ -149,6 +150,7 @@ def run_sub_agent_tasks(
             allowed_tools=tuple(item.get("allowed_tools") or ()),
             system_prompt=str(item.get("system_prompt") or ""),
             learning_agent=bool(item.get("learning_agent")),
+            child_metadata=item.get("child_metadata") if isinstance(item.get("child_metadata"), Mapping) else None,
         )
         for item in normalized
     )
@@ -206,6 +208,7 @@ def start_sub_agent_tasks(
             allowed_tools=tuple(item.get("allowed_tools") or ()),
             system_prompt=str(item.get("system_prompt") or ""),
             learning_agent=bool(item.get("learning_agent")),
+            child_metadata=item.get("child_metadata") if isinstance(item.get("child_metadata"), Mapping) else None,
         )
         for item in normalized
     )
@@ -302,8 +305,14 @@ def _prepare_sub_agent_child(
     allowed_tools: tuple[str, ...],
     system_prompt: str = "",
     learning_agent: bool = False,
+    child_metadata: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
-    child = _open_sub_agent_child_episode(runtime, parent_session_id, learning_agent=learning_agent)
+    child = _open_sub_agent_child_episode(
+        runtime,
+        parent_session_id,
+        learning_agent=learning_agent,
+        child_metadata=child_metadata,
+    )
     child_session_id = child.episode_id
     prompt = task if system_prompt.strip() else _compose_sub_agent_prompt(
         runtime,
@@ -322,14 +331,29 @@ def _prepare_sub_agent_child(
         "skills": skills,
         "allowed_tools": tuple(dict.fromkeys(item.strip() for item in allowed_tools if item.strip())),
         "learning_agent": learning_agent,
+        "child_metadata": dict(child_metadata or {}),
     }
 
 
-def _open_sub_agent_child_episode(runtime: Any, parent_session_id: str, *, learning_agent: bool = False) -> Episode:
+def _open_sub_agent_child_episode(
+    runtime: Any,
+    parent_session_id: str,
+    *,
+    learning_agent: bool = False,
+    child_metadata: Mapping[str, Any] | None = None,
+) -> Episode:
     parent = runtime.repository.load_episode(parent_session_id)
     if parent is None:
         raise KeyError(f"episode not found: {parent_session_id}")
     now = datetime.now(timezone.utc)
+    metadata = {
+        "episode_kind": "sub_agent",
+        "parent_episode_id": parent.episode_id,
+        "learning_agent": "true" if learning_agent else "false",
+        "opened_at": now.isoformat(),
+    }
+    if child_metadata:
+        metadata.update({str(key): value for key, value in child_metadata.items() if str(key).strip()})
     child = Episode(
         episode_id=uuid4().hex,
         state_id=parent.state_id,
@@ -340,12 +364,7 @@ def _open_sub_agent_child_episode(runtime: Any, parent_session_id: str, *, learn
         started_at=now,
         updated_at=now,
         parent_episode_id=parent.episode_id,
-        metadata={
-            "episode_kind": "sub_agent",
-            "parent_episode_id": parent.episode_id,
-            "learning_agent": "true" if learning_agent else "false",
-            "opened_at": now.isoformat(),
-        },
+        metadata=metadata,
     )
     runtime.repository.upsert_episode(child)
     return child
@@ -500,7 +519,16 @@ def _normalize_sub_agent_task(item: Mapping[str, Any]) -> Mapping[str, Any]:
     allowed_tools = cron_skill_ids(item.get("allowed_tools") or item.get("allowed_tool_ids"))
     system_prompt = str(item.get("system_prompt") or "").strip()
     learning_agent = bool(item.get("learning_agent"))
-    return {"task": task, "name": name_text, "skills": skills, "allowed_tools": allowed_tools, "system_prompt": system_prompt, "learning_agent": learning_agent}
+    child_metadata = item.get("child_metadata") if isinstance(item.get("child_metadata"), Mapping) else {}
+    return {
+        "task": task,
+        "name": name_text,
+        "skills": skills,
+        "allowed_tools": allowed_tools,
+        "system_prompt": system_prompt,
+        "learning_agent": learning_agent,
+        "child_metadata": dict(child_metadata),
+    }
 
 
 def _aggregate_sub_agent_status(results: list[Mapping[str, Any] | None]) -> str:

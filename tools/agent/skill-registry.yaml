@@ -155,7 +155,8 @@
         "packages/growth/**",
         "packages/understanding/**",
         "packages/experience/**",
-        "packages/continuity/**"
+        "packages/continuity/**",
+        "packages/reflect/**"
       ],
       "required_surfaces": [
         "learning"
@@ -163,7 +164,8 @@
       "conditional_surfaces": [
         "kernel",
         "evidence",
-        "state"
+        "state",
+        "learning_agents"
       ],
       "read_first": [
         "docs/system-design/system-layer-model.md"

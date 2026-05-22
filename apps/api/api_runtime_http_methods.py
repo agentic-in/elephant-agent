@@ -364,15 +364,18 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             or self.repository.ensure_default_personal_model().personal_model_id
         ).strip()
         identity_text = _elephant_identity_text_from_payload(payload, elephant_id=elephant_id, display_name=display_name)
+        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode")) or "companion"
+        initiative = _optional_str(payload.get("initiative")) or "gentle"
+        working_style = _optional_str(payload.get("personality_preset") or payload.get("working_style")) or "companion"
         state = self.repository.create_state(
             personal_model_id=personal_model_id,
             state_id=f"state:{elephant_id}",
             state_anchor=f"elephant:{elephant_id}",
             elephant_id=elephant_id,
             elephant_name=display_name,
-            identity_mode=_optional_str(payload.get("mode") or payload.get("identity_mode")) or "",
-            initiative=_optional_str(payload.get("initiative")) or "",
-            working_style=_optional_str(payload.get("personality_preset") or payload.get("working_style")) or "",
+            identity_mode=identity_mode,
+            initiative=initiative,
+            working_style=working_style,
             surface_bindings=("api", "dashboard"),
             elephant_identity_text=identity_text,
             summary=f"{display_name} is ready to continue this elephant line.",

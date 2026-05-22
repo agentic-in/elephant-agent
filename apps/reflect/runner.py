@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import json
 from threading import Lock
 from typing import Any
 
 from packages.contracts.runtime import LearningJob
 
-from .evidence import build_evidence
+from .evidence import build_evidence, build_skill_optimization_context
 from .features import TRIGGER_CONSERVATISM, resolve_features
 from .features.types import Feature
 from .prompts import BOUNDARIES, CLAIM_TEXT_RULE, CONSERVATISM_PROMPTS, LANGUAGE_RULE, TOPIC_FORMAT
@@ -49,7 +50,7 @@ def _assemble_system_prompt(features: tuple[Feature, ...], *, conservatism: str)
     sections.extend(["", f"Approach: {conservatism_prompt}"])
 
     # Shared knowledge
-    if any(f.feature_id in ("pm", "questions", "skills", "dream") for f in features):
+    if any(f.feature_id in ("pm", "questions", "skills", "dream", "skill_optimization") for f in features):
         sections.extend(["", TOPIC_FORMAT])
 
     sections.extend(["", LANGUAGE_RULE, "", CLAIM_TEXT_RULE, "", BOUNDARIES])
@@ -229,6 +230,14 @@ def run_reflect_agent(
     allowed_tools = _compose_tools(features)
     system_prompt = _assemble_system_prompt(features, conservatism=conservatism)
     evidence = build_evidence(runtime, job, features)
+    child_metadata: dict[str, str] = {}
+    if "skill_optimization" in feature_ids:
+        _, _, candidate_records = build_skill_optimization_context(runtime, job)
+        child_metadata["authoritative_skill_optimization_candidates_json"] = json.dumps(
+            list(candidate_records),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
 
     # Update job progress (best-effort; sync paths like context compress
     # may pass a transient job that is not persisted in DB — never fail here).
@@ -252,6 +261,7 @@ def run_reflect_agent(
             allowed_tools=allowed_tools,
             system_prompt=system_prompt,
             learning_agent=True,
+            child_metadata=child_metadata,
         )
     except Exception as exc:
         raise RuntimeError(f"reflect agent failed: {exc}") from exc

@@ -187,6 +187,27 @@ def _lines_for_claims(result: Mapping[str, Any]) -> list[str]:
         protected_suffix = f" protected={protected}" if protected else ""
         lines.append(f"- [{lens}/{topic}] ref={ref} status={status} policy={policy}{protected_suffix} updated={updated}")
         lines.append(f"  text: {text}")
+        if str(claim.get("projection_policy") or "").strip() == "skill_optimization_candidate":
+            candidate_parts: list[str] = []
+            for key in (
+                "candidate_key",
+                "review_status",
+                "optimization_type",
+                "signal_type",
+                "occurrence_count",
+                "target_scope",
+                "skill_id",
+            ):
+                value = str(claim.get(key) or "").strip()
+                if value:
+                    candidate_parts.append(f"{key}={value}")
+            if claim.get("confidence") not in ("", None):
+                candidate_parts.append(f"confidence={claim.get('confidence')}")
+            if candidate_parts:
+                lines.append(f"  candidate: {' '.join(candidate_parts)}")
+            suggested_action = str(claim.get("suggested_action") or "").strip()
+            if suggested_action:
+                lines.append(f"  suggested_action: {suggested_action}")
     diagnostics = result.get("diagnostics")
     if isinstance(diagnostics, Mapping):
         reason = str(diagnostics.get("no_match_reason") or "").strip()

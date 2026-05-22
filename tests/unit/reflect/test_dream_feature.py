@@ -13,7 +13,10 @@ class DreamFeatureTest(unittest.TestCase):
     def test_dream_trigger_resolves_to_single_nightly_bundle(self) -> None:
         features = resolve_features("dream")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("dream", "questions", "skills", "diary"))
+        self.assertEqual(
+            tuple(feature.feature_id for feature in features),
+            ("dream", "questions", "skills", "skill_optimization", "diary"),
+        )
 
     def test_explicit_dream_drops_pm_learning_but_preserves_questions(self) -> None:
         features = resolve_features("manual", explicit_features=("pm", "questions", "dream", "recall"))
@@ -23,7 +26,10 @@ class DreamFeatureTest(unittest.TestCase):
     def test_dream_trigger_with_legacy_explicit_metadata_adds_nightly_bundle(self) -> None:
         features = resolve_features("dream", explicit_features=("dream", "questions"))
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("dream", "questions", "skills", "diary"))
+        self.assertEqual(
+            tuple(feature.feature_id for feature in features),
+            ("dream", "questions", "skills", "skill_optimization", "diary"),
+        )
 
     def test_explicit_dream_alone_stays_dream_only(self) -> None:
         features = resolve_features("manual", explicit_features=("dream",))

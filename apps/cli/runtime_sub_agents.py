@@ -25,6 +25,7 @@ class CliRuntimeSubAgentsMixin:
         allowed_tools: tuple[str, ...] = (),
         system_prompt: str = "",
         learning_agent: bool = False,
+        child_metadata: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any]:
         return run_sub_agent_task(
             self,
@@ -35,6 +36,7 @@ class CliRuntimeSubAgentsMixin:
             allowed_tools=allowed_tools,
             system_prompt=system_prompt,
             learning_agent=learning_agent,
+            child_metadata=child_metadata,
         )
 
     def run_sub_agents(
