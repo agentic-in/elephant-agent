@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+import tempfile
+import unittest
+from unittest import mock
+
+from apps.cli.runtime_cron_sub_agents import _run_prepared_sub_agent_child
+from packages.contracts import ExecutionResult
+from packages.tools import ToolInvocation, ToolLifecycleEvent
+
+
+class _ParentToolRuntime:
+    def __init__(self) -> None:
+        self.events: list[ToolLifecycleEvent] = []
+
+    def _emit_event(self, event: ToolLifecycleEvent) -> None:
+        self.events.append(event)
+
+
+class _ChildToolRuntime:
+    descriptor = SimpleNamespace()
+
+    def __init__(self) -> None:
+        self.observers = []
+
+    def subscribe(self, observer):
+        self.observers.append(observer)
+
+        def unsubscribe() -> None:
+            if observer in self.observers:
+                self.observers.remove(observer)
+
+        return unsubscribe
+
+    def invoke(self, tool_name, arguments, *, session_id, requester=None):
+        invocation = ToolInvocation(
+            invocation_id=f"{session_id}:{tool_name}",
+            tool_id=tool_name,
+            session_id=session_id,
+            arguments=dict(arguments),
+            requested_at=datetime.now(timezone.utc),
+            requester=requester,
+        )
+        event = ToolLifecycleEvent(
+            event_id=f"{invocation.invocation_id}:execution.started",
+            invocation=invocation,
+            phase="execution.started",
+            detail=f"executing {tool_name}",
+        )
+        for observer in tuple(self.observers):
+            observer(event)
+        return ExecutionResult(
+            execution_id=invocation.invocation_id,
+            episode_id=session_id,
+            outcome="success",
+            summary="tool completed",
+            side_effects=(tool_name,),
+        )
+
+
+class RuntimeSubAgentTest(unittest.TestCase):
+    def test_learning_sub_agent_relays_allowed_tool_events_to_parent_runtime(self) -> None:
+        parent_tool_runtime = _ParentToolRuntime()
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        parent_runtime = SimpleNamespace(
+            tool_runtime=parent_tool_runtime,
+            paths=SimpleNamespace(state_dir=Path(tempdir.name)),
+        )
+        child_tool_runtime = _ChildToolRuntime()
+        child_runtime = SimpleNamespace(
+            tool_runtime=child_tool_runtime,
+            model_provider=SimpleNamespace(tool_runtime=child_tool_runtime),
+            prepare_session_surface=mock.Mock(),
+            close=mock.Mock(),
+        )
+
+        def run_turn(**kwargs):
+            child_runtime.tool_runtime.invoke(
+                "tool.personal_model.search",
+                {"query": "onboarding"},
+                session_id=str(kwargs["session_id"]),
+                requester="model",
+            )
+            return SimpleNamespace(
+                execution=ExecutionResult(
+                    execution_id="exec:learning-child",
+                    episode_id=str(kwargs["session_id"]),
+                    outcome="success",
+                    summary="learning result written",
+                )
+            )
+
+        child_runtime._run_turn = mock.Mock(side_effect=run_turn)
+        prepared_child = {
+            "session_id": "episode:child",
+            "parent_session_id": "episode:parent",
+            "task": "Mode: init\nLearning context packet: compact facts",
+            "name": "Init learning",
+            "skills": (),
+            "allowed_tools": ("tool.personal_model.search",),
+            "system_prompt": "[SYSTEM: Background Learning Agent]",
+            "learning_agent": True,
+            "child_metadata": {},
+        }
+
+        with mock.patch("apps.cli.runtime_cron_sub_agents._create_child_runtime", return_value=child_runtime):
+            result = _run_prepared_sub_agent_child(parent_runtime, prepared_child=prepared_child)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(
+            any(
+                event.invocation.tool_id == "tool.personal_model.search"
+                and event.phase == "execution.started"
+                for event in parent_tool_runtime.events
+            )
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -13,7 +13,7 @@ from tests.e2e.support.processes import find_free_port, wait_for_json, wait_for_
 DASHBOARD_INDEX = ROOT / "apps" / "dashboard" / "dist" / "index.html"
 
 
-def _ensure_playwright_chromium() -> None:
+def _ensure_playwright_headless_shell() -> None:
     try:
         from playwright.sync_api import sync_playwright
     except ModuleNotFoundError as exc:  # pragma: no cover - dependency contract failure
@@ -21,14 +21,14 @@ def _ensure_playwright_chromium() -> None:
 
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch()
+            browser = playwright.chromium.launch(headless=True)
             browser.close()
     except Exception as exc:
         message = str(exc)
         if "Executable doesn't exist" not in message and "playwright install" not in message:
             raise
         subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
+            [sys.executable, "-m", "playwright", "install", "--only-shell", "chromium"],
             cwd=ROOT,
             check=True,
             text=True,
@@ -37,13 +37,13 @@ def _ensure_playwright_chromium() -> None:
 
 
 def _drive_dashboard_chat(dashboard_url: str) -> None:
-    _ensure_playwright_chromium()
+    _ensure_playwright_headless_shell()
 
     from playwright.sync_api import sync_playwright
 
     chat_url = dashboard_url.rstrip("/") + "/chat"
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
             page.goto(chat_url, wait_until="domcontentloaded")

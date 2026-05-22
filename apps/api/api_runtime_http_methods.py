@@ -637,6 +637,7 @@ def _dispatch_states(self, method: str, parts: tuple[str, ...], body: bytes | No
                 state_id=state_id,
                 text=_optional_str(payload.get("text") or payload.get("content")),
                 fields=payload.get("fields") if isinstance(payload.get("fields"), dict) else None,
+                grounding_answers=payload.get("grounding_answers") if isinstance(payload.get("grounding_answers"), list) else None,
                 append=bool(payload.get("append", False)),
                 clear=bool(payload.get("clear", False)),
                 split_personal_model_facts=bool(payload.get("split_personal_model_facts", False)),

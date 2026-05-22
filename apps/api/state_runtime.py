@@ -255,6 +255,7 @@ class APIStateService:
         personal_model_id: str | None = None,
         text: str | None = None,
         fields: dict[str, object] | None = None,
+        grounding_answers: list[object] | None = None,
         append: bool = False,
         clear: bool = False,
         split_personal_model_facts: bool = False,
@@ -307,6 +308,7 @@ class APIStateService:
                 personal_model_id=personal_model.profile_id,
                 fields=field_updates or {},
                 text=normalized_text,
+                grounding_answers=grounding_answers,
                 state_id=resolved_state.state_id if resolved_state is not None else state_id,
                 episode_id=episode_id,
                 captured_at=datetime.now(timezone.utc),
@@ -505,6 +507,7 @@ def _replace_user_profile_capture_with_split_facts(
     personal_model_id: str,
     fields: dict[str, str],
     text: str | None,
+    grounding_answers: list[object] | None = None,
     state_id: str | None,
     episode_id: str | None,
     captured_at: datetime,
@@ -550,6 +553,46 @@ def _replace_user_profile_capture_with_split_facts(
             )
         )
 
+    for answer in _normalized_grounding_answers(grounding_answers):
+        question_id = answer["question_id"]
+        field_id = f"grounding_{question_id}"
+        lens = answer["lens"] if answer["lens"] in {"identity", "world", "pulse", "journey"} else "identity"
+        topic = answer["topic"] or f"{lens}.grounding.{question_id}"
+        sensitivity = answer["sensitivity"] or "medium"
+        upsert_fact(
+            Fact(
+                fact_id=_init_profile_fact_id(profile_id, field_id),
+                personal_model_id=profile_id,
+                lens=lens,
+                text=answer["fact_text"],
+                confidence=1.0,
+                committed_at=captured_at,
+                source="user_explicit",
+                source_episode_ids=(episode_id,) if episode_id else (),
+                status="active",
+                metadata={
+                    "topic": topic,
+                    "component_kind": "user_profile",
+                    "sync_source": "api.user.update",
+                    "surface": "api",
+                    "state_id": state_id or "",
+                    "episode_id": episode_id or "",
+                    "sensitivity": sensitivity,
+                    "user_directed": "true",
+                    "recall_policy": "stable",
+                    "retention_lifecycle": "durable",
+                    "init_profile_field": field_id,
+                    "grounding_question_id": question_id,
+                    "grounding_option_id": answer["option_id"],
+                    "grounding_question_title": answer["question_title"],
+                    "grounding_question_prompt": answer["question_prompt"],
+                    "grounding_option_label": answer["option_label"],
+                    "grounding_option_detail": answer["option_detail"],
+                    "grounding_user_note": answer["note"],
+                },
+            )
+        )
+
     for fact in list_facts(personal_model_id=profile_id, status=("active",)):
         metadata = dict(fact.metadata or {})
         if metadata.get("canonical_component") != "user-profile":
@@ -585,6 +628,34 @@ def _split_profile_values(*, fields: dict[str, str], text: str | None) -> dict[s
         if key and value:
             values[key] = value
     return values
+
+
+def _normalized_grounding_answers(raw_answers: list[object] | None) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for raw_answer in raw_answers or []:
+        if not isinstance(raw_answer, dict):
+            continue
+        answer = {
+            "question_id": _grounding_token(raw_answer.get("question_id")),
+            "option_id": _grounding_token(raw_answer.get("option_id")),
+            "question_title": str(raw_answer.get("question_title") or "").strip(),
+            "question_prompt": str(raw_answer.get("question_prompt") or "").strip(),
+            "option_label": str(raw_answer.get("option_label") or "").strip(),
+            "option_detail": str(raw_answer.get("option_detail") or "").strip(),
+            "note": str(raw_answer.get("note") or "").strip(),
+            "fact_text": str(raw_answer.get("fact_text") or "").strip(),
+            "lens": str(raw_answer.get("lens") or "").strip().lower(),
+            "topic": str(raw_answer.get("topic") or "").strip(),
+            "sensitivity": str(raw_answer.get("sensitivity") or "").strip().lower(),
+        }
+        if not answer["question_id"] or not answer["fact_text"]:
+            continue
+        normalized.append(answer)
+    return normalized
+
+
+def _grounding_token(value: object) -> str:
+    return re.sub(r"[^a-z0-9_]+", "_", str(value or "").strip().lower()).strip("_")
 
 
 def _init_profile_field_key(value: object) -> str:

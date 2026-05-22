@@ -239,7 +239,8 @@ struct APIClient {
         valueAnchor: String = "",
         pressurePattern: String = "",
         recoveryStyle: String = "",
-        decisionCompass: String = ""
+        decisionCompass: String = "",
+        groundingAnswers: [OnboardingGroundingAnswerRecord] = []
     ) async throws {
         guard !stateID.isEmpty else { return }
         let fields: [String: String] = [
@@ -272,20 +273,25 @@ struct APIClient {
             "decision_compass": decisionCompass
         ].filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-        guard !fields.isEmpty || !durableNotes.isEmpty else { return }
+        let groundingPayload = groundingAnswers.map(\.payload)
+        guard !fields.isEmpty || !durableNotes.isEmpty || !groundingPayload.isEmpty else { return }
         let lines = (fields.map { "\($0.key): \($0.value)" } + durableNotes.map { "\($0.key): \($0.value)" })
             .sorted()
             .joined(separator: "\n")
+        var body: [String: Any] = [
+            "append": true,
+            "fields": fields,
+            "durable_fields": durableNotes,
+            "split_personal_model_facts": true,
+            "text": lines
+        ]
+        if !groundingPayload.isEmpty {
+            body["grounding_answers"] = groundingPayload
+        }
         _ = try await request(
             path: "/v1/states/\(stateID)/user",
             method: "POST",
-            body: [
-                "append": true,
-                "fields": fields,
-                "durable_fields": durableNotes,
-                "split_personal_model_facts": true,
-                "text": lines
-            ]
+            body: body
         )
     }
 
@@ -1106,6 +1112,7 @@ enum SnapshotParser {
             let features = learningFeatures(from: row, metadata: metadata, trigger: trigger, progressDetail: progressDetail)
             let tools = learningTools(from: row, metadata: metadata, features: features)
             let usedTools = learningUsedTools(from: row)
+            let toolProgress = learningToolProgress(from: progressDetail, progressStage: progressStage, usedTools: usedTools)
             let resultText = learningMarkdown(from: row)
             return LearningJobItem(
                 id: id,
@@ -1118,6 +1125,7 @@ enum SnapshotParser {
                 resolvedFeatures: features,
                 resolvedTools: tools,
                 usedTools: usedTools,
+                toolProgress: toolProgress,
                 markdown: resultText
             )
         }
@@ -1879,6 +1887,134 @@ enum SnapshotParser {
             if !tools.isEmpty { return deduplicated(tools) }
         }
         return []
+    }
+
+    private static func learningToolProgress(from progressDetail: String, progressStage: String, usedTools: [String]) -> LearningToolCallProgress {
+        let trimmed = progressDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("tool_event_v1=") {
+            let payloadText = String(trimmed.dropFirst("tool_event_v1=".count))
+            let payload = object(payloadText)
+            let activeTool = string(payload["active_tool"] ?? payload["activeTool"])
+            let completedTools = deduplicated(listStrings(payload["completed_tools"] ?? payload["completedTools"]))
+            let failedTools = deduplicated(listStrings(payload["failed_tools"] ?? payload["failedTools"]))
+            let rawEvents = payload["events"] as? [[String: Any]] ?? []
+            let events = rawEvents.enumerated().compactMap { index, event -> LearningToolCallEvent? in
+                let toolID = string(event["tool_id"] ?? event["toolID"] ?? event["tool"])
+                guard !toolID.isEmpty else { return nil }
+                let phase = string(event["phase"], fallback: "execution.started")
+                let preview = string(event["preview"])
+                return LearningToolCallEvent(
+                    id: "\(index)-\(toolID)-\(phase)-\(preview)",
+                    toolID: toolID,
+                    phase: phase,
+                    preview: preview
+                )
+            }
+            return LearningToolCallProgress(
+                activeToolID: activeTool,
+                completedToolIDs: completedTools,
+                failedToolIDs: failedTools,
+                events: events
+            )
+        }
+
+        let legacy = legacyLearningToolProgress(from: trimmed, progressStage: progressStage)
+        if !legacy.events.isEmpty {
+            return legacy
+        }
+        let completedTools = deduplicated(usedTools.filter { $0.hasPrefix("tool.") })
+        let events = completedTools.enumerated().map { index, toolID in
+            LearningToolCallEvent(
+                id: "used-\(index)-\(toolID)",
+                toolID: toolID,
+                phase: "execution.completed",
+                preview: ""
+            )
+        }
+        return LearningToolCallProgress(activeToolID: "", completedToolIDs: completedTools, failedToolIDs: [], events: events)
+    }
+
+    private static func legacyLearningToolProgress(from progressDetail: String, progressStage: String) -> LearningToolCallProgress {
+        guard progressDetail.contains("tool_event") || progressDetail.contains("called=") else {
+            return .empty
+        }
+        let completedTools = deduplicated(legacyCalledTools(from: progressDetail))
+        let latestTool = legacyLatestTool(from: progressDetail)
+        let normalizedStage = progressStage.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedDetail = progressDetail.lowercased()
+        let phase: String
+        if normalizedStage.contains("failed") || normalizedDetail.contains("execution.failed") {
+            phase = "execution.failed"
+        } else if normalizedStage.contains("completed") || normalizedDetail.contains("execution.completed") {
+            phase = "execution.completed"
+        } else if normalizedDetail.contains("requested") {
+            phase = "requested"
+        } else {
+            phase = "execution.started"
+        }
+        var failedTools: [String] = []
+        if phase == "execution.failed", !latestTool.isEmpty {
+            failedTools = [latestTool]
+        }
+        var events: [LearningToolCallEvent] = completedTools.enumerated().map { index, toolID in
+            LearningToolCallEvent(id: "legacy-completed-\(index)-\(toolID)", toolID: toolID, phase: "execution.completed", preview: "")
+        }
+        if !latestTool.isEmpty {
+            events.append(
+                LearningToolCallEvent(
+                    id: "legacy-latest-\(latestTool)-\(phase)",
+                    toolID: latestTool,
+                    phase: phase,
+                    preview: legacyToolPreview(from: progressDetail)
+                )
+            )
+        }
+        let activeTool = phase == "requested" || phase == "execution.started" ? latestTool : ""
+        return LearningToolCallProgress(
+            activeToolID: activeTool,
+            completedToolIDs: completedTools,
+            failedToolIDs: failedTools,
+            events: events
+        )
+    }
+
+    private static func legacyLatestTool(from progressDetail: String) -> String {
+        let separators = CharacterSet(charactersIn: " =,()[]\n\t")
+        return normalizedToolIDs(progressDetail.components(separatedBy: separators).filter { $0.contains("tool.") }).first ?? ""
+    }
+
+    private static func legacyCalledTools(from progressDetail: String) -> [String] {
+        guard let range = progressDetail.range(of: "called=") else { return [] }
+        return normalizedToolIDs(
+            String(progressDetail[range.upperBound...])
+                .components(separatedBy: CharacterSet(charactersIn: ", \n\t"))
+        )
+    }
+
+    private static func legacyToolPreview(from progressDetail: String) -> String {
+        for key in ["action=", "query=", "topic=", "url=", "ref=", "lens="] {
+            guard let range = progressDetail.range(of: key) else { continue }
+            let tail = progressDetail[range.lowerBound...]
+            if let token = tail.split(whereSeparator: { $0.isWhitespace }).first {
+                return String(token).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return ""
+    }
+
+    private static func normalizedToolIDs(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let normalized = value
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "tool_event", with: "")
+                .trimmingCharacters(in: CharacterSet(charactersIn: "=:;,"))
+            guard normalized.hasPrefix("tool."), !seen.contains(normalized) else { continue }
+            seen.insert(normalized)
+            result.append(normalized)
+        }
+        return result
     }
 
     private static func featuresFromProgressDetail(_ detail: String) -> [String] {

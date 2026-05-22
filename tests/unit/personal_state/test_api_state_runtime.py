@@ -269,6 +269,21 @@ class APIStateServiceTest(unittest.TestCase):
             episode_id=episode.episode_id,
             fields=fields,
             text=text,
+            grounding_answers=[
+                {
+                    "question_id": "recovery_path",
+                    "option_id": "quiet_corner",
+                    "question_title": "当你需要恢复精力、让自己舒服一点时，通常会怎么做？",
+                    "question_prompt": "当你需要恢复精力、让自己舒服一点时，通常会怎么做？",
+                    "option_label": "少一点输入，安静下来",
+                    "option_detail": "恢复有时不是被鼓励，而是先少一点声音、少一点催促。",
+                    "note": "睡眠必须先补回来",
+                    "fact_text": "用户恢复时通常先需要安静、减少输入和降低外界要求。用户补充：睡眠必须先补回来",
+                    "lens": "pulse",
+                    "topic": "pulse.pattern.recovery.path",
+                    "sensitivity": "medium",
+                }
+            ],
             append=True,
             split_personal_model_facts=True,
         )
@@ -291,6 +306,13 @@ class APIStateServiceTest(unittest.TestCase):
         self.assertEqual(str(facts_by_field["preferred_name"].metadata.get("topic") or ""), "identity.anchor.name.preferred")
         self.assertEqual(facts_by_field["current_work"].lens, "pulse")
         self.assertEqual(facts_by_field["blog"].text, "blog: https://example.com/blog")
+        grounding_fact = facts_by_field["grounding_recovery_path"]
+        self.assertEqual(grounding_fact.lens, "pulse")
+        self.assertEqual(grounding_fact.text, "用户恢复时通常先需要安静、减少输入和降低外界要求。用户补充：睡眠必须先补回来")
+        self.assertEqual(str(grounding_fact.metadata.get("topic") or ""), "pulse.pattern.recovery.path")
+        self.assertEqual(str(grounding_fact.metadata.get("grounding_question_id") or ""), "recovery_path")
+        self.assertEqual(str(grounding_fact.metadata.get("grounding_option_id") or ""), "quiet_corner")
+        self.assertEqual(str(grounding_fact.metadata.get("grounding_option_label") or ""), "少一点输入，安静下来")
 
         all_update_facts = tuple(
             fact

@@ -16,6 +16,10 @@ from .features.types import Feature
 from .prompts import BOUNDARIES, CLAIM_TEXT_RULE, CONSERVATISM_PROMPTS, LANGUAGE_RULE, TOPIC_FORMAT
 
 
+_TOOL_EVENT_PROGRESS_PREFIX = "tool_event_v1="
+_TOOL_EVENT_PROGRESS_LIMIT = 8
+
+
 @dataclass(frozen=True, slots=True)
 class ReflectResult:
     status: str
@@ -101,6 +105,39 @@ def _tool_event_preview(arguments: Mapping[str, Any]) -> str:
     return ""
 
 
+def _tool_event_progress_detail(
+    *,
+    tool_id: str,
+    phase: str,
+    preview: str,
+    active_tool: str,
+    completed_tools: list[str],
+    failed_tools: list[str],
+    events: list[dict[str, str]],
+) -> str:
+    payload = {
+        "version": "tool_event_v1",
+        "tool_id": tool_id,
+        "phase": phase,
+        "preview": preview,
+        "active_tool": active_tool,
+        "completed_tools": completed_tools[-_TOOL_EVENT_PROGRESS_LIMIT:],
+        "failed_tools": failed_tools[-_TOOL_EVENT_PROGRESS_LIMIT:],
+        "events": events[-_TOOL_EVENT_PROGRESS_LIMIT:],
+    }
+    return _TOOL_EVENT_PROGRESS_PREFIX + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _tool_event_progress_stage(phase: str) -> str:
+    if phase == "requested":
+        return "tool_requested"
+    if phase == "execution.completed":
+        return "tool_completed"
+    if phase == "execution.failed":
+        return "tool_failed"
+    return "tool_running"
+
+
 def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[Any, list[str]]:
     tool_runtime = getattr(runtime, "tool_runtime", None)
     subscribe = getattr(tool_runtime, "subscribe", None)
@@ -108,6 +145,8 @@ def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[A
         return None, []
 
     seen: list[str] = []
+    failed: list[str] = []
+    events: list[dict[str, str]] = []
     lock = Lock()
 
     def observer(event: Any) -> None:
@@ -122,17 +161,28 @@ def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[A
         if not isinstance(arguments, Mapping):
             arguments = {}
         preview = _tool_event_preview(arguments)
-        detail = f"{phase} {tool_id}" + (f" {preview}" if preview else "")
         with lock:
-            if tool_id not in seen and phase in {"execution.completed", "execution.failed"}:
+            active_tool = tool_id if phase in {"requested", "execution.started"} else ""
+            events.append({"tool_id": tool_id, "phase": phase, "preview": preview})
+            if tool_id not in seen and phase == "execution.completed":
                 seen.append(tool_id)
-            called = ",".join(seen[-6:])
+            if tool_id not in failed and phase == "execution.failed":
+                failed.append(tool_id)
+            detail = _tool_event_progress_detail(
+                tool_id=tool_id,
+                phase=phase,
+                preview=preview,
+                active_tool=active_tool,
+                completed_tools=seen,
+                failed_tools=failed,
+                events=events,
+            )
         try:
             runtime.repository.update_learning_job_progress(
                 job.job_id,
                 worker_id=str(job.worker_id or "reflect-agent"),
-                progress_stage="tool_running" if phase != "execution.completed" else "tool_completed",
-                progress_detail=f"tool_event={detail}" + (f" called={called}" if called else ""),
+                progress_stage=_tool_event_progress_stage(phase),
+                progress_detail=detail,
             )
         except Exception:
             return
