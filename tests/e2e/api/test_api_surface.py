@@ -1496,6 +1496,7 @@ class APISurfaceE2ETest(unittest.TestCase):
                         {
                             "name": "get_user",
                             "description": "Get one KM user profile.",
+                            "enabled": False,
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {"staffname": {"type": "string"}},
@@ -1516,6 +1517,8 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
         self.assertIsNotNone(self.app.tool_runtime.describe("mcp.km.list_articles"))
         self.assertIsNotNone(self.app.tool_runtime.describe("mcp.km.get_user"))
+        self.assertFalse(stored_global_config["mcp_servers"]["km"]["tools"]["get_user"]["enabled"])
+        self.assertFalse(self.app.tool_runtime.describe("mcp.km.get_user").enabled)
 
         toggled = self.app.dispatch(
             "PATCH",

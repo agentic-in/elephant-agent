@@ -21,6 +21,8 @@ By default, `make macos-build` attempts to produce a self-contained app on the c
 
 Set `MACOS_BUNDLE_RUNTIME=0` for a lightweight bootstrap build that falls back to the bundled `Install/install.sh` on machines without a developer repo. Set `MACOS_BUNDLE_RUNTIME=1` to require the embedded runtime and fail instead of falling back. Cross-architecture self-contained builds should run on a matching macOS runner or pass `MACOS_RUNTIME_PYTHON=/path/to/python3.12` for the target architecture.
 
+Runtime downloads and resolved dependency layers are cached under `~/Library/Caches/ElephantAgent/macos-runtime/<target>/` by default, including the managed Python install, `uv` wheel cache, the hashed `site-packages` dependency layer, and the Playwright browser payload. Set `MACOS_RUNTIME_BUILD_CACHE=/path/to/cache` to use another cache location.
+
 The repo-level Makefile wraps the release paths:
 
 ```bash

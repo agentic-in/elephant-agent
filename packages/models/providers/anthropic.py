@@ -38,6 +38,7 @@ from packages.models.reasoning_parser import split_reasoning_and_content
 from ._tool_names import provider_tool_name
 from .identity_contract import build_provider_messages, build_provider_system_prompt
 from .http import JSONHTTPTransport, UrllibJSONHTTPTransport
+from .message_payloads import split_text_and_image_parts
 
 
 ANTHROPIC_API_VERSION = "2023-06-01"
@@ -66,6 +67,7 @@ class AnthropicContentBlock:
     block_id: str = ""
     name: str = ""
     input: Mapping[str, object] = field(default_factory=dict)
+    source: Mapping[str, object] = field(default_factory=dict)
     tool_use_id: str = ""
     metadata: Mapping[str, str] = field(default_factory=dict)
 
@@ -83,6 +85,12 @@ class AnthropicContentBlock:
                 "type": "tool_result",
                 "tool_use_id": self.tool_use_id,
                 "content": self.text,
+                "metadata": dict(self.metadata),
+            }
+        if self.type == "image":
+            return {
+                "type": "image",
+                "source": dict(self.source),
                 "metadata": dict(self.metadata),
             }
         return {
@@ -181,6 +189,11 @@ def _anthropic_wire_content_block(block: AnthropicContentBlock) -> dict[str, obj
             "type": "tool_result",
             "tool_use_id": block.tool_use_id,
             "content": block.text,
+        }
+    if block.type == "image":
+        return {
+            "type": "image",
+            "source": dict(block.source),
         }
     return {
         "type": block.type,
@@ -560,8 +573,24 @@ class AnthropicMessagesModelAdapter(ModelAdapter):
         if role not in {"user", "assistant"}:
             return None
         blocks: list[AnthropicContentBlock] = []
-        if message.content.strip():
-            blocks.append(AnthropicContentBlock(type="text", text=message.content))
+        content = str(message.content or "")
+        image_parts = ()
+        if role == "user":
+            content, image_parts = split_text_and_image_parts(content)
+        if content.strip():
+            blocks.append(AnthropicContentBlock(type="text", text=content))
+        for image in image_parts:
+            blocks.append(
+                AnthropicContentBlock(
+                    type="image",
+                    text="",
+                    source={
+                        "type": "base64",
+                        "media_type": image.mime_type,
+                        "data": image.data,
+                    },
+                )
+            )
         if role == "assistant":
             for call in message.tool_calls:
                 if not isinstance(call, Mapping):

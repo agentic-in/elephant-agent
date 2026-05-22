@@ -12,14 +12,14 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
-from packages.contracts.runtime import ExecutionToolCall
+from packages.contracts.runtime import ExecutionToolCall, PromptMessage
 
 from ..provider_runtime import ProviderRuntimeResolution, ProviderRuntimeResolver, attach_session_header
 from ..runtime import CredentialSource, ModelAdapterDescriptor, ModelEmbeddingResult, ModelRequest, ModelTextResult, ModelUsage
 from ._tool_names import provider_tool_name
 from .identity_contract import build_provider_messages, build_provider_system_prompt
 from .http import JSONHTTPTransport, UrllibJSONHTTPTransport
-from .message_payloads import openai_chat_messages_payload, openai_responses_input_payload
+from .message_payloads import openai_chat_messages_payload, openai_responses_input_payload, prompt_message_has_image_parts
 from .openai_usage import openai_compatible_usage_from_payload
 from ..reasoning_parser import combine_reasoning_text, normalize_reasoning_text, split_reasoning_and_content, stitch_text_fragments
 
@@ -447,6 +447,10 @@ class OpenAICompatibleProviderAdapter:
                 },
                 {},
             )
+        provider_messages = build_provider_messages(request)
+        image_references_as_text = self._request_has_image_parts(provider_messages) and not self._supports_image_input(resolution)
+        if image_references_as_text and resolution.provider_id in {"minimax", "minimax-cn"}:
+            provider_messages = self._with_minimax_mcp_image_hint(provider_messages)
         if resolution.request_family == "responses":
             should_stream = bool(resolution.supports_streaming)
             response_tools, tool_name_map = (
@@ -461,8 +465,9 @@ class OpenAICompatibleProviderAdapter:
             payload: dict[str, Any] = {
                 "model": resolution.model_id,
                 "input": openai_responses_input_payload(
-                    build_provider_messages(request),
+                    provider_messages,
                     tool_name_map=tool_name_map,
+                    image_references_as_text=image_references_as_text,
                 ),
                 "store": False,
                 "stream": should_stream,
@@ -486,8 +491,9 @@ class OpenAICompatibleProviderAdapter:
                 strict_schema=self._requires_strict_tool_schema(resolution),
             )
         messages = openai_chat_messages_payload(
-            build_provider_messages(request),
+            provider_messages,
             tool_name_map=tool_name_map,
+            image_references_as_text=image_references_as_text,
         )
         payload = {
             "model": resolution.model_id,
@@ -596,6 +602,41 @@ class OpenAICompatibleProviderAdapter:
 
     def _requires_strict_tool_schema(self, resolution: ProviderRuntimeResolution) -> bool:
         return resolution.request_family == "responses" or resolution.provider_id in {"copilot", "openai", "openai-codex"}
+
+    def _supports_image_input(self, resolution: ProviderRuntimeResolution) -> bool:
+        return resolution.provider_id not in {"minimax", "minimax-cn"}
+
+    def _request_has_image_parts(self, messages: tuple[Any, ...]) -> bool:
+        return any(prompt_message_has_image_parts(message) for message in messages)
+
+    def _with_minimax_mcp_image_hint(self, messages: tuple[PromptMessage, ...]) -> tuple[PromptMessage, ...]:
+        hint = (
+            "MiniMax text API cannot receive image bytes directly. "
+            "When the user provides @image:/path references, keep the local path and, "
+            "if an MCP image tool such as understand_image is available, call it with "
+            "image_url set to that path and prompt set to the user's question before answering."
+        )
+        updated_messages: list[PromptMessage] = []
+        inserted = False
+        for message in messages:
+            if not inserted and str(message.role or "").strip().lower() == "system":
+                updated_messages.append(
+                    PromptMessage(
+                        role=message.role,
+                        content=f"{message.content}\n\n{hint}",
+                        name=message.name,
+                        tool_call_id=message.tool_call_id,
+                        tool_name=message.tool_name,
+                        tool_calls=message.tool_calls,
+                        metadata=message.metadata,
+                    )
+                )
+                inserted = True
+            else:
+                updated_messages.append(message)
+        if inserted:
+            return tuple(updated_messages)
+        return (PromptMessage(role="system", content=hint), *messages)
 
     def _sanitize_tool_definition(
         self,

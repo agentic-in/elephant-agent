@@ -255,6 +255,19 @@ enum OpenPanelBridge {
         panel.allowedContentTypes = [.image]
         return panel.runModal() == .OK ? panel.urls.first : nil
     }
+
+    static func pickChatImageURLs(language: AppLanguage) -> [URL] {
+        let panel = NSOpenPanel()
+        panel.title = AppText.chatImagePickerTitle.text(language)
+        panel.message = AppText.chatImagePickerMessage.text(language)
+        panel.prompt = AppText.chatImagePickerPrompt.text(language)
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.resolvesAliases = true
+        panel.allowedContentTypes = [.image]
+        return panel.runModal() == .OK ? panel.urls : []
+    }
 }
 
 enum UNNotificationBridge {

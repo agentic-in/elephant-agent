@@ -3,21 +3,44 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+import base64
 from hashlib import sha256
 import json
+import mimetypes
+from pathlib import Path
 
 from packages.contracts.runtime import PromptMessage
+
+_MAX_INLINE_IMAGE_BYTES = 20 * 1024 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class ImagePromptPart:
+    mime_type: str
+    data: str
+
+    @property
+    def data_url(self) -> str:
+        return f"data:{self.mime_type};base64,{self.data}"
 
 
 def openai_chat_messages_payload(
     messages: tuple[PromptMessage, ...],
     *,
     tool_name_map: Mapping[str, str],
+    image_references_as_text: bool = False,
 ) -> list[dict[str, object]]:
     return [
         payload
         for message in messages
-        if (payload := _openai_chat_message_payload(message, tool_name_map=tool_name_map))
+        if (
+            payload := _openai_chat_message_payload(
+                message,
+                tool_name_map=tool_name_map,
+                image_references_as_text=image_references_as_text,
+            )
+        )
     ]
 
 
@@ -25,6 +48,7 @@ def openai_responses_input_payload(
     messages: tuple[PromptMessage, ...],
     *,
     tool_name_map: Mapping[str, str],
+    image_references_as_text: bool = False,
 ) -> list[dict[str, object]]:
     payload: list[dict[str, object]] = []
     for message in messages:
@@ -47,17 +71,14 @@ def openai_responses_input_payload(
                     payload.append(_openai_responses_function_call_payload(call, tool_name_map=tool_name_map))
             if not str(message.content or "").strip():
                 continue
-        payload.append(
-            {
-                "role": "assistant" if role == "assistant" else "user",
-                "content": [
-                    {
-                        "type": "output_text" if role == "assistant" else "input_text",
-                        "text": str(message.content or ""),
-                    }
-                ],
-            }
-        )
+        content = _openai_responses_content(message, role=role, image_references_as_text=image_references_as_text)
+        if content:
+            payload.append(
+                {
+                    "role": "assistant" if role == "assistant" else "user",
+                    "content": content,
+                }
+            )
     return payload
 
 
@@ -65,6 +86,7 @@ def _openai_chat_message_payload(
     message: PromptMessage,
     *,
     tool_name_map: Mapping[str, str],
+    image_references_as_text: bool,
 ) -> dict[str, object]:
     role = str(message.role or "").strip().lower()
     if role not in {"system", "user", "assistant", "tool"}:
@@ -75,7 +97,14 @@ def _openai_chat_message_payload(
         if message.tool_call_id:
             payload["tool_call_id"] = _provider_call_id(str(message.tool_call_id))
         return payload
-    payload["content"] = str(message.content or "")
+    if role == "user":
+        if image_references_as_text:
+            payload["content"] = str(message.content or "")
+        else:
+            content = _openai_chat_user_content(message)
+            payload["content"] = content if content else str(message.content or "")
+    else:
+        payload["content"] = str(message.content or "")
     if role == "assistant" and message.tool_calls:
         payload["tool_calls"] = [
             _openai_chat_tool_call_payload(call, tool_name_map=tool_name_map)
@@ -83,6 +112,89 @@ def _openai_chat_message_payload(
             if isinstance(call, Mapping)
         ]
     return payload
+
+
+def split_text_and_image_parts(content: str) -> tuple[str, tuple[ImagePromptPart, ...]]:
+    """Extract local @image:/path references into base64 image parts."""
+
+    text_lines: list[str] = []
+    images: list[ImagePromptPart] = []
+    for raw_line in str(content or "").splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("@image:"):
+            image_part = _image_prompt_part(stripped.removeprefix("@image:").strip())
+            if image_part is not None:
+                images.append(image_part)
+                continue
+        text_lines.append(raw_line)
+    return "\n".join(text_lines).strip(), tuple(images)
+
+
+def prompt_message_has_image_parts(message: PromptMessage) -> bool:
+    _text, images = split_text_and_image_parts(str(message.content or ""))
+    return bool(images)
+
+
+def _openai_chat_user_content(message: PromptMessage) -> list[dict[str, object]]:
+    text, images = split_text_and_image_parts(str(message.content or ""))
+    if not images:
+        return []
+    content: list[dict[str, object]] = []
+    if text:
+        content.append({"type": "text", "text": text})
+    content.extend(
+        {
+            "type": "image_url",
+            "image_url": {"url": image.data_url},
+        }
+        for image in images
+    )
+    return content
+
+
+def _openai_responses_content(
+    message: PromptMessage,
+    *,
+    role: str,
+    image_references_as_text: bool,
+) -> list[dict[str, object]]:
+    raw_content = str(message.content or "")
+    if role != "user":
+        text = raw_content.strip()
+        return [{"type": "output_text", "text": text}] if text else []
+    if image_references_as_text:
+        text = raw_content.strip()
+        return [{"type": "input_text", "text": text}] if text else []
+    text, images = split_text_and_image_parts(raw_content)
+    content: list[dict[str, object]] = []
+    if text:
+        content.append({"type": "input_text", "text": text})
+    content.extend(
+        {
+            "type": "input_image",
+            "image_url": image.data_url,
+            "detail": "auto",
+        }
+        for image in images
+    )
+    return content
+
+
+def _image_prompt_part(raw_path: str) -> ImagePromptPart | None:
+    if not raw_path:
+        return None
+    path = Path(raw_path).expanduser()
+    try:
+        path = path.resolve(strict=True)
+        if not path.is_file() or path.stat().st_size > _MAX_INLINE_IMAGE_BYTES:
+            return None
+        mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+        if not mime_type.startswith("image/"):
+            return None
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    except OSError:
+        return None
+    return ImagePromptPart(mime_type=mime_type, data=encoded)
 
 
 def _openai_chat_tool_call_payload(

@@ -415,6 +415,46 @@ struct APIClient {
         )
     }
 
+    func discoverMCPServer(payload: [String: Any]) async throws -> MCPDiscoveryResult {
+        let json = try await request(
+            path: "/v1/operator/mcp/discover",
+            method: "POST",
+            body: payload
+        )
+        return SnapshotParser.mcpDiscoveryResult(from: json)
+    }
+
+    func syncMCPServer(payload: [String: Any]) async throws -> String {
+        let json = try await request(
+            path: "/v1/operator/mcp/servers",
+            method: "POST",
+            body: payload
+        )
+        return SnapshotParser.findString(in: json, keys: ["runtimeStatus", "status"]) ?? ""
+    }
+
+    func deleteMCPServer(serverID: String) async throws -> String {
+        let json = try await request(
+            path: "/v1/operator/mcp/servers",
+            method: "DELETE",
+            body: ["serverId": serverID]
+        )
+        return SnapshotParser.findString(in: json, keys: ["runtimeStatus", "status"]) ?? ""
+    }
+
+    func setMCPToolEnabled(serverID: String, toolName: String, enabled: Bool) async throws -> String {
+        let json = try await request(
+            path: "/v1/operator/mcp/tools/enabled",
+            method: "PATCH",
+            body: [
+                "serverId": serverID,
+                "toolName": toolName,
+                "enabled": enabled
+            ]
+        )
+        return SnapshotParser.findString(in: json, keys: ["runtimeStatus", "status"]) ?? ""
+    }
+
     func saveGlobalConfig(yamlText: String) async throws {
         _ = try await request(
             path: "/v1/operator/config",
@@ -997,6 +1037,9 @@ enum SnapshotParser {
         }
         snapshot.mcpServers = mcpServerRows.count
         snapshot.mcpTools = mcpToolRows.count
+        snapshot.mcpConfigPath = string(mcp["configPath"] ?? mcp["config_path"])
+        snapshot.mcpToolItems = mcpToolRows.compactMap { mcpToolItem(from: $0) }
+        snapshot.mcpServerItems = mcpServerRows.compactMap { mcpServerItem(from: $0) }
 
         let gatewayRoot = dashboards["gateway"] ?? [:]
         let gatewayOps = gatewayRoot["operations"] as? [String: Any] ?? [:]
@@ -1318,6 +1361,32 @@ enum SnapshotParser {
         }
 
         return snapshot
+    }
+
+    static func mcpDiscoveryResult(from json: [String: Any]) -> MCPDiscoveryResult {
+        let toolRows = json["tools"] as? [[String: Any]] ?? []
+        return MCPDiscoveryResult(
+            status: string(json["status"], fallback: "unknown"),
+            serverID: string(json["serverId"] ?? json["server_id"]),
+            serverLabel: string(json["serverLabel"] ?? json["server_label"]),
+            transport: string(json["transport"], fallback: "stdio"),
+            toolCount: int(json["toolCount"] ?? json["tool_count"]),
+            durationMs: int(json["durationMs"] ?? json["duration_ms"]),
+            tools: toolRows.compactMap { row in
+                let name = string(row["name"])
+                guard !name.isEmpty else { return nil }
+                return MCPDiscoveredTool(
+                    name: name,
+                    description: string(row["description"]),
+                    requiredFields: listStrings(row["requiredFields"] ?? row["required_fields"]),
+                    inputSchema: object(row["inputSchema"] ?? row["input_schema"] ?? row["schema"]),
+                    enabled: bool(row["enabled"], fallback: true)
+                )
+            },
+            error: string(json["error"]),
+            stdout: string(json["stdout"]),
+            stderr: string(json["stderr"])
+        )
     }
 
     private static func providerOptions(
@@ -2363,6 +2432,71 @@ enum SnapshotParser {
             .components(separatedBy: CharacterSet(charactersIn: "\n;,"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private static func mcpServerItem(from row: [String: Any]) -> MCPServerItem? {
+        let serverID = string(row["serverId"] ?? row["server_id"] ?? row["id"])
+        guard !serverID.isEmpty else { return nil }
+        return MCPServerItem(
+            serverID: serverID,
+            label: string(row["label"] ?? row["serverLabel"] ?? row["server_label"], fallback: serverID),
+            transport: string(row["transport"], fallback: "stdio"),
+            command: string(row["command"]),
+            args: listStrings(row["args"]),
+            url: string(row["url"]),
+            env: stringMap(row["env"]),
+            envKeys: listStrings(row["envKeys"] ?? row["env_keys"]),
+            headers: stringMap(row["headers"]),
+            headerKeys: listStrings(row["headerKeys"] ?? row["header_keys"]),
+            toolCount: int(row["toolCount"] ?? row["tool_count"]),
+            provenance: string(row["provenance"])
+        )
+    }
+
+    private static func mcpToolItem(from row: [String: Any]) -> MCPToolItem? {
+        let serverID = string(row["serverId"] ?? row["server_id"])
+        let toolName = string(row["toolName"] ?? row["tool_name"] ?? row["name"])
+        guard !serverID.isEmpty, !toolName.isEmpty else { return nil }
+        let toolKey = string(row["toolKey"] ?? row["tool_key"], fallback: "\(serverID):\(toolName)")
+        return MCPToolItem(
+            toolID: string(row["toolId"] ?? row["tool_id"], fallback: "mcp.\(serverID).\(toolName)"),
+            toolKey: toolKey,
+            toolName: toolName,
+            serverID: serverID,
+            serverLabel: string(row["serverLabel"] ?? row["server_label"], fallback: serverID),
+            displayName: string(row["displayName"] ?? row["display_name"], fallback: toolName),
+            description: string(row["description"]),
+            family: string(row["family"], fallback: "mcp"),
+            enabled: bool(row["enabled"], fallback: true),
+            defaultEnabled: bool(row["defaultEnabled"] ?? row["default_enabled"], fallback: true),
+            available: bool(row["available"], fallback: true),
+            availabilityReason: string(row["availabilityReason"] ?? row["availability_reason"]),
+            riskClass: string(row["riskClass"] ?? row["risk_class"], fallback: "medium"),
+            approvalClass: string(row["approvalClass"] ?? row["approval_class"], fallback: "standard"),
+            requiredFields: listStrings(row["requiredFields"] ?? row["required_fields"]),
+            schemaJSON: jsonString(row["schema"])
+        )
+    }
+
+    private static func stringMap(_ value: Any?) -> [String: String] {
+        guard let dictionary = value as? [String: Any] else { return [:] }
+        var result: [String: String] = [:]
+        for (key, value) in dictionary {
+            let normalizedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedKey.isEmpty else { continue }
+            result[normalizedKey] = string(value)
+        }
+        return result
+    }
+
+    private static func jsonString(_ value: Any?) -> String {
+        guard let value,
+              JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
     }
 
     private static func stripProfileFactPrefix(_ text: String) -> String {

@@ -320,7 +320,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         self.assertEqual(tokenhub.env_var_names, ("TOKENHUB_API_KEY", "TENCENT_TOKENHUB_API_KEY"))
         self.assertEqual(xiaomi.default_model_id, "mimo-v2-pro")
         self.assertEqual(xiaomi.model_hints, ("mimo-v2-pro", "mimo-v2-omni", "mimo-v2-flash"))
-        self.assertEqual(minimax.transport_id, "anthropic_messages")
+        self.assertEqual(minimax.transport_id, "openai_chat_compatible")
+        self.assertEqual(minimax.default_base_url, "https://api.minimaxi.com/v1")
+        self.assertEqual(minimax.metadata["image_input_support"], "token_plan_mcp_only")
         self.assertEqual(ollama.transport_id, "openai_chat_compatible")
 
     def test_provider_runtime_resolves_transport_and_runtime_metadata(self) -> None:
@@ -346,8 +348,9 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
 
         minimax_resolution = resolver.resolve("minimax", model_id="MiniMax-M2.5")
 
-        self.assertEqual(minimax_resolution.transport_id, "anthropic_messages")
-        self.assertEqual(minimax_resolution.request_family, "messages")
+        self.assertEqual(minimax_resolution.transport_id, "openai_chat_compatible")
+        self.assertEqual(minimax_resolution.request_family, "chat_completions")
+        self.assertEqual(minimax_resolution.base_url, "https://api.minimaxi.com/v1")
 
         copilot_claude = resolver.resolve("copilot", model_id="claude-sonnet-4.6")
         self.assertEqual(copilot_claude.transport_id, "anthropic_messages")
@@ -1018,7 +1021,7 @@ class ModelsAuthIntegrationTests(unittest.TestCase):
         with mock.patch("packages.models.runtime_capability.request_json", side_effect=RuntimeError("boom")):
             minimax_models = capability.discover_models(
                 provider_id="minimax",
-                base_url="https://api.minimax.io/anthropic",
+                base_url="https://api.minimaxi.com/v1",
             )
             qwen_models = capability.discover_models(
                 provider_id="qwen-oauth",

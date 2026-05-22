@@ -327,7 +327,9 @@ def resolve_embedding_bootstrap_state(
             updated_at=updated_at,
             background_pid=None,
         )
-    if embedding_root_is_healthy(str(EMBEDDING_MODEL_ROOT)):
+    root_ready = embedding_root_is_healthy(str(EMBEDDING_MODEL_ROOT))
+    dependencies_ready = sentence_transformers_dependencies_ready()
+    if root_ready and dependencies_ready:
         updated_at = (
             stored.updated_at
             if stored is not None and stored.state_focus_mode == "embedded" and stored.status == "ready"
@@ -347,7 +349,7 @@ def resolve_embedding_bootstrap_state(
                 background_pid=active_pid,
                 source=stored.source,
             )
-    status = "downloading" if sentence_transformers_dependencies_ready() else "pending"
+    status = "downloading" if dependencies_ready else "pending"
     source = stored.source if stored is not None else "huggingface"
     return _embedding_bootstrap_state_for_runtime(status=status, background_pid=active_pid, source=source)
 
@@ -359,12 +361,6 @@ def run_embedding_bootstrap_worker(state_dir_arg: str) -> int:
     stored = load_embedding_bootstrap_state(state_dir)
     source = stored.source if stored is not None else "huggingface"
     try:
-        if embedding_root_is_healthy(str(EMBEDDING_MODEL_ROOT)):
-            persist_embedding_bootstrap_state(
-                state_dir,
-                _embedding_bootstrap_state_for_runtime(status="ready", background_pid=None, source=source),
-            )
-            return 0
         if not sentence_transformers_dependencies_ready():
             persist_embedding_bootstrap_state(
                 state_dir,
@@ -385,6 +381,12 @@ def run_embedding_bootstrap_worker(state_dir_arg: str) -> int:
                     *pip_specs,
                 ]
             )
+        if embedding_root_is_healthy(str(EMBEDDING_MODEL_ROOT)):
+            persist_embedding_bootstrap_state(
+                state_dir,
+                _embedding_bootstrap_state_for_runtime(status="ready", background_pid=None, source=source),
+            )
+            return 0
         persist_embedding_bootstrap_state(
             state_dir,
             _embedding_bootstrap_state_for_runtime(status="downloading", background_pid=current_pid, source=source),

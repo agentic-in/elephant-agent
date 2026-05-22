@@ -66,7 +66,7 @@ export type SkillHubCatalogData = {
 };
 
 export const skillHubCatalog: SkillHubCatalogData = {
-  "generated_at": "2026-05-22T07:49:01Z",
+  "generated_at": "2026-05-22T14:12:46Z",
   "headline": "Browse the skills that ship with Elephant Agent.",
   "summary": "Packaged Elephant Agent skills and the external source lanes the CLI can install from.",
   "builtin_posture": "Bundled skills already ship with Elephant Agent. Use `elephant skills install <skill-id>` only when you want an explicit local materialization record for one packaged skill.",

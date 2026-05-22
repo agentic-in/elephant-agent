@@ -1724,6 +1724,7 @@ def _mcp_discovered_tool_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]
                 "name": str(item.get("name") or "").strip(),
                 "description": str(item.get("description") or "").strip(),
                 "inputSchema": schema,
+                "enabled": bool(item.get("enabled", True)),
                 "requiredFields": tuple(str(field) for field in schema.get("required", []) if str(field).strip()) if isinstance(schema.get("required"), list) else (),
                 "options": [option for option in item.get("options", []) if isinstance(option, Mapping)] if isinstance(item.get("options"), list) else [],
             }
@@ -1753,7 +1754,10 @@ def _merge_discovered_mcp_tools(
         next_tool.setdefault("family", "mcp")
         next_tool.setdefault("risk_class", "medium")
         next_tool.setdefault("approval_class", "standard")
-        next_tool.setdefault("enabled", True)
+        if "enabled" in discovered:
+            next_tool["enabled"] = bool(discovered.get("enabled"))
+        else:
+            next_tool.setdefault("enabled", True)
         next_tool.setdefault("reads_state", False)
         next_tool.setdefault("writes_state", False)
         next_tool.setdefault("touches_network", transport != "stdio")

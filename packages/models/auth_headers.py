@@ -132,7 +132,7 @@ class _AnthropicApiKeyStrategy:
         provider_id = context.provider_id.strip().lower()
         request_family = context.request_family.strip().lower()
         return bool(api_key) and (
-            request_family == "messages" or provider_id in {"anthropic", "minimax"}
+            request_family == "messages" or provider_id == "anthropic"
         )
 
     def build_headers(self, context: AuthHeaderContext) -> Mapping[str, str]:

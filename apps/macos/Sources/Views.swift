@@ -678,8 +678,7 @@ struct HomeReadinessStrip: View {
     }
 
     private var memoryItem: HomeReadinessItem {
-        let indexed = model.snapshot.semanticEntries > 0 || model.snapshot.semanticStatus.lowercased().contains("ready")
-        let healthy = indexed && model.snapshot.localModelWarm
+        let healthy = model.snapshot.localModelAvailable
         return HomeReadinessItem(
             title: model.text(.homeReadinessMemory),
             detail: String(
@@ -745,9 +744,6 @@ struct HomeReadinessStrip: View {
         let value = providerStatusLabel.lowercased()
         if value.contains("setup") || value.contains("missing") || model.snapshot.providerID.isEmpty {
             return ElephantTheme.orange
-        }
-        if !model.snapshot.localModelWarm {
-            return ElephantTheme.accent
         }
         if value.contains("unknown") {
             return ElephantTheme.faint
@@ -2199,6 +2195,7 @@ struct WakeComposerPanel: View {
     @StateObject private var speech = SpeechInputController()
     @State private var composerFocused = false
     @State private var lastScrollTargetID: UUID?
+    @State private var composerTextHeight: CGFloat = 26
     private let chatBottomSpacerID = "chat-active-response-spacer"
 
     var body: some View {
@@ -2276,32 +2273,60 @@ struct WakeComposerPanel: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
+                    if !model.wakeAttachments.isEmpty {
+                        WakeAttachmentStrip(attachments: model.wakeAttachments, removable: true) { attachment in
+                            model.removeWakeAttachment(attachment)
+                        }
+                    }
+
                     ZStack(alignment: .bottomTrailing) {
                         ZStack(alignment: .topLeading) {
                             MacComposerTextView(
                                 text: $model.wakeDraft,
-                                isFocused: $composerFocused
+                                isFocused: $composerFocused,
+                                measuredHeight: $composerTextHeight
                             ) {
                                 guard canSend else { return }
                                 speech.stop()
                                 Task { await model.sendWakeMessage() }
+                            } onPasteImages: {
+                                model.importWakeImages(from: .general)
                             }
-                            .frame(height: 44)
+                            .frame(height: composerTextHeight)
+                            .padding(.leading, 42)
                             .padding(.trailing, 86)
-
-                            if model.wakeDraft.isEmpty {
-                                Text(model.text(.typeMessagePlaceholder))
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(ElephantTheme.faint)
-                                    .allowsHitTesting(false)
-                            }
                         }
-                        .frame(maxWidth: .infinity, minHeight: 46, maxHeight: 46, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, minHeight: composerControlHeight, alignment: .topLeading)
                         .onHover { hovering in
                             if hovering {
                                 NSCursor.iBeam.set()
                             }
                         }
+
+                        HStack(spacing: 0) {
+                            Button {
+                                let urls = OpenPanelBridge.pickChatImageURLs(language: model.appLanguage)
+                                model.addWakeImageURLs(urls)
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .frame(width: 32, height: 32)
+                                    .foregroundStyle(ElephantTheme.muted)
+                                    .background(
+                                        Circle()
+                                            .fill(ElephantTheme.panel.opacity(0.72))
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(ElephantTheme.line.opacity(0.50), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(PressablePlainButtonStyle())
+                            .help(localizedYouText(model.appLanguage, en: "Attach image", zh: "添加图片", fr: "Joindre une image", de: "Bild anhängen"))
+                            .accessibilityLabel(localizedYouText(model.appLanguage, en: "Attach image", zh: "添加图片", fr: "Joindre une image", de: "Bild anhängen"))
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.bottom, 1)
 
                         HStack(spacing: 8) {
                             Button {
@@ -2350,7 +2375,7 @@ struct WakeComposerPanel: View {
                         }
                         .padding(.bottom, 1)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: composerControlHeight, alignment: .topLeading)
 
                     if speech.isRecording || !speech.statusText.isEmpty {
                         Label(speech.statusText, systemImage: speech.isRecording ? "waveform" : "mic")
@@ -2362,7 +2387,7 @@ struct WakeComposerPanel: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 12)
                 .padding(.bottom, 10)
-                .frame(maxWidth: composerMaxWidth, minHeight: 76, alignment: .topLeading)
+                .frame(maxWidth: composerMaxWidth, minHeight: composerMinimumHeight, alignment: .topLeading)
                 .background(Color(nsColor: .textBackgroundColor).opacity(0.985), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -2391,7 +2416,15 @@ struct WakeComposerPanel: View {
     }
 
     private var canSend: Bool {
-        !model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.wakeAttachments.isEmpty
+    }
+
+    private var composerControlHeight: CGFloat {
+        max(48, composerTextHeight + 4)
+    }
+
+    private var composerMinimumHeight: CGFloat {
+        composerControlHeight + (model.wakeAttachments.isEmpty ? 28 : 70)
     }
 
     private var composerMaxWidth: CGFloat {
@@ -2433,21 +2466,37 @@ struct WakeComposerPanel: View {
 struct MacComposerTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
+    @Binding var measuredHeight: CGFloat
     var onSubmit: () -> Void
+    var onPasteImages: () -> Bool
+
+    private let minimumHeight: CGFloat = 26
+    private let maxVisibleLines = 10
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isFocused: $isFocused, onSubmit: onSubmit)
+        Coordinator(
+            text: $text,
+            isFocused: $isFocused,
+            measuredHeight: $measuredHeight,
+            minimumHeight: minimumHeight,
+            maxVisibleLines: maxVisibleLines,
+            onSubmit: onSubmit,
+            onPasteImages: onPasteImages
+        )
     }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = ComposerTextScrollView()
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = false
+        scrollView.autohidesScrollers = true
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
+        scrollView.verticalScrollElasticity = .none
 
         let textView = ComposerNSTextView()
         textView.delegate = context.coordinator
+        textView.onPaste = context.coordinator.handlePaste
         textView.drawsBackground = false
         textView.isEditable = true
         textView.isSelectable = true
@@ -2460,11 +2509,11 @@ struct MacComposerTextView: NSViewRepresentable {
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.textContainerInset = NSSize(width: 0, height: 0)
-        textView.minSize = NSSize(width: 0, height: 44)
+        textView.minSize = NSSize(width: 0, height: minimumHeight)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.isVerticallyResizable = false
+        textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width, .height]
+        textView.autoresizingMask = [.width]
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 0
@@ -2473,6 +2522,13 @@ struct MacComposerTextView: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
+        context.coordinator.scrollView = scrollView
+        scrollView.onLayout = { [weak coordinator = context.coordinator] in
+            coordinator?.refreshHeight()
+        }
+        DispatchQueue.main.async {
+            context.coordinator.refreshHeight()
+        }
         return scrollView
     }
 
@@ -2485,25 +2541,44 @@ struct MacComposerTextView: NSViewRepresentable {
         if isFocused, textView.window?.firstResponder !== textView {
             textView.window?.makeFirstResponder(textView)
         }
+        context.coordinator.refreshHeight()
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding var text: String
         @Binding var isFocused: Bool
+        @Binding var measuredHeight: CGFloat
         weak var textView: NSTextView?
+        weak var scrollView: NSScrollView?
         var lastKnownText = ""
+        var minimumHeight: CGFloat
+        var maxVisibleLines: Int
         var onSubmit: () -> Void
+        var onPasteImages: () -> Bool
 
-        init(text: Binding<String>, isFocused: Binding<Bool>, onSubmit: @escaping () -> Void) {
+        init(
+            text: Binding<String>,
+            isFocused: Binding<Bool>,
+            measuredHeight: Binding<CGFloat>,
+            minimumHeight: CGFloat,
+            maxVisibleLines: Int,
+            onSubmit: @escaping () -> Void,
+            onPasteImages: @escaping () -> Bool
+        ) {
             _text = text
             _isFocused = isFocused
+            _measuredHeight = measuredHeight
+            self.minimumHeight = minimumHeight
+            self.maxVisibleLines = maxVisibleLines
             self.onSubmit = onSubmit
+            self.onPasteImages = onPasteImages
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             lastKnownText = textView.string
             text = textView.string
+            refreshHeight()
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -2526,16 +2601,53 @@ struct MacComposerTextView: NSViewRepresentable {
             }
             return false
         }
+
+        func handlePaste() -> Bool {
+            onPasteImages()
+        }
+
+        func refreshHeight() {
+            guard let textView, let scrollView, let layoutManager = textView.layoutManager, let textContainer = textView.textContainer else { return }
+            let font = textView.font ?? .systemFont(ofSize: 16)
+            textContainer.containerSize = NSSize(width: max(textView.bounds.width, 1), height: CGFloat.greatestFiniteMagnitude)
+            layoutManager.ensureLayout(for: textContainer)
+            let usedHeight = ceil(layoutManager.usedRect(for: textContainer).height)
+            let lineHeight = ceil(layoutManager.defaultLineHeight(for: font))
+            let maxHeight = max(minimumHeight, lineHeight * CGFloat(maxVisibleLines))
+            let targetHeight = min(max(minimumHeight, usedHeight + 2), maxHeight)
+            scrollView.hasVerticalScroller = targetHeight >= maxHeight - 0.5 && usedHeight > maxHeight
+            if abs(measuredHeight - targetHeight) > 0.5 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.measuredHeight = targetHeight
+                }
+            }
+        }
     }
 }
 
 final class ComposerNSTextView: NSTextView {
+    var onPaste: (() -> Bool)?
+
+    override func paste(_ sender: Any?) {
+        if onPaste?() == true {
+            return
+        }
+        super.paste(sender)
+    }
+
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .iBeam)
     }
 }
 
 final class ComposerTextScrollView: NSScrollView {
+    var onLayout: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        onLayout?()
+    }
+
     override func mouseDown(with event: NSEvent) {
         if let textView = documentView as? NSTextView,
            window?.firstResponder !== textView {
@@ -2603,7 +2715,7 @@ struct WakeQueueRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(ElephantTheme.faint)
                 .frame(width: 18)
-            Text(item.text)
+            Text(previewText)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(ElephantTheme.ink.opacity(0.74))
                 .lineLimit(1)
@@ -2626,6 +2738,20 @@ struct WakeQueueRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
+    }
+
+    private var previewText: String {
+        let trimmed = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        if item.attachments.count == 1 {
+            return item.attachments[0].displayName
+        }
+        if item.attachments.count > 1 {
+            return localizedFormat(model.appLanguage, en: "%d images", zh: "%d 张图片", fr: "%d images", de: "%d Bilder", item.attachments.count)
+        }
+        return localizedYouText(model.appLanguage, en: "Image message", zh: "图片消息", fr: "Message image", de: "Bildnachricht")
     }
 }
 
@@ -3230,6 +3356,10 @@ struct MessageBubble: View, Equatable {
 
     private var bubbleCore: some View {
         VStack(alignment: .leading, spacing: 3) {
+            if !message.attachments.isEmpty {
+                WakeAttachmentStrip(attachments: message.attachments, removable: false)
+                    .padding(.bottom, message.text.isEmpty ? 0 : 4)
+            }
             if !message.text.isEmpty {
                 MarkdownBody(
                     text: message.text,
@@ -3266,6 +3396,82 @@ struct MessageBubble: View, Equatable {
 
     private var textColor: Color {
         ElephantTheme.ink
+    }
+}
+
+struct WakeAttachmentStrip: View {
+    var attachments: [WakeAttachment]
+    var removable = false
+    var remove: (WakeAttachment) -> Void = { _ in }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(attachments) { attachment in
+                    WakeAttachmentChip(attachment: attachment, removable: removable) {
+                        remove(attachment)
+                    }
+                }
+            }
+            .padding(.vertical, 1)
+        }
+    }
+}
+
+struct WakeAttachmentChip: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var attachment: WakeAttachment
+    var removable = false
+    var remove: () -> Void = {}
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Group {
+                if let image = NSImage(contentsOf: attachment.url) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: "photo")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+            }
+            .frame(width: 28, height: 28)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(ElephantTheme.line.opacity(0.62), lineWidth: 1)
+            )
+
+            Text(attachment.displayName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.ink.opacity(0.74))
+                .lineLimit(1)
+
+            if removable {
+                Button {
+                    remove()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.bold))
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(ElephantTheme.faint)
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .help(localizedYouText(model.appLanguage, en: "Remove image", zh: "移除图片", fr: "Retirer l'image", de: "Bild entfernen"))
+                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Remove image", zh: "移除图片", fr: "Retirer l'image", de: "Bild entfernen"))
+            }
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, removable ? 5 : 8)
+        .padding(.vertical, 4)
+        .background(ElephantTheme.panel.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1)
+        )
+        .accessibilityLabel(attachment.displayName)
     }
 }
 
@@ -6398,6 +6604,7 @@ struct ToolsView: View {
                 MetricTile(label: localizedYouText(model.appLanguage, en: "MCP Tools", zh: "MCP 工具", fr: "Outils MCP", de: "MCP-Tools"), value: "\(model.snapshot.mcpTools)", symbol: "point.3.connected.trianglepath.dotted", tint: ElephantTheme.orange)
             }
 
+            MCPManagementPanel()
             ToolsCatalogPanel()
         }
     }
@@ -7650,7 +7857,7 @@ struct ProviderView: View {
                     label: "Embedding",
                     value: model.snapshot.embeddingProviderID.isEmpty ? embeddingStatus : model.snapshot.embeddingProviderID,
                     symbol: "point.3.connected.trianglepath.dotted",
-                    tint: model.snapshot.localModelWarm ? ElephantTheme.green : ElephantTheme.accent
+                    tint: model.snapshot.localModelAvailable ? ElephantTheme.green : ElephantTheme.accent
                 )
             }
 
@@ -7674,7 +7881,7 @@ struct ProviderView: View {
     }
 
     private var embeddingStatus: String {
-        if !model.snapshot.embeddingRuntimeState.isEmpty, !model.snapshot.localModelWarm {
+        if !model.snapshot.embeddingRuntimeState.isEmpty, !model.snapshot.localModelAvailable {
             return model.snapshot.embeddingRuntimeState
         }
         if !model.snapshot.embeddingStatus.isEmpty {
@@ -11544,6 +11751,705 @@ struct ToolsCatalogPanel: View {
                 pageSize: 12
             )
         }
+    }
+}
+
+private struct MCPManagementPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var showingEditor = false
+    @State private var draft = MCPServerDraft.empty
+    @State private var rawJSON = MCPServerDraft.empty.jsonText()
+    @State private var discovery: MCPDiscoveryResult?
+    @State private var enabledToolNames: Set<String> = []
+
+    var body: some View {
+        NativePanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 13) {
+                    OperatorCatalogLogo(symbol: "server.rack", tint: ElephantTheme.green)
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "Custom MCP", zh: "自定义 MCP", fr: "MCP personnalisé", de: "Eigenes MCP"),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Add MCP servers, verify live tools, and choose which tools Chat can use.",
+                            zh: "新增 MCP 服务、测试可用工具，并选择 Chat 可以调用哪些工具。",
+                            fr: "Ajoutez des serveurs MCP, vérifiez les outils et choisissez ceux utilisables par Chat.",
+                            de: "MCP-Server hinzufügen, Tools prüfen und für Chat freigeben."
+                        )
+                    )
+                    Spacer(minLength: 0)
+                    HStack(spacing: 8) {
+                        Button {
+                            openEditor(draft: .minimax(), discovery: nil)
+                        } label: {
+                            Label("MiniMax", systemImage: "photo.on.rectangle.angled")
+                        }
+                        .controlSize(.small)
+
+                        Button {
+                            openEditor(draft: .empty, discovery: nil)
+                        } label: {
+                            Label(localizedYouText(model.appLanguage, en: "Add Server", zh: "新增服务", fr: "Ajouter", de: "Server hinzufügen"), systemImage: "plus")
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                if !model.mcpActionResult.isEmpty {
+                    Label(model.mcpActionResult, systemImage: model.mcpActionFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(model.mcpActionFailed ? ElephantTheme.orange : ElephantTheme.green)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 8) {
+                    Pill(text: configPathLabel, symbol: "doc.text", tint: ElephantTheme.accent)
+                    Pill(text: localizedFormat(model.appLanguage, en: "%d server(s)", zh: "%d 个服务", fr: "%d serveur(s)", de: "%d Server", model.snapshot.mcpServerItems.count), symbol: "server.rack", tint: ElephantTheme.green)
+                    Pill(text: "\(enabledMCPToolCount)/\(model.snapshot.mcpToolItems.count)", symbol: "checkmark.seal", tint: ElephantTheme.orange)
+                    Spacer(minLength: 0)
+                }
+
+                if model.snapshot.mcpServerItems.isEmpty {
+                    MCPEmptyStateRow()
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(model.snapshot.mcpServerItems) { server in
+                            MCPServerCard(
+                                server: server,
+                                tools: tools(for: server),
+                                onEdit: { openEditor(draft: .from(server: server), discovery: nil) },
+                                onVerifySync: { Task { await verifyAndSync(server) } },
+                                onDelete: { Task { await model.deleteMCPServer(server) } }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingEditor) {
+            MCPServerEditorSheet(
+                isPresented: $showingEditor,
+                draft: $draft,
+                rawJSON: $rawJSON,
+                discovery: $discovery,
+                enabledToolNames: $enabledToolNames
+            )
+            .environmentObject(model)
+        }
+    }
+
+    private var enabledMCPToolCount: Int {
+        model.snapshot.mcpToolItems.filter(\.enabled).count
+    }
+
+    private var configPathLabel: String {
+        let path = model.snapshot.mcpConfigPath.isEmpty ? model.snapshot.settingsPath : model.snapshot.mcpConfigPath
+        guard !path.isEmpty else {
+            return localizedYouText(model.appLanguage, en: "not resolved", zh: "未解析", fr: "non résolu", de: "nicht aufgelöst")
+        }
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private func tools(for server: MCPServerItem) -> [MCPToolItem] {
+        model.snapshot.mcpToolItems
+            .filter { $0.serverID == server.serverID }
+            .sorted { left, right in
+                if left.enabled != right.enabled { return left.enabled && !right.enabled }
+                return left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
+            }
+    }
+
+    private func openEditor(draft nextDraft: MCPServerDraft, discovery nextDiscovery: MCPDiscoveryResult?) {
+        draft = nextDraft
+        rawJSON = nextDraft.jsonText()
+        discovery = nextDiscovery
+        enabledToolNames = Set(nextDiscovery?.tools.filter(\.enabled).map(\.name) ?? [])
+        showingEditor = true
+    }
+
+    private func verifyAndSync(_ server: MCPServerItem) async {
+        let nextDraft = MCPServerDraft.from(server: server)
+        guard let result = await model.discoverMCPServer(draft: nextDraft), result.ok, !result.tools.isEmpty else { return }
+        _ = await model.syncMCPServer(
+            draft: nextDraft,
+            discoveredTools: result.tools,
+            enabledToolNames: Set(result.tools.filter(\.enabled).map(\.name))
+        )
+    }
+}
+
+private struct MCPStatPill: View {
+    var title: String
+    var value: String
+    var symbol: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .textCase(.uppercase)
+                Text(value)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+    }
+}
+
+private struct MCPEmptyStateRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "server.rack")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(ElephantTheme.green)
+                .frame(width: 34, height: 34)
+                .background(ElephantTheme.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localizedYouText(model.appLanguage, en: "No custom MCP server", zh: "还没有自定义 MCP 服务", fr: "Aucun serveur MCP personnalisé", de: "Kein eigener MCP-Server"))
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Text(localizedYouText(model.appLanguage, en: "Add one server or start with the MiniMax preset.", zh: "可以新增服务，或直接使用 MiniMax 预设。", fr: "Ajoutez un serveur ou utilisez le preset MiniMax.", de: "Server hinzufügen oder MiniMax-Preset nutzen."))
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+    }
+}
+
+private struct MCPServerCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var server: MCPServerItem
+    var tools: [MCPToolItem]
+    var onEdit: () -> Void
+    var onVerifySync: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .top, spacing: 12) {
+                OperatorCatalogLogo(symbol: "point.3.connected.trianglepath.dotted", tint: ElephantTheme.green, brandSlug: server.serverID.lowercased().contains("minimax") ? "minimax" : nil)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(server.label)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                        Pill(text: server.transport.isEmpty ? "stdio" : server.transport, symbol: "antenna.radiowaves.left.and.right", tint: ElephantTheme.green)
+                    }
+                    Text(server.target.isEmpty ? localizedYouText(model.appLanguage, en: "No command or URL configured.", zh: "还没有配置 command 或 URL。", fr: "Aucune commande ou URL configurée.", de: "Kein Command oder URL konfiguriert.") : server.target)
+                        .font(.caption)
+                        .foregroundStyle(server.target.isEmpty ? ElephantTheme.orange : ElephantTheme.muted)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                    Text("\(server.serverID) · \(server.args.count) args · \(server.envKeys.count) env · \(server.headerKeys.count) headers")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.faint)
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    Button(localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"), action: onEdit)
+                    Button(localizedYouText(model.appLanguage, en: "Test & Sync", zh: "测试并同步", fr: "Tester et sync", de: "Testen & sync"), action: onVerifySync)
+                    Button(role: .destructive, action: onDelete) {
+                        Text(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"))
+                    }
+                }
+                .controlSize(.small)
+                .disabled(model.mcpActionInFlight)
+            }
+
+            if tools.isEmpty {
+                EmptyLine(
+                    symbol: "wrench.and.screwdriver",
+                    text: localizedYouText(model.appLanguage, en: "No tools synced yet. Run Test & Sync after the command works locally.", zh: "还没有同步工具。本机命令可用后运行“测试并同步”。", fr: "Aucun outil synchronisé.", de: "Noch keine Tools synchronisiert.")
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(tools) { tool in
+                        MCPToolToggleRow(tool: tool)
+                        if tool.id != tools.last?.id {
+                            Divider()
+                                .padding(.leading, 54)
+                        }
+                    }
+                }
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+    }
+}
+
+private struct MCPToolToggleRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var tool: MCPToolItem
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 11) {
+            Image(systemName: "wrench.and.screwdriver")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(tool.enabled ? ElephantTheme.green : ElephantTheme.faint)
+                .frame(width: 32, height: 32)
+                .background((tool.enabled ? ElephantTheme.green : ElephantTheme.faint).opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 7) {
+                    Text(tool.displayName)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(tool.toolName)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.faint)
+                        .lineLimit(1)
+                }
+                Text(tool.description.isEmpty ? localizedYouText(model.appLanguage, en: "No description returned.", zh: "没有返回工具说明。", fr: "Aucune description.", de: "Keine Beschreibung.") : tool.description)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(2)
+                if !tool.requiredFields.isEmpty {
+                    Text("required · \(tool.requiredFields.joined(separator: ", "))")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.faint)
+                }
+            }
+            Spacer(minLength: 10)
+            Toggle("", isOn: Binding(
+                get: { tool.enabled },
+                set: { enabled in Task { await model.setMCPToolEnabled(tool, enabled: enabled) } }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(model.mcpActionInFlight)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+    }
+}
+
+private enum MCPEditorMode: String, CaseIterable, Identifiable {
+    case form
+    case json
+
+    var id: String { rawValue }
+}
+
+private struct MCPServerEditorSheet: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @Binding var isPresented: Bool
+    @Binding var draft: MCPServerDraft
+    @Binding var rawJSON: String
+    @Binding var discovery: MCPDiscoveryResult?
+    @Binding var enabledToolNames: Set<String>
+    @State private var mode: MCPEditorMode = .form
+    @State private var localError = ""
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                OperatorCatalogLogo(symbol: "server.rack", tint: ElephantTheme.green, brandSlug: draft.serverID.lowercased().contains("minimax") ? "minimax" : nil)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(draft.serverID.isEmpty ? localizedYouText(model.appLanguage, en: "Add MCP Server", zh: "新增 MCP 服务", fr: "Ajouter un serveur MCP", de: "MCP-Server hinzufügen") : draft.serverID)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(targetLabel)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+                Picker("", selection: modeBinding) {
+                    Text("Form").tag(MCPEditorMode.form)
+                    Text("JSON").tag(MCPEditorMode.json)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 164)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
+                    if mode == .form {
+                        MCPServerForm(draft: $draft)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("MCP JSON")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(ElephantTheme.muted)
+                                Spacer(minLength: 0)
+                                Button {
+                                    loadJSONIntoForm()
+                                } label: {
+                                    Label(localizedYouText(model.appLanguage, en: "Convert", zh: "转换", fr: "Convertir", de: "Konvertieren"), systemImage: "arrow.triangle.2.circlepath")
+                                }
+                                .controlSize(.small)
+                            }
+                            TextEditor(text: $rawJSON)
+                                .font(.system(.callout, design: .monospaced))
+                                .scrollContentBackground(.hidden)
+                                .padding(10)
+                                .frame(minHeight: 330)
+                                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+                        }
+                    }
+
+                    if !localError.isEmpty {
+                        Label(localError, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                MCPDiscoveryPreview(
+                    discovery: discovery,
+                    enabledToolNames: $enabledToolNames
+                )
+                .frame(width: 295, alignment: .topLeading)
+            }
+            .padding(20)
+
+            Divider()
+            HStack {
+                Text(model.snapshot.mcpConfigPath.isEmpty ? model.snapshot.settingsPath : model.snapshot.mcpConfigPath)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.faint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
+                    isPresented = false
+                }
+                Button {
+                    Task { await test() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen"), systemImage: "checkmark.seal")
+                }
+                Button {
+                    Task { await save() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Save & Sync", zh: "保存并同步", fr: "Enregistrer et sync", de: "Speichern & sync"), systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .controlSize(.small)
+            .disabled(model.mcpActionInFlight)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 820)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onChange(of: draft) { next in
+            if mode == .form {
+                rawJSON = next.jsonText()
+            }
+        }
+    }
+
+    private var targetLabel: String {
+        let target = draft.transport == "stdio" || draft.transport.isEmpty ? draft.command : draft.url
+        if target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return draft.transport.isEmpty ? "stdio" : draft.transport
+        }
+        return target
+    }
+
+    private var modeBinding: Binding<MCPEditorMode> {
+        Binding(
+            get: { mode },
+            set: { nextMode in
+                if nextMode == .form, mode == .json {
+                    loadJSONIntoForm()
+                } else {
+                    if nextMode == .json {
+                        rawJSON = draft.jsonText()
+                        localError = ""
+                    }
+                    mode = nextMode
+                }
+            }
+        )
+    }
+
+    private func loadJSONIntoForm() {
+        do {
+            draft = try MCPServerDraft.from(jsonText: rawJSON)
+            rawJSON = draft.jsonText()
+            localError = ""
+            mode = .form
+        } catch {
+            localError = error.localizedDescription
+            mode = .json
+        }
+    }
+
+    private func effectiveDraft() throws -> MCPServerDraft {
+        if mode == .json {
+            return try MCPServerDraft.from(jsonText: rawJSON)
+        }
+        return draft
+    }
+
+    private func test() async {
+        do {
+            let nextDraft = try effectiveDraft()
+            if mode == .json { draft = nextDraft }
+            guard let result = await model.discoverMCPServer(draft: nextDraft) else { return }
+            discovery = result
+            enabledToolNames = Set(result.tools.filter(\.enabled).map(\.name))
+            localError = ""
+        } catch {
+            localError = error.localizedDescription
+        }
+    }
+
+    private func save() async {
+        do {
+            let nextDraft = try effectiveDraft()
+            if mode == .json { draft = nextDraft }
+            var result = discovery
+            if result?.ok != true {
+                result = await model.discoverMCPServer(draft: nextDraft)
+                discovery = result
+                enabledToolNames = Set(result?.tools.filter(\.enabled).map(\.name) ?? [])
+            }
+            guard let result, result.ok, !result.tools.isEmpty else {
+                localError = localizedYouText(model.appLanguage, en: "Test the MCP server successfully before saving.", zh: "需要先成功测试 MCP 服务再保存。", fr: "Testez le serveur MCP avec succès avant d'enregistrer.", de: "MCP-Server vor dem Speichern erfolgreich testen.")
+                return
+            }
+            let saved = await model.syncMCPServer(
+                draft: nextDraft,
+                discoveredTools: result.tools,
+                enabledToolNames: enabledToolNames
+            )
+            if saved {
+                isPresented = false
+            }
+        } catch {
+            localError = error.localizedDescription
+        }
+    }
+}
+
+private struct MCPServerForm: View {
+    @Binding var draft: MCPServerDraft
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Server ID")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    TextField("filesystem", text: $draft.serverID)
+                        .textFieldStyle(.roundedBorder)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Label")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    TextField("Filesystem", text: $draft.serverLabel)
+                        .textFieldStyle(.roundedBorder)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Transport")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    Picker("", selection: $draft.transport) {
+                        Text("stdio").tag("stdio")
+                        Text("http").tag("http")
+                        Text("streamable-http").tag("streamable-http")
+                        Text("sse").tag("sse")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 150)
+                }
+            }
+
+            if draft.transport == "stdio" || draft.transport.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Command")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    TextField("uvx", text: $draft.command)
+                        .textFieldStyle(.roundedBorder)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Args JSON or CSV")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    TextEditor(text: $draft.argsText)
+                        .font(.system(.callout, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .frame(height: 72)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+                }
+                MCPKeyValueEditor(title: "Environment", rows: $draft.envRows)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("URL")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                    TextField("https://example.com/mcp", text: $draft.url)
+                        .textFieldStyle(.roundedBorder)
+                }
+                MCPKeyValueEditor(title: "Headers", rows: $draft.headerRows)
+            }
+        }
+    }
+}
+
+private struct MCPKeyValueEditor: View {
+    var title: String
+    @Binding var rows: [MCPKeyValueRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Spacer(minLength: 0)
+                Button {
+                    rows.append(.empty)
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .controlSize(.small)
+            }
+            VStack(spacing: 7) {
+                ForEach($rows) { $row in
+                    HStack(spacing: 8) {
+                        TextField("Key", text: $row.key)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Value", text: $row.value)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            rows.removeAll { $0.id == row.id }
+                            if rows.isEmpty { rows = [.empty] }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(rows.count == 1 && row.key.isEmpty && row.value.isEmpty)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct MCPDiscoveryPreview: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var discovery: MCPDiscoveryResult?
+    @Binding var enabledToolNames: Set<String>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Live Tools", zh: "实时工具", fr: "Outils live", de: "Live Tools"),
+                    subtitle: discoverySubtitle
+                )
+                Spacer(minLength: 0)
+                if let discovery {
+                    Pill(
+                        text: discovery.status,
+                        symbol: discovery.ok ? "checkmark" : "exclamationmark.triangle",
+                        tint: discovery.ok ? ElephantTheme.green : ElephantTheme.orange
+                    )
+                }
+            }
+
+            if let discovery {
+                if !discovery.error.isEmpty {
+                    EmptyLine(symbol: "exclamationmark.triangle", text: discovery.error)
+                } else if discovery.tools.isEmpty {
+                    EmptyLine(symbol: "wrench.and.screwdriver", text: localizedYouText(model.appLanguage, en: "The server responded, but no tools were returned.", zh: "服务有响应，但没有返回工具。", fr: "Le serveur a répondu sans outil.", de: "Server antwortete ohne Tools."))
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(discovery.tools) { tool in
+                            HStack(alignment: .top, spacing: 10) {
+                                Toggle("", isOn: Binding(
+                                    get: { enabledToolNames.contains(tool.name) },
+                                    set: { enabled in
+                                        if enabled {
+                                            enabledToolNames.insert(tool.name)
+                                        } else {
+                                            enabledToolNames.remove(tool.name)
+                                        }
+                                    }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(tool.name)
+                                        .font(.callout.weight(.semibold))
+                                        .foregroundStyle(ElephantTheme.ink)
+                                    Text(tool.description.isEmpty ? "No description returned." : tool.description)
+                                        .font(.caption)
+                                        .foregroundStyle(ElephantTheme.muted)
+                                        .lineLimit(2)
+                                    if !tool.requiredFields.isEmpty {
+                                        Text("required · \(tool.requiredFields.joined(separator: ", "))")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(ElephantTheme.faint)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 8)
+                            if tool.id != discovery.tools.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+                }
+            } else {
+                EmptyLine(symbol: "checkmark.seal", text: localizedYouText(model.appLanguage, en: "Run Test to preview tools before saving.", zh: "保存前先点击测试预览工具。", fr: "Testez pour prévisualiser les outils.", de: "Mit Test die Tools vor dem Speichern anzeigen."))
+            }
+        }
+    }
+
+    private var discoverySubtitle: String {
+        guard let discovery else {
+            return localizedYouText(model.appLanguage, en: "Not tested yet", zh: "尚未测试", fr: "Pas encore testé", de: "Noch nicht getestet")
+        }
+        if discovery.durationMs > 0 {
+            return "\(discovery.tools.count) tools · \(discovery.durationMs)ms"
+        }
+        return "\(discovery.tools.count) tools"
     }
 }
 

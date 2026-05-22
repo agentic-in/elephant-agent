@@ -101,7 +101,10 @@ class EmbeddingRuntimeLoggingTest(unittest.TestCase):
 
 class EmbeddingBootstrapStateTest(unittest.TestCase):
     def test_resolve_embedding_bootstrap_state_uses_ready_when_root_is_healthy(self) -> None:
-        with mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True):
+        with (
+            mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True),
+            mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=True),
+        ):
             state = provider_runtime_support.resolve_embedding_bootstrap_state(
                 Path("/tmp/elephant-bootstrap-state"),
                 state_focus_mode="embedded",
@@ -124,7 +127,10 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
                     source="modelscope",
                 ),
             )
-            with mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True):
+            with (
+                mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True),
+                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=True),
+            ):
                 state = provider_runtime_support.resolve_embedding_bootstrap_state(
                     state_dir,
                     state_focus_mode="embedded",
@@ -133,6 +139,18 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
         self.assertEqual(state.status, "ready")
         self.assertEqual(state.source, "modelscope")
         self.assertEqual(state.model_source_url, model_bootstrap.EMBEDDING_MODEL_MODELSCOPE_URL)
+
+    def test_resolve_embedding_bootstrap_state_uses_pending_when_root_has_no_dependencies(self) -> None:
+        with (
+            mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True),
+            mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=False),
+        ):
+            state = provider_runtime_support.resolve_embedding_bootstrap_state(
+                Path("/tmp/elephant-bootstrap-state"),
+                state_focus_mode="embedded",
+            )
+
+        self.assertEqual(state.status, "pending")
 
     def test_resolve_embedding_bootstrap_state_uses_downloading_when_dependencies_exist(self) -> None:
         with (
@@ -215,6 +233,7 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             )
             with (
                 mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True),
+                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", return_value=True),
                 mock.patch.object(model_bootstrap.subprocess, "Popen") as popen,
             ):
                 state = provider_runtime_support.trigger_embedding_bootstrap(
@@ -303,6 +322,28 @@ class EmbeddingBootstrapStateTest(unittest.TestCase):
             self.assertEqual(state.source, "modelscope")
             self.assertFalse(model_root.exists())
             popen.assert_called_once()
+
+    def test_run_embedding_bootstrap_worker_installs_dependencies_before_ready_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_dir = Path(tmpdir)
+            calls = [False, True]
+
+            def dependencies_ready() -> bool:
+                return calls.pop(0) if calls else True
+
+            with (
+                mock.patch.object(model_bootstrap, "embedding_root_is_healthy", return_value=True),
+                mock.patch.object(model_bootstrap, "sentence_transformers_dependencies_ready", side_effect=dependencies_ready),
+                mock.patch.object(model_bootstrap.subprocess, "check_call") as check_call,
+            ):
+                status = provider_runtime_support.run_embedding_bootstrap_worker(str(state_dir))
+
+            self.assertEqual(status, 0)
+            check_call.assert_called_once()
+            persisted = provider_runtime_support.load_embedding_bootstrap_state(state_dir)
+            self.assertIsNotNone(persisted)
+            assert persisted is not None
+            self.assertEqual(persisted.status, "ready")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum AppSection: String, CaseIterable, Identifiable {
     case home
@@ -143,14 +144,45 @@ struct ChatMessage: Identifiable, Equatable {
     var role: Role
     var text: String
     var date = Date()
+    var attachments: [WakeAttachment] = []
     var toolEvents: [ToolUseEvent] = []
     var isStreaming = false
+}
+
+struct WakeAttachment: Identifiable, Equatable {
+    enum Kind: String {
+        case image
+    }
+
+    var id = UUID()
+    var kind: Kind = .image
+    var url: URL
+    var displayName: String
+
+    var promptFragment: String {
+        "@\(kind.rawValue):\(url.path)"
+    }
 }
 
 struct WakeQueuedPrompt: Identifiable, Equatable {
     var id = UUID()
     var text: String
+    var attachments: [WakeAttachment] = []
     var date = Date()
+
+    var previewText: String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        if attachments.count == 1 {
+            return attachments[0].displayName
+        }
+        if !attachments.isEmpty {
+            return "\(attachments.count) images"
+        }
+        return ""
+    }
 }
 
 struct PersonalModelFact: Identifiable, Equatable {
@@ -211,6 +243,393 @@ struct OperationItem: Identifiable, Equatable {
     var title: String
     var detail: String
     var enabled: Bool
+}
+
+struct MCPServerItem: Identifiable, Equatable {
+    var id: String { serverID }
+    var serverID: String
+    var label: String
+    var transport: String
+    var command: String
+    var args: [String]
+    var url: String
+    var env: [String: String]
+    var envKeys: [String]
+    var headers: [String: String]
+    var headerKeys: [String]
+    var toolCount: Int
+    var provenance: String
+
+    var target: String {
+        if transport == "stdio" || transport.isEmpty {
+            return ([command] + args).filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        return url
+    }
+}
+
+struct MCPToolItem: Identifiable, Equatable {
+    var id: String { toolKey }
+    var toolID: String
+    var toolKey: String
+    var toolName: String
+    var serverID: String
+    var serverLabel: String
+    var displayName: String
+    var description: String
+    var family: String
+    var enabled: Bool
+    var defaultEnabled: Bool
+    var available: Bool
+    var availabilityReason: String
+    var riskClass: String
+    var approvalClass: String
+    var requiredFields: [String]
+    var schemaJSON: String
+}
+
+struct MCPKeyValueRow: Identifiable, Equatable {
+    var id = UUID()
+    var key: String
+    var value: String
+
+    static let empty = MCPKeyValueRow(key: "", value: "")
+}
+
+struct MCPServerDraft: Equatable {
+    var serverID: String
+    var serverLabel: String
+    var transport: String
+    var command: String
+    var argsText: String
+    var url: String
+    var envRows: [MCPKeyValueRow]
+    var headerRows: [MCPKeyValueRow]
+
+    static let empty = MCPServerDraft(
+        serverID: "",
+        serverLabel: "",
+        transport: "stdio",
+        command: "",
+        argsText: "[]",
+        url: "",
+        envRows: [.empty],
+        headerRows: [.empty]
+    )
+
+    static func minimax(apiKey: String = "") -> MCPServerDraft {
+        MCPServerDraft(
+            serverID: "MiniMax",
+            serverLabel: "MiniMax",
+            transport: "stdio",
+            command: "uvx",
+            argsText: "[\"minimax-coding-plan-mcp\", \"-y\"]",
+            url: "",
+            envRows: [
+                MCPKeyValueRow(key: "MINIMAX_API_KEY", value: apiKey),
+                MCPKeyValueRow(key: "MINIMAX_API_HOST", value: "https://api.minimaxi.com")
+            ],
+            headerRows: [.empty]
+        )
+    }
+
+    static func from(server: MCPServerItem) -> MCPServerDraft {
+        MCPServerDraft(
+            serverID: server.serverID,
+            serverLabel: server.label,
+            transport: server.transport.isEmpty ? "stdio" : server.transport,
+            command: server.command,
+            argsText: Self.jsonString(server.args),
+            url: server.url,
+            envRows: Self.rows(from: server.env),
+            headerRows: Self.rows(from: server.headers)
+        )
+    }
+
+    static func from(jsonText: String) throws -> MCPServerDraft {
+        let rawObject = try jsonObject(from: jsonText)
+
+        if let servers = firstServerMap(in: rawObject) {
+            guard let serverID = servers.keys.sorted().first,
+                  let server = servers[serverID] as? [String: Any] else {
+                throw MCPDraftError.invalid("MCP JSON must contain at least one server object.")
+            }
+            return from(serverID: serverID, object: server)
+        }
+        return from(serverID: string(rawObject["serverId"] ?? rawObject["serverID"] ?? rawObject["id"]), object: rawObject)
+    }
+
+    func payload(discoveredTools: [MCPDiscoveredTool] = [], enabledToolNames: Set<String> = []) throws -> [String: Any] {
+        let serverID = serverID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !serverID.isEmpty else { throw MCPDraftError.invalid("Server ID is required.") }
+        let normalizedTransport = transport.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "stdio" : transport.trimmingCharacters(in: .whitespacesAndNewlines)
+        var body: [String: Any] = [
+            "serverId": serverID,
+            "serverLabel": serverLabel.trimmingCharacters(in: .whitespacesAndNewlines),
+            "transport": normalizedTransport,
+            "args": try Self.parseArgs(argsText),
+            "env": try Self.record(from: envRows, label: "Environment"),
+            "headers": try Self.record(from: headerRows, label: "Headers")
+        ]
+        if normalizedTransport == "stdio" {
+            let command = command.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !command.isEmpty else { throw MCPDraftError.invalid("Command is required for stdio transport.") }
+            body["command"] = command
+            body["url"] = ""
+        } else {
+            let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !url.isEmpty else { throw MCPDraftError.invalid("URL is required for remote MCP transport.") }
+            body["url"] = url
+            body["command"] = ""
+        }
+        if !discoveredTools.isEmpty {
+            body["tools"] = discoveredTools.map { tool in
+                tool.payload(enabled: enabledToolNames.contains(tool.name))
+            }
+        }
+        return body
+    }
+
+    func jsonText() -> String {
+        let entry: [String: Any] = [
+            "command": command,
+            "args": (try? Self.parseArgs(argsText)) ?? [],
+            "env": (try? Self.record(from: envRows, label: "Environment")) ?? [:],
+            "url": url,
+            "headers": (try? Self.record(from: headerRows, label: "Headers")) ?? [:],
+            "transport": transport
+        ].filter { _, value in
+            if let text = value as? String { return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            if let list = value as? [Any] { return !list.isEmpty }
+            if let object = value as? [String: Any] { return !object.isEmpty }
+            return true
+        }
+        return Self.jsonString(["mcpServers": [serverID.isEmpty ? "server" : serverID: entry]])
+    }
+
+    private static func from(serverID: String, object: [String: Any]) -> MCPServerDraft {
+        let env = object["env"] ?? object["environment"] ?? [:]
+        let commandParts = stringList(object["command"])
+        let command = commandParts.first ?? string(object["command"])
+        let explicitArgs = stringList(object["args"] ?? object["arguments"])
+        let args = Array(commandParts.dropFirst()) + explicitArgs
+        let transportValue = normalizedTransport(
+            string(object["transport"] ?? object["transportType"] ?? object["type"]),
+            hasURL: object["url"] != nil
+        )
+        return MCPServerDraft(
+            serverID: serverID.isEmpty ? string(object["serverId"] ?? object["id"], fallback: "server") : serverID,
+            serverLabel: string(object["serverLabel"] ?? object["label"], fallback: serverID),
+            transport: transportValue,
+            command: command,
+            argsText: jsonString(args),
+            url: string(object["url"]),
+            envRows: rows(from: stringMap(env)),
+            headerRows: rows(from: stringMap(object["headers"]))
+        )
+    }
+
+    private static func firstServerMap(in object: [String: Any]) -> [String: Any]? {
+        for key in ["mcpServers", "servers", "mcp"] {
+            if let servers = object[key] as? [String: Any] {
+                return servers
+            }
+        }
+        return nil
+    }
+
+    private static func jsonObject(from jsonText: String) throws -> [String: Any] {
+        let trimmed = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw MCPDraftError.invalid("JSON is empty.") }
+        if let object = parseJSONObject(trimmed) {
+            return object
+        }
+        let repaired = repairLenientJSON(trimmed)
+        if repaired != trimmed, let object = parseJSONObject(repaired) {
+            return object
+        }
+        throw MCPDraftError.invalid("MCP JSON is not valid. Check quotes, commas, and line breaks inside values.")
+    }
+
+    private static func parseJSONObject(_ text: String) -> [String: Any]? {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
+
+    private static func repairLenientJSON(_ text: String) -> String {
+        var output = ""
+        var inString = false
+        var escaped = false
+        var skippingWhitespaceAfterStringNewline = false
+        for scalar in text.unicodeScalars {
+            if inString {
+                if escaped {
+                    output.unicodeScalars.append(scalar)
+                    escaped = false
+                    skippingWhitespaceAfterStringNewline = false
+                    continue
+                }
+                if scalar == "\\" {
+                    output.unicodeScalars.append(scalar)
+                    escaped = true
+                    continue
+                }
+                if scalar == "\"" {
+                    output.unicodeScalars.append(scalar)
+                    inString = false
+                    skippingWhitespaceAfterStringNewline = false
+                    continue
+                }
+                if scalar == "\n" || scalar == "\r" {
+                    skippingWhitespaceAfterStringNewline = true
+                    continue
+                }
+                if skippingWhitespaceAfterStringNewline,
+                   CharacterSet.whitespaces.contains(scalar) {
+                    continue
+                }
+                skippingWhitespaceAfterStringNewline = false
+                if scalar.value < 0x20 {
+                    output.append(" ")
+                    continue
+                }
+                output.unicodeScalars.append(scalar)
+            } else {
+                output.unicodeScalars.append(scalar)
+                if scalar == "\"" {
+                    inString = true
+                }
+            }
+        }
+        return output
+            .replacingOccurrences(of: #",\s*([}\]])"#, with: "$1", options: .regularExpression)
+    }
+
+    private static func normalizedTransport(_ value: String, hasURL: Bool) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "", "local", "stdio":
+            return hasURL ? "streamable-http" : "stdio"
+        case "remote":
+            return "streamable-http"
+        default:
+            return value
+        }
+    }
+
+    private static func rows(from record: [String: String]) -> [MCPKeyValueRow] {
+        let rows = record.keys.sorted().map { MCPKeyValueRow(key: $0, value: record[$0] ?? "") }
+        return rows.isEmpty ? [.empty] : rows
+    }
+
+    private static func record(from rows: [MCPKeyValueRow], label: String) throws -> [String: String] {
+        var record: [String: String] = [:]
+        for row in rows {
+            let key = row.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = row.value
+            if key.isEmpty && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+            guard !key.isEmpty else { throw MCPDraftError.invalid("\(label) key is required.") }
+            guard record[key] == nil else { throw MCPDraftError.invalid("\(label) contains duplicate key: \(key)") }
+            record[key] = value
+        }
+        return record
+    }
+
+    private static func parseArgs(_ text: String) throws -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        if let data = trimmed.data(using: .utf8),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+            return array.map { string($0) }.filter { !$0.isEmpty }
+        }
+        return trimmed
+            .components(separatedBy: CharacterSet(charactersIn: "\n,"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func stringMap(_ value: Any?) -> [String: String] {
+        guard let dict = value as? [String: Any] else { return [:] }
+        var record: [String: String] = [:]
+        for (key, value) in dict {
+            let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { continue }
+            record[normalized] = string(value)
+        }
+        return record
+    }
+
+    private static func stringList(_ value: Any?) -> [String] {
+        if let list = value as? [Any] {
+            return list.map { string($0) }.filter { !$0.isEmpty }
+        }
+        let text = string(value)
+        return text.isEmpty ? [] : [text]
+    }
+
+    private static func string(_ value: Any?, fallback: String = "") -> String {
+        if value == nil || value is NSNull { return fallback }
+        if let text = value as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? fallback : trimmed
+        }
+        if let value { return String(describing: value) }
+        return fallback
+    }
+
+    private static func jsonString(_ value: Any) -> String {
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return text
+    }
+}
+
+struct MCPDiscoveredTool: Identifiable {
+    var id: String { name }
+    var name: String
+    var description: String
+    var requiredFields: [String]
+    var inputSchema: [String: Any]
+    var enabled: Bool = true
+
+    func payload(enabled: Bool) -> [String: Any] {
+        [
+            "name": name,
+            "description": description,
+            "inputSchema": inputSchema,
+            "enabled": enabled
+        ]
+    }
+}
+
+struct MCPDiscoveryResult {
+    var status: String
+    var serverID: String
+    var serverLabel: String
+    var transport: String
+    var toolCount: Int
+    var durationMs: Int
+    var tools: [MCPDiscoveredTool]
+    var error: String
+    var stdout: String
+    var stderr: String
+
+    var ok: Bool { status.lowercased() == "ok" && error.isEmpty }
+}
+
+enum MCPDraftError: LocalizedError {
+    case invalid(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalid(let message): return message
+        }
+    }
 }
 
 struct GatewayServiceItem: Identifiable, Equatable {
@@ -428,6 +847,7 @@ struct DashboardSnapshot: Equatable {
     var enabledTools = 0
     var mcpServers = 0
     var mcpTools = 0
+    var mcpConfigPath = ""
     var gatewayServices = 0
     var gatewayConfigured = 0
     var gatewayRunning = 0
@@ -461,6 +881,8 @@ struct DashboardSnapshot: Equatable {
     var skillItems: [OperationItem] = []
     var toolNames: [String] = []
     var toolItems: [OperationItem] = []
+    var mcpServerItems: [MCPServerItem] = []
+    var mcpToolItems: [MCPToolItem] = []
     var gatewayNames: [String] = []
     var gatewayItems: [GatewayServiceItem] = []
     var logItems: [OperationItem] = []
@@ -490,8 +912,23 @@ struct DashboardSnapshot: Equatable {
         return runtime == "loaded" || runtime == "external"
     }
 
+    var localModelAvailable: Bool {
+        if localModelWarm { return true }
+        return Self.statusIndicatesAvailable(embeddingStatus)
+            || Self.statusIndicatesAvailable(semanticStatus)
+    }
+
     var readyForInteraction: Bool {
-        providerReady && localModelWarm
+        providerReady && localModelAvailable
+    }
+
+    private static func statusIndicatesAvailable(_ value: String) -> Bool {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "active", "external", "healthy", "indexed", "loaded", "ok", "ready", "serving":
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -505,6 +942,7 @@ final class ElephantAppModel: ObservableObject {
     ]
     @Published var chatScrollRevision = 0
     @Published var wakeDraft = ""
+    @Published var wakeAttachments: [WakeAttachment] = []
     @Published var wakeQueue: [WakeQueuedPrompt] = []
     @Published var onboardingName = "Elephant"
     @Published var onboardingPurpose = ElephantAppModel.persistedAppLanguage().defaultElephantVibe
@@ -567,6 +1005,9 @@ final class ElephantAppModel: ObservableObject {
     @Published var diaryActionResult = ""
     @Published var factActionResult = ""
     @Published var configActionResult = ""
+    @Published var mcpActionResult = ""
+    @Published var mcpActionFailed = false
+    @Published var mcpActionInFlight = false
     @Published var isReflecting = false
     @Published var isWakeRunning = false
     @Published var activeEpisodeID = ""
@@ -604,6 +1045,19 @@ final class ElephantAppModel: ObservableObject {
             return AppLanguage(code: code)
         }
         return .preferred
+    }
+
+    private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String) -> String {
+        switch language {
+        case .zh: return zh
+        case .fr: return fr
+        case .de: return de
+        case .en: return en
+        }
+    }
+
+    private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
+        String(format: localizedText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
     }
 
     var userDisplayName: String {
@@ -1498,6 +1952,95 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    func discoverMCPServer(draft: MCPServerDraft) async -> MCPDiscoveryResult? {
+        mcpActionInFlight = true
+        defer { mcpActionInFlight = false }
+        do {
+            let result = try await client.discoverMCPServer(payload: try draft.payload())
+            mcpActionFailed = !result.ok
+            if result.ok {
+                mcpActionResult = Self.localizedText(
+                    appLanguage,
+                    en: "%@ verified with %d tool(s).",
+                    zh: "%@ 已通过测试，发现 %d 个工具。",
+                    fr: "%@ vérifié avec %d outil(s).",
+                    de: "%@ geprüft mit %d Tool(s).",
+                    result.serverID,
+                    result.tools.count
+                )
+            } else {
+                mcpActionResult = result.error.isEmpty
+                    ? Self.localizedText(appLanguage, en: "MCP discovery failed.", zh: "MCP 测试失败。", fr: "La découverte MCP a échoué.", de: "MCP-Erkennung fehlgeschlagen.")
+                    : result.error
+            }
+            return result
+        } catch {
+            mcpActionFailed = true
+            mcpActionResult = error.localizedDescription
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func syncMCPServer(
+        draft: MCPServerDraft,
+        discoveredTools: [MCPDiscoveredTool],
+        enabledToolNames: Set<String>
+    ) async -> Bool {
+        mcpActionInFlight = true
+        defer { mcpActionInFlight = false }
+        do {
+            let status = try await client.syncMCPServer(
+                payload: try draft.payload(discoveredTools: discoveredTools, enabledToolNames: enabledToolNames)
+            )
+            try await refreshDashboard()
+            mcpActionFailed = false
+            mcpActionResult = status.isEmpty
+                ? Self.localizedText(appLanguage, en: "MCP server saved and synced.", zh: "MCP 服务已保存并同步。", fr: "Serveur MCP enregistré et synchronisé.", de: "MCP-Server gespeichert und synchronisiert.")
+                : status
+            return true
+        } catch {
+            mcpActionFailed = true
+            mcpActionResult = error.localizedDescription
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteMCPServer(_ server: MCPServerItem) async {
+        mcpActionInFlight = true
+        defer { mcpActionInFlight = false }
+        do {
+            let status = try await client.deleteMCPServer(serverID: server.serverID)
+            try await refreshDashboard()
+            mcpActionFailed = false
+            mcpActionResult = status.isEmpty
+                ? Self.localizedText(appLanguage, en: "MCP server removed.", zh: "MCP 服务已删除。", fr: "Serveur MCP supprimé.", de: "MCP-Server entfernt.")
+                : status
+        } catch {
+            mcpActionFailed = true
+            mcpActionResult = error.localizedDescription
+            lastError = error.localizedDescription
+        }
+    }
+
+    func setMCPToolEnabled(_ tool: MCPToolItem, enabled: Bool) async {
+        mcpActionInFlight = true
+        defer { mcpActionInFlight = false }
+        do {
+            let status = try await client.setMCPToolEnabled(serverID: tool.serverID, toolName: tool.toolName, enabled: enabled)
+            try await refreshDashboard()
+            mcpActionFailed = false
+            mcpActionResult = status.isEmpty
+                ? Self.localizedText(appLanguage, en: "MCP tool updated.", zh: "MCP 工具已更新。", fr: "Outil MCP mis à jour.", de: "MCP-Tool aktualisiert.")
+                : status
+        } catch {
+            mcpActionFailed = true
+            mcpActionResult = error.localizedDescription
+            lastError = error.localizedDescription
+        }
+    }
+
     func setCuriosityIntensity(_ intensity: String) async {
         do {
             try await client.configureLearningIntensity(intensity)
@@ -1824,11 +2367,131 @@ final class ElephantAppModel: ObservableObject {
 
     func sendWakeMessage() async {
         let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let attachments = wakeAttachments
+        guard !text.isEmpty || !attachments.isEmpty else { return }
         wakeDraft = ""
-        wakeQueue.append(WakeQueuedPrompt(text: text))
+        wakeAttachments = []
+        wakeQueue.append(WakeQueuedPrompt(text: text, attachments: attachments))
         focusComposer()
         await drainWakeQueueIfNeeded()
+    }
+
+    func addWakeImageURLs(_ urls: [URL]) {
+        let prepared = urls.compactMap { prepareWakeImageAttachment(from: $0) }
+        guard !prepared.isEmpty else { return }
+        wakeAttachments.append(contentsOf: prepared)
+        focusComposer()
+    }
+
+    func importWakeImages(from pasteboard: NSPasteboard) -> Bool {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let urlObjects = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [NSURL] ?? []
+        let urls = urlObjects.map { $0 as URL }.filter(Self.isImageURL)
+        if !urls.isEmpty {
+            addWakeImageURLs(urls)
+            return true
+        }
+
+        if let pngData = pasteboard.data(forType: .png),
+           let image = NSImage(data: pngData),
+           appendWakeImage(image, sourceName: "pasted-image") {
+            focusComposer()
+            return true
+        }
+        if let tiffData = pasteboard.data(forType: .tiff),
+           let image = NSImage(data: tiffData),
+           appendWakeImage(image, sourceName: "pasted-image") {
+            focusComposer()
+            return true
+        }
+        if let image = NSImage(pasteboard: pasteboard),
+           appendWakeImage(image, sourceName: "pasted-image") {
+            focusComposer()
+            return true
+        }
+        return false
+    }
+
+    func removeWakeAttachment(_ attachment: WakeAttachment) {
+        wakeAttachments.removeAll { $0.id == attachment.id }
+    }
+
+    private func prepareWakeImageAttachment(from url: URL) -> WakeAttachment? {
+        guard Self.isImageURL(url), let image = NSImage(contentsOf: url) else {
+            return nil
+        }
+        return makeWakeImageAttachment(from: image, sourceName: url.deletingPathExtension().lastPathComponent)
+    }
+
+    @discardableResult
+    private func appendWakeImage(_ image: NSImage, sourceName: String) -> Bool {
+        guard let attachment = makeWakeImageAttachment(from: image, sourceName: sourceName) else {
+            return false
+        }
+        wakeAttachments.append(attachment)
+        return true
+    }
+
+    private func makeWakeImageAttachment(from image: NSImage, sourceName: String) -> WakeAttachment? {
+        guard let data = Self.pngData(from: image) else { return nil }
+        do {
+            let directory = try Self.wakeAttachmentDirectory()
+            let safeName = Self.safeAttachmentStem(sourceName)
+            let filename = "\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString)-\(safeName).png"
+            let url = directory.appendingPathComponent(filename)
+            try data.write(to: url, options: [.atomic])
+            return WakeAttachment(url: url, displayName: "\(safeName).png")
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    private static func wakePrompt(text: String, attachments: [WakeAttachment]) -> String {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fragments = attachments.map(\.promptFragment)
+        return ([normalized] + fragments)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
+
+    private static func isImageURL(_ url: URL) -> Bool {
+        guard url.isFileURL else { return false }
+        if let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image) {
+            return true
+        }
+        return false
+    }
+
+    private static func wakeAttachmentDirectory() throws -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let directory = base.appendingPathComponent("Elephant Agent/Chat Attachments", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private static func safeAttachmentStem(_ rawValue: String) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? "image" : trimmed
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = base.unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        }
+        let collapsed = String(scalars).split(separator: "-").joined(separator: "-")
+        return String(collapsed.prefix(48)).trimmingCharacters(in: CharacterSet(charactersIn: "-")).isEmpty
+            ? "image"
+            : String(collapsed.prefix(48)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+
+    private static func pngData(from image: NSImage) -> Data? {
+        var proposedRect = NSRect(origin: .zero, size: image.size)
+        guard let cgImage = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) else {
+            return nil
+        }
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        return bitmap.representation(using: .png, properties: [:])
     }
 
     func removeQueuedWakeMessage(_ item: WakeQueuedPrompt) {
@@ -1844,14 +2507,15 @@ final class ElephantAppModel: ObservableObject {
         }
         while !wakeQueue.isEmpty {
             let item = wakeQueue.removeFirst()
-            await runWakeMessage(item.text)
+            await runWakeMessage(item.text, attachments: item.attachments)
         }
     }
 
-    private func runWakeMessage(_ text: String) async {
-        messages.append(ChatMessage(role: .user, text: text))
+    private func runWakeMessage(_ text: String, attachments: [WakeAttachment]) async {
+        messages.append(ChatMessage(role: .user, text: text, attachments: attachments))
         chatScrollRevision += 1
 
+        let prompt = Self.wakePrompt(text: text, attachments: attachments)
         var assistantMessageID: UUID?
         var currentAssistantTextMessageID: UUID?
         var liveMessageIDs: [UUID] = []
@@ -2005,7 +2669,7 @@ final class ElephantAppModel: ObservableObject {
             )
             activeEpisodeID = episodeID
 
-            streamLoop: for try await event in client.streamWakeLoop(text, episodeID: episodeID) {
+            streamLoop: for try await event in client.streamWakeLoop(prompt, episodeID: episodeID) {
                 if event.type == "stream.heartbeat" {
                     continue
                 }

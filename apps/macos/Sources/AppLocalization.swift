@@ -99,6 +99,9 @@ enum AppText {
     case imagePickerTitle
     case imagePickerMessage
     case imagePickerPrompt
+    case chatImagePickerTitle
+    case chatImagePickerMessage
+    case chatImagePickerPrompt
     case female
     case male
     case nonBinary
@@ -430,6 +433,12 @@ enum AppText {
             return pick(language, en: "Pick a local image for your Elephant Agent profile.", zh: "选择一张本地图片作为你的 Elephant Agent 个人照片。", fr: "Choisissez une image locale pour votre profil Elephant Agent.", de: "Wähle ein lokales Bild für dein Elephant-Agent-Profil.")
         case .imagePickerPrompt:
             return pick(language, en: "Use Photo", zh: "使用照片", fr: "Utiliser la photo", de: "Foto verwenden")
+        case .chatImagePickerTitle:
+            return pick(language, en: "Choose images", zh: "选择图片", fr: "Choisir des images", de: "Bilder wählen")
+        case .chatImagePickerMessage:
+            return pick(language, en: "Attach local images to this chat message.", zh: "把本地图片附加到这条聊天消息。", fr: "Joindre des images locales à ce message.", de: "Lokale Bilder an diese Chatnachricht anhängen.")
+        case .chatImagePickerPrompt:
+            return pick(language, en: "Attach", zh: "添加", fr: "Joindre", de: "Anhängen")
         case .female:
             return pick(language, en: "Female", zh: "女", fr: "Femme", de: "Frau")
         case .male:
