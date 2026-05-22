@@ -80,6 +80,9 @@ final class CoreRunner {
         if let root {
             environment["PYTHONPATH"] = root.path
         }
+        for (key, value) in pythonRuntime.environment {
+            environment[key] = value
+        }
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         environment["ELEPHANT_HOME"] = data.home.path
         environment["ELEPHANT_HERD_DIR"] = data.herd.path
@@ -396,6 +399,7 @@ final class CoreRunner {
     private struct PythonRuntime {
         var executableURL: URL
         var argumentsPrefix: [String]
+        var environment: [String: String] = [:]
     }
 
     private static func apiProcessRows() -> [ProcessRow] {
@@ -587,10 +591,46 @@ final class CoreRunner {
             return PythonRuntime(executableURL: URL(fileURLWithPath: "/usr/bin/env"), argumentsPrefix: ["python3"])
         }
 
+        if let bundled = bundledPythonRuntime() {
+            return bundled
+        }
+
         guard let runtimePython = try await resolveInstalledPythonIfNeeded(repoRoot: nil, data: data) else {
             throw CoreRunnerError.runtimeMissing("No Python runtime was resolved.")
         }
         return PythonRuntime(executableURL: runtimePython, argumentsPrefix: [])
+    }
+
+    private static func bundledPythonRuntime() -> PythonRuntime? {
+        let fileManager = FileManager.default
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let runtime = resources.appendingPathComponent("Runtime")
+        let manifest = runtime.appendingPathComponent("manifest.json")
+        guard fileManager.fileExists(atPath: manifest.path) else { return nil }
+
+        let pythonCandidates = [
+            runtime.appendingPathComponent("python/bin/python3.12"),
+            runtime.appendingPathComponent("python/bin/python3"),
+            runtime.appendingPathComponent("python/bin/python")
+        ]
+        guard let python = pythonCandidates.first(where: { fileManager.isExecutableFile(atPath: $0.path) }) else {
+            return nil
+        }
+
+        let sitePackages = runtime.appendingPathComponent("site-packages")
+        var environment: [String: String] = [
+            "ELEPHANT_MAC_BUNDLED_RUNTIME": "1",
+            "PYTHONNOUSERSITE": "1"
+        ]
+        if fileManager.fileExists(atPath: sitePackages.path) {
+            environment["PYTHONPATH"] = sitePackages.path
+        }
+        let browsers = runtime.appendingPathComponent("ms-playwright")
+        if fileManager.fileExists(atPath: browsers.path) {
+            environment["PLAYWRIGHT_BROWSERS_PATH"] = browsers.path
+            environment["PLAYWRIGHT_SKIP_BROWSER_GC"] = "1"
+        }
+        return PythonRuntime(executableURL: python, argumentsPrefix: [], environment: environment)
     }
 
     private static func repoPythonCandidates(
