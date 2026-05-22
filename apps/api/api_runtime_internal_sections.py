@@ -576,7 +576,7 @@ def _fill_reflect(dashboard: dict[str, Any], self) -> None:
 
 def _fill_chat(dashboard: dict[str, Any], self) -> None:
     states, current_state = _state_collections(self)
-    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")[:10]
+    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")[:30]
     loop_rows: list[Any] = []
     for episode in episodes:
         loop_rows.extend(self.repository.list_loops(episode_id=episode.episode_id))

@@ -7,10 +7,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from packages.contracts import Step
+from packages.contracts import Fact, Step
 from packages.evidence import recall_time_range_from_payload
 from packages.storage import RuntimeStorageRepository
-from packages.tools.handlers_personal_model import run_personal_model_update
+from packages.tools.handlers_personal_model import run_personal_model_search, run_personal_model_update
 from packages.tools.runtime import ToolInvocation, ToolRuntimeContext
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.understanding.personal_model_governance import protected_topic_metadata
@@ -621,6 +621,97 @@ class PersonalModelLifecycleTest(unittest.TestCase):
         self.assertIn("protected core topic cannot be deleted", result["summary"])
         self.assertEqual(active[0].fact_id, created["ref"])
 
+    def test_background_learning_cannot_change_preferred_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+            now = datetime.now(timezone.utc)
+            repository.upsert_personal_model_fact(
+                Fact(
+                    fact_id="fact:preferred-name",
+                    personal_model_id=state.personal_model_id,
+                    lens="identity",
+                    text="Bit",
+                    confidence=1.0,
+                    committed_at=now,
+                    source="user_explicit",
+                    status="active",
+                    metadata={
+                        **protected_topic_metadata("identity.anchor.name.preferred"),
+                        "topic": "identity.anchor.name.preferred",
+                    },
+                )
+            )
+
+            result = run_personal_model_update(
+                ToolInvocation(
+                    invocation_id="invoke:overwrite-protected-name",
+                    tool_id="tool.personal_model.update",
+                    session_id="session-life",
+                    context=ToolRuntimeContext(cwd=Path(tmpdir), personal_model_id=state.personal_model_id),
+                    arguments={
+                        "action": "correct",
+                        "lens": "identity",
+                        "topic": "identity.anchor.name.preferred",
+                        "text": "训灼",
+                        "source": "learned",
+                        "reason": "background inference",
+                    },
+                ),
+                surface=surface,
+            )
+            active = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")
+
+        self.assertIn("status: protected", result["summary"])
+        self.assertEqual(tuple(fact.text for fact in active), ("Bit",))
+
+    def test_chat_correction_can_change_preferred_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+            now = datetime.now(timezone.utc)
+            repository.upsert_personal_model_fact(
+                Fact(
+                    fact_id="fact:preferred-name",
+                    personal_model_id=state.personal_model_id,
+                    lens="identity",
+                    text="Bit",
+                    confidence=1.0,
+                    committed_at=now,
+                    source="user_explicit",
+                    status="active",
+                    metadata={
+                        **protected_topic_metadata("identity.anchor.name.preferred"),
+                        "topic": "identity.anchor.name.preferred",
+                    },
+                )
+            )
+
+            result = run_personal_model_update(
+                ToolInvocation(
+                    invocation_id="invoke:chat-correct-name",
+                    tool_id="tool.personal_model.update",
+                    session_id="session-life",
+                    context=ToolRuntimeContext(cwd=Path(tmpdir), personal_model_id=state.personal_model_id),
+                    arguments={
+                        "action": "correct",
+                        "lens": "identity",
+                        "topic": "identity.anchor.name.preferred",
+                        "text": "灼灼",
+                        "reason": "user asked to change preferred name in chat",
+                    },
+                ),
+                surface=surface,
+            )
+            active = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")
+
+        self.assertNotIn("status: protected", result["summary"])
+        self.assertEqual(tuple(fact.text for fact in active), ("灼灼",))
+
     def test_search_diagnostics_returns_related_claims_and_broad_tip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
@@ -795,6 +886,108 @@ class PersonalModelLifecycleTest(unittest.TestCase):
         self.assertEqual(len(active), 1)
         self.assertEqual(second["retired"], (first["ref"],))
         self.assertEqual(tuple(retired.get("claims") or ())[0]["status"], "retired")
+
+    def test_skill_optimization_claim_payload_and_search_surface_expose_candidate_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+
+            claim = surface.update_personal_model(
+                "session-life",
+                action="remember",
+                lens="world",
+                topic="world.skills.optimization.python_development.update_procedure_ab12cd34",
+                text="将 tool.terminal.exec → tool.file.read 编码为稳定流程。",
+                reason="reflect candidate draft",
+                source="user_said",
+                personal_model_id=state.personal_model_id,
+                metadata={
+                    "review_status": "new",
+                    "confidence": "0.84",
+                    "optimization_type": "update_procedure",
+                    "signal_type": "recurring_sequence",
+                    "occurrence_count": "5",
+                    "suggested_action": "Update python-development to encode the repeated tool sequence tool.terminal.exec -> tool.file.read.",
+                    "skill_id": "python-development",
+                },
+            )["claim"]
+            fact = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")[0]
+            search = run_personal_model_search(
+                ToolInvocation(
+                    invocation_id="invoke:search-skillopt-claim",
+                    tool_id="tool.personal_model.search",
+                    session_id="session-life",
+                    context=ToolRuntimeContext(cwd=Path(tmpdir), personal_model_id=state.personal_model_id),
+                    arguments={
+                        "lens": "world",
+                        "topic": "world.skills.optimization.python_development.update_procedure_ab12cd34",
+                        "personal_model_id": state.personal_model_id,
+                    },
+                ),
+                surface=surface,
+            )
+
+        self.assertEqual(claim["candidate_key"], "update_procedure_ab12cd34")
+        self.assertEqual(claim["candidate_id"], "skillopt_update_procedure_ab12cd34")
+        self.assertEqual(claim["target_scope"], "python_development")
+        self.assertEqual(claim["index_id"], "python_development")
+        self.assertEqual(claim["skill_id"], "python-development")
+        self.assertEqual(claim["optimization_type"], "update_procedure")
+        self.assertEqual(claim["signal_type"], "recurring_sequence")
+        self.assertEqual(claim["occurrence_count"], "5")
+        self.assertEqual(claim["review_status"], "pending")
+        self.assertEqual(claim["confidence"], 0.84)
+        self.assertEqual(fact.confidence, 0.84)
+        self.assertIn("candidate_key=update_procedure_ab12cd34", search["summary"])
+        self.assertIn("review_status=pending", search["summary"])
+        self.assertIn("target_scope=python_development", search["summary"])
+        self.assertIn("confidence=0.84", search["summary"])
+        self.assertIn("suggested_action: Update python-development to encode the repeated tool sequence", search["summary"])
+
+    def test_skill_optimization_topics_are_normalized_at_write_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "elephant.sqlite3")
+            repository.bootstrap()
+            state = repository.create_state(elephant_id="elephant-life", elephant_name="Life")
+            surface = PersonalModelUnderstandingSurface(repository=repository)
+
+            created = surface.update_personal_model(
+                "session-life",
+                action="remember",
+                lens="world",
+                topic="world.skills.optimization.new.tool_sequence_questions_skill_list",
+                text="将 tool.personal_model.questions → tool.skill.list 编码为过程性行为模式。",
+                reason="reflect candidate draft",
+                source="user_said",
+                personal_model_id=state.personal_model_id,
+                metadata={"review_status": "new"},
+            )["claim"]
+            updated = surface.update_personal_model(
+                "session-life",
+                action="correct",
+                lens="world",
+                topic="world.skills.optimization.new.tool_sequence_questions_skill_list",
+                ref=created["ref"],
+                text="将 tool.personal_model.questions → tool.skill.list 编码为稳定的过程性行为模式。",
+                reason="tighten candidate wording",
+                source="user_said",
+                personal_model_id=state.personal_model_id,
+                metadata={},
+            )["claim"]
+            active = repository.list_personal_model_facts(personal_model_id=state.personal_model_id, status="active")
+            self.assertEqual(len(active), 1)
+            fact = active[0]
+
+        self.assertEqual(updated["ref"], fact.fact_id)
+        self.assertEqual(fact.metadata["source_kind"], "learned")
+        self.assertEqual(fact.metadata["recall_policy"], "review")
+        self.assertEqual(fact.metadata["retention_lifecycle"], "draft")
+        self.assertEqual(fact.metadata["projection_policy"], "skill_optimization_candidate")
+        self.assertEqual(fact.metadata["review_status"], "pending")
+        self.assertEqual(fact.metadata["candidate_key"], "tool_sequence_questions_skill_list")
+        self.assertEqual(fact.metadata["candidate_id"], "skillopt_tool_sequence_questions_skill_list")
 
     def test_restore_reactivates_disputed_claim_by_ref(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

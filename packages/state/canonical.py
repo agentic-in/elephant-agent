@@ -78,7 +78,7 @@ def build_elephant_identity_record(
         elephant_id=elephant_id or ids.elephant_id,
         profile_id=profile.state.profile_id,
         display_name=identity.display_name,
-        identity_mode=profile.state.mode,
+        identity_mode=identity.mode,
         personality_preset=identity.personality_preset,
         initiative=identity.initiative,
         relational_stance=identity.relational_stance,

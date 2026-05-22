@@ -471,6 +471,14 @@ class ContextRuntime(ContextCapability):
     def total_tokens(self) -> int:
         return self._total_tokens
 
+    def update_total_tokens(self, total_tokens: int) -> None:
+        try:
+            parsed = int(total_tokens or 0)
+        except (TypeError, ValueError):
+            return
+        if parsed > 0:
+            self._total_tokens = parsed
+
     def plan(
         self,
         session: Episode,

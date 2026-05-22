@@ -11,6 +11,7 @@ from packages.models.runtime import CredentialSource, ModelAdapter
 
 from .anthropic import AnthropicMessagesModelAdapter
 from .openai_compatible import OpenAICompatibleProviderAdapter, OpenAICompatibleProviderConfig
+from .vllm_semantic_router import VllmSemanticRouterProviderAdapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +68,36 @@ class InMemoryModelAdapterBuilderRegistry:
 
     @classmethod
     def default(cls) -> "InMemoryModelAdapterBuilderRegistry":
-        return cls((_OpenAICompatibleModelAdapterBuilder(), _AnthropicMessagesModelAdapterBuilder()))
+        return cls(
+            (
+                _VllmSemanticRouterModelAdapterBuilder(),
+                _OpenAICompatibleModelAdapterBuilder(),
+                _AnthropicMessagesModelAdapterBuilder(),
+            )
+        )
+
+
+class _VllmSemanticRouterModelAdapterBuilder:
+    builder_id = "vllm-semantic-router"
+
+    def supports(self, context: ModelAdapterBuildContext) -> bool:
+        return context.profile.provider_id == "vllm-semantic-router"
+
+    def build(self, context: ModelAdapterBuildContext) -> ModelAdapter:
+        return VllmSemanticRouterProviderAdapter(
+            router_metadata=context.profile.metadata,
+            config=OpenAICompatibleProviderConfig(
+                provider_id=context.profile.provider_id,
+                base_url=context.profile.base_url or "",
+                model_id=context.profile.default_model or "",
+                extra_headers=context.profile.extra_headers,
+                auth_header_name=context.resolution.auth_header_name,
+            ),
+            runtime_resolver=context.runtime_resolver,
+            credential_source=context.credential_source,
+            adapter_id=context.adapter_id,
+            stream_observer=context.stream_observer,
+        )
 
 
 class _OpenAICompatibleModelAdapterBuilder:

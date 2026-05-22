@@ -390,12 +390,13 @@ def _companion_settings_from_identity(
     fallback_mode: str,
 ) -> CompanionSettings:
     governance_flags = set(getattr(identity_record, "governance_flags", ()) or ())
-    preset = resolve_personality_preset(None, mode=fallback_mode)
+    preset = resolve_personality_preset(getattr(identity_record, "personality_preset", None), mode=fallback_mode)
     notes = relationship_record.continuity_notes if relationship_record is not None else ()
     return CompanionSettings(
         text_first=_flag(governance_flags, positive="text-first", fallback=True),
         personality_preset=preset.preset_id,
         personality=preset.traits,
+        initiative=str(getattr(identity_record, "initiative", "") or "").strip() or CompanionSettings().initiative,
         preserve_relationship_timeline=_flag(
             governance_flags,
             positive="preserve-relationship-timeline",

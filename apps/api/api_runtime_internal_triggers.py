@@ -64,6 +64,7 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
     """Enqueue a reflect job from the dashboard."""
     from apps.learning_worker_runtime import ensure_learning_worker_running
 
+    resolved_trigger = trigger or "manual"
     pm = self.repository.ensure_default_personal_model()
     states = self.repository.list_states(personal_model_id=pm.personal_model_id)
     if not states:
@@ -87,14 +88,15 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
                 metadata["diary_target_date"] = diary_target_date
             else:
                 metadata["target_date"] = diary_target_date
+    summary_features = _resolved_feature_summary(resolved_trigger, features=features)
     job = self.repository.enqueue_learning_job(
         job_type="episode_boundary_learning",
-        trigger=trigger or "manual",
+        trigger=resolved_trigger,
         personal_model_id=pm.personal_model_id,
         state_id=state.state_id,
         episode_id=episode.episode_id,
         loop_id=None,
-        summary=f"reflect job (features={features or 'default'})",
+        summary=f"reflect job (features={summary_features})",
         metadata=metadata,
         force_new=True,
     )
@@ -102,7 +104,18 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
         ensure_learning_worker_running(state_dir=self.repository.database_path.parent)
     except Exception:
         pass
-    return {"status": "queued", "job_id": job.job_id, "trigger": trigger or "manual", "features": features}
+    return {"status": "queued", "job_id": job.job_id, "trigger": resolved_trigger, "features": summary_features}
+
+
+def _resolved_feature_summary(trigger: str, *, features: str | None) -> str:
+    explicit = tuple(item.strip() for item in (features or "").split(",") if item.strip())
+    try:
+        from apps.reflect.features import resolve_features
+
+        resolved = resolve_features(trigger.strip().lower(), explicit_features=explicit or None)
+    except Exception:
+        return features.strip() if features and features.strip() else "default"
+    return ",".join(feature.feature_id for feature in resolved) or "default"
 
 
 __all__ = ["delete_diary_entry", "trigger_diary_write", "trigger_reflect_job"]

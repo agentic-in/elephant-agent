@@ -114,7 +114,7 @@ class PublicInstallScriptSmokeTest(unittest.TestCase):
 
     def test_pyproject_excludes_site_packages_from_python_distribution(self) -> None:
         content = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertIn('include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "packages*"]', content)
+        self.assertIn('include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "apps.learning_agents*", "apps.reflect*", "packages*"]', content)
         self.assertIn('exclude = ["tests*", ".worktrees*", "apps.site*"]', content)
         self.assertIn('"apps.dashboard" = ["dist/*", "dist/assets/*"]', content)
 

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 import json
 from pathlib import Path
+import tempfile
 from threading import Lock
 import time
 from types import SimpleNamespace
@@ -11,8 +12,18 @@ import unittest
 from unittest import mock
 
 from apps.api.api_runtime_http_methods import __call__ as wsgi_call
-from apps.api.api_runtime_http_methods import _dispatch_internal, _dispatch_operator, stream_loop_events
+from apps.api.api_runtime_context_compression import (
+    compact_context_after_usage,
+)
+from apps.api.api_runtime_http_methods import (
+    _dispatch_internal,
+    _dispatch_operator,
+    stream_loop_events,
+)
 from apps.api.capabilities import APITelemetrySink
+from packages.context.epoch_store import FileEpochStore
+from packages.context.session_projection import SessionContextEpoch
+from packages.contracts.runtime import PromptMessage
 from packages.tools.runtime import ToolInvocation, ToolLifecycleEvent, ToolRuntimeContext
 
 
@@ -118,6 +129,186 @@ class OperatorCronDispatchTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(calls, ["run"])
         self.assertEqual(response.payload["cron"]["run"]["outcome"], "success")
+
+
+class APIContextCompressionTest(unittest.TestCase):
+    def test_after_turn_high_usage_compacts_epoch_like_chat_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            store = FileEpochStore(state_dir)
+            episode_id = "episode-api-compress"
+            store.save(
+                SessionContextEpoch(
+                    session_id=episode_id,
+                    frozen=True,
+                    frozen_prefix="## Stable prefix",
+                    base_loop_context="",
+                    thread_focus="High usage API chat",
+                    history_messages=tuple(
+                        PromptMessage(
+                            role="user" if index % 2 == 0 else "assistant",
+                            content=f"message {index} " + ("payload " * 200),
+                        )
+                        for index in range(18)
+                    ),
+                )
+            )
+            telemetry = APITelemetrySink()
+            app = SimpleNamespace(
+                repository=SimpleNamespace(
+                    database_path=state_dir / "elephant.sqlite3"
+                ),
+                telemetry=telemetry,
+                context=SimpleNamespace(runtime=SimpleNamespace(total_tokens=1000)),
+            )
+            outcome = SimpleNamespace(
+                execution=SimpleNamespace(prompt_tokens=900, total_tokens=900),
+                context=SimpleNamespace(token_budget=1000),
+                event=SimpleNamespace(event_id="event:api-compress"),
+                stages=(),
+            )
+
+            with mock.patch(
+                "apps.api.api_runtime_context_compression._run_reflect_context_compressor",
+                return_value="reflect summary",
+            ) as reflect_compressor:
+                compact_context_after_usage(app, episode_id, outcome)
+
+            updated = store.load(episode_id)
+            self.assertIsNotNone(updated)
+            assert updated is not None
+            reflect_compressor.assert_called_once()
+            self.assertEqual(updated.compaction_count, 1)
+            self.assertLess(len(updated.history_messages), 18)
+            self.assertEqual(updated.compacted_history_summary, "reflect summary")
+            self.assertIn("Reference summary: reflect summary", updated.frozen_prefix)
+            details = [
+                str((event.get("payload") or {}).get("detail") or "")
+                for event in telemetry.events
+                if event.get("event_type") == "kernel.stage"
+                and event.get("episode_id") == episode_id
+                and (event.get("payload") or {}).get("stage") == "context-compact"
+            ]
+            self.assertTrue(any("phase=compressing" in detail for detail in details))
+            self.assertTrue(
+                any(
+                    "reason=usage" in detail
+                    and "method=reflect" in detail
+                    and "phase=compressing" not in detail
+                    for detail in details
+                )
+            )
+            results = [
+                str((event.get("payload") or {}).get("result") or "")
+                for event in telemetry.events
+                if event.get("event_type") == "kernel.stage"
+                and event.get("episode_id") == episode_id
+                and (event.get("payload") or {}).get("stage") == "context-compact"
+            ]
+            self.assertTrue(
+                any("Reflect context compression completed" in result for result in results)
+            )
+
+    def test_after_turn_short_high_usage_history_does_not_compact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            store = FileEpochStore(state_dir)
+            episode_id = "episode-api-short-no-compress"
+            store.save(
+                SessionContextEpoch(
+                    session_id=episode_id,
+                    frozen=True,
+                    frozen_prefix="## Stable prefix\n" + ("stable context " * 500),
+                    history_messages=(
+                        PromptMessage(role="user", content="hello"),
+                        PromptMessage(role="assistant", content="hello back"),
+                    ),
+                )
+            )
+            telemetry = APITelemetrySink()
+            app = SimpleNamespace(
+                repository=SimpleNamespace(
+                    database_path=state_dir / "elephant.sqlite3"
+                ),
+                telemetry=telemetry,
+                context=SimpleNamespace(runtime=SimpleNamespace(total_tokens=1000)),
+            )
+            outcome = SimpleNamespace(
+                execution=SimpleNamespace(prompt_tokens=900, total_tokens=900),
+                context=SimpleNamespace(token_budget=1000),
+                event=SimpleNamespace(event_id="event:api-short-no-compress"),
+                stages=(),
+            )
+
+            with mock.patch(
+                "apps.api.api_runtime_context_compression._run_reflect_context_compressor",
+                return_value="should not run",
+            ) as reflect_compressor:
+                compact_context_after_usage(app, episode_id, outcome)
+
+            reflect_compressor.assert_not_called()
+            updated = store.load(episode_id)
+            self.assertIsNotNone(updated)
+            assert updated is not None
+            self.assertEqual(updated.compaction_count, 0)
+            self.assertEqual(len(updated.history_messages), 2)
+            self.assertFalse(
+                any(
+                    event.get("event_type") == "kernel.stage"
+                    and (event.get("payload") or {}).get("stage") == "context-compact"
+                    for event in telemetry.events
+                )
+            )
+
+    def test_after_turn_low_usage_does_not_emit_context_compact_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            store = FileEpochStore(state_dir)
+            episode_id = "episode-api-no-compress"
+            store.save(
+                SessionContextEpoch(
+                    session_id=episode_id,
+                    frozen=True,
+                    frozen_prefix="## Stable prefix",
+                    history_messages=(
+                        PromptMessage(role="user", content="hello"),
+                        PromptMessage(role="assistant", content="hi"),
+                    ),
+                )
+            )
+            telemetry = APITelemetrySink()
+            app = SimpleNamespace(
+                repository=SimpleNamespace(
+                    database_path=state_dir / "elephant.sqlite3"
+                ),
+                telemetry=telemetry,
+                context=SimpleNamespace(runtime=SimpleNamespace(total_tokens=1000)),
+            )
+            outcome = SimpleNamespace(
+                execution=SimpleNamespace(prompt_tokens=200, total_tokens=200),
+                context=SimpleNamespace(token_budget=1000),
+                event=SimpleNamespace(event_id="event:api-no-compress"),
+                stages=(),
+            )
+
+            with mock.patch(
+                "apps.api.api_runtime_context_compression._run_reflect_context_compressor",
+                return_value="should not run",
+            ) as reflect_compressor:
+                compact_context_after_usage(app, episode_id, outcome)
+
+            reflect_compressor.assert_not_called()
+            updated = store.load(episode_id)
+            self.assertIsNotNone(updated)
+            assert updated is not None
+            self.assertEqual(updated.compaction_count, 0)
+            self.assertFalse(
+                any(
+                    event.get("event_type") == "kernel.stage"
+                    and (event.get("payload") or {}).get("stage") == "context-compact"
+                    for event in telemetry.events
+                )
+            )
 
 
 class InternalDiaryDispatchTest(unittest.TestCase):
@@ -252,6 +443,42 @@ class LoopEventStreamTest(unittest.TestCase):
         self.assertEqual(events[-1]["reply"]["text"], "stream complete")
         self.assertNotIn("inspection", events[-1]["reply"])
         self.assertNotIn("outcome", events[-1]["reply"])
+
+    def test_stream_loop_events_exposes_context_compact_stage(self) -> None:
+        model_provider = _StreamModelProvider()
+        tool_runtime = _StreamToolRuntime()
+        telemetry = APITelemetrySink()
+
+        def run_loop(episode_id: str, **_kwargs):
+            telemetry.emit(
+                {
+                    "event_id": "context-compact-1",
+                    "event_type": "kernel.stage",
+                    "episode_id": episode_id,
+                    "payload": {
+                        "stage": "context-compact",
+                        "detail": "reason=usage tokens=900->300",
+                        "result": "Reflect context compression completed. method=reflect",
+                    },
+                }
+            )
+            return _LoopResult()
+
+        app = SimpleNamespace(
+            model_provider=model_provider,
+            tool_runtime=tool_runtime,
+            telemetry=telemetry,
+            run_loop=run_loop,
+            _loop_stream_lock=Lock(),
+        )
+
+        events = list(stream_loop_events(app, "session-stream", prompt="hello"))
+        stage_event = next(event for event in events if event["type"] == "kernel.stage")
+
+        self.assertEqual(stage_event["stage"], "context-compact")
+        self.assertEqual(stage_event["detail"], "reason=usage tokens=900->300")
+        self.assertEqual(stage_event["result"], "Reflect context compression completed. method=reflect")
+        self.assertEqual(stage_event["status"], "running")
 
     def test_stream_loop_events_emits_heartbeat_while_loop_is_quiet(self) -> None:
         model_provider = _StreamModelProvider()

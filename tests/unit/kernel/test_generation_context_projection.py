@@ -274,6 +274,43 @@ class GenerationContextProjectionTest(unittest.TestCase):
         self.assertNotIn("User explicitly shared autonomy_boundary", prompt)
         self.assertNotIn("Synthetic live acceptance marker", prompt)
 
+    def test_core_prompt_filters_skill_optimization_review_candidates(self) -> None:
+        result = build_context_for_generation(
+            dependencies=_FakeDependencies(
+                _FakeStorage(
+                    facts=(
+                        _fact(text="第一语言：中文。", field="first_language", lens="rapport"),
+                        _fact(
+                            text="python-development shows a repeatable optimization opportunity.",
+                            field="world.skills.optimization.python_development.update_procedure_ab12cd34",
+                            lens="world",
+                            extra_metadata={
+                                "topic": "world.skills.optimization.python_development.update_procedure_ab12cd34",
+                                "recall_policy": "review",
+                                "retention_lifecycle": "draft",
+                                "projection_policy": "skill_optimization_candidate",
+                            },
+                        ),
+                    )
+                )
+            ),
+            request=_FakeRequest(),
+            profile=None,
+            session=None,
+            state_focus=None,
+            work_items=(),
+            recall_items=(),
+            context=_bundle(),
+            decision=None,
+            plan=None,
+            continuity=None,
+        )
+
+        prompt = result.prompt_envelope.frozen_prefix
+        self.assertIn("第一语言：中文", prompt)
+        self.assertNotIn("repeatable optimization opportunity", prompt)
+        self.assertNotIn("world.skills.optimization", prompt)
+
     def test_gateway_state_projection_does_not_inject_previous_assistant_reply_as_ongoing_thread(self) -> None:
         state = type(
             "_State",

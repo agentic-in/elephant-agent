@@ -207,6 +207,10 @@ class InstalledCommandLiveSmokeTest(unittest.TestCase):
                 self.assertIn(command_name, help_output.stdout)
         self.assertNotIn("chat", help_output.stdout)
 
+        daemon_logs_help = self._run_elephant("daemon", "logs", "--help", timeout=120)
+        self.assertIn("-f", daemon_logs_help.stdout)
+        self.assertIn("--follow", daemon_logs_help.stdout)
+
         initialized = self._run_elephant(
             "init",
             "--non-interactive",

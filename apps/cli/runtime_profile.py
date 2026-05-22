@@ -48,14 +48,7 @@ _DEFAULT_ELEPHANT_FOCUS_MARKERS = (
 
 
 def _elephant_identity_record_view(record: ElephantIdentityRecord) -> ElephantIdentityRecord:
-    return replace(
-        record,
-        identity_mode="",
-        personality_preset="",
-        initiative="",
-        relational_stance="",
-        working_style_contract="",
-    )
+    return record
 
 
 def _state_focus_text(state) -> str:
@@ -167,13 +160,26 @@ class CliRuntimeProfileMixin:
     def patch_profile_surface(self, session_id: str, payload: dict[str, object]):
         if any(
             key in payload
-            for key in {"display_name", "name", "elephant_identity_text", "text", "content", "clear_elephant_identity"}
+            for key in {
+                "display_name",
+                "name",
+                "personality_preset",
+                "initiative",
+                "elephant_identity_text",
+                "text",
+                "content",
+                "clear_elephant_identity",
+            }
         ):
             display_name = str(payload.get("display_name") or payload.get("name") or "").strip() or None
+            personality_preset = str(payload.get("personality_preset") or "").strip() or None
+            initiative = str(payload.get("initiative") or "").strip() or None
             elephant_identity_text = str(payload.get("elephant_identity_text") or payload.get("text") or payload.get("content") or "").strip() or None
             self.update_identity_state(
                 session_id=session_id,
                 display_name=display_name,
+                personality_preset=personality_preset,
+                initiative=initiative,
                 elephant_identity_text=elephant_identity_text,
                 clear_elephant_identity=bool(payload.get("clear_elephant_identity", False)),
             )
@@ -453,6 +459,8 @@ class CliRuntimeProfileMixin:
         session_id: str | None = None,
         profile_id: str | None = None,
         display_name: str | None = None,
+        personality_preset: str | None = None,
+        initiative: str | None = None,
         elephant_identity_text: str | None = None,
         clear_elephant_identity: bool = False,
     ) -> ElephantIdentityRecord:
@@ -461,6 +469,13 @@ class CliRuntimeProfileMixin:
         target_elephant_id = self.elephant_id_for_session(target_session) if target_session is not None else ""
         if display_name is not None:
             self.update_identity(profile_id=resolved_profile_id, display_name=display_name)
+        if personality_preset is not None or initiative is not None:
+            self.update_companion_settings(
+                session_id=session_id,
+                profile_id=resolved_profile_id,
+                personality_preset=personality_preset,
+                initiative=initiative,
+            )
         loaded = self._load_profile(resolved_profile_id)
         if clear_elephant_identity or elephant_identity_text is not None:
             self._authorize_write(

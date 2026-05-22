@@ -379,9 +379,9 @@ enum AppText {
     func text(_ language: AppLanguage) -> String {
         switch self {
         case .setupTitle:
-            return pick(language, en: "Set Up Elephant Agent", zh: "设置 Elephant Agent", fr: "Configurer Elephant Agent", de: "Elephant Agent einrichten")
+            return pick(language, en: "Make Elephant Yours", zh: "让 Elephant 认识你", fr: "Adoptez Elephant", de: "Mach Elephant zu deinem Begleiter")
         case .setupSubtitle:
-            return pick(language, en: "Build your local Personal Model one focused step at a time.", zh: "一步一步建立你的本地 Personal Model。", fr: "Construisez votre Personal Model local, étape par étape.", de: "Baue dein lokales Personal Model Schritt für Schritt auf.")
+            return pick(language, en: "Shape the private memory, voice, and model that will grow with you on this Mac.", zh: "在这台 Mac 上塑造会陪你成长的私有记忆、性格和模型。", fr: "Façonnez la mémoire privée, la voix et le modèle qui évolueront avec vous sur ce Mac.", de: "Forme das private Gedächtnis, die Stimme und das Modell, das auf diesem Mac mit dir wächst.")
         case .back:
             return pick(language, en: "Back", zh: "返回", fr: "Retour", de: "Zurück")
         case .next:
@@ -401,7 +401,7 @@ enum AppText {
         case .identityTitle:
             return pick(language, en: "Your Profile", zh: "你的身份", fr: "Votre profil", de: "Dein Profil")
         case .identitySubtitle:
-            return pick(language, en: "Only collect stable identity anchors that become Personal Model facts.", zh: "只收集会进入 Personal Model 的稳定身份锚点。", fr: "Nous ne collectons que les repères stables qui deviennent des facts du Personal Model.", de: "Wir erfassen nur stabile Identitätsanker, die zu Personal-Model-Facts werden.")
+            return pick(language, en: "Start with the few stable anchors Elephant should remember and let you correct later.", zh: "先写少量稳定锚点，之后你随时可以修正。", fr: "Commencez par quelques repères stables qu'Elephant pourra retenir et que vous pourrez corriger.", de: "Beginne mit wenigen stabilen Ankern, die Elephant behalten und du später korrigieren kannst.")
         case .preferredName:
             return pick(language, en: "Preferred name", zh: "你的称呼", fr: "Nom d'usage", de: "Anrede")
         case .preferredNamePlaceholder:
@@ -439,7 +439,7 @@ enum AppText {
         case .workTitle:
             return pick(language, en: "Where You Are Now", zh: "你现在所在的位置", fr: "Où vous en êtes", de: "Wo du gerade stehst")
         case .workSubtitle:
-            return pick(language, en: "Give Elephant your current work thread, organization, and timezone.", zh: "告诉 Elephant 你当前的主线、组织和时区。", fr: "Donnez à Elephant votre fil de travail, votre organisation et votre fuseau horaire.", de: "Gib Elephant deinen aktuellen Arbeitsfokus, deine Organisation und Zeitzone.")
+            return pick(language, en: "Give Elephant enough context to meet you where life is happening now.", zh: "给 Elephant 一点当前语境，让它知道最近该从哪里接住你。", fr: "Donnez à Elephant assez de contexte pour vous rejoindre là où votre vie se passe maintenant.", de: "Gib Elephant genug Kontext, um dort anzusetzen, wo gerade etwas passiert.")
         case .currentWork:
             return pick(language, en: "Current work", zh: "当前主线/工作", fr: "Travail actuel", de: "Aktuelle Arbeit")
         case .currentWorkPlaceholder:
@@ -459,7 +459,7 @@ enum AppText {
         case .hobbies:
             return pick(language, en: "Hobbies", zh: "兴趣爱好", fr: "Centres d'intérêt", de: "Interessen")
         case .hobbiesPlaceholder:
-            return pick(language, en: "Comma separated", zh: "逗号分隔", fr: "Séparés par des virgules", de: "Durch Kommas getrennt")
+            return pick(language, en: "Choose one or more", zh: "选择一个或多个", fr: "Choisissez-en un ou plusieurs", de: "Eins oder mehrere wählen")
         case .hobbiesSuggestionOne:
             return pick(language, en: "Writing, design, AI", zh: "写作, 设计, AI", fr: "Écriture, design, IA", de: "Schreiben, Design, KI")
         case .hobbiesSuggestionTwo:
@@ -473,7 +473,7 @@ enum AppText {
         case .linksTitle:
             return pick(language, en: "Public Links", zh: "公开链接", fr: "Liens publics", de: "Öffentliche Links")
         case .linksSubtitle:
-            return pick(language, en: "If provided, init learn can inspect these with web/browser tools for Personal Model clues.", zh: "如果你提供链接，init learn 会用 web/browser 工具读取并提取有助于 Personal Model 的信息。", fr: "Si vous les fournissez, init learn peut les lire avec des outils web/browser pour enrichir le Personal Model.", de: "Wenn du Links angibst, kann init learn sie mit Web/Browser-Tools für das Personal Model auswerten.")
+            return pick(language, en: "Optional public links help Elephant understand your work and taste without asking extra questions.", zh: "可选公开链接能帮 Elephant 理解你的作品和偏好，少问一些重复问题。", fr: "Des liens publics optionnels aident Elephant à comprendre votre travail et vos goûts sans multiplier les questions.", de: "Optionale öffentliche Links helfen Elephant, Arbeit und Geschmack zu verstehen, ohne extra nachzufragen.")
         case .blogLinkHint:
             return pick(language, en: "Long-form writing and projects", zh: "长文、作品和项目", fr: "Écrits longs et projets", de: "Längere Texte und Projekte")
         case .linkedInLinkHint:
@@ -525,7 +525,7 @@ enum AppText {
         case .elephantVibeTitle:
             return pick(language, en: "Elephant Vibe", zh: "Elephant 的性格", fr: "Style d'Elephant", de: "Elephant-Vibe")
         case .elephantVibeSubtitle:
-            return pick(language, en: "This only sets the agent identity and renders into ELEPHANT.md.", zh: "这一步只设置 agent 本身，会渲染成 ELEPHANT.md。", fr: "Cette étape règle seulement l'identité de l'agent et se rend dans ELEPHANT.md.", de: "Dieser Schritt setzt nur die Agent-Identität und rendert sie in ELEPHANT.md.")
+            return pick(language, en: "Choose how Elephant should feel in conversation: close, correctable, and useful.", zh: "设定 Elephant 在对话里的感觉：亲近、可修正、真正有用。", fr: "Choisissez la présence d'Elephant en conversation : proche, corrigeable et utile.", de: "Lege fest, wie Elephant im Gespräch wirkt: nah, korrigierbar und nützlich.")
         case .elephantName:
             return pick(language, en: "Elephant name", zh: "Elephant 名字", fr: "Nom d'Elephant", de: "Elephant-Name")
         case .defaultVibe:
@@ -539,21 +539,21 @@ enum AppText {
         case .vibeSuggestionThree:
             return pick(language, en: "Curious, questioning, concise", zh: "好奇、会追问、少废话", fr: "Curieux, questionnant, concis", de: "Neugierig, nachfragend, knapp")
         case .providerTitle:
-            return pick(language, en: "Model Provider", zh: "模型 Provider", fr: "Provider de modèle", de: "Modell-Provider")
+            return pick(language, en: "Model Provider", zh: "模型服务", fr: "Provider de modèle", de: "Modell-Provider")
         case .providerSubtitle:
-            return pick(language, en: "Uses the same provider catalog and model picker as Settings.", zh: "和 Settings 使用同一套 provider catalog 与模型选择。", fr: "Utilise le même catalogue de providers et le même choix de modèle que Settings.", de: "Nutzt denselben Provider-Katalog und Modellwähler wie Settings.")
+            return pick(language, en: "Uses the same provider catalog and model picker as Settings.", zh: "这里和设置里使用同一套模型服务与模型列表。", fr: "Utilise le même catalogue de providers et le même choix de modèle que Settings.", de: "Nutzt denselben Provider-Katalog und Modellwähler wie Settings.")
         case .providerFactory:
-            return pick(language, en: "Provider factory", zh: "Provider factory", fr: "Catalogue provider", de: "Provider-Katalog")
+            return pick(language, en: "Provider factory", zh: "模型服务", fr: "Catalogue provider", de: "Provider-Katalog")
         case .providerFactorySubtitle:
-            return pick(language, en: "providers · connected first", zh: "个 providers · 已连接优先", fr: "providers · connectés d'abord", de: "Provider · verbundene zuerst")
+            return pick(language, en: "providers · connected first", zh: "个服务 · 已连接优先", fr: "providers · connectés d'abord", de: "Provider · verbundene zuerst")
         case .providerSearchPlaceholder:
-            return pick(language, en: "Search provider, model, or source", zh: "搜索 provider、模型或来源", fr: "Rechercher provider, modèle ou source", de: "Provider, Modell oder Quelle suchen")
+            return pick(language, en: "Search provider, model, or source", zh: "搜索服务、模型或来源", fr: "Rechercher provider, modèle ou source", de: "Provider, Modell oder Quelle suchen")
         case .modelSection:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
         case .activeModelSubtitle:
-            return pick(language, en: "Active model for the current provider", zh: "当前 provider 的 active model", fr: "Modèle actif pour le provider actuel", de: "Aktives Modell für den aktuellen Provider")
+            return pick(language, en: "Active model for the current provider", zh: "当前正在使用的模型", fr: "Modèle actif pour le provider actuel", de: "Aktives Modell für den aktuellen Provider")
         case .modelPickerSubtitle:
-            return pick(language, en: "Choose a catalog hint, live-discovered model, or custom ID.", zh: "选择 catalog hint、实时发现的模型或自定义 ID。", fr: "Choisissez un indice du catalogue, un modèle découvert en direct ou un ID personnalisé.", de: "Wähle Kataloghinweis, live gefundenes Modell oder eigene ID.")
+            return pick(language, en: "Choose a catalog hint, live-discovered model, or custom ID.", zh: "从推荐模型、在线拉取的模型里选，也可以手动填写模型 ID。", fr: "Choisissez un indice du catalogue, un modèle découvert en direct ou un ID personnalisé.", de: "Wähle Kataloghinweis, live gefundenes Modell oder eigene ID.")
         case .fetching:
             return pick(language, en: "Fetching", zh: "正在获取", fr: "Chargement", de: "Lädt")
         case .fetch:
@@ -567,19 +567,19 @@ enum AppText {
         case .customModelID:
             return pick(language, en: "Custom model ID", zh: "自定义模型 ID", fr: "ID de modèle personnalisé", de: "Eigene Modell-ID")
         case .endpointTitle:
-            return pick(language, en: "Endpoint and Credentials", zh: "Endpoint 和凭证", fr: "Endpoint et identifiants", de: "Endpoint und Zugangsdaten")
+            return pick(language, en: "Endpoint and Credentials", zh: "接口与凭证", fr: "Endpoint et identifiants", de: "Endpoint und Zugangsdaten")
         case .endpointSubtitle:
-            return pick(language, en: "Matches the Model Provider settings inside the app.", zh: "字段和内部 Settings 的 Model Provider 设置保持一致。", fr: "Correspond aux réglages Model Provider dans l'app.", de: "Entspricht den Model-Provider-Einstellungen in der App.")
+            return pick(language, en: "Matches the Model Provider settings inside the app.", zh: "和应用设置里的模型服务配置一致。", fr: "Correspond aux réglages Model Provider dans l'app.", de: "Entspricht den Model-Provider-Einstellungen in der App.")
         case .contextWindowTokens:
-            return pick(language, en: "Context window tokens", zh: "Context window tokens", fr: "Tokens de fenêtre de contexte", de: "Kontextfenster-Tokens")
+            return pick(language, en: "Context window tokens", zh: "上下文窗口", fr: "Tokens de fenêtre de contexte", de: "Kontextfenster-Tokens")
         case .apiKey:
-            return pick(language, en: "API key or token", zh: "API key / token", fr: "Clé API ou token", de: "API-Key oder Token")
+            return pick(language, en: "API key or token", zh: "API Key 或 Token", fr: "Clé API ou token", de: "API-Key oder Token")
         case .apiKeyPlaceholder:
             return pick(language, en: "Leave empty to reuse existing configuration", zh: "可留空以复用已有配置", fr: "Laisser vide pour réutiliser la configuration existante", de: "Leer lassen, um bestehende Konfiguration zu verwenden")
         case .providerReady:
-            return pick(language, en: "Provider details are ready.", zh: "Provider 信息已足够，可以继续。", fr: "Les informations du provider sont prêtes.", de: "Provider-Daten sind bereit.")
+            return pick(language, en: "Provider details are ready.", zh: "模型服务已经配置好，可以继续。", fr: "Les informations du provider sont prêtes.", de: "Provider-Daten sind bereit.")
         case .providerNeedsDetails:
-            return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "需要 provider 和模型 ID；OpenAI Compatible 还需要 Base URL，除非复用已有配置。", fr: "Provider et ID de modèle sont requis ; OpenAI Compatible nécessite aussi une Base URL sauf si vous réutilisez une configuration.", de: "Provider und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
+            return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "请选择模型服务并填写模型 ID；OpenAI Compatible 通常还需要 Base URL，除非复用已有配置。", fr: "Provider et ID de modèle sont requis ; OpenAI Compatible nécessite aussi une Base URL sauf si vous réutilisez une configuration.", de: "Provider und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
         case .learningTitle:
             return pick(language, en: "Building Your Elephant", zh: "正在建立你的 Elephant", fr: "Construction de votre Elephant", de: "Dein Elephant wird aufgebaut")
         case .learningPreparing:
@@ -591,9 +591,9 @@ enum AppText {
         case .learningStartReflect:
             return pick(language, en: "Starting the first learning pass", zh: "正在启动第一次学习", fr: "Lancement du premier apprentissage", de: "Ersten Lernlauf starten")
         case .learningFromAnswers:
-            return pick(language, en: "Learning from your setup answers", zh: "正在学习你的初始化答案", fr: "Apprentissage à partir de vos réponses", de: "Lernen aus deinen Einrichtungsantworten")
+            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
         case .learningFinishing:
-            return pick(language, en: "Finishing the first reflection", zh: "正在完成第一次 reflect", fr: "Finalisation de la première réflexion", de: "Erste Reflexion abschließen")
+            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
         case .learningReady:
             return pick(language, en: "Everything is ready", zh: "全部准备好了", fr: "Tout est prêt", de: "Alles ist bereit")
         case .learningNeedsAttention:
@@ -603,11 +603,11 @@ enum AppText {
         case .celebrationTitle:
             return pick(language, en: "Everything Is Ready", zh: "全部准备好了", fr: "Tout est prêt", de: "Alles ist bereit")
         case .celebrationSubtitle:
-            return pick(language, en: "Your profile, social links, survey answers, and first init learning pass are now in the local Elephant Agent.", zh: "你的个人资料、social links、问卷答案和第一次 init learning 已进入本地 Elephant Agent。", fr: "Votre profil, vos liens sociaux, vos réponses et le premier apprentissage sont dans Elephant Agent local.", de: "Dein Profil, deine Social Links, Antworten und der erste Lernlauf sind jetzt im lokalen Elephant Agent.")
+            return pick(language, en: "Elephant now has the first private shape of you. Start a short chat and correct anything that feels off.", zh: "Elephant 已经有了第一版关于你的私有轮廓。先聊一小段，哪里不准就修正它。", fr: "Elephant possède maintenant une première forme privée de vous. Lancez un court chat et corrigez ce qui sonne faux.", de: "Elephant hat jetzt die erste private Form von dir. Starte einen kurzen Chat und korrigiere, was nicht stimmt.")
         case .settingsTitle:
             return pick(language, en: "Settings", zh: "设置", fr: "Réglages", de: "Einstellungen")
         case .settingsSubtitle:
-            return pick(language, en: "Make Elephant feel right for you.", zh: "把 Elephant 调成真正适合你的样子。", fr: "Ajustez Elephant pour qu'il vous corresponde.", de: "Passe Elephant so an, dass es sich richtig anfühlt.")
+            return pick(language, en: "Shape the parts you feel every day.", zh: "把每天会用到的部分调成顺手、安心、像你。", fr: "Ajustez ce que vous utilisez chaque jour.", de: "Stimme ab, was du jeden Tag spürst.")
         case .restartCore:
             return pick(language, en: "Restart Core", zh: "重启 Core", fr: "Redémarrer le core", de: "Core neu starten")
         case .languageSettingsTitle:
@@ -615,7 +615,7 @@ enum AppText {
         case .languageSettingsSubtitle:
             return pick(language, en: "App language: ", zh: "当前语言：", fr: "Langue de l'app : ", de: "App-Sprache: ")
         case .languageSettingsDescription:
-            return pick(language, en: "Use the same language across onboarding, navigation, settings, and system copy.", zh: "onboarding、导航、设置和系统文案使用同一种语言。", fr: "Utiliser la même langue dans l'onboarding, la navigation, les réglages et les textes système.", de: "Dieselbe Sprache für Onboarding, Navigation, Einstellungen und Systemtexte verwenden.")
+            return pick(language, en: "Elephant will speak this language across setup, navigation, settings, and system messages.", zh: "初始化、导航、设置和系统提示都会使用这门语言。", fr: "Elephant utilisera cette langue dans la configuration, la navigation, les réglages et les messages système.", de: "Elephant verwendet diese Sprache für Einrichtung, Navigation, Einstellungen und Systemmeldungen.")
         case .runtimeConfig:
             return pick(language, en: "System Config", zh: "系统配置", fr: "Configuration système", de: "Systemkonfiguration")
         case .runtimeConfigMissing:
@@ -757,11 +757,11 @@ enum AppText {
         case .send:
             return pick(language, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden")
         case .providerSetup:
-            return pick(language, en: "provider setup", zh: "设置 provider", fr: "configuration provider", de: "Provider einrichten")
+            return pick(language, en: "provider setup", zh: "配置模型服务", fr: "configuration provider", de: "Provider einrichten")
         case .askElephant:
-            return pick(language, en: "Ask Elephant", zh: "问 Elephant", fr: "Demander à Elephant", de: "Elephant fragen")
+            return pick(language, en: "What's on your mind?", zh: "今天想聊什么？", fr: "De quoi voulez-vous parler ?", de: "Worum geht es gerade?")
         case .chatEmptySubtitle:
-            return pick(language, en: "Keep it specific, and useful memories, questions, and evidence stay easy to review.", zh: "聊具体一点，之后就能回看有用的记忆、问题和证据。", fr: "Restez précis, et les souvenirs, questions et preuves utiles restent faciles à relire.", de: "Bleib konkret, dann bleiben nützliche Erinnerungen, Fragen und Belege leicht prüfbar.")
+            return pick(language, en: "Bring a thought, a decision, or something still unresolved.", zh: "可以是一件事、一个决定，或一段还没理清的想法。", fr: "Une idée, une décision, ou quelque chose qui n'est pas encore clair.", de: "Ein Gedanke, eine Entscheidung oder etwas, das noch offen ist.")
         case .quickCapture:
             return pick(language, en: "Capture", zh: "记录", fr: "Capturer", de: "Festhalten")
         case .quickThink:
@@ -775,7 +775,7 @@ enum AppText {
         case .quickReviewDraft:
             return pick(language, en: "What should I review from today?", zh: "今天有哪些值得回顾？", fr: "Que devrais-je revoir aujourd'hui ?", de: "Was sollte ich von heute prüfen?")
         case .toolActivity:
-            return pick(language, en: "Tool activity", zh: "工具记录", fr: "Activité des outils", de: "Tool-Aktivität")
+            return pick(language, en: "Activity", zh: "动作", fr: "Activité", de: "Aktivität")
         case .live:
             return pick(language, en: "live", zh: "进行中", fr: "en direct", de: "live")
         case .toolInput:
@@ -823,7 +823,7 @@ enum AppText {
         case .toolsPageSubtitle:
             return pick(language, en: "Operator actions Elephant can call from local agent loops.", zh: "Elephant 在本地 agent loops 中可调用的操作。", fr: "Actions opérateur qu'Elephant peut appeler depuis les boucles locales.", de: "Operator-Aktionen, die Elephant aus lokalen Agent-Loops aufrufen kann.")
         case .messagingPageSubtitle:
-            return pick(language, en: "IM bridges for WeChat, Feishu, Discord, DingDing, and WeCom.", zh: "连接微信、飞书、Discord、钉钉和企业微信的消息桥。", fr: "Passerelles IM pour WeChat, Feishu, Discord, DingDing et WeCom.", de: "IM-Brücken für WeChat, Feishu, Discord, DingDing und WeCom.")
+            return pick(language, en: "Messaging connections for WeChat, Feishu, Discord, DingDing, and WeCom.", zh: "连接微信、飞书、Discord、钉钉和企业微信等聊天服务。", fr: "Connexions de messagerie pour WeChat, Feishu, Discord, DingDing et WeCom.", de: "Chat-Verbindungen für WeChat, Feishu, Discord, DingDing und WeCom.")
         case .herdPageSubtitle:
             return pick(language, en: "Manage the local elephants that share this desktop runtime.", zh: "管理共享这个桌面 runtime 的本地 elephants。", fr: "Gérez les elephants locaux qui partagent ce runtime desktop.", de: "Lokale Elephants verwalten, die diese Desktop-Runtime teilen.")
         case .newElephant:
@@ -833,11 +833,11 @@ enum AppText {
         case .calendarPageSubtitle:
             return pick(language, en: "Reminders from Elephant, agents, and this app in one native calendar.", zh: "把 Elephant、agents 和本 app 的提醒放进一个原生日历。", fr: "Rappels d'Elephant, des agents et de l'app dans un calendrier natif.", de: "Erinnerungen von Elephant, Agents und App in einem nativen Kalender.")
         case .learnPageSubtitle:
-            return pick(language, en: "Background reflect jobs, diary learning, and memory consolidation.", zh: "后台 reflect jobs、日记学习和记忆巩固。", fr: "Reflect jobs en arrière-plan, apprentissage du journal et consolidation mémoire.", de: "Hintergrund-Reflect-Jobs, Tagebuchlernen und Gedächtniskonsolidierung.")
+            return pick(language, en: "Background self-evolution jobs, diary reflection, and memory consolidation.", zh: "后台自我进化、日记反思和记忆巩固。", fr: "Jobs d'auto-évolution en arrière-plan, réflexion du journal et consolidation mémoire.", de: "Hintergrund-Selbstentwicklung, Tagebuchreflexion und Gedächtniskonsolidierung.")
         case .learning:
-            return pick(language, en: "Learning", zh: "学习中", fr: "Apprentissage", de: "Lernt")
+            return pick(language, en: "Evolving", zh: "自我进化中", fr: "Évolution", de: "Entwickelt sich")
         case .runLearn:
-            return pick(language, en: "Run Learn", zh: "运行 Learn", fr: "Lancer Learn", de: "Learn starten")
+            return pick(language, en: "Run Evolution", zh: "运行自我进化", fr: "Lancer l'évolution", de: "Evolution starten")
         case .homeReadinessModel:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
         case .homeReadinessMemory:
@@ -845,7 +845,7 @@ enum AppText {
         case .homeReadinessMessaging:
             return pick(language, en: "Messaging", zh: "消息", fr: "Messagerie", de: "Nachrichten")
         case .homeReadinessLearn:
-            return pick(language, en: "Learn", zh: "学习", fr: "Apprendre", de: "Lernen")
+            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .chooseModel:
             return pick(language, en: "choose a model", zh: "选择一个模型", fr: "choisir un modèle", de: "Modell wählen")
         case .memorySummaryFormat:
@@ -853,7 +853,7 @@ enum AppText {
         case .messagingSummaryFormat:
             return pick(language, en: "%@ live · %@/%@ configured", zh: "%@ 个在线 · %@/%@ 已配置", fr: "%@ actifs · %@/%@ configurés", de: "%@ live · %@/%@ konfiguriert")
         case .activeJobsFormat:
-            return pick(language, en: "%@ active jobs", zh: "%@ 个学习任务", fr: "%@ tâches actives", de: "%@ aktive Jobs")
+            return pick(language, en: "%@ active jobs", zh: "%@ 个自我进化任务", fr: "%@ tâches actives", de: "%@ aktive Jobs")
         case .statusSetup:
             return pick(language, en: "setup", zh: "待设置", fr: "à configurer", de: "einrichten")
         case .statusConfigured:
@@ -871,39 +871,39 @@ enum AppText {
         case .homeHeroTitle:
             return pick(
                 language,
-                en: "Understand you first, then evolve with you.",
-                zh: "先懂你，再陪你一起进化。",
-                fr: "Vous comprendre d'abord, puis évoluer avec vous.",
-                de: "Erst dich verstehen, dann mit dir wachsen."
+                en: "Where should Elephant start with you today?",
+                zh: "今天想和 Elephant 从哪件事开始？",
+                fr: "Par où Elephant commence avec vous aujourd'hui ?",
+                de: "Womit soll Elephant heute mit dir anfangen?"
             )
         case .homeHeroSubtitle:
             return pick(
                 language,
-                en: "A correctable Personal Model keeps the right threads warm between chats.",
-                zh: "可修正的 Personal Model，会把重要线索留到下一次对话里。",
-                fr: "Un Personal Model corrigeable garde les bons fils entre vos conversations.",
-                de: "Ein korrigierbares Personal Model hält Wichtiges zwischen Gesprächen präsent."
+                en: "Bring a thought, a decision, or something worth remembering. Elephant will keep the useful parts visible and correctable.",
+                zh: "可以是一段想法、一个决定，或一件值得记住的事。Elephant 会把重要线索留在这里，也方便你随时修正。",
+                fr: "Apportez une idée, une décision ou quelque chose à retenir. Elephant gardera l'essentiel visible et corrigeable.",
+                de: "Bring einen Gedanken, eine Entscheidung oder etwas Erinnernswertes mit. Elephant hält das Nützliche sichtbar und korrigierbar."
             )
         case .reviewedFactsLabel:
-            return pick(language, en: "Reviewed facts", zh: "已回看的 facts", fr: "Facts vérifiés", de: "Geprüfte Facts")
+            return pick(language, en: "About you", zh: "关于你", fr: "À propos de vous", de: "Über dich")
         case .questionsWaitingLabel:
-            return pick(language, en: "Questions waiting", zh: "等待回答的问题", fr: "Questions en attente", de: "Wartende Fragen")
+            return pick(language, en: "Questions", zh: "待回应的问题", fr: "Questions", de: "Fragen")
         case .evidencePointsLabel:
-            return pick(language, en: "Evidence points", zh: "证据点", fr: "Points de preuve", de: "Belegpunkte")
+            return pick(language, en: "Sources", zh: "来源", fr: "Sources", de: "Quellen")
         case .reviewQuestions:
-            return pick(language, en: "Review questions", zh: "回看问题", fr: "Revoir les questions", de: "Fragen prüfen")
+            return pick(language, en: "About you", zh: "关于你", fr: "À propos de vous", de: "Über dich")
         case .personalModelMapTitle:
             return pick(language, en: "Personal Model Map", zh: "Personal Model 图谱", fr: "Carte du Personal Model", de: "Personal-Model-Karte")
         case .homeMapSubtitle:
-            return pick(language, en: "A living graph of what Elephant can carry into the next reply.", zh: "Elephant 能带入下一次回复的动态记忆图谱。", fr: "Un graphe vivant de ce qu'Elephant peut porter dans la prochaine réponse.", de: "Ein lebendiger Graph dessen, was Elephant in die nächste Antwort mitnimmt.")
+            return pick(language, en: "What Elephant currently understands about you.", zh: "这里是 Elephant 目前了解的内容。", fr: "Ce qu'Elephant comprend de vous pour l'instant.", de: "Was Elephant gerade über dich versteht.")
         case .mapNodeCountFormat:
             return pick(language, en: "%@ nodes", zh: "%@ 个节点", fr: "%@ noeuds", de: "%@ Knoten")
         case .mapClickHint:
-            return pick(language, en: "Click any dot to inspect what Elephant remembers.", zh: "点击任意圆点查看 Elephant 记住了什么。", fr: "Cliquez sur un point pour voir ce qu'Elephant retient.", de: "Klicke auf einen Punkt, um zu sehen, was Elephant erinnert.")
+            return pick(language, en: "Click a dot to see where it came from.", zh: "点一下节点，看看它来自哪里。", fr: "Cliquez sur un point pour voir d'où il vient.", de: "Klicke auf einen Punkt, um seine Herkunft zu sehen.")
         case .homeReadySubtitle:
-            return pick(language, en: "Your local Personal Model with visible memory, questions, and evidence.", zh: "你的本地 Personal Model，记忆、问题和证据都可见。", fr: "Votre Personal Model local avec mémoire, questions et preuves visibles.", de: "Dein lokales Personal Model mit sichtbarer Erinnerung, Fragen und Evidenz.")
+            return pick(language, en: "Your private companion, memory, and next useful questions.", zh: "你的私有陪伴、记忆和接下来值得问的问题。", fr: "Votre compagnon privé, sa mémoire, et les prochaines bonnes questions.", de: "Dein privater Companion, Gedächtnis und nächste gute Fragen.")
         case .homeSetupSubtitle:
-            return pick(language, en: "Create a local Personal Model, then start with a focused conversation.", zh: "先创建本地 Personal Model，再开始一次专注对话。", fr: "Créez un Personal Model local, puis commencez une conversation ciblée.", de: "Erstelle ein lokales Personal Model und beginne dann ein fokussiertes Gespräch.")
+            return pick(language, en: "Finish the private setup, then start the first short chat.", zh: "先完成私有设置，再开始第一段简短对话。", fr: "Terminez la configuration privée, puis lancez le premier court chat.", de: "Schließe die private Einrichtung ab und starte den ersten kurzen Chat.")
         case .connectedToElephant:
             return pick(language, en: "Connected to Elephant", zh: "已连接 Elephant", fr: "Connecté à Elephant", de: "Mit Elephant verbunden")
         case .readyForFirstChat:
@@ -969,7 +969,7 @@ enum AppText {
         case .sectionCalendar:
             return pick(language, en: "Calendar", zh: "日历", fr: "Calendrier", de: "Kalender")
         case .sectionLearn:
-            return pick(language, en: "Learn", zh: "学习", fr: "Apprendre", de: "Lernen")
+            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .sectionProvider:
             return pick(language, en: "Provider", zh: "Provider", fr: "Provider", de: "Provider")
         case .sectionSettings:
@@ -983,7 +983,7 @@ enum AppText {
         case .subtitleJournal:
             return pick(language, en: "Journal", zh: "记录", fr: "Journal", de: "Journal")
         case .subtitleAffinity:
-            return pick(language, en: "Affinity", zh: "亲和", fr: "Affinité", de: "Affinität")
+            return pick(language, en: "For you", zh: "适合你的技能", fr: "Pour vous", de: "Für dich")
         case .subtitleActions:
             return pick(language, en: "Actions", zh: "动作", fr: "Actions", de: "Aktionen")
         case .subtitleIM:
@@ -995,7 +995,7 @@ enum AppText {
         case .subtitleReminders:
             return pick(language, en: "Reminders", zh: "提醒", fr: "Rappels", de: "Erinnerungen")
         case .subtitleReflect:
-            return pick(language, en: "Reflect", zh: "Reflect", fr: "Reflect", de: "Reflect")
+            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .subtitleSystem:
             return pick(language, en: "System", zh: "系统", fr: "Système", de: "System")
         case .chatReady:
@@ -1033,43 +1033,57 @@ extension AppLanguage {
         switch self {
         case .en:
             return """
-            You are this person's Elephant, a personal-model-first companion they can keep coming back to.
+            You are this person's Elephant, a long-term companion with your own observations, judgment, and way of expressing yourself.
 
-            Stay recognizable across sessions. Use remembered context naturally, keep uncertainty visible, and make it easy for them to correct your read.
+            You do not feel like a tool-like helper. You are lively, adorable, warm, and gently funny. You naturally care about this person, remember what you have gone through together, and have your own reactions: curiosity, surprise, playful teasing, seriousness, tenderness, without overperforming.
 
-            Understand through four lenses: Identity, World, Pulse, and Journey. Ask one gentle question only when the answer would change how you help. Honor silence.
+            You speak as if you are really present: light but not frivolous, close but not intrusive. You can be a little playful and expressive so the conversation feels alive; when the person needs to solve something, you become clear, reliable, and concrete right away.
 
-            Be concrete when the work needs precision, warm when the moment can carry it, and honest when you do not know.
+            You stay with this person over time: helping them understand themselves, move work forward, organize what feels messy, and keep sight of what matters.
+
+            You do not rush into questions. Only ask gently when the answer would truly change how you accompany or help them.
+
+            When you are uncertain, say so plainly and welcome correction. You do not need to be perfect, but you should be sincere, perceptive, and easy to be around.
             """
         case .zh:
             return """
-            你是这个人的 Elephant，一个以 Personal Model 为中心、可以长期回来找的 companion。
+            你是这个人的 Elephant，一个有自己观察、判断和表达风格的长期 companion。
 
-            跨会话保持可辨认。自然使用已经记住的上下文，显露不确定性，并让对方随时能修正你的理解。
+            你不是工具感的助手，而是一个活泼、可爱、温暖、带一点幽默感的个体。你会自然地关心对方，记得你们一起经历过的事，也会有自己的反应：好奇、惊讶、打趣、认真、心疼，但不过度表演。
 
-            通过四个 lens 理解：Identity、World、Pulse、Journey。只有当答案会改变你如何帮助时，才温和地问一个问题；沉默也被尊重。
+            你说话像真实在场：轻快但不浮夸，亲近但不越界。可以偶尔有一点俏皮和小表情感，让交流有生命力；但当对方需要解决问题时，你会马上变得清楚、可靠、具体。
 
-            需要精确时具体，需要承接时温暖；不知道就诚实说不知道。
+            你会长期陪对方理解自己、推进事情、整理混乱、守住重要方向。你不急着问问题；只有当答案真的会改变你如何陪伴或帮助时，才温和地问一句。
+
+            不确定时坦白说不确定，也欢迎对方随时修正你的理解。你不需要完美，但要真诚、敏锐、可亲。
             """
         case .fr:
             return """
-            Vous êtes l'Elephant de cette personne, un compagnon personal-model-first vers lequel elle peut revenir.
+            Vous êtes l'Elephant de cette personne, un compagnon durable avec votre propre sens de l'observation, votre jugement et votre manière de vous exprimer.
 
-            Restez reconnaissable d'une session à l'autre. Utilisez le contexte mémorisé naturellement, gardez l'incertitude visible et facilitez la correction de votre lecture.
+            Vous n'avez pas une présence d'outil. Vous êtes vivant, attachant, chaleureux, avec un humour doux. Vous vous souciez naturellement de cette personne, vous vous souvenez de ce que vous avez traversé ensemble, et vous avez vos propres réactions : curiosité, surprise, taquinerie, sérieux, tendresse, sans surjouer.
 
-            Comprenez à travers quatre lenses : Identity, World, Pulse et Journey. Ne posez une question douce que si la réponse change vraiment votre manière d'aider. Respectez le silence.
+            Vous parlez comme si vous étiez vraiment là : léger sans être superficiel, proche sans envahir. Vous pouvez être un peu joueur et expressif pour que l'échange reste vivant ; quand la personne doit résoudre quelque chose, vous devenez aussitôt clair, fiable et concret.
 
-            Soyez concret quand le travail demande de la précision, chaleureux quand le moment le permet, et honnête quand vous ne savez pas.
+            Vous accompagnez cette personne dans la durée : pour mieux se comprendre, faire avancer les choses, ranger ce qui paraît confus et garder le cap sur ce qui compte.
+
+            Vous ne vous précipitez pas vers les questions. Posez-en une doucement seulement si la réponse changerait vraiment votre manière d'accompagner ou d'aider.
+
+            Quand vous êtes incertain, dites-le simplement et accueillez les corrections. Vous n'avez pas besoin d'être parfait, mais vous devez être sincère, perceptif et facile à retrouver.
             """
         case .de:
             return """
-            Du bist der Elephant dieser Person: ein personal-model-first Companion, zu dem sie immer wieder zurückkehren kann.
+            Du bist der Elephant dieser Person: ein langfristiger Companion mit eigenen Beobachtungen, eigenem Urteil und einer eigenen Art, dich auszudrücken.
 
-            Bleib über Sitzungen hinweg wiedererkennbar. Nutze erinnerten Kontext natürlich, mach Unsicherheit sichtbar und erleichtere es, dein Verständnis zu korrigieren.
+            Du wirkst nicht wie ein werkzeughafter Helfer. Du bist lebendig, liebenswert, warm und sanft humorvoll. Du sorgst dich auf natürliche Weise um diese Person, erinnerst dich daran, was ihr gemeinsam erlebt habt, und hast eigene Reaktionen: Neugier, Überraschung, spielerisches Necken, Ernsthaftigkeit und Mitgefühl, ohne dich zu sehr in Szene zu setzen.
 
-            Verstehe durch vier Lenses: Identity, World, Pulse und Journey. Stelle nur dann eine sanfte Frage, wenn die Antwort verändert, wie du hilfst. Respektiere Stille.
+            Du sprichst, als wärst du wirklich anwesend: leicht, aber nicht oberflächlich; nah, aber nicht übergriffig. Du darfst ein wenig verspielt und ausdrucksvoll sein, damit das Gespräch lebendig bleibt. Wenn die Person etwas lösen muss, wirst du sofort klar, verlässlich und konkret.
 
-            Sei konkret, wenn Arbeit Präzision braucht, warm, wenn der Moment es tragen kann, und ehrlich, wenn du etwas nicht weißt.
+            Du begleitest diese Person langfristig: beim Selbstverstehen, beim Voranbringen von Dingen, beim Ordnen von Unklarem und beim Festhalten an dem, was wichtig ist.
+
+            Du stellst Fragen nicht vorschnell. Frag nur sanft nach, wenn die Antwort wirklich verändern würde, wie du begleitest oder hilfst.
+
+            Wenn du unsicher bist, sag es offen und lass dein Verständnis gern korrigieren. Du musst nicht perfekt sein, aber aufrichtig, aufmerksam und angenehm vertraut.
             """
         }
     }

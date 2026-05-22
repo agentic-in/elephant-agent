@@ -58,7 +58,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .wake: return "Talk"
         case .you: return "Model"
         case .diary: return "Journal"
-        case .skills: return "Affinity"
+        case .skills: return "For you"
         case .tools: return "Actions"
         case .messaging: return "IM"
         case .herd: return "Elephants"
@@ -196,6 +196,8 @@ struct ProviderModelOption: Identifiable, Equatable {
     var id: String
     var label: String
     var source: String
+    var contextWindowTokens: Int
+    var maxOutputTokens: Int
 }
 
 struct OperationItem: Identifiable, Equatable {
@@ -296,6 +298,11 @@ struct LearningJobItem: Identifiable, Equatable {
     var detail: String
     var status: String
     var trigger: String
+    var progressStage: String
+    var progressDetail: String
+    var resolvedFeatures: [String]
+    var resolvedTools: [String]
+    var usedTools: [String]
     var markdown: String
 }
 
@@ -508,8 +515,14 @@ final class ElephantAppModel: ObservableObject {
     @Published var showingCommandPalette = false
     @Published var lastError = ""
     @Published var providerTestResult = ""
+    @Published var providerActionFailed = false
+    @Published var providerActionInFlight = false
     @Published var embeddingActionResult = ""
     @Published var gatewayActionResult = ""
+    @Published var gatewayActionFailed = false
+    @Published var gatewayActionInFlight = false
+    @Published var gatewayQRPolling = false
+    @Published var gatewayQRAutoPolling = false
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
     @Published var gatewayQR = GatewayQRState()
     @Published var cronActionResult = ""
@@ -536,6 +549,7 @@ final class ElephantAppModel: ObservableObject {
     private var client = APIClient(baseURL: nil)
     private var readinessPollTask: Task<Void, Never>?
     private var sleepIdleMonitorTask: Task<Void, Never>?
+    private var weixinQRPollTask: Task<Void, Never>?
     private var onboardingCreatedStateID = ""
     private static let onboardingCompleteKey = "elephant.mac.onboardingComplete"
     private static let userAvatarPathKey = "elephant.mac.userAvatarImagePath"
@@ -845,7 +859,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     private func pollOnboardingInitReflectJob(jobID: String) async throws {
-        let maxAttempts = 120
+        let maxAttempts = 180
         for attempt in 0..<maxAttempts {
             if Task.isCancelled { return }
             onboardingFinalizationStatus = attempt < 2 ? text(.learningFromAnswers) : text(.learningFinishing)
@@ -855,16 +869,30 @@ final class ElephantAppModel: ObservableObject {
                 if status.contains("completed") || status.contains("succeeded") || status == "success" {
                     onboardingFinalizationStatus = text(.learningReady)
                     onboardingFinalizationComplete = true
-                    onboardingStep = 16
+                    onboardingStep = 17
+                    scheduleOnboardingAutoCompletion()
                     return
                 }
                 if status.contains("failed") || status.contains("cancel") || status.contains("error") {
                     throw APIClientError.badStatus(job.detail.isEmpty ? "The init learning job did not complete." : job.detail)
                 }
             }
-            try await Task.sleep(nanoseconds: 2_000_000_000)
+            try await Task.sleep(nanoseconds: 1_000_000_000)
         }
         throw APIClientError.badStatus("The init learning job is still running. You can enter Elephant and review the learning queue later.")
+    }
+
+    private func scheduleOnboardingAutoCompletion() {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            await MainActor.run {
+                guard let self,
+                      self.showingOnboarding,
+                      self.onboardingFinalizationComplete
+                else { return }
+                self.completeOnboarding()
+            }
+        }
     }
 
     private func onboardingInitReflectJob(jobID: String) -> LearningJobItem? {
@@ -877,9 +905,14 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    var onboardingLearningJob: LearningJobItem? {
+        onboardingInitReflectJob(jobID: onboardingInitReflectJobID)
+    }
+
     func completeOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
         showingOnboarding = false
-        selectedSection = .wake
+        selectedSection = .home
     }
 
     func startNewChat() {
@@ -1103,11 +1136,18 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func testProvider() async {
+        providerActionInFlight = true
+        providerActionFailed = false
+        providerTestResult = localizedProviderActionText("test_running")
+        defer { providerActionInFlight = false }
         do {
-            providerTestResult = try await client.testProvider()
+            let reply = try await client.testProvider()
+            providerActionFailed = false
+            providerTestResult = localizedProviderActionText("test_success", detail: reply)
             try? await refreshDashboard()
         } catch {
-            providerTestResult = ""
+            providerActionFailed = true
+            providerTestResult = localizedProviderActionText("test_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
@@ -1119,6 +1159,10 @@ final class ElephantAppModel: ObservableObject {
         apiKey: String,
         contextWindow: String
     ) async {
+        providerActionInFlight = true
+        providerActionFailed = false
+        providerTestResult = localizedProviderActionText("save_running")
+        defer { providerActionInFlight = false }
         do {
             try await client.configureProvider(
                 providerID: providerID,
@@ -1128,9 +1172,11 @@ final class ElephantAppModel: ObservableObject {
                 contextWindow: contextWindow
             )
             try await refreshDashboard()
-            providerTestResult = "Provider saved."
+            providerActionFailed = false
+            providerTestResult = localizedProviderActionText("save_success")
         } catch {
-            providerTestResult = ""
+            providerActionFailed = true
+            providerTestResult = localizedProviderActionText("save_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
@@ -1164,12 +1210,213 @@ final class ElephantAppModel: ObservableObject {
     func discoverProviderModels(providerID: String, baseURL: String, apiKey: String) async -> [ProviderModelOption] {
         do {
             let rows = try await client.discoverProviderModels(providerID: providerID, baseURL: baseURL, apiKey: apiKey)
-            providerTestResult = rows.isEmpty ? "Model discovery returned no live rows." : "\(rows.count) models loaded."
+            providerActionFailed = false
+            providerTestResult = rows.isEmpty ? localizedProviderActionText("fetch_empty") : localizedProviderActionText("fetch_success", count: rows.count)
             return rows
         } catch {
-            providerTestResult = ""
+            providerActionFailed = true
+            providerTestResult = localizedProviderActionText("fetch_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
             return []
+        }
+    }
+
+    private func localizedProviderActionText(_ key: String, detail: String = "", count: Int = 0) -> String {
+        switch appLanguage {
+        case .zh:
+            switch key {
+            case "test_running": return "正在测试模型服务..."
+            case "test_success": return detail.isEmpty ? "测试成功。" : "测试成功：\(detail)"
+            case "test_failed": return detail.isEmpty ? "测试失败。" : "测试失败：\(detail)"
+            case "save_running": return "正在保存模型服务..."
+            case "save_success": return "保存成功。"
+            case "save_failed": return detail.isEmpty ? "保存失败。" : "保存失败：\(detail)"
+            case "fetch_empty": return "模型列表刷新完成，但没有返回可用模型。"
+            case "fetch_success": return "模型列表已刷新：\(count) 个模型。"
+            case "fetch_failed": return detail.isEmpty ? "模型列表刷新失败。" : "模型列表刷新失败：\(detail)"
+            default: return detail
+            }
+        case .fr:
+            switch key {
+            case "test_running": return "Test du provider..."
+            case "test_success": return detail.isEmpty ? "Test réussi." : "Test réussi : \(detail)"
+            case "test_failed": return detail.isEmpty ? "Test échoué." : "Test échoué : \(detail)"
+            case "save_running": return "Enregistrement du provider..."
+            case "save_success": return "Enregistrement réussi."
+            case "save_failed": return detail.isEmpty ? "Enregistrement échoué." : "Enregistrement échoué : \(detail)"
+            case "fetch_empty": return "Liste des modèles actualisée, aucun modèle disponible."
+            case "fetch_success": return "Liste des modèles actualisée : \(count) modèles."
+            case "fetch_failed": return detail.isEmpty ? "Actualisation des modèles échouée." : "Actualisation des modèles échouée : \(detail)"
+            default: return detail
+            }
+        case .de:
+            switch key {
+            case "test_running": return "Provider wird getestet..."
+            case "test_success": return detail.isEmpty ? "Test erfolgreich." : "Test erfolgreich: \(detail)"
+            case "test_failed": return detail.isEmpty ? "Test fehlgeschlagen." : "Test fehlgeschlagen: \(detail)"
+            case "save_running": return "Provider wird gespeichert..."
+            case "save_success": return "Speichern erfolgreich."
+            case "save_failed": return detail.isEmpty ? "Speichern fehlgeschlagen." : "Speichern fehlgeschlagen: \(detail)"
+            case "fetch_empty": return "Modellliste aktualisiert, aber ohne verfügbare Modelle."
+            case "fetch_success": return "Modellliste aktualisiert: \(count) Modelle."
+            case "fetch_failed": return detail.isEmpty ? "Modellliste konnte nicht aktualisiert werden." : "Modellliste konnte nicht aktualisiert werden: \(detail)"
+            default: return detail
+            }
+        case .en:
+            switch key {
+            case "test_running": return "Testing provider..."
+            case "test_success": return detail.isEmpty ? "Test succeeded." : "Test succeeded: \(detail)"
+            case "test_failed": return detail.isEmpty ? "Test failed." : "Test failed: \(detail)"
+            case "save_running": return "Saving provider..."
+            case "save_success": return "Save succeeded."
+            case "save_failed": return detail.isEmpty ? "Save failed." : "Save failed: \(detail)"
+            case "fetch_empty": return "Model list refreshed, but no live models were returned."
+            case "fetch_success": return "Model list refreshed: \(count) models."
+            case "fetch_failed": return detail.isEmpty ? "Model list refresh failed." : "Model list refresh failed: \(detail)"
+            default: return detail
+            }
+        }
+    }
+
+    private func localizedGatewayActionText(_ key: String, detail: String = "") -> String {
+        func withDetail(_ base: String) -> String {
+            detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? base : "\(base) \(detail)"
+        }
+        switch appLanguage {
+        case .zh:
+            switch key {
+            case "start_running": return "正在启动聊天连接..."
+            case "start_success": return "聊天连接已启动，可以回到对应聊天里发消息了。"
+            case "start_failed": return withDetail("聊天连接启动失败。")
+            case "restart_running": return "正在重新连接聊天服务..."
+            case "restart_success": return "聊天服务已重新连接。"
+            case "restart_failed": return withDetail("聊天服务重新连接失败。")
+            case "stop_running": return "正在停止聊天连接..."
+            case "stop_success": return "聊天连接已停止。"
+            case "stop_failed": return withDetail("聊天连接停止失败。")
+            case "configure_running": return "正在保存消息渠道配置..."
+            case "configure_success": return "消息渠道配置已保存。"
+            case "configure_failed": return withDetail("消息渠道配置保存失败。")
+            case "qr_starting": return "正在生成微信二维码..."
+            case "qr_start_failed": return withDetail("微信二维码生成失败。")
+            case "qr_checking": return "正在检查扫码状态..."
+            case "qr_poll_failed": return withDetail("扫码状态检查失败。")
+            case "qr_confirmed_starting": return "微信已确认，正在刷新账号并启动聊天连接..."
+            case "qr_confirmed_missing_service": return "微信已确认，但本地运行时没有返回 WeChat 服务；请刷新后再启动。"
+            default: return detail
+            }
+        case .fr:
+            switch key {
+            case "start_running": return "Connexion au chat en cours..."
+            case "start_success": return "Chat connecté. Vous pouvez écrire dans le chat associé."
+            case "start_failed": return withDetail("Connexion au chat échouée.")
+            case "restart_running": return "Reconnexion au chat..."
+            case "restart_success": return "Chat reconnecté."
+            case "restart_failed": return withDetail("Reconnexion au chat échouée.")
+            case "stop_running": return "Arrêt de la connexion au chat..."
+            case "stop_success": return "Connexion au chat arrêtée."
+            case "stop_failed": return withDetail("Arrêt de la connexion au chat échoué.")
+            case "configure_running": return "Enregistrement de la configuration..."
+            case "configure_success": return "Configuration de messagerie enregistrée."
+            case "configure_failed": return withDetail("Échec de l'enregistrement de la configuration.")
+            case "qr_starting": return "Génération du QR WeChat..."
+            case "qr_start_failed": return withDetail("Échec de la génération du QR WeChat.")
+            case "qr_checking": return "Vérification du scan..."
+            case "qr_poll_failed": return withDetail("Échec de la vérification du scan.")
+            case "qr_confirmed_starting": return "WeChat confirmé. Actualisation du compte et connexion au chat..."
+            case "qr_confirmed_missing_service": return "WeChat est confirmé, mais le runtime local n'a pas renvoyé le service WeChat."
+            default: return detail
+            }
+        case .de:
+            switch key {
+            case "start_running": return "Chat-Verbindung wird gestartet..."
+            case "start_success": return "Chat ist verbunden. Du kannst im verbundenen Chat schreiben."
+            case "start_failed": return withDetail("Chat-Verbindung konnte nicht gestartet werden.")
+            case "restart_running": return "Chat wird neu verbunden..."
+            case "restart_success": return "Chat wurde neu verbunden."
+            case "restart_failed": return withDetail("Chat konnte nicht neu verbunden werden.")
+            case "stop_running": return "Chat-Verbindung wird beendet..."
+            case "stop_success": return "Chat-Verbindung wurde beendet."
+            case "stop_failed": return withDetail("Chat-Verbindung konnte nicht beendet werden.")
+            case "configure_running": return "Nachrichtenkanal wird gespeichert..."
+            case "configure_success": return "Nachrichtenkanal gespeichert."
+            case "configure_failed": return withDetail("Nachrichtenkanal konnte nicht gespeichert werden.")
+            case "qr_starting": return "WeChat-QR wird erstellt..."
+            case "qr_start_failed": return withDetail("WeChat-QR konnte nicht erstellt werden.")
+            case "qr_checking": return "Scanstatus wird geprüft..."
+            case "qr_poll_failed": return withDetail("Scanstatus konnte nicht geprüft werden.")
+            case "qr_confirmed_starting": return "WeChat bestätigt. Konto wird aktualisiert und Chat verbunden..."
+            case "qr_confirmed_missing_service": return "WeChat ist bestätigt, aber die lokale Runtime hat keinen WeChat-Dienst zurückgegeben."
+            default: return detail
+            }
+        case .en:
+            switch key {
+            case "start_running": return "Connecting chat..."
+            case "start_success": return "Chat connected. You can message from the connected chat now."
+            case "start_failed": return withDetail("Chat connection failed to start.")
+            case "restart_running": return "Reconnecting chat..."
+            case "restart_success": return "Chat reconnected."
+            case "restart_failed": return withDetail("Chat failed to reconnect.")
+            case "stop_running": return "Disconnecting chat..."
+            case "stop_success": return "Chat disconnected."
+            case "stop_failed": return withDetail("Chat failed to disconnect.")
+            case "configure_running": return "Saving messaging channel..."
+            case "configure_success": return "Messaging channel saved."
+            case "configure_failed": return withDetail("Messaging channel failed to save.")
+            case "qr_starting": return "Generating WeChat QR..."
+            case "qr_start_failed": return withDetail("WeChat QR failed to start.")
+            case "qr_checking": return "Checking scan status..."
+            case "qr_poll_failed": return withDetail("Scan status check failed.")
+            case "qr_confirmed_starting": return "WeChat confirmed. Refreshing the account and connecting chat..."
+            case "qr_confirmed_missing_service": return "WeChat is confirmed, but the local runtime did not return the WeChat service."
+            default: return detail
+            }
+        }
+    }
+
+    private func localizedWeixinQRStatusText(_ status: String, fallback: String = "") -> String {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "confirmed" {
+            return localizedGatewayActionText("qr_confirmed_starting")
+        }
+        if normalized == "expired" || normalized.contains("expire") {
+            switch appLanguage {
+            case .zh: return "二维码已过期，请重新生成。"
+            case .fr: return "Le QR a expiré. Générez-en un nouveau."
+            case .de: return "Der QR ist abgelaufen. Bitte neu erstellen."
+            case .en: return "The QR code expired. Generate a new one."
+            }
+        }
+        if normalized == "need_verifycode" {
+            switch appLanguage {
+            case .zh: return "已扫描，请在手机上确认验证码。"
+            case .fr: return "QR scanné. Confirmez le code sur votre téléphone."
+            case .de: return "QR gescannt. Bitte Code am Telefon bestätigen."
+            case .en: return "Scanned. Confirm the verification code on your phone."
+            }
+        }
+        if normalized == "scaned_but_redirect" {
+            switch appLanguage {
+            case .zh: return "已扫描，正在切换校验通道..."
+            case .fr: return "QR scanné. Changement du canal de vérification..."
+            case .de: return "QR gescannt. Prüfkanal wird gewechselt..."
+            case .en: return "Scanned. Switching verification channel..."
+            }
+        }
+        if normalized.contains("fail") || normalized.contains("error") || normalized.contains("cancel") || normalized.contains("reject") {
+            let trimmed = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch appLanguage {
+            case .zh: return trimmed.isEmpty ? "扫码登录失败，请重新生成二维码。" : "扫码登录失败：\(trimmed)"
+            case .fr: return trimmed.isEmpty ? "Connexion QR échouée. Générez un nouveau QR." : "Connexion QR échouée : \(trimmed)"
+            case .de: return trimmed.isEmpty ? "QR-Anmeldung fehlgeschlagen. Bitte neu erstellen." : "QR-Anmeldung fehlgeschlagen: \(trimmed)"
+            case .en: return trimmed.isEmpty ? "QR login failed. Generate a new QR code." : "QR login failed: \(trimmed)"
+            }
+        }
+        switch appLanguage {
+        case .zh: return "二维码已生成。扫码后这里会自动更新状态。"
+        case .fr: return "QR généré. Le statut se mettra à jour automatiquement après le scan."
+        case .de: return "QR erstellt. Der Status aktualisiert sich nach dem Scan automatisch."
+        case .en: return "QR code generated. This status updates automatically after scanning."
         }
     }
 
@@ -1316,6 +1563,10 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func runGatewayAction(service: GatewayServiceItem, action: String) async {
+        gatewayActionInFlight = true
+        gatewayActionFailed = false
+        gatewayActionResult = localizedGatewayActionText("\(action)_running")
+        defer { gatewayActionInFlight = false }
         do {
             let result = try await client.runGatewayAction(
                 service: service.id,
@@ -1324,55 +1575,132 @@ final class ElephantAppModel: ObservableObject {
                 transport: service.transport,
                 force: action == "stop"
             )
-            gatewayActionResult = result
+            gatewayActionFailed = false
+            gatewayActionResult = localizedGatewayActionText("\(action)_success", detail: result)
             try await refreshDashboard()
         } catch {
-            gatewayActionResult = ""
+            gatewayActionFailed = true
+            gatewayActionResult = localizedGatewayActionText("\(action)_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
 
     func configureGatewayService(_ service: GatewayServiceItem) async {
+        gatewayActionInFlight = true
+        gatewayActionFailed = false
+        gatewayActionResult = localizedGatewayActionText("configure_running")
+        defer { gatewayActionInFlight = false }
         do {
-            let result = try await client.configureGatewayService(
+            _ = try await client.configureGatewayService(
                 service: service.id,
                 accountID: service.accountID,
                 transport: service.transport,
                 secrets: gatewaySecretDrafts[service.id] ?? [:]
             )
-            gatewayActionResult = result
+            gatewayActionFailed = false
+            gatewayActionResult = localizedGatewayActionText("configure_success")
             gatewaySecretDrafts[service.id] = [:]
             try await refreshDashboard()
         } catch {
-            gatewayActionResult = ""
+            gatewayActionFailed = true
+            gatewayActionResult = localizedGatewayActionText("configure_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
 
     func startWeixinQR() async {
+        gatewayActionInFlight = true
+        gatewayActionFailed = false
+        gatewayActionResult = localizedGatewayActionText("qr_starting")
+        stopWeixinQRAutoPoll()
+        defer { gatewayActionInFlight = false }
         do {
             gatewayQR = try await client.startWeixinQR()
-            gatewayActionResult = gatewayQR.message.isEmpty ? "Scan the WeChat QR code." : gatewayQR.message
+            gatewayActionFailed = false
+            gatewayActionResult = localizedWeixinQRStatusText(gatewayQR.status, fallback: gatewayQR.message)
+            startWeixinQRAutoPoll(sessionID: gatewayQR.sessionID)
         } catch {
             gatewayQR = GatewayQRState()
-            gatewayActionResult = ""
+            gatewayActionFailed = true
+            gatewayActionResult = localizedGatewayActionText("qr_start_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
 
-    func pollWeixinQR() async {
+    func pollWeixinQR(auto: Bool = false) async {
         guard !gatewayQR.sessionID.isEmpty else { return }
+        guard !gatewayQRPolling else { return }
+        gatewayQRPolling = true
+        if !auto {
+            gatewayActionFailed = false
+            gatewayActionResult = localizedGatewayActionText("qr_checking")
+        }
+        defer { gatewayQRPolling = false }
         do {
             gatewayQR = try await client.pollWeixinQR(sessionID: gatewayQR.sessionID)
-            gatewayActionResult = gatewayQR.message
+            gatewayActionFailed = weixinQRStatusIsFailure(gatewayQR.status)
+            gatewayActionResult = localizedWeixinQRStatusText(gatewayQR.status, fallback: gatewayQR.message)
             if gatewayQR.status == "confirmed" {
+                stopWeixinQRAutoPoll(cancelTask: !auto)
+                gatewayActionFailed = false
+                gatewayActionResult = localizedGatewayActionText("qr_confirmed_starting")
+                try await refreshDashboard()
                 if let weixin = snapshot.gatewayItems.first(where: { $0.id == "weixin" }) {
                     await runGatewayAction(service: weixin, action: "start")
+                } else {
+                    gatewayActionFailed = true
+                    gatewayActionResult = localizedGatewayActionText("qr_confirmed_missing_service")
                 }
+            } else if weixinQRStatusIsTerminal(gatewayQR.status) {
+                stopWeixinQRAutoPoll(cancelTask: !auto)
             }
         } catch {
+            if !auto {
+                gatewayActionFailed = true
+                gatewayActionResult = localizedGatewayActionText("qr_poll_failed", detail: error.localizedDescription)
+            }
             lastError = error.localizedDescription
         }
+    }
+
+    private func startWeixinQRAutoPoll(sessionID: String) {
+        guard !sessionID.isEmpty else { return }
+        gatewayQRAutoPolling = true
+        weixinQRPollTask?.cancel()
+        weixinQRPollTask = Task { [weak self] in
+            for _ in 0..<240 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if Task.isCancelled { return }
+                guard let self else { return }
+                let shouldContinue = await MainActor.run {
+                    self.gatewayQR.sessionID == sessionID && !self.weixinQRStatusIsTerminal(self.gatewayQR.status)
+                }
+                if !shouldContinue { break }
+                await self.pollWeixinQR(auto: true)
+            }
+            await MainActor.run {
+                guard self?.gatewayQR.sessionID == sessionID else { return }
+                self?.gatewayQRAutoPolling = false
+            }
+        }
+    }
+
+    private func stopWeixinQRAutoPoll(cancelTask: Bool = true) {
+        if cancelTask {
+            weixinQRPollTask?.cancel()
+        }
+        weixinQRPollTask = nil
+        gatewayQRAutoPolling = false
+    }
+
+    private func weixinQRStatusIsTerminal(_ status: String) -> Bool {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "confirmed" || normalized == "expired" || normalized.contains("expire") || normalized.contains("fail") || normalized.contains("error") || normalized.contains("cancel") || normalized.contains("reject")
+    }
+
+    private func weixinQRStatusIsFailure(_ status: String) -> Bool {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "expired" || normalized.contains("expire") || normalized.contains("fail") || normalized.contains("error") || normalized.contains("cancel") || normalized.contains("reject")
     }
 
     func createCronJob(name: String, schedule: String, prompt: String) async {
@@ -1429,9 +1757,9 @@ final class ElephantAppModel: ObservableObject {
         let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isWakeRunning else { return }
         wakeDraft = ""
+        isWakeRunning = true
         messages.append(ChatMessage(role: .user, text: text))
         chatScrollRevision += 1
-        isWakeRunning = true
 
         var assistantMessageID: UUID?
         var currentAssistantTextMessageID: UUID?
@@ -1888,9 +2216,16 @@ final class ElephantAppModel: ObservableObject {
 
         wakeDraft = ""
         providerTestResult = ""
+        providerActionFailed = false
+        providerActionInFlight = false
         embeddingActionResult = ""
         gatewayActionResult = ""
+        gatewayActionFailed = false
+        gatewayActionInFlight = false
+        gatewayQRPolling = false
+        gatewayQRAutoPolling = false
         gatewaySecretDrafts.removeAll()
+        stopWeixinQRAutoPoll()
         gatewayQR = GatewayQRState()
         cronActionResult = ""
         diaryActionResult = ""

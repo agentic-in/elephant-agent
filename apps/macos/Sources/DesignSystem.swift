@@ -14,6 +14,7 @@ enum ElephantTheme {
     static let orange = Color(red: 0.86, green: 0.42, blue: 0.12)
     static let mint = Color(red: 0.53, green: 0.82, blue: 0.70)
     static let ember = Color(red: 0.95, green: 0.54, blue: 0.28)
+    static let gold = Color(red: 0.88, green: 0.66, blue: 0.24)
 }
 
 struct AppBackground: View {
@@ -224,6 +225,7 @@ struct NativePanel<Content: View>: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(ElephantTheme.line, lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.025), radius: 10, y: 4)
     }
 }
 
@@ -316,23 +318,153 @@ struct EmptyLine: View {
     }
 }
 
+struct SurfaceActionButton: View {
+    var title: String
+    var subtitle: String? = nil
+    var symbol: String
+    var tint: Color = ElephantTheme.accent
+    var isProminent = false
+    var isDisabled = false
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            guard !isDisabled else { return }
+            action()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(iconFill)
+                    Image(systemName: symbol)
+                        .font(.system(size: 15, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(iconTint)
+                }
+                .frame(width: 38, height: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(titleColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(isDisabled ? ElephantTheme.faint : ElephantTheme.muted)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isDisabled ? ElephantTheme.faint : tint)
+                    .opacity(hovering && !isDisabled ? 1 : 0.58)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, subtitle == nil ? 9 : 11)
+            .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 54 : 66, alignment: .leading)
+            .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.62 : 1)
+        .onHover { hovering = $0 }
+        .help(subtitle.map { "\(title): \($0)" } ?? title)
+        .accessibilityLabel(subtitle.map { "\(title), \($0)" } ?? title)
+    }
+
+    private var iconFill: Color {
+        if isProminent { return Color.white.opacity(0.18) }
+        return tint.opacity(hovering && !isDisabled ? 0.16 : 0.10)
+    }
+
+    private var iconTint: Color {
+        if isDisabled { return ElephantTheme.faint }
+        return isProminent ? .white : tint
+    }
+
+    private var titleColor: Color {
+        if isDisabled { return ElephantTheme.faint }
+        return isProminent ? .white : ElephantTheme.ink
+    }
+
+    private var background: Color {
+        if isProminent {
+            return hovering && !isDisabled ? tint.opacity(0.92) : tint
+        }
+        return hovering && !isDisabled
+            ? Color(nsColor: .controlBackgroundColor).opacity(0.96)
+            : Color(nsColor: .controlBackgroundColor).opacity(0.78)
+    }
+
+    private var borderColor: Color {
+        if isProminent { return Color.white.opacity(0.24) }
+        return tint.opacity(hovering && !isDisabled ? 0.34 : 0.18)
+    }
+}
+
 struct SettingsRow: View {
     var label: String
     var value: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
+        HStack(alignment: .firstTextBaseline, spacing: 18) {
             Text(label)
                 .font(.callout)
                 .foregroundStyle(ElephantTheme.muted)
-                .frame(width: 116, alignment: .leading)
+                .frame(width: 148, alignment: .leading)
             Text(value)
                 .font(.callout)
                 .foregroundStyle(ElephantTheme.ink)
                 .textSelection(.enabled)
-                .lineLimit(2)
+                .lineLimit(3)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 7)
+    }
+}
+
+struct SettingsFieldRow<Accessory: View>: View {
+    var label: String
+    var value: String
+    var accessory: Accessory
+
+    init(
+        label: String,
+        value: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.label = label
+        self.value = value
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.muted)
+                .frame(width: 148, alignment: .leading)
+            Text(value)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.ink)
+                .textSelection(.enabled)
+                .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
+            accessory
         }
         .padding(.vertical, 7)
     }

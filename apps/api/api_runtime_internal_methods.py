@@ -341,6 +341,11 @@ def _learning_snapshot(
         episode = episodes_by_id.get(str(getattr(job, "episode_id", "") or ""))
         result_payload = getattr(job, "result_json", {})
         result_json = dict(result_payload) if isinstance(result_payload, Mapping) else {}
+        metadata = dict(getattr(job, "metadata", {}) or {})
+        resolved_features, resolved_tools = _learning_job_runtime_contract(
+            str(getattr(job, "trigger", "") or ""),
+            metadata=metadata,
+        )
         rows.append(
             {
                 **_serialize(job),
@@ -348,6 +353,8 @@ def _learning_snapshot(
                 "elephant_name": getattr(state, "elephant_name", "") if state is not None else "",
                 "entry_surface": getattr(episode, "entry_surface", "") if episode is not None else "",
                 "episode_status": getattr(episode, "status", "") if episode is not None else "",
+                "resolved_features": resolved_features,
+                "resolved_tools": resolved_tools,
                 "result_status": str(result_json.get("status") or ""),
                 "result_summary": str(result_json.get("summary") or ""),
                 "learning_result": result_json,
@@ -368,6 +375,29 @@ def _learning_snapshot(
         },
         "jobs": tuple(rows),
     }
+
+
+def _learning_job_runtime_contract(trigger: str, *, metadata: Mapping[str, Any]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    explicit_features = _learning_explicit_features(metadata.get("features"))
+    try:
+        from apps.reflect.features import resolve_features
+
+        features = resolve_features(trigger.strip().lower(), explicit_features=explicit_features or None)
+    except Exception:
+        return (), ()
+    feature_ids = tuple(feature.feature_id for feature in features)
+    tools: list[str] = []
+    for feature in features:
+        tools.extend(str(tool) for tool in feature.tools)
+    return feature_ids, tuple(dict.fromkeys(tool for tool in tools if tool))
+
+
+def _learning_explicit_features(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return tuple(item.strip() for item in value.split(",") if item.strip())
+    if isinstance(value, (list, tuple)):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return ()
 
 
 def _operation_snapshot(self, *, active_provider: Mapping[str, Any], provider_doctor: Mapping[str, Any]) -> dict[str, Any]:

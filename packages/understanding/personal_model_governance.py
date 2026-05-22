@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from enum import StrEnum
+import json
 import re
 import unicodedata
 from typing import Any
@@ -278,6 +279,189 @@ def skill_affinity_index_id(topic: object) -> str:
     return ""
 
 
+def is_skill_optimization_topic(topic: object) -> bool:
+    resolved = valid_topic_key(topic)
+    return resolved.startswith("world.skills.optimization.") or resolved.startswith("skills.optimization.")
+
+
+def skill_optimization_scope(topic: object) -> str:
+    resolved = valid_topic_key(topic)
+    parts = resolved.split(".")
+    if len(parts) < 4:
+        return ""
+    if parts[0] not in {"world", "skills"} or parts[1] != "skills" or parts[2] != "optimization":
+        return ""
+    return parts[3]
+
+
+def skill_optimization_candidate_key(topic: object) -> str:
+    resolved = valid_topic_key(topic)
+    parts = resolved.split(".")
+    if len(parts) < 5:
+        return ""
+    if parts[0] not in {"world", "skills"}:
+        return ""
+    if parts[1] != "skills" or parts[2] != "optimization":
+        return ""
+    return parts[-1]
+
+
+_ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES = frozenset({"pending", "approved", "applied", "rejected"})
+_SKILL_OPTIMIZATION_REVIEW_STATUS_ALIASES = {"new": "pending"}
+
+
+def _string_metadata(metadata: Mapping[str, object] | None) -> dict[str, str]:
+    return {str(key): str(value) for key, value in dict(metadata or {}).items() if clean(value)}
+
+
+def canonical_skill_optimization_review_status(value: object, *, default: str = "pending") -> str:
+    resolved = clean(value).lower()
+    resolved = _SKILL_OPTIMIZATION_REVIEW_STATUS_ALIASES.get(resolved, resolved)
+    if resolved in _ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES:
+        return resolved
+    fallback = clean(default).lower()
+    fallback = _SKILL_OPTIMIZATION_REVIEW_STATUS_ALIASES.get(fallback, fallback)
+    return fallback if fallback in _ALLOWED_SKILL_OPTIMIZATION_REVIEW_STATUSES else "pending"
+
+
+def skill_optimization_candidate_confidence(
+    metadata: Mapping[str, object] | None = None,
+    *,
+    default: float = 0.72,
+) -> float:
+    raw = clean((metadata or {}).get("confidence")) if isinstance(metadata, Mapping) else ""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return max(0.0, min(1.0, float(default)))
+    return max(0.0, min(1.0, value))
+
+
+def skill_optimization_candidate_text_from_record(record: Mapping[str, object] | None = None) -> str:
+    metadata = _string_metadata(record)
+    subject = clean(metadata.get("skill_id")) or "a new skill"
+    occurrence_count = clean(metadata.get("occurrence_count")) or "0"
+    confidence = clean(metadata.get("confidence")) or "0.72"
+    summary = clean(metadata.get("summary")) or "repeatable optimization opportunity detected"
+    suggested_action = clean(metadata.get("suggested_action")) or summary
+    return (
+        f"{subject} shows a repeatable optimization opportunity. "
+        f"Evidence: {summary}. "
+        f"Observed in {occurrence_count} closed episodes with confidence {confidence}. "
+        f"Suggested action: {suggested_action}"
+    ).strip()
+
+
+def authoritative_skill_optimization_candidate_records(repository: Any, session_id: str) -> tuple[dict[str, str], ...]:
+    load_episode = getattr(repository, "load_episode", None)
+    if not callable(load_episode):
+        return ()
+    visited: set[str] = set()
+    current_episode_id = clean(session_id)
+    while current_episode_id and current_episode_id not in visited:
+        visited.add(current_episode_id)
+        episode = load_episode(current_episode_id)
+        if episode is None:
+            break
+        metadata = dict(getattr(episode, "metadata", {}) or {})
+        raw_records = clean(metadata.get("authoritative_skill_optimization_candidates_json"))
+        if raw_records:
+            try:
+                decoded = json.loads(raw_records)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                decoded = ()
+            records: list[dict[str, str]] = []
+            if isinstance(decoded, list):
+                for item in decoded:
+                    if not isinstance(item, Mapping):
+                        continue
+                    record = {str(key): str(value) for key, value in item.items() if clean(value)}
+                    if clean(record.get("topic")):
+                        records.append(record)
+            if records:
+                return tuple(records)
+        current_episode_id = clean(getattr(episode, "parent_episode_id", ""))
+    return ()
+
+
+def enforce_authoritative_skill_optimization_candidate(
+    repository: Any,
+    *,
+    session_id: str,
+    topic: str,
+    action: str,
+    ref: str = "",
+    text: str,
+    incoming_metadata: Mapping[str, object] | None = None,
+    current_metadata: Mapping[str, object] | None = None,
+) -> tuple[str, dict[str, str]]:
+    caller_metadata = _string_metadata(incoming_metadata)
+    authoritative_records = authoritative_skill_optimization_candidate_records(repository, session_id)
+    requested_review_status = canonical_skill_optimization_review_status(
+        caller_metadata.get("review_status"),
+        default=_string_metadata(current_metadata).get("review_status", "pending"),
+    )
+    enforce_authoritative_record = bool(authoritative_records) and not (
+        clean(action).lower() == "correct"
+        and clean(ref)
+        and requested_review_status in {"approved", "applied", "rejected"}
+    )
+    if not enforce_authoritative_record:
+        return text, caller_metadata
+    authoritative_record = next(
+        (item for item in authoritative_records if clean(item.get("topic")) == clean(topic)),
+        None,
+    )
+    if authoritative_record is None:
+        raise ValueError(
+            "skill optimization candidate writes in learning-agent sessions must use an exact topic from the authoritative Optimization Candidate Records section"
+        )
+    merged_metadata = {
+        **caller_metadata,
+        **{
+            key: value
+            for key, value in authoritative_record.items()
+            if key not in {"summary", "supporting_signals"}
+        },
+    }
+    return skill_optimization_candidate_text_from_record(authoritative_record), merged_metadata
+
+
+def normalize_skill_optimization_candidate_metadata(
+    topic: object,
+    metadata: Mapping[str, object] | None = None,
+    *,
+    action: str = "",
+    current_metadata: Mapping[str, object] | None = None,
+) -> dict[str, str]:
+    resolved_topic = valid_topic_key(topic)
+    current = _string_metadata(current_metadata)
+    incoming = _string_metadata(metadata)
+    if not is_skill_optimization_topic(resolved_topic):
+        return {**current, **incoming}
+
+    merged = {**current, **incoming}
+    candidate_key = clean(merged.get("candidate_key")) or skill_optimization_candidate_key(resolved_topic)
+    scope = skill_optimization_scope(resolved_topic)
+    current_status = canonical_skill_optimization_review_status(current.get("review_status"), default="pending")
+    default_status = "pending" if clean(action).lower() == "remember" else current_status
+
+    merged["projection_policy"] = "skill_optimization_candidate"
+    merged["retention_lifecycle"] = "draft"
+    merged["review_status"] = canonical_skill_optimization_review_status(
+        merged.get("review_status"),
+        default=default_status,
+    )
+    if candidate_key:
+        merged["candidate_key"] = candidate_key
+        merged.setdefault("candidate_id", f"skillopt_{candidate_key}")
+    if scope and scope != "new":
+        merged.setdefault("index_id", scope)
+        merged.setdefault("target_scope", scope)
+
+    return {str(key): str(value) for key, value in merged.items() if clean(value)}
+
+
 def numeric_mentions(value: object) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(
@@ -402,13 +586,16 @@ def claim_payload(fact: Fact) -> dict[str, Any]:
     metadata = dict(fact.metadata or {})
     topic = clean(metadata.get("topic"))
     protection = protected_topic_policy(topic, metadata)
-    return {
+    confidence = float(getattr(fact, "confidence", 0.0) or 0.0)
+    if is_skill_optimization_topic(topic):
+        confidence = skill_optimization_candidate_confidence(metadata, default=confidence)
+    payload = {
         "ref": fact.fact_id,
         "lens": fact.lens,
         "topic": topic,
         "text": fact.text,
         "status": fact.status,
-        "confidence": fact.confidence,
+        "confidence": confidence,
         "source": metadata.get("source_kind", fact.source),
         "updated_at": fact.committed_at.isoformat(),
         "reason": metadata.get("reason", ""),
@@ -421,6 +608,23 @@ def claim_payload(fact: Fact) -> dict[str, Any]:
         "projection_policy": metadata.get("projection_policy", protection.projection_policy if protection is not None else ""),
         "facet": metadata.get("facet", protection.facet if protection is not None else ""),
     }
+    if is_skill_optimization_topic(topic):
+        scope = skill_optimization_scope(topic)
+        payload.update(
+            {
+                "candidate_id": metadata.get("candidate_id", ""),
+                "candidate_key": metadata.get("candidate_key", skill_optimization_candidate_key(topic)),
+                "index_id": metadata.get("index_id", ""),
+                "target_scope": metadata.get("target_scope", "" if scope == "new" else scope),
+                "skill_id": metadata.get("skill_id", ""),
+                "optimization_type": metadata.get("optimization_type", ""),
+                "signal_type": metadata.get("signal_type", ""),
+                "occurrence_count": metadata.get("occurrence_count", ""),
+                "review_status": canonical_skill_optimization_review_status(metadata.get("review_status"), default="pending"),
+                "suggested_action": metadata.get("suggested_action", ""),
+            }
+        )
+    return payload
 
 
 def topic_tree(facts: tuple[Fact, ...]) -> dict[str, dict[str, dict[str, list[str]]]]:

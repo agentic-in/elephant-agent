@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import json
+from threading import Lock
 from typing import Any
 
 from packages.contracts.runtime import LearningJob
 
-from .evidence import build_evidence
+from .evidence import build_evidence, build_skill_optimization_context
 from .features import TRIGGER_CONSERVATISM, resolve_features
 from .features.types import Feature
 from .prompts import BOUNDARIES, CLAIM_TEXT_RULE, CONSERVATISM_PROMPTS, LANGUAGE_RULE, TOPIC_FORMAT
@@ -48,10 +50,16 @@ def _assemble_system_prompt(features: tuple[Feature, ...], *, conservatism: str)
     sections.extend(["", f"Approach: {conservatism_prompt}"])
 
     # Shared knowledge
-    if any(f.feature_id in ("pm", "questions", "skills", "dream") for f in features):
+    if any(f.feature_id in ("pm", "questions", "skills", "dream", "skill_optimization") for f in features):
         sections.extend(["", TOPIC_FORMAT])
 
     sections.extend(["", LANGUAGE_RULE, "", CLAIM_TEXT_RULE, "", BOUNDARIES])
+    sections.extend(
+        [
+            "",
+            "Background write rule: every tool.personal_model.update call MUST set source=learned. Do not remember or correct identity.anchor.name.preferred from background reflection; the user's preferred name can only change through explicit chat/profile intent.",
+        ]
+    )
 
     # Feature SOPs
     sections.append("\n## SOP")
@@ -83,6 +91,63 @@ def _extract_tool_stats(result: Mapping[str, Any]) -> tuple[int, tuple[str, ...]
         side_effects = (side_effects,)
     tool_names = tuple(name for name in side_effects if name.startswith("tool."))
     return len(tool_names), tool_names
+
+
+def _tool_event_preview(arguments: Mapping[str, Any]) -> str:
+    for key in ("action", "query", "topic", "url", "ref", "lens"):
+        value = str(arguments.get(key) or "").strip()
+        if value:
+            return f"{key}={value[:80]}"
+    return ""
+
+
+def _subscribe_learning_tool_progress(runtime: Any, job: LearningJob) -> tuple[Any, list[str]]:
+    tool_runtime = getattr(runtime, "tool_runtime", None)
+    subscribe = getattr(tool_runtime, "subscribe", None)
+    if not callable(subscribe):
+        return None, []
+
+    seen: list[str] = []
+    lock = Lock()
+
+    def observer(event: Any) -> None:
+        invocation = getattr(event, "invocation", None)
+        tool_id = str(getattr(invocation, "tool_id", "") or "").strip()
+        if not tool_id or tool_id == "tool.sub_agents":
+            return
+        phase = str(getattr(event, "phase", "") or "").strip()
+        if phase not in {"requested", "execution.started", "execution.completed", "execution.failed"}:
+            return
+        arguments = getattr(invocation, "arguments", {}) or {}
+        if not isinstance(arguments, Mapping):
+            arguments = {}
+        preview = _tool_event_preview(arguments)
+        detail = f"{phase} {tool_id}" + (f" {preview}" if preview else "")
+        with lock:
+            if tool_id not in seen and phase in {"execution.completed", "execution.failed"}:
+                seen.append(tool_id)
+            called = ",".join(seen[-6:])
+        try:
+            runtime.repository.update_learning_job_progress(
+                job.job_id,
+                worker_id=str(job.worker_id or "reflect-agent"),
+                progress_stage="tool_running" if phase != "execution.completed" else "tool_completed",
+                progress_detail=f"tool_event={detail}" + (f" called={called}" if called else ""),
+            )
+        except Exception:
+            return
+
+    return subscribe(observer), seen
+
+
+def _dedupe_tool_names(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    result: list[str] = []
+    for group in groups:
+        for name in group:
+            cleaned = str(name or "").strip()
+            if cleaned and cleaned not in result:
+                result.append(cleaned)
+    return tuple(result)
 
 
 def _write_result_to_job(
@@ -165,6 +230,14 @@ def run_reflect_agent(
     allowed_tools = _compose_tools(features)
     system_prompt = _assemble_system_prompt(features, conservatism=conservatism)
     evidence = build_evidence(runtime, job, features)
+    child_metadata: dict[str, str] = {}
+    if "skill_optimization" in feature_ids:
+        _, _, candidate_records = build_skill_optimization_context(runtime, job)
+        child_metadata["authoritative_skill_optimization_candidates_json"] = json.dumps(
+            list(candidate_records),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
 
     # Update job progress (best-effort; sync paths like context compress
     # may pass a transient job that is not persisted in DB — never fail here).
@@ -178,7 +251,7 @@ def run_reflect_agent(
     except KeyError:
         pass
 
-    # Execute
+    unsubscribe, captured_tool_names = _subscribe_learning_tool_progress(runtime, job)
     try:
         result = runtime.run_sub_agent(
             session_id=job.episode_id,
@@ -188,13 +261,21 @@ def run_reflect_agent(
             allowed_tools=allowed_tools,
             system_prompt=system_prompt,
             learning_agent=True,
+            child_metadata=child_metadata,
         )
     except Exception as exc:
         raise RuntimeError(f"reflect agent failed: {exc}") from exc
+    finally:
+        if callable(unsubscribe):
+            unsubscribe()
 
     summary = str(result.get("summary") if isinstance(result, Mapping) else "")
     agent_status = str(result.get("status") if isinstance(result, Mapping) else "completed")
     tool_calls_total, tool_names = _extract_tool_stats(result)
+    captured_tools = tuple(captured_tool_names)
+    if captured_tools:
+        tool_names = _dedupe_tool_names(captured_tools, tool_names)
+        tool_calls_total = max(tool_calls_total, len(captured_tools))
 
     result_payload = _reflect_result_payload(
         job,

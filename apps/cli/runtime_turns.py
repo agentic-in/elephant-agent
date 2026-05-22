@@ -25,6 +25,10 @@ from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
 from packages.state import (
     ensure_elephant_identity_file,
 )
+from apps.reflect.context_compression import (
+    reflect_compress_summary,
+    render_messages_text,
+)
 
 if TYPE_CHECKING:
     from apps.cli.runtime import CliRuntime
@@ -379,59 +383,7 @@ def run_turn(
     return outcome
 
 
-def _render_messages_text(messages: tuple[PromptMessage, ...], *, limit: int = 0) -> str:
-    """Render prompt messages into concise text for compress evidence.
-
-    Only includes user queries and assistant final responses.
-    Tool calls are summarized as "[N tool calls]", tool results are omitted.
-    limit=0 means no truncation (best effort — pass everything).
-    """
-    lines: list[str] = []
-    total = 0
-    pending_tool_names: list[str] = []
-    for msg in messages:
-        role = msg.role or "unknown"
-        content = msg.content.strip()
-        if role == "tool":
-            # Skip tool results entirely — they're noise for summary
-            continue
-        if role == "assistant" and msg.tool_calls and not content:
-            # Collect tool call names but don't render the empty assistant message
-            for c in msg.tool_calls:
-                name = str(c.get("function", {}).get("name") or c.get("name") or "tool")
-                pending_tool_names.append(name)
-            continue
-        # Flush pending tool calls as a compact line
-        if pending_tool_names:
-            tool_line = f"[used {len(pending_tool_names)} tools: {', '.join(dict.fromkeys(pending_tool_names))}]"
-            total += len(tool_line)
-            if limit and total > limit:
-                lines.append("... (truncated)")
-                break
-            lines.append(tool_line)
-            pending_tool_names = []
-        if not content:
-            continue
-        if role == "assistant" and msg.tool_calls:
-            # Assistant with both tool_calls and content — just show content
-            call_summary = f"[+{len(msg.tool_calls)} tool calls]"
-            line = f"assistant {call_summary}: {content[:300]}"
-        elif role == "user":
-            line = f"user: {content}"
-        elif role == "assistant":
-            line = f"assistant: {content}"
-        else:
-            continue
-        total += len(line)
-        if limit and total > limit:
-            lines.append("... (truncated)")
-            break
-        lines.append(line)
-    # Flush any remaining pending tools
-    if pending_tool_names:
-        tool_line = f"[used {len(pending_tool_names)} tools: {', '.join(dict.fromkeys(pending_tool_names))}]"
-        lines.append(tool_line)
-    return "\n".join(lines)
+_render_messages_text = render_messages_text
 
 
 def _reflect_compress_summary(
@@ -444,61 +396,15 @@ def _reflect_compress_summary(
     context_limit: int,
     log: Any,
 ) -> tuple[str, str]:
-    fallback_note = "llm_failed_using_heuristic"
-    previous_sub_agent_active = bool(getattr(runtime, "sub_agent_active", False))
-    delegation_armed = False
-    if previous_sub_agent_active:
-        # Internal context compaction is allowed to run reflect delegation even
-        # inside a sub-agent runtime; temporarily drop the guard only for this call.
-        object.__setattr__(runtime, "sub_agent_active", False)
-        delegation_armed = True
-    try:
-        from apps.reflect.runner import run_reflect_agent
-        from packages.contracts.runtime import LearningJob
-
-        token_budget = max(400, int(context_limit * 0.08))
-        compress_metadata = {
-            "compressed_messages": _render_messages_text(to_summarize, limit=0),
-            "previous_summary": frozen_epoch.compacted_history_summary,
-            "token_budget": str(token_budget),
-            "tail_hint": _render_messages_text(tail, limit=1500),
-            # Must use comma-separated string rather than list, because _mapping_text will
-            # turn list into "['compress']" via str(value), causing feature parsing to fail
-            "features": "compress",
-        }
-        session = runtime._load_session(outcome.route_session_id)
-        now = datetime.now(timezone.utc)
-        # Transient job instance, used only to pass metadata/episode/state to run_reflect_agent
-        job = LearningJob(
-            job_id=f"sync-compress:{uuid4().hex[:12]}",
-            job_type="context_compaction",
-            trigger="context_compaction",
-            status="running",
-            personal_model_id=session.personal_model_id,
-            state_id=session.state_id,
-            episode_id=outcome.route_session_id,
-            loop_id=None,
-            summary="synchronous context compression",
-            progress_stage="agent_running",
-            progress_detail="synchronous compress",
-            attempt_count=1,
-            max_attempts=1,
-            available_at=now,
-            created_at=now,
-            started_at=now,
-            finished_at=None,
-            worker_id="context-compress-sync",
-            last_error="",
-            metadata=compress_metadata,
-        )
-        result = run_reflect_agent(runtime, job, explicit_features=("compress",), persist_result=False)
-        return result.summary.strip(), fallback_note
-    except Exception as exc:
-        log.warning("context compress agent failed: %s", exc, exc_info=True)
-        return "", fallback_note
-    finally:
-        if delegation_armed:
-            object.__setattr__(runtime, "sub_agent_active", previous_sub_agent_active)
+    return reflect_compress_summary(
+        runtime,
+        session_id=outcome.route_session_id,
+        frozen_epoch=frozen_epoch,
+        to_summarize=to_summarize,
+        tail=tail,
+        context_limit=context_limit,
+        log=log,
+    )
 
 
 

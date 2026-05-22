@@ -23,7 +23,9 @@ world — What is around this person? Their environment and relationships.
   tools      : Software, devices, platforms, workflows they rely on.
   places     : Locations — home city, timezone, frequent places.
   assets     : Things they own or maintain — pets, subscriptions, collections.
-  skills     : Capability affinities — skills and tools the person has affinity for. Use topic world.skills.affinity.<skill_id> and include skill_id, index_id, projection_policy in metadata.
+  skills     : Capability affinities and optimization candidates.
+               Use topic world.skills.affinity.<skill_id> for skill affinity facts and include skill_id, index_id, projection_policy in metadata.
+               Use topic world.skills.optimization.<scope>.<candidate_key> or world.skills.optimization.new.<candidate_key> for operator-reviewed optimization candidates.
 
 pulse — How is this person right now? Current state that changes frequently.
   chapter    : Current life phase — active work role, life stage, major transitions.

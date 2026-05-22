@@ -15,6 +15,11 @@ from types import SimpleNamespace
 
 import typer
 
+from packages.cron import (
+    ensure_dream_cron as _ensure_dream_cron_row,
+    ensure_nightly_learning_crons as _ensure_nightly_learning_cron_rows,
+    remove_former_diary_crons as _remove_former_diary_cron_rows,
+)
 from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity, render_user_profile_text
 
 from .runtime import CliRuntime
@@ -1595,7 +1600,7 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
             api_key=api_key,
         )
     if context_window_tokens is None:
-        context_window_tokens = 128_000
+        context_window_tokens = 256_000
     guide = runtime.provider_setup_guide(provider_id)
     if (
         guide.auth_type == "api_key"
@@ -2507,40 +2512,17 @@ def _run_learn(runtime: CliRuntime, args: argparse.Namespace) -> int:
 
 
 def _remove_former_diary_crons(runtime: CliRuntime) -> None:
-    """Remove the former built-in diary cron; diary now runs inside Dream."""
-    for job in runtime.cron_runtime.list_jobs():
-        if job.action_kind != "learning":
-            continue
-        if job.payload.get("trigger") != "diary":
-            continue
-        name = str(getattr(job, "name", "") or "").strip().lower()
-        summary = str(job.payload.get("summary") or "").strip().lower()
-        if name == "daily diary" or summary == "daily diary entry for yesterday":
-            runtime.cron_runtime.remove_job(job.job_id)
+    _remove_former_diary_cron_rows(runtime.cron_runtime)
 
 
 def _ensure_dream_cron(runtime: CliRuntime) -> None:
-    """Create the nightly dream consolidation cron job if it doesn't already exist."""
-    _remove_former_diary_crons(runtime)
-    existing = runtime.cron_runtime.list_jobs()
-    for job in existing:
-        if job.payload.get("trigger") == "dream" and job.action_kind == "learning":
-            return
-    runtime.cron_runtime.create_job(
-        name="Nightly dream",
-        schedule_text="every day at 1am",
-        payload={
-            "action_kind": "learning",
-            "trigger": "dream",
-            "summary": "nightly Personal Model, question, skill, and diary maintenance",
-            "metadata": {"features": "dream,questions,skills,diary"},
-        },
-    )
+    """Create the nightly Dream consolidation cron job if it does not exist."""
+    _ensure_dream_cron_row(runtime.cron_runtime)
 
 
 def _ensure_nightly_learning_crons(runtime: CliRuntime) -> None:
     """Create the single built-in nightly learning cron job."""
-    _ensure_dream_cron(runtime)
+    _ensure_nightly_learning_cron_rows(runtime.cron_runtime)
 
 
 def _run_grow(runtime: CliRuntime, args: argparse.Namespace) -> int:
@@ -2610,6 +2592,53 @@ def _namespace(**kwargs: object) -> SimpleNamespace:
 def _cli_runtime(state_dir: Path, *, warm_embedding: bool = True) -> CliRuntime:
     resolved_state_dir = Path(state_dir).expanduser()
     return CliRuntime.create(state_dir=resolved_state_dir, warm_embedding=warm_embedding)
+
+
+def _resolve_reflect_run_request(
+    *,
+    trigger: str | None,
+    features: str | None,
+    date: str | None,
+) -> tuple[str, dict[str, str]]:
+    from datetime import date as date_type, timedelta
+
+    allowed_triggers = {"manual", "dream", "diary", "skill_review"}
+    requested_trigger = str(trigger or "").strip().lower() or None
+    if requested_trigger is not None and requested_trigger not in allowed_triggers:
+        choices = ", ".join(sorted(allowed_triggers))
+        raise ValueError(f"--trigger must be one of: {choices}")
+
+    explicit_features = str(features or "").strip() or None
+    feature_set = {item.strip() for item in (explicit_features or "").split(",") if item.strip()}
+    effective_trigger = requested_trigger or "manual"
+    extra_metadata: dict[str, str] = {}
+
+    if explicit_features:
+        extra_metadata["features"] = explicit_features
+        if "dream" in feature_set:
+            if requested_trigger is None:
+                effective_trigger = "dream" if feature_set == {"dream"} else "manual"
+            extra_metadata["target_date"] = date or date_type.today().isoformat()
+            if feature_set == {"dream"}:
+                extra_metadata["diary_target_date"] = date or (date_type.today() - timedelta(days=1)).isoformat()
+        if "diary" in feature_set:
+            if requested_trigger is None:
+                effective_trigger = "diary" if feature_set == {"diary"} else "manual"
+            target_date = date or (date_type.today() - timedelta(days=1)).isoformat()
+            if "dream" in feature_set:
+                extra_metadata["diary_target_date"] = target_date
+            else:
+                extra_metadata["target_date"] = target_date
+    else:
+        if effective_trigger == "dream":
+            extra_metadata["target_date"] = date or date_type.today().isoformat()
+            extra_metadata["diary_target_date"] = date or (date_type.today() - timedelta(days=1)).isoformat()
+        elif effective_trigger == "diary":
+            extra_metadata["target_date"] = date or (date_type.today() - timedelta(days=1)).isoformat()
+        elif date:
+            raise ValueError("--date requires --trigger dream/diary or dream/diary features")
+
+    return effective_trigger, extra_metadata
 
 
 def _show_cli_banner() -> None:
@@ -3065,14 +3094,13 @@ def build_typer_app() -> typer.Typer:
     def reflect_run_command(
         ctx: typer.Context,
         elephant_id: str | None = typer.Option(None, "--elephant-id", help="Run reflect for a named elephant."),
-        features: str | None = typer.Option(None, "--features", help="Comma-separated feature set (pm,questions,dream,diary,skills,recall,compress)."),
-        date: str | None = typer.Option(None, "--date", help="Target date for dream/diary feature (YYYY-MM-DD). Defaults to today for dream and yesterday for diary."),
+        trigger: str | None = typer.Option(None, "--trigger", help="Reflect trigger to use: manual, dream, diary, or skill_review."),
+        features: str | None = typer.Option(None, "--features", help="Comma-separated feature set (pm,questions,dream,diary,skills,skill_optimization,recall,compress)."),
+        date: str | None = typer.Option(None, "--date", help="Target date for dream/diary trigger or feature (YYYY-MM-DD). Defaults to today for dream and yesterday for diary."),
         wait: bool = typer.Option(False, "--wait", help="Wait for the reflect agent to finish."),
         install_cron: bool = typer.Option(False, "--install-cron", help="Install the built-in nightly Dream learning cron job."),
     ) -> None:
-        """Run a reflect agent with the specified features."""
-        from datetime import date as date_type, timedelta
-
+        """Run a reflect agent with the specified trigger and features."""
         params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
         runtime = _cli_runtime(params["state_dir"])
 
@@ -3094,28 +3122,16 @@ def build_typer_app() -> typer.Typer:
             if not features:
                 raise typer.Exit(0)
 
-        extra_metadata: dict[str, str] = {}
-        trigger = "manual"
-        if features:
-            extra_metadata["features"] = features.strip()
-            feature_set = set(f.strip() for f in features.split(",") if f.strip())
-            if "dream" in feature_set:
-                trigger = "dream" if feature_set == {"dream"} else "manual"
-                extra_metadata["target_date"] = date or date_type.today().isoformat()
-                if feature_set == {"dream"}:
-                    extra_metadata["diary_target_date"] = date or (date_type.today() - timedelta(days=1)).isoformat()
-            if "diary" in feature_set:
-                trigger = "diary" if feature_set == {"diary"} else "manual"
-                target_date = date or (date_type.today() - timedelta(days=1)).isoformat()
-                if "dream" in feature_set:
-                    extra_metadata["diary_target_date"] = target_date
-                else:
-                    extra_metadata["target_date"] = target_date
         try:
+            resolved_trigger, extra_metadata = _resolve_reflect_run_request(
+                trigger=trigger,
+                features=features,
+                date=date,
+            )
             job = _queue_learning_job(
                 runtime,
                 elephant_id=elephant_id,
-                trigger=trigger,
+                trigger=resolved_trigger,
                 summary=f"reflect run features={features or 'default'}",
                 source="cli.reflect.run",
                 force_new=True,
@@ -3137,7 +3153,7 @@ def build_typer_app() -> typer.Typer:
                 sections=(
                     CliCardSection("Job", (
                         f"job_id · {job.job_id}",
-                        f"trigger · {trigger}",
+                        f"trigger · {resolved_trigger}",
                         f"features · {features or '(trigger default)'}",
                         f"status · {worker_line}",
                     )),

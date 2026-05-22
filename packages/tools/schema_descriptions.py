@@ -97,8 +97,8 @@ _PROPERTY_DESCRIPTIONS: Mapping[str, Mapping[str, str]] = {
         "text": "Claim text for remember/correct.",
         "ref": "Optional claim ref from tool.personal_model.search; prefer it for correct/forget/dispute when topic is uncertain.",
         "reason": "Short grounded reason, preferably in the user's words.",
-        "source": "Where the update came from: user_said, user_corrected, or learned.",
-        "recall_policy": "Optional. Use only when obvious: stable, current, temporary, or review.",
+        "source": "Where the update came from: user_said, user_corrected, or learned. For world.skills.optimization.* candidates, always use learned.",
+        "recall_policy": "Optional. Use only when obvious: stable, current, temporary, or review. For world.skills.optimization.* candidates, always use review.",
     },
     "tool.personal_model.questions": {
         "action": "Use list, ask, answer, dismiss, create, update, reopen, stale, delete, inspect, or bank.",
