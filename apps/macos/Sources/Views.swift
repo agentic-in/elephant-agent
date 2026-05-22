@@ -8748,12 +8748,33 @@ struct LearningJobRow: View {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: 10) {
                 LearningJobRuntimeStrip(item: item)
-                if !item.progressDetail.isEmpty {
-                    Text(cleanProgressDetail(item.progressDetail))
-                        .font(.caption)
-                        .foregroundStyle(ElephantTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                if !detailMarkdown.isEmpty {
+                    MarkdownBody(
+                        text: detailMarkdown,
+                        font: .caption,
+                        color: ElephantTheme.ink.opacity(0.92),
+                        blockSpacing: 7,
+                        lineSpacing: 3
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if !supplementalProgressDetail.isEmpty {
+                    if progressLooksLikeMarkdown(supplementalProgressDetail) {
+                        MarkdownBody(
+                            text: supplementalProgressDetail,
+                            font: .caption2,
+                            color: ElephantTheme.muted,
+                            blockSpacing: 6,
+                            lineSpacing: 2.5
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text(supplementalProgressDetail)
+                            .font(.caption2)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .padding(.top, 6)
@@ -8825,6 +8846,44 @@ struct LearningJobRow: View {
         item.resolvedFeatures.isEmpty ? "" : item.resolvedFeatures.map(localizedFeatureName).joined(separator: ", ")
     }
 
+    private var detailMarkdown: String {
+        let markdown = item.markdown.trimmingCharacters(in: .whitespacesAndNewlines)
+        let progress = item.progressDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if progressLooksLikeMarkdown(progress) && progress.count > markdown.count {
+            return progress
+        }
+        if !markdown.isEmpty {
+            return markdown
+        }
+        if progressLooksLikeMarkdown(progress) {
+            return progress
+        }
+        return cleanProgressDetail(progress)
+    }
+
+    private var supplementalProgressDetail: String {
+        guard !item.markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
+        let progress = item.progressDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !progress.isEmpty else { return "" }
+        if normalizedDetail(progress) == normalizedDetail(item.markdown) {
+            return ""
+        }
+        if normalizedDetail(progress) == normalizedDetail(detailMarkdown) {
+            return ""
+        }
+        if progressLooksLikeMarkdown(progress) {
+            return progress
+        }
+        let cleaned = cleanProgressDetail(progress)
+        if normalizedDetail(cleaned) == normalizedDetail(item.markdown) {
+            return ""
+        }
+        if normalizedDetail(cleaned) == normalizedDetail(detailMarkdown) {
+            return ""
+        }
+        return cleaned
+    }
+
     private func localizedFeatureName(_ feature: String) -> String {
         switch feature.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "pm":
@@ -8848,6 +8907,22 @@ struct LearningJobRow: View {
         detail
             .replacingOccurrences(of: "tool.", with: "")
             .replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func progressLooksLikeMarkdown(_ detail: String) -> Bool {
+        detail.contains("\n")
+            || detail.hasPrefix("#")
+            || detail.hasPrefix("|")
+            || detail.hasPrefix(">")
+            || detail.contains("**")
+            || detail.contains("```")
+    }
+
+    private func normalizedDetail(_ detail: String) -> String {
+        detail
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
     }
 }
 
