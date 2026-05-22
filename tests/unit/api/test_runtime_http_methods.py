@@ -209,6 +209,57 @@ class APIContextCompressionTest(unittest.TestCase):
                 any("Reflect context compression completed" in result for result in results)
             )
 
+    def test_after_turn_short_high_usage_history_does_not_compact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            store = FileEpochStore(state_dir)
+            episode_id = "episode-api-short-no-compress"
+            store.save(
+                SessionContextEpoch(
+                    session_id=episode_id,
+                    frozen=True,
+                    frozen_prefix="## Stable prefix\n" + ("stable context " * 500),
+                    history_messages=(
+                        PromptMessage(role="user", content="hello"),
+                        PromptMessage(role="assistant", content="hello back"),
+                    ),
+                )
+            )
+            telemetry = APITelemetrySink()
+            app = SimpleNamespace(
+                repository=SimpleNamespace(
+                    database_path=state_dir / "elephant.sqlite3"
+                ),
+                telemetry=telemetry,
+                context=SimpleNamespace(runtime=SimpleNamespace(total_tokens=1000)),
+            )
+            outcome = SimpleNamespace(
+                execution=SimpleNamespace(prompt_tokens=900, total_tokens=900),
+                context=SimpleNamespace(token_budget=1000),
+                event=SimpleNamespace(event_id="event:api-short-no-compress"),
+                stages=(),
+            )
+
+            with mock.patch(
+                "apps.api.api_runtime_context_compression._run_reflect_context_compressor",
+                return_value="should not run",
+            ) as reflect_compressor:
+                compact_context_after_usage(app, episode_id, outcome)
+
+            reflect_compressor.assert_not_called()
+            updated = store.load(episode_id)
+            self.assertIsNotNone(updated)
+            assert updated is not None
+            self.assertEqual(updated.compaction_count, 0)
+            self.assertEqual(len(updated.history_messages), 2)
+            self.assertFalse(
+                any(
+                    event.get("event_type") == "kernel.stage"
+                    and (event.get("payload") or {}).get("stage") == "context-compact"
+                    for event in telemetry.events
+                )
+            )
+
     def test_after_turn_low_usage_does_not_emit_context_compact_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp)

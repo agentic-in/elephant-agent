@@ -833,6 +833,8 @@ class APISurfaceE2ETest(unittest.TestCase):
         self.assertEqual(defaulted.payload["active_provider"]["model_id"], "openai/gpt-4o-mini")
         self.assertEqual(defaulted.payload["active_provider"]["context_window_tokens"], 128000)
         self.assertEqual(defaulted.payload["active_provider"]["context_window_mode"], "auto")
+        self.assertEqual(self.app.context_runtime.total_tokens, 128000)
+        self.assertEqual(self.app.context.runtime.total_tokens, 128000)
         self.assertIn(defaulted.payload["active_provider"]["embedding_bootstrap_status"], EMBEDDING_BOOTSTRAP_STATUSES)
         config = load_global_config(
             global_config_path_for_state_dir(self.app.repository.database_path.parent),
@@ -851,6 +853,11 @@ class APISurfaceE2ETest(unittest.TestCase):
             provider_config["metadata"]["context_window_tokens"],
             128000,
         )
+        reloaded_app = create_app(
+            database_path=self.app.repository.database_path,
+            install_root=Path(self.tempdir.name),
+        )
+        self.assertEqual(reloaded_app.context_runtime.total_tokens, 128000)
 
         keys = self.app.dispatch("GET", "/v1/providers/keys")
         self.assertEqual(keys.status_code, 200)

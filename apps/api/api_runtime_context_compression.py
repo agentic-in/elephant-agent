@@ -9,7 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from apps.reflect.context_compression import FALLBACK_NOTE, reflect_compress_summary
-from packages.context.compress import compress_epoch, split_for_compress
+from packages.context.compress import compress_epoch, should_compress_split, split_for_compress
 from packages.context.epoch_store import FileEpochStore
 from packages.kernel import KernelStageRecord
 from packages.kernel.context_compaction import flush_projection_cache
@@ -44,6 +44,8 @@ def compact_context_after_usage(app: Any, episode_id: str, outcome: Any) -> Any:
         return outcome
     to_summarize, tail = split_for_compress(epoch.history_messages)
     if not to_summarize:
+        return outcome
+    if not should_compress_split(epoch.history_messages, to_summarize, context_limit=context_limit):
         return outcome
     source_event_id = str(
         getattr(getattr(outcome, "event", None), "event_id", "")

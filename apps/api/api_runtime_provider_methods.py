@@ -147,6 +147,15 @@ def _metadata_context_window_tokens(metadata: Mapping[str, str]) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _sync_context_runtime_window(self, profile: AuthProfile) -> None:
+    tokens = _metadata_context_window_tokens(profile.metadata)
+    if tokens is None:
+        return
+    update_total_tokens = getattr(getattr(self, "context_runtime", None), "update_total_tokens", None)
+    if callable(update_total_tokens):
+        update_total_tokens(tokens)
+
+
 def _profile_payload_with_metadata(payload: Mapping[str, Any], profile: AuthProfile) -> dict[str, Any]:
     next_payload = dict(payload)
     next_payload["metadata"] = {
@@ -186,6 +195,7 @@ def set_default_provider(self, provider_profile: Mapping[str, Any]) -> dict[str,
         provider_profile_id=active_profile.profile_id,
         provider_id=active_profile.provider_id,
     )
+    _sync_context_runtime_window(self, active_profile)
     return {
         "provider_profile": active_profile,
         "active_provider": self.model_provider.describe(),
