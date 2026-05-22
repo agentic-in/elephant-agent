@@ -157,6 +157,8 @@ struct SleepDisplayView: View {
                                 SecureField(model.text(.sleepPasswordPlaceholder), text: $model.sleepUnlockPassword)
                                     .textFieldStyle(.plain)
                                     .focused($passwordFocused)
+                                    .font(.callout.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.92))
                                     .onSubmit {
                                         model.verifySleepUnlock()
                                     }
@@ -167,18 +169,28 @@ struct SleepDisplayView: View {
                                     Image(systemName: "arrow.right.circle.fill")
                                         .font(.system(size: 22, weight: .semibold))
                                         .foregroundStyle(.white.opacity(0.92))
+                                        .frame(width: 34, height: 34)
+                                        .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
                                 .help(model.text(.sleepUnlock))
+                                .accessibilityLabel(model.text(.sleepUnlock))
                             }
-                            .padding(.horizontal, 13)
-                            .frame(width: min(360, proxy.size.width * 0.42), height: 42)
+                            .padding(.leading, 15)
+                            .padding(.trailing, 6)
+                            .frame(width: min(380, proxy.size.width * 0.46), height: 46)
                             .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(Capsule().stroke(.white.opacity(0.26), lineWidth: 1))
+                            .overlay(Capsule().stroke(model.sleepUnlockError.isEmpty ? .white.opacity(0.30) : ElephantTheme.ember.opacity(0.82), lineWidth: model.sleepUnlockError.isEmpty ? 1 : 1.4))
+                            .shadow(color: Color.black.opacity(0.18), radius: 12, y: 6)
 
-                            Text(model.sleepUnlockError.isEmpty ? model.text(.sleepLockSubtitle) : model.sleepUnlockError)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(model.sleepUnlockError.isEmpty ? .white.opacity(0.66) : ElephantTheme.ember)
+                            Label(
+                                model.sleepUnlockError.isEmpty ? model.text(.sleepLockSubtitle) : model.sleepUnlockError,
+                                systemImage: model.sleepUnlockError.isEmpty ? "lock.fill" : "exclamationmark.circle.fill"
+                            )
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(model.sleepUnlockError.isEmpty ? .white.opacity(0.68) : ElephantTheme.ember)
+                            .labelStyle(.titleAndIcon)
+                            .multilineTextAlignment(.center)
                         } else {
                             Button {
                                 model.dismissSleepDisplay()

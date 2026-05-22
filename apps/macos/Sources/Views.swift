@@ -418,6 +418,7 @@ struct HomeFirstLookPanel: View {
                         .accessibilityLabel(model.text(.changeProfilePhoto))
 
                         VStack(alignment: .leading, spacing: 6) {
+                            Pill(text: localizedYouText(model.appLanguage, en: "Local Personal Model", zh: "本地个人模型", fr: "Personal Model local", de: "Lokales Personal Model"), symbol: "lock.shield", tint: ElephantTheme.green)
                             Text(model.userDisplayName)
                                 .font(.title2.weight(.semibold))
                                 .foregroundStyle(ElephantTheme.ink)
@@ -434,45 +435,41 @@ struct HomeFirstLookPanel: View {
 
                     VStack(alignment: .leading, spacing: 9) {
                         Text(model.text(.homeHeroTitle))
-                            .font(.system(size: 26, weight: .semibold))
+                            .font(.system(size: 28, weight: .semibold))
                             .foregroundStyle(ElephantTheme.ink)
+                            .lineLimit(2)
                         Text(model.text(.homeHeroSubtitle))
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Button {
+                    SurfaceActionButton(
+                        title: AppSection.wake.title(language: model.appLanguage),
+                        subtitle: model.text(.typeMessagePlaceholder),
+                        symbol: "bubble.left.and.bubble.right.fill",
+                        tint: ElephantTheme.accent,
+                        isProminent: true
+                    ) {
                         model.selectedSection = .wake
                         model.focusComposer()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                            Text(AppSection.wake.title(language: model.appLanguage))
-                            Spacer(minLength: 0)
-                            Image(systemName: "arrow.right")
-                        }
-                        .font(.headline.weight(.semibold))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
-                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(ElephantTheme.accent)
 
-                    VStack(spacing: 9) {
-                        TodaySignalRow(value: "\(model.snapshot.facts)", label: model.text(.reviewedFactsLabel), symbol: "checkmark.seal")
-                        TodaySignalRow(value: "\(model.snapshot.waitingQuestions)", label: model.text(.questionsWaitingLabel), symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                        TodaySignalRow(value: "\(model.snapshot.semanticEntries)", label: model.text(.evidencePointsLabel), symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
-                    }
-                    .padding(.top, 2)
+                    HomeMemoryPulseRow()
 
                     HStack(spacing: 10) {
-                        TodayCommand(title: model.text(.reviewQuestions), symbol: "person.crop.circle") {
+                        SurfaceActionButton(
+                            title: model.text(.reviewQuestions),
+                            symbol: "person.crop.circle",
+                            tint: ElephantTheme.orange
+                        ) {
                             model.selectedSection = .you
                         }
-                        TodayCommand(title: AppSection.diary.title(language: model.appLanguage), symbol: "book.closed") {
+                        SurfaceActionButton(
+                            title: AppSection.diary.title(language: model.appLanguage),
+                            symbol: "book.closed",
+                            tint: ElephantTheme.green
+                        ) {
                             model.selectedSection = .diary
                         }
                     }
@@ -512,6 +509,51 @@ struct HomeFirstLookPanel: View {
             }
             .frame(minHeight: 438, alignment: .top)
         }
+    }
+}
+
+private struct HomeMemoryPulseRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HomePulseChip(value: "\(model.snapshot.facts)", label: model.text(.reviewedFactsLabel), symbol: "checkmark.seal", tint: ElephantTheme.accent)
+            HomePulseChip(value: "\(model.snapshot.waitingQuestions)", label: model.text(.questionsWaitingLabel), symbol: "questionmark.bubble", tint: ElephantTheme.orange)
+            HomePulseChip(value: "\(model.snapshot.semanticEntries)", label: model.text(.evidencePointsLabel), symbol: "doc.text.magnifyingglass", tint: ElephantTheme.green)
+        }
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HomePulseChip: View {
+    var value: String
+    var label: String
+    var symbol: String
+    var tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                Text(value)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .monospacedDigit()
+            }
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(ElephantTheme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(tint.opacity(0.16), lineWidth: 1))
     }
 }
 
@@ -759,7 +801,7 @@ struct HomeContinuityPanel: View {
                     )
                     Spacer(minLength: 0)
                     if let question = nextQuestion {
-                        Pill(text: question.statusTitle, symbol: "questionmark.bubble", tint: questionTint(question))
+                        Pill(text: localizedQuestionStatus(question, language: model.appLanguage), symbol: "questionmark.bubble", tint: questionTint(question))
                     }
                 }
 
@@ -2168,6 +2210,7 @@ struct WakeComposerPanel: View {
                         }
                         .buttonStyle(PressablePlainButtonStyle())
                         .help(speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput))
+                        .accessibilityLabel(speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput))
 
                         TextField(model.text(.typeMessagePlaceholder), text: $model.wakeDraft, axis: .vertical)
                             .textFieldStyle(.plain)
@@ -2194,6 +2237,7 @@ struct WakeComposerPanel: View {
                         .tint(ElephantTheme.accent)
                         .disabled(model.isWakeRunning || model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .help(model.text(.send))
+                        .accessibilityLabel(model.text(.send))
                     }
 
                     if speech.isRecording || !speech.statusText.isEmpty {
@@ -2262,16 +2306,17 @@ struct ChatEmptyState: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             VStack(spacing: 8) {
+                Pill(text: localizedYouText(model.appLanguage, en: "Private memory, ready to work", zh: "私有记忆，随时开始", fr: "Mémoire privée, prête à agir", de: "Privates Gedächtnis, bereit"), symbol: "lock.shield", tint: ElephantTheme.green)
                 ElephantMascotView(
                     mood: model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .idle : .listening,
-                    size: 356,
+                    size: 248,
                     showsMemoryField: true,
-                    energy: 1.55
+                    energy: 1.16
                 )
                     .accessibilityHidden(true)
-                    .padding(.bottom, -8)
+                    .padding(.bottom, -4)
                 Text(model.text(.askElephant))
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
@@ -2295,6 +2340,8 @@ struct ChatEmptyState: View {
                     model.focusComposer()
                 }
             }
+            HomeMemoryPulseRow()
+                .frame(maxWidth: 520)
         }
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -2304,18 +2351,23 @@ struct QuickPromptButton: View {
     var title: String
     var symbol: String
     var action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: symbol)
                 .font(.callout.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minWidth: 108)
+                .padding(.horizontal, 14)
+                .frame(minWidth: 116, minHeight: 38)
+                .contentShape(Capsule())
         }
         .buttonStyle(PressablePlainButtonStyle())
-        .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
-        .overlay(Capsule().stroke(ElephantTheme.line, lineWidth: 1))
+        .foregroundStyle(hovering ? ElephantTheme.accent : ElephantTheme.ink)
+        .background(hovering ? ElephantTheme.accent.opacity(0.10) : Color(nsColor: .controlBackgroundColor), in: Capsule())
+        .overlay(Capsule().stroke(hovering ? ElephantTheme.accent.opacity(0.28) : ElephantTheme.line, lineWidth: 1))
+        .help(title)
+        .accessibilityLabel(title)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -3302,6 +3354,21 @@ private func localizedToolStatus(_ rawValue: String, language: AppLanguage) -> S
     return localizedYouText(language, en: "done", zh: "完成", fr: "fait", de: "fertig")
 }
 
+private func localizedQuestionStatus(_ question: PersonalModelQuestionItem, language: AppLanguage) -> String {
+    switch question.status {
+    case "ready":
+        return localizedYouText(language, en: "Ready", zh: "可回答", fr: "Prête", de: "Bereit")
+    case "asked":
+        return localizedYouText(language, en: "Asked", zh: "已问过", fr: "Posée", de: "Gefragt")
+    case "answered":
+        return localizedYouText(language, en: "Learned", zh: "已学到", fr: "Apprise", de: "Gelernt")
+    case "dismissed":
+        return localizedYouText(language, en: "Dismissed", zh: "已忽略", fr: "Ignorée", de: "Verworfen")
+    default:
+        return question.statusTitle
+    }
+}
+
 private func localizedRuntimeStatus(_ rawValue: String, language: AppLanguage) -> String {
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if value.contains("schedule") {
@@ -3321,6 +3388,9 @@ private func localizedRuntimeStatus(_ rawValue: String, language: AppLanguage) -
     }
     if value.contains("run") || value.contains("active") || value.contains("start") {
         return localizedYouText(language, en: "running", zh: "运行中", fr: "en cours", de: "läuft")
+    }
+    if value.contains("stop") || value.contains("idle") {
+        return localizedYouText(language, en: "quiet", zh: "安静待命", fr: "au repos", de: "ruht")
     }
     return rawValue.isEmpty ? localizedYouText(language, en: "unknown", zh: "未知", fr: "inconnu", de: "unbekannt") : rawValue
 }
@@ -3637,7 +3707,7 @@ struct QuestionLedgerRow: View {
                     Pill(text: question.source, symbol: "link", tint: ElephantTheme.faint)
                     Pill(text: question.sensitivity, symbol: "lock", tint: ElephantTheme.faint)
                     if question.askedCount > 0 {
-                        Pill(text: "\(question.askedCount) asked", symbol: "clock", tint: ElephantTheme.orange)
+                        Pill(text: localizedFormat(model.appLanguage, en: "%d asked", zh: "问过 %d 次", fr: "%d posées", de: "%d gefragt", question.askedCount), symbol: "clock", tint: ElephantTheme.orange)
                     }
                 }
 
@@ -3649,7 +3719,7 @@ struct QuestionLedgerRow: View {
 
                 if !question.resultingFacts.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Learned facts")
+                        Text(localizedYouText(model.appLanguage, en: "Learned memories", zh: "已经学到的记忆", fr: "Souvenirs appris", de: "Gelernte Erinnerungen"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.muted)
                         ForEach(question.resultingFacts.prefix(3)) { fact in
@@ -3663,23 +3733,23 @@ struct QuestionLedgerRow: View {
 
                 if question.canAct {
                     HStack(spacing: 8) {
-                        Button("Answer in Chat") {
+                        Button(localizedYouText(model.appLanguage, en: "Answer in Chat", zh: "去聊天里回答", fr: "Répondre dans Chat", de: "Im Chat antworten")) {
                             model.draftAnswerForQuestion(question)
                         }
-                        Button("Surface sooner") {
+                        Button(localizedYouText(model.appLanguage, en: "Ask sooner", zh: "早点问我", fr: "Demander plus tôt", de: "Früher fragen")) {
                             Task { await model.surfaceQuestionSooner(question) }
                         }
-                        Button("Dismiss") {
+                        Button(localizedYouText(model.appLanguage, en: "Dismiss", zh: "忽略", fr: "Ignorer", de: "Verwerfen")) {
                             Task { await model.dismissQuestion(question) }
                         }
                     }
                     .controlSize(.small)
 
                     HStack(alignment: .bottom, spacing: 8) {
-                        TextField("Answer this question here...", text: $answerDraft, axis: .vertical)
+                        TextField(localizedYouText(model.appLanguage, en: "Answer this question here...", zh: "也可以直接在这里回答...", fr: "Répondez ici...", de: "Hier antworten..."), text: $answerDraft, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(1...3)
-                        Button("Save Answer") {
+                        Button(localizedYouText(model.appLanguage, en: "Save", zh: "保存", fr: "Enregistrer", de: "Speichern")) {
                             let draft = answerDraft
                             answerDraft = ""
                             Task { await model.answerQuestion(question, content: draft) }
@@ -3697,11 +3767,11 @@ struct QuestionLedgerRow: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
-                        Text(question.statusTitle)
+                        Text(localizedQuestionStatus(question, language: model.appLanguage))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(tint)
                         if question.priority > 0 {
-                            Text("priority \(String(format: "%.2f", question.priority))")
+                            Text(localizedYouText(model.appLanguage, en: "priority", zh: "优先级", fr: "priorité", de: "Priorität") + " \(String(format: "%.2f", question.priority))")
                                 .font(.caption)
                                 .foregroundStyle(ElephantTheme.muted)
                         }
@@ -8317,7 +8387,7 @@ struct LearnView: View {
 
             HStack(spacing: 12) {
                 MetricTile(label: localizedYouText(model.appLanguage, en: "Questions", zh: "问题", fr: "Questions", de: "Fragen"), value: "\(model.snapshot.waitingQuestions)", symbol: "questionmark.bubble", tint: ElephantTheme.orange)
-                MetricTile(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: localizedRuntimeStatus(model.snapshot.workerStatus, language: model.appLanguage), symbol: "gearshape.2", tint: ElephantTheme.accent)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Background", zh: "后台", fr: "Arrière-plan", de: "Hintergrund"), value: localizedRuntimeStatus(model.snapshot.workerStatus, language: model.appLanguage), symbol: "gearshape.2", tint: ElephantTheme.accent)
                 MetricTile(label: localizedYouText(model.appLanguage, en: "Jobs", zh: "任务", fr: "Tâches", de: "Jobs"), value: "\(model.snapshot.learningItems.count)", symbol: "brain.head.profile", tint: ElephantTheme.green)
             }
 
@@ -8570,10 +8640,10 @@ struct LearningJobRow: View {
                 StatusDot(tint: statusTint)
                     .padding(.top, 6)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
+                    Text(displayTitle)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text([item.trigger, featureSummary, formattedDetail].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([triggerLabel, featureSummary, formattedDetail].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -8583,6 +8653,39 @@ struct LearningJobRow: View {
             }
         }
         .padding(.vertical, 7)
+    }
+
+    private var displayTitle: String {
+        let raw = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = raw.lowercased()
+        if value.contains("nightly") {
+            return localizedYouText(model.appLanguage, en: "Nightly memory maintenance", zh: "夜间记忆维护", fr: "Entretien mémoire nocturne", de: "Nächtliche Gedächtnispflege")
+        }
+        if value.contains("reflect job") {
+            return localizedYouText(model.appLanguage, en: "Memory reflection", zh: "记忆整理", fr: "Réflexion mémoire", de: "Gedächtnisreflexion")
+        }
+        if value.contains("diary") {
+            return localizedYouText(model.appLanguage, en: "Diary reflection", zh: "日记反思", fr: "Réflexion journal", de: "Tagebuchreflexion")
+        }
+        return raw.isEmpty ? localizedYouText(model.appLanguage, en: "Evolution job", zh: "自我进化任务", fr: "Tâche d'évolution", de: "Evolutionsjob") : raw
+    }
+
+    private var triggerLabel: String {
+        let value = item.trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if value.isEmpty { return "" }
+        if value.contains("night") {
+            return localizedYouText(model.appLanguage, en: "nightly", zh: "夜间", fr: "nocturne", de: "nächtlich")
+        }
+        if value.contains("init") {
+            return localizedYouText(model.appLanguage, en: "first setup", zh: "首次设置", fr: "première configuration", de: "Ersteinrichtung")
+        }
+        if value.contains("dream") {
+            return localizedYouText(model.appLanguage, en: "dream", zh: "Dream", fr: "dream", de: "Dream")
+        }
+        if value.contains("diary") {
+            return localizedYouText(model.appLanguage, en: "diary", zh: "日记", fr: "journal", de: "Tagebuch")
+        }
+        return item.trigger
     }
 
     private var statusTint: Color {
@@ -8597,7 +8700,26 @@ struct LearningJobRow: View {
     }
 
     private var featureSummary: String {
-        item.resolvedFeatures.isEmpty ? "" : item.resolvedFeatures.joined(separator: ",")
+        item.resolvedFeatures.isEmpty ? "" : item.resolvedFeatures.map(localizedFeatureName).joined(separator: ", ")
+    }
+
+    private func localizedFeatureName(_ feature: String) -> String {
+        switch feature.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "pm":
+            return localizedYouText(model.appLanguage, en: "personal model", zh: "个人模型", fr: "Personal Model", de: "Personal Model")
+        case "questions":
+            return localizedYouText(model.appLanguage, en: "questions", zh: "问题", fr: "questions", de: "Fragen")
+        case "skills":
+            return localizedYouText(model.appLanguage, en: "skills", zh: "技能", fr: "skills", de: "Skills")
+        case "diary":
+            return localizedYouText(model.appLanguage, en: "diary", zh: "日记", fr: "journal", de: "Tagebuch")
+        case "dream":
+            return localizedYouText(model.appLanguage, en: "patterns", zh: "模式", fr: "motifs", de: "Muster")
+        case "init_links":
+            return localizedYouText(model.appLanguage, en: "public links", zh: "公开链接", fr: "liens publics", de: "öffentliche Links")
+        default:
+            return feature.replacingOccurrences(of: "_", with: " ")
+        }
     }
 
     private func cleanProgressDetail(_ detail: String) -> String {
@@ -12653,6 +12775,7 @@ struct OnboardingPhaseRailItem: View {
 }
 
 struct OnboardingStepHeader: View {
+    @EnvironmentObject private var model: ElephantAppModel
     var title: String
     var subtitle: String
     var symbol: String
@@ -12665,6 +12788,10 @@ struct OnboardingStepHeader: View {
                 .frame(width: 34, height: 34)
                 .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 5) {
+                Text(localizedYouText(model.appLanguage, en: "Shaping your Personal Model", zh: "正在形成你的个人模型", fr: "Formation de votre Personal Model", de: "Dein Personal Model entsteht"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .textCase(.uppercase)
                 Text(title)
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
