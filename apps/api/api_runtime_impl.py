@@ -121,6 +121,22 @@ def _steady_embedding_runtime(embedding_service: Any) -> None:
         return
 
 
+def _provider_context_total_tokens(profile: AuthProfile | None, fallback: int) -> int:
+    metadata = getattr(profile, "metadata", {}) if profile is not None else {}
+    raw_value = metadata.get("context_window_tokens") if isinstance(metadata, Mapping) else None
+    try:
+        parsed = int(str(raw_value or "").replace(",", ""))
+    except (TypeError, ValueError):
+        parsed = 0
+    if parsed > 0:
+        return parsed
+    try:
+        fallback_tokens = int(fallback or 0)
+    except (TypeError, ValueError):
+        fallback_tokens = 0
+    return fallback_tokens if fallback_tokens > 0 else 2048
+
+
 def _ensure_system_cron_jobs(cron_runtime: CronRuntime) -> None:
     """Best-effort startup self-heal for built-in durable cron rows."""
     try:
@@ -167,7 +183,10 @@ class ElephantAPIApp:
         loaded_profile = self.profile_loader.load()
         prompt_contract = build_prompt_contract(loaded_profile, prompt_mode="full")
         context_instruction_refs = prompt_contract.instruction_refs or config.instruction_refs
-        self.context_runtime = ContextRuntime(instruction_refs=context_instruction_refs, total_tokens=config.total_tokens)
+        self.context_runtime = ContextRuntime(
+            instruction_refs=context_instruction_refs,
+            total_tokens=_provider_context_total_tokens(active_provider_profile, config.total_tokens),
+        )
         self.personal_state = APIStateService(
             repository=self.repository,
             recall_runtime=self.recall_runtime,

@@ -431,7 +431,7 @@ struct APIClient {
             return "\(service) \(action) completed."
         }
         let stderr = SnapshotParser.findString(in: json, keys: ["stderr"]) ?? ""
-        return stderr.isEmpty ? "\(service) \(action) returned \(status)." : stderr
+        throw APIClientError.badStatus(stderr.isEmpty ? "\(service) \(action) returned \(status)." : stderr)
     }
 
     func configureGatewayService(
@@ -712,7 +712,7 @@ struct APIClient {
                     name: stageTitle(object["stage"] as? String ?? "Working"),
                     status: object["status"] as? String ?? "running",
                     arguments: object["detail"] as? String ?? "",
-                    result: ""
+                    result: object["result"] as? String ?? ""
                 ),
                 stage: object["stage"] as? String ?? "",
                 detail: object["detail"] as? String ?? ""
@@ -1075,7 +1075,7 @@ enum SnapshotParser {
         if snapshot.steps == 0 {
             snapshot.steps = (runtime["steps"] as? [[String: Any]])?.count ?? 0
         }
-        snapshot.episodeThreads = episodeTraces.prefix(10).compactMap { episodeThread(from: $0) }
+        snapshot.episodeThreads = Array(episodeTraces.lazy.compactMap { episodeThread(from: $0) }.prefix(10))
 
         let reflectRoot = dashboards["reflect"] ?? [:]
         let learning = reflectRoot["learning"] as? [String: Any] ?? [:]
@@ -1088,13 +1088,24 @@ enum SnapshotParser {
             let id = string(row["job_id"] ?? row["jobId"] ?? row["id"])
             guard !id.isEmpty else { return nil }
             let trigger = string(row["trigger"] ?? row["job_type"] ?? row["jobType"])
+            let metadata = object(row["metadata"])
+            let progressStage = string(row["progress_stage"] ?? row["progressStage"])
+            let progressDetail = string(row["progress_detail"] ?? row["progressDetail"])
+            let features = learningFeatures(from: row, metadata: metadata, trigger: trigger, progressDetail: progressDetail)
+            let tools = learningTools(from: row, metadata: metadata, features: features)
+            let usedTools = learningUsedTools(from: row)
             let resultText = learningMarkdown(from: row)
             return LearningJobItem(
                 id: id,
-                title: learningTitle(from: row, trigger: trigger, id: id, markdown: resultText),
+                title: learningTitle(from: row, trigger: trigger, id: id, markdown: resultText, features: features),
                 detail: [string(row["created_at"] ?? row["createdAt"]), string(row["finished_at"] ?? row["finishedAt"])].filter { !$0.isEmpty }.joined(separator: " → "),
                 status: string(row["status"], fallback: "unknown"),
                 trigger: trigger,
+                progressStage: progressStage,
+                progressDetail: progressDetail,
+                resolvedFeatures: features,
+                resolvedTools: tools,
+                usedTools: usedTools,
                 markdown: resultText
             )
         }
@@ -1423,18 +1434,28 @@ enum SnapshotParser {
         var seen = Set<String>()
         var rows: [ProviderModelOption] = []
 
-        func push(_ rawID: String, source: String, label: String = "") {
+        func push(_ rawID: String, source: String, label: String = "", contextWindowTokens: Int = 0, maxOutputTokens: Int = 0) {
             let modelID = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !modelID.isEmpty, !seen.contains(modelID) else { return }
             seen.insert(modelID)
-            rows.append(ProviderModelOption(id: modelID, label: label.isEmpty ? modelID : label, source: source))
+            rows.append(
+                ProviderModelOption(
+                    id: modelID,
+                    label: label.isEmpty ? modelID : label,
+                    source: source,
+                    contextWindowTokens: contextWindowTokens,
+                    maxOutputTokens: maxOutputTokens
+                )
+            )
         }
 
         for row in discoveredRows {
             push(
                 string(row["model_id"] ?? row["modelId"] ?? row["id"]),
                 source: string(row["source"], fallback: "endpoint"),
-                label: string(row["label"] ?? row["name"])
+                label: string(row["label"] ?? row["name"]),
+                contextWindowTokens: int(row["context_window_tokens"] ?? row["contextWindowTokens"] ?? row["context_window"] ?? row["contextWindow"]),
+                maxOutputTokens: int(row["max_output_tokens"] ?? row["maxOutputTokens"] ?? row["max_tokens"] ?? row["maxTokens"])
             )
         }
         for modelID in listStrings(providerRow["model_hints"] ?? providerRow["modelHints"]) {
@@ -1802,8 +1823,11 @@ enum SnapshotParser {
         return ""
     }
 
-    private static func learningTitle(from row: [String: Any], trigger: String, id: String, markdown: String) -> String {
+    private static func learningTitle(from row: [String: Any], trigger: String, id: String, markdown: String, features: [String]) -> String {
         let summary = string(row["summary"])
+        if !features.isEmpty, summary.lowercased().contains("features=default") {
+            return "reflect job (features=\(features.joined(separator: ",")))"
+        }
         if !summary.isEmpty && !looksLikeLongMarkdown(summary) {
             return compactLine(summary, maxLength: 72)
         }
@@ -1812,6 +1836,94 @@ enum SnapshotParser {
             .map { cleanMarkdownTitleLine($0) }
             .first { !$0.isEmpty }
         return compactLine(firstLine ?? (trigger.isEmpty ? id : trigger), maxLength: 72)
+    }
+
+    private static func learningFeatures(from row: [String: Any], metadata: [String: Any], trigger: String, progressDetail: String) -> [String] {
+        let resolved = listStrings(row["resolved_features"] ?? row["resolvedFeatures"] ?? metadata["resolved_features"] ?? metadata["resolvedFeatures"])
+        if !resolved.isEmpty { return deduplicated(resolved) }
+        let explicit = listStrings(metadata["features"]).filter { $0.lowercased() != "default" }
+        if !explicit.isEmpty { return deduplicated(explicit) }
+        let progress = featuresFromProgressDetail(progressDetail)
+        if !progress.isEmpty { return progress }
+        return fallbackFeatures(for: trigger)
+    }
+
+    private static func learningTools(from row: [String: Any], metadata: [String: Any], features: [String]) -> [String] {
+        let resolved = listStrings(row["resolved_tools"] ?? row["resolvedTools"] ?? metadata["resolved_tools"] ?? metadata["resolvedTools"])
+        if !resolved.isEmpty { return deduplicated(resolved) }
+        var tools: [String] = []
+        for feature in features {
+            tools.append(contentsOf: fallbackTools(for: feature))
+        }
+        return deduplicated(tools)
+    }
+
+    private static func learningUsedTools(from row: [String: Any]) -> [String] {
+        let direct = listStrings(row["tool_names"] ?? row["toolNames"] ?? row["used_tools"] ?? row["usedTools"])
+        if !direct.isEmpty { return deduplicated(direct) }
+        for key in ["learning_result", "learningResult", "result_json", "resultJson", "result"] {
+            let result = object(row[key])
+            let tools = listStrings(result["tool_names"] ?? result["toolNames"] ?? result["used_tools"] ?? result["usedTools"])
+            if !tools.isEmpty { return deduplicated(tools) }
+        }
+        return []
+    }
+
+    private static func featuresFromProgressDetail(_ detail: String) -> [String] {
+        guard let range = detail.range(of: "features=") else { return [] }
+        let tail = detail[range.upperBound...]
+        let token = tail.split(whereSeparator: { $0.isWhitespace || $0 == ")" || $0 == "]" }).first.map(String.init) ?? ""
+        return deduplicated(listStrings(token).filter { $0.lowercased() != "default" })
+    }
+
+    private static func fallbackFeatures(for trigger: String) -> [String] {
+        switch trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "init", "init_profile", "profile":
+            return ["pm", "questions", "skills", "init_links"]
+        case "manual":
+            return ["pm", "questions", "recall", "skills"]
+        case "dream":
+            return ["dream", "questions", "skills", "diary"]
+        case "diary":
+            return ["diary"]
+        case "context_compaction":
+            return ["compress"]
+        default:
+            return ["pm", "questions", "skills"]
+        }
+    }
+
+    private static func fallbackTools(for feature: String) -> [String] {
+        switch feature.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "pm":
+            return ["tool.personal_model.search", "tool.personal_model.update"]
+        case "questions":
+            return ["tool.personal_model.questions"]
+        case "skills":
+            return ["tool.skill.list", "tool.skill.view", "tool.personal_model.search", "tool.personal_model.update"]
+        case "init_links":
+            return ["tool.web.search", "tool.web.read", "tool.web.extract", "tool.browser.navigate", "tool.browser.snapshot", "tool.browser.scroll", "tool.browser.images"]
+        case "recall":
+            return ["tool.conversation.search"]
+        case "diary":
+            return ["tool.diary.write", "tool.diary.list", "tool.conversation.search", "tool.personal_model.search"]
+        case "dream":
+            return ["tool.personal_model.search", "tool.personal_model.update", "tool.conversation.search"]
+        default:
+            return []
+        }
+    }
+
+    private static func deduplicated(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty, !seen.contains(normalized) else { continue }
+            seen.insert(normalized)
+            result.append(normalized)
+        }
+        return result
     }
 
     private static func looksLikeLongMarkdown(_ text: String) -> Bool {
@@ -1837,6 +1949,9 @@ enum SnapshotParser {
         let messages = chatMessages(from: timeline)
         let firstUserMessage = messages.first { $0.role == .user }?.text ?? ""
         let summary = string(row["exit_summary"] ?? row["summary"])
+        guard shouldShowChatThread(row: row, messages: messages, firstUserMessage: firstUserMessage, summary: summary) else {
+            return nil
+        }
         let status = string(row["status"], fallback: "open")
         let titleSeed = firstUserMessage.isEmpty ? summary : firstUserMessage
         let title = compactLine(titleSeed.isEmpty ? "Conversation" : titleSeed, maxLength: 44)
@@ -1857,6 +1972,57 @@ enum SnapshotParser {
             status: status,
             messages: messages
         )
+    }
+
+    private static func shouldShowChatThread(
+        row: [String: Any],
+        messages: [ChatMessage],
+        firstUserMessage: String,
+        summary: String
+    ) -> Bool {
+        let userMessages = messages
+            .filter { $0.role == .user }
+            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !userMessages.isEmpty else { return false }
+
+        let titleText = [
+            firstUserMessage,
+            summary,
+            string(row["display_name"] ?? row["displayName"] ?? row["title"] ?? row["name"])
+        ].joined(separator: "\n")
+        if looksLikeInternalChatHistoryTitle(titleText) {
+            return false
+        }
+        return !userMessages.allSatisfy(looksLikeInternalChatHistoryTitle)
+    }
+
+    private static func looksLikeInternalChatHistoryTitle(_ value: String) -> Bool {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else { return false }
+        let prefixes = [
+            "[context compressed]",
+            "context compressed",
+            "token budget:",
+            "trigger:",
+            "job:",
+            "reflect run",
+            "reflect job",
+            "run reflect",
+            "context compression"
+        ]
+        if prefixes.contains(where: { normalized.hasPrefix($0) }) {
+            return true
+        }
+        let markers = [
+            "\n[context compressed]",
+            "reflect context compression",
+            "method=reflect",
+            "phase=compressing"
+        ]
+        return markers.contains(where: { normalized.contains($0) })
     }
 
     private static func chatMessages(from timeline: [[String: Any]]) -> [ChatMessage] {

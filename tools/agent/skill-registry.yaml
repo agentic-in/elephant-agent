@@ -191,7 +191,8 @@
       "conditional_surfaces": [
         "kernel",
         "state",
-        "tools_skills"
+        "tools_skills",
+        "learning_agents"
       ],
       "read_first": [
         "apps/cli/AGENTS.md"
@@ -216,7 +217,8 @@
       ],
       "conditional_surfaces": [
         "kernel",
-        "state"
+        "state",
+        "learning_agents"
       ],
       "read_first": [
         "apps/api/AGENTS.md",

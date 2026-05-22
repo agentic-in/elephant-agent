@@ -49,9 +49,9 @@ def derive_profile_from_claims(facts: tuple[Any, ...] | list[Any]) -> dict[str, 
 
     Returns keys used by the rendered profile view (preferred_name,
     current_city, etc.).
-    Only active claims are considered. First match per field wins.
+    Only active claims are considered. Explicit user claims outrank learned claims.
     """
-    profile: dict[str, str] = {}
+    selected: dict[str, tuple[int, str]] = {}
     for fact in facts:
         if str(getattr(fact, "status", "") or "").strip() != "active":
             continue
@@ -60,11 +60,28 @@ def derive_profile_from_claims(facts: tuple[Any, ...] | list[Any]) -> dict[str, 
             metadata = {}
         topic = str(metadata.get("topic") or "").strip()
         field = TOPIC_TO_FIELD.get(topic)
-        if field and field not in profile:
+        if field:
             text = str(getattr(fact, "text", "") or "").strip()
             if text:
-                profile[field] = text
+                priority = _profile_fact_priority(fact, metadata)
+                previous = selected.get(field)
+                if previous is None or priority > previous[0]:
+                    selected[field] = (priority, text)
+    profile: dict[str, str] = {}
+    for field, (_priority, text) in selected.items():
+        profile[field] = text
     return profile
+
+
+def _profile_fact_priority(fact: Any, metadata: Mapping[str, Any]) -> int:
+    score = 0
+    if str(getattr(fact, "source", "") or "").strip() == "user_explicit":
+        score += 40
+    if str(metadata.get("source_kind") or "").strip() == "learned":
+        score -= 30
+    if str(getattr(fact, "source", "") or "").strip() == "pm_agent_promote":
+        score -= 30
+    return score
 
 
 def render_profile_text_from_claims(facts: tuple[Any, ...] | list[Any]) -> str:

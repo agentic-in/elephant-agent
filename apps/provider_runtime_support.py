@@ -76,7 +76,7 @@ _MODEL_OUTPUT_KEYS = (
     "max_output_tokens",
     "max_tokens",
 )
-DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
+DEFAULT_CONTEXT_WINDOW_TOKENS = 256_000
 
 
 @dataclass(frozen=True, slots=True)

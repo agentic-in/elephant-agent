@@ -50,7 +50,7 @@ Issues = "https://github.com/agentic-in/elephant-agent/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "packages*"]
+include = ["apps", "apps.api*", "apps.cli*", "apps.dashboard*", "apps.gateway*", "apps.learning_agents*", "apps.reflect*", "packages*"]
 exclude = ["tests*", ".worktrees*", "apps.site*"]
 namespaces = true
 

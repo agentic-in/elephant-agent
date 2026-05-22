@@ -24,6 +24,7 @@ from packages.embeddings import (
     embedding_runtime_state,
 )
 from packages.models import SurfaceModelProviderCapability
+from packages.models.discovery import DEFAULT_CONTEXT_WINDOW_TOKENS
 from packages.auth import AuthProfile, PersistentAuthProfileStore, SecretReference
 from packages.context import ContextRuntime
 from packages.contracts import (
@@ -146,6 +147,15 @@ def _metadata_context_window_tokens(metadata: Mapping[str, str]) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _sync_context_runtime_window(self, profile: AuthProfile) -> None:
+    tokens = _metadata_context_window_tokens(profile.metadata)
+    if tokens is None:
+        return
+    update_total_tokens = getattr(getattr(self, "context_runtime", None), "update_total_tokens", None)
+    if callable(update_total_tokens):
+        update_total_tokens(tokens)
+
+
 def _profile_payload_with_metadata(payload: Mapping[str, Any], profile: AuthProfile) -> dict[str, Any]:
     next_payload = dict(payload)
     next_payload["metadata"] = {
@@ -172,8 +182,7 @@ def _provider_profile_with_auto_context(self, profile: AuthProfile) -> AuthProfi
         )
     except Exception:
         detected = None
-    if detected is not None:
-        metadata["context_window_tokens"] = str(detected)
+    metadata["context_window_tokens"] = str(detected or DEFAULT_CONTEXT_WINDOW_TOKENS)
     return replace(profile, metadata=metadata)
 
 
@@ -186,6 +195,7 @@ def set_default_provider(self, provider_profile: Mapping[str, Any]) -> dict[str,
         provider_profile_id=active_profile.profile_id,
         provider_id=active_profile.provider_id,
     )
+    _sync_context_runtime_window(self, active_profile)
     return {
         "provider_profile": active_profile,
         "active_provider": self.model_provider.describe(),

@@ -51,6 +51,46 @@ def _looks_like_internal_learning_artifact(text: str) -> bool:
     )
 
 
+def _truthy(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _learning_agent_invocation(invocation: ToolInvocation, surface: PersonalModelUnderstandingSurface, source: str) -> bool:
+    if source == "learned":
+        return True
+    for loader_name in ("load_episode_state", "load_episode"):
+        loader = getattr(surface.repository, loader_name, None)
+        if not callable(loader):
+            continue
+        try:
+            episode = loader(invocation.session_id)
+        except Exception:
+            episode = None
+        if episode is None:
+            continue
+        metadata = getattr(episode, "metadata", {}) or {}
+        if isinstance(metadata, Mapping) and _truthy(metadata.get("learning_agent")):
+            return True
+    return False
+
+
+def _background_learning_name_update_block(
+    invocation: ToolInvocation,
+    *,
+    surface: PersonalModelUnderstandingSurface,
+    action: str,
+    source: str,
+    topic: str,
+) -> str:
+    if action not in {"remember", "correct"}:
+        return ""
+    if topic != "identity.anchor.name.preferred":
+        return ""
+    if not _learning_agent_invocation(invocation, surface, source):
+        return ""
+    return "background learning cannot change the preferred name; explicit chat/profile corrections remain allowed"
+
+
 def _resolve_search_status(raw: str | None) -> str:
     """Normalize the user-facing status param to a valid search status string."""
     value = (raw or "").strip().lower()
@@ -578,6 +618,27 @@ def run_personal_model_update(
             personal_model_id=personal_model_id,
         )
     else:
+        protected_block = _background_learning_name_update_block(
+            invocation,
+            surface=surface,
+            action=action,
+            source=source,
+            topic=topic,
+        )
+        if protected_block:
+            return tool_summary(
+                invocation,
+                "\n".join(
+                    [
+                        f"action: {action}",
+                        f"lens: {lens}",
+                        f"topic: {topic}",
+                        "status: protected",
+                        f"hint: {protected_block}",
+                    ]
+                ),
+                side_effects=("personal_model", "update"),
+            )
         # Anti-duplication guard: warn if same topic already exists for remember
         if action == "remember" and topic and not ref:
             duplicate_hint = _check_topic_duplicate(surface, invocation.session_id, personal_model_id, lens, topic, new_text=text)

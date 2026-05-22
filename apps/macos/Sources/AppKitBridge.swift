@@ -202,9 +202,7 @@ private final class TitlebarIdentityMenuButton: NSPopUpButton {
         menu?.addItem(.separator())
         addMenuItem(title: AppSection.home.title(language: language), section: .home)
         addMenuItem(title: AppSection.wake.title(language: language), section: .wake)
-        addMenuItem(title: AppSection.tools.title(language: language), section: .tools)
-        addMenuItem(title: AppSection.herd.title(language: language), section: .herd)
-        addMenuItem(title: AppSection.provider.title(language: language), section: .provider)
+        addMenuItem(title: AppSection.diary.title(language: language), section: .diary)
         menu?.addItem(.separator())
         addMenuItem(title: AppSection.settings.title(language: language), section: .settings)
         target = self

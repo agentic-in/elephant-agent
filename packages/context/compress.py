@@ -15,12 +15,17 @@ from typing import Protocol
 
 from packages.contracts.runtime import PromptMessage
 
+from .projection import estimate_projection_tokens
 from .projection_support import message_groups, tool_call_id
 from .session_projection import (
     SessionContextEpoch,
     compact_session_context_epoch,
     estimate_epoch_prompt_tokens,
 )
+
+_SHORT_HISTORY_MESSAGE_THRESHOLD = 4
+_SHORT_HISTORY_MIN_COMPRESSIBLE_TOKENS = 512
+_SHORT_HISTORY_MIN_CONTEXT_RATIO = 0.10
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +84,8 @@ def compress_epoch(
     history = epoch.history_messages
     to_summarize, tail = split_for_compress(history)
     if not to_summarize:
+        return None
+    if not should_compress_split(history, to_summarize, context_limit=context_limit):
         return None
 
     resolved_session_id = session_id or epoch.session_id
@@ -145,6 +152,31 @@ def compress_epoch(
         method=method,
     )
     return updated, result
+
+
+def should_compress_split(
+    history: tuple[PromptMessage, ...],
+    to_summarize: tuple[PromptMessage, ...],
+    *,
+    context_limit: int,
+) -> bool:
+    """Return whether a candidate split is worth compressing.
+
+    Very short histories often cross a low context budget because of the stable
+    prompt prefix rather than because the session tail is large. Compressing one
+    tiny greeting into a summary can increase prompt size and lose the freshest
+    user intent, so only allow short-history compaction when the selected payload
+    is itself substantial.
+    """
+    if not to_summarize:
+        return False
+    if len(history) >= _SHORT_HISTORY_MESSAGE_THRESHOLD:
+        return True
+    threshold = min(
+        _SHORT_HISTORY_MIN_COMPRESSIBLE_TOKENS,
+        max(128, int(max(context_limit, 0) * _SHORT_HISTORY_MIN_CONTEXT_RATIO)),
+    )
+    return _estimate_messages_tokens(to_summarize) >= threshold
 
 
 def split_for_compress(
@@ -226,6 +258,18 @@ def split_for_compress(
         if start >= tail_start
     }
     return _split_by_tail_groups(messages, groups, tail_groups)
+
+
+def _estimate_messages_tokens(messages: tuple[PromptMessage, ...]) -> int:
+    chunks: list[str] = []
+    for message in messages:
+        if message.content.strip():
+            chunks.append(message.content)
+        if message.tool_calls:
+            chunks.append(str(tuple(dict(call) for call in message.tool_calls)))
+    if not chunks:
+        return 0
+    return estimate_projection_tokens("\n".join(chunks))
 
 
 def _split_by_tail_groups(

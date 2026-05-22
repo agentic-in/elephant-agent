@@ -223,6 +223,7 @@ def stream_loop_events(
                 "id": str(event.get("event_id") or payload.get("event_id") or uuid4().hex),
                 "stage": str(payload.get("stage") or ""),
                 "detail": str(payload.get("detail") or ""),
+                "result": str(payload.get("result") or ""),
                 "status": "running",
             }
         )
