@@ -953,7 +953,7 @@ enum AppText {
         case .sectionChat:
             return pick(language, en: "Chat", zh: "聊天", fr: "Chat", de: "Chat")
         case .sectionYou:
-            return pick(language, en: "You", zh: "你", fr: "Vous", de: "Du")
+            return pick(language, en: "Personal Model", zh: "个人模型", fr: "Personal Model", de: "Personal Model")
         case .sectionDiary:
             return pick(language, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch")
         case .sectionSkills:
