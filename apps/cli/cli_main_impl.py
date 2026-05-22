@@ -1996,7 +1996,11 @@ def _run_embedding_provider(runtime: CliRuntime, args: argparse.Namespace) -> in
     return 0
 
 def _run_elephant(runtime: CliRuntime, args: argparse.Namespace) -> int:
-    report = runtime.provider_doctor()
+    # Creating a new elephant only needs "configured provider profile + usable
+    # credentials". Avoid the deep doctor here because it performs live model
+    # catalog discovery plus an LLM probe, which can flap or stall in CI before
+    # the first real turn ever starts.
+    report = runtime.provider_doctor(deep=False)
     if not _provider_session_ready(report):
         _print_elephant_blocked(runtime)
         return 1

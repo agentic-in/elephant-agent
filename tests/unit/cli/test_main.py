@@ -1679,6 +1679,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
             exit_code = cli_main._run_elephant(runtime, args)
 
         self.assertEqual(exit_code, 0)
+        runtime.provider_doctor.assert_called_once_with(deep=False)
         runtime.create_elephant.assert_called_once_with(
             elephant_id="nova",
             profile_id=None,
@@ -1709,6 +1710,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
             exit_code = cli_main._run_elephant(runtime, args)
 
         self.assertEqual(exit_code, 0)
+        runtime.provider_doctor.assert_called_once_with(deep=False)
         wizard.assert_not_called()
         runtime.prepare_session_surface.assert_not_called()
         runtime.create_elephant.assert_called_once_with(
