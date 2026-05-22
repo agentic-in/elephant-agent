@@ -633,10 +633,10 @@ enum AppText {
         case .sleepBrandSlogan:
             return pick(
                 language,
-                en: "Understand you first, then evolve with you.",
-                zh: "先懂你，再陪你一起进化。",
-                fr: "Vous comprendre d'abord, puis évoluer avec vous.",
-                de: "Erst dich verstehen, dann mit dir wachsen."
+                en: "Don't be afraid. We'll evolve together.",
+                zh: "别怕，我们一起进化",
+                fr: "N'ayez pas peur. Nous évoluerons ensemble.",
+                de: "Keine Angst. Wir wachsen gemeinsam."
             )
         case .sleepLockTitle:
             return pick(language, en: "Welcome back", zh: "欢迎回来", fr: "Bon retour", de: "Willkommen zurück")
