@@ -5985,13 +5985,13 @@ struct MessagingView: View {
             NativePanel {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionLabel(
-                        title: localizedYouText(model.appLanguage, en: "IM Bridge Cards", zh: "消息渠道", fr: "Cartes de passerelles IM", de: "IM-Brückenkarten"),
+                        title: localizedYouText(model.appLanguage, en: "Messaging Channels", zh: "消息渠道", fr: "Canaux de messagerie", de: "Nachrichtenkanäle"),
                         subtitle: localizedYouText(
                             model.appLanguage,
-                            en: "Configure credentials, start bridges, and scan WeChat QR from the desktop app.",
+                            en: "Configure accounts, connect chat services, and scan WeChat QR from the desktop app.",
                             zh: "在这里连接微信、飞书、Discord 等账号。",
-                            fr: "Configurez les identifiants, lancez les passerelles et scannez le QR WeChat depuis l'app.",
-                            de: "Zugangsdaten konfigurieren, Brücken starten und WeChat-QR in der Desktop-App scannen."
+                            fr: "Configurez les comptes, connectez les chats et scannez le QR WeChat depuis l'app.",
+                            de: "Konten einrichten, Chats verbinden und WeChat-QR in der Desktop-App scannen."
                         )
                     )
                     if !model.gatewayActionResult.isEmpty {
@@ -6298,7 +6298,7 @@ struct WeixinQRPanel: View {
     private var qrInstruction: String {
         switch normalizedQRStatus {
         case "confirmed":
-            return localizedYouText(model.appLanguage, en: "Confirmed. Starting the WeChat messaging bridge now.", zh: "微信已确认，正在启动消息桥。", fr: "Confirmé. Démarrage de la passerelle WeChat.", de: "Bestätigt. WeChat-Brücke wird gestartet.")
+            return localizedYouText(model.appLanguage, en: "Confirmed. Connecting WeChat now.", zh: "微信已确认，正在连接聊天服务。", fr: "Confirmé. Connexion à WeChat en cours.", de: "Bestätigt. WeChat wird verbunden.")
         case "need_verifycode":
             return localizedYouText(model.appLanguage, en: "Scanned. Confirm the verification code on your phone.", zh: "已扫描，请在手机上确认验证码。", fr: "QR scanné. Confirmez le code sur votre téléphone.", de: "QR gescannt. Bitte Code am Telefon bestätigen.")
         case "scaned_but_redirect":

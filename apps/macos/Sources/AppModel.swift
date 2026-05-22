@@ -1285,15 +1285,15 @@ final class ElephantAppModel: ObservableObject {
         switch appLanguage {
         case .zh:
             switch key {
-            case "start_running": return "正在启动消息桥..."
-            case "start_success": return "消息桥已启动，可以回到对应聊天里发消息了。"
-            case "start_failed": return withDetail("消息桥启动失败。")
-            case "restart_running": return "正在重启消息桥..."
-            case "restart_success": return "消息桥已重启。"
-            case "restart_failed": return withDetail("消息桥重启失败。")
-            case "stop_running": return "正在停止消息桥..."
-            case "stop_success": return "消息桥已停止。"
-            case "stop_failed": return withDetail("消息桥停止失败。")
+            case "start_running": return "正在启动聊天连接..."
+            case "start_success": return "聊天连接已启动，可以回到对应聊天里发消息了。"
+            case "start_failed": return withDetail("聊天连接启动失败。")
+            case "restart_running": return "正在重新连接聊天服务..."
+            case "restart_success": return "聊天服务已重新连接。"
+            case "restart_failed": return withDetail("聊天服务重新连接失败。")
+            case "stop_running": return "正在停止聊天连接..."
+            case "stop_success": return "聊天连接已停止。"
+            case "stop_failed": return withDetail("聊天连接停止失败。")
             case "configure_running": return "正在保存消息渠道配置..."
             case "configure_success": return "消息渠道配置已保存。"
             case "configure_failed": return withDetail("消息渠道配置保存失败。")
@@ -1301,21 +1301,21 @@ final class ElephantAppModel: ObservableObject {
             case "qr_start_failed": return withDetail("微信二维码生成失败。")
             case "qr_checking": return "正在检查扫码状态..."
             case "qr_poll_failed": return withDetail("扫码状态检查失败。")
-            case "qr_confirmed_starting": return "微信已确认，正在刷新账号并启动消息桥..."
+            case "qr_confirmed_starting": return "微信已确认，正在刷新账号并启动聊天连接..."
             case "qr_confirmed_missing_service": return "微信已确认，但本地运行时没有返回 WeChat 服务；请刷新后再启动。"
             default: return detail
             }
         case .fr:
             switch key {
-            case "start_running": return "Démarrage de la passerelle..."
-            case "start_success": return "Passerelle démarrée. Vous pouvez écrire dans le chat connecté."
-            case "start_failed": return withDetail("Échec du démarrage de la passerelle.")
-            case "restart_running": return "Redémarrage de la passerelle..."
-            case "restart_success": return "Passerelle redémarrée."
-            case "restart_failed": return withDetail("Échec du redémarrage de la passerelle.")
-            case "stop_running": return "Arrêt de la passerelle..."
-            case "stop_success": return "Passerelle arrêtée."
-            case "stop_failed": return withDetail("Échec de l'arrêt de la passerelle.")
+            case "start_running": return "Connexion au chat en cours..."
+            case "start_success": return "Chat connecté. Vous pouvez écrire dans le chat associé."
+            case "start_failed": return withDetail("Connexion au chat échouée.")
+            case "restart_running": return "Reconnexion au chat..."
+            case "restart_success": return "Chat reconnecté."
+            case "restart_failed": return withDetail("Reconnexion au chat échouée.")
+            case "stop_running": return "Arrêt de la connexion au chat..."
+            case "stop_success": return "Connexion au chat arrêtée."
+            case "stop_failed": return withDetail("Arrêt de la connexion au chat échoué.")
             case "configure_running": return "Enregistrement de la configuration..."
             case "configure_success": return "Configuration de messagerie enregistrée."
             case "configure_failed": return withDetail("Échec de l'enregistrement de la configuration.")
@@ -1323,21 +1323,21 @@ final class ElephantAppModel: ObservableObject {
             case "qr_start_failed": return withDetail("Échec de la génération du QR WeChat.")
             case "qr_checking": return "Vérification du scan..."
             case "qr_poll_failed": return withDetail("Échec de la vérification du scan.")
-            case "qr_confirmed_starting": return "WeChat confirmé. Actualisation du compte et démarrage de la passerelle..."
+            case "qr_confirmed_starting": return "WeChat confirmé. Actualisation du compte et connexion au chat..."
             case "qr_confirmed_missing_service": return "WeChat est confirmé, mais le runtime local n'a pas renvoyé le service WeChat."
             default: return detail
             }
         case .de:
             switch key {
-            case "start_running": return "Nachrichtenbrücke wird gestartet..."
-            case "start_success": return "Nachrichtenbrücke läuft. Du kannst im verbundenen Chat schreiben."
-            case "start_failed": return withDetail("Nachrichtenbrücke konnte nicht gestartet werden.")
-            case "restart_running": return "Nachrichtenbrücke wird neu gestartet..."
-            case "restart_success": return "Nachrichtenbrücke wurde neu gestartet."
-            case "restart_failed": return withDetail("Neustart der Nachrichtenbrücke fehlgeschlagen.")
-            case "stop_running": return "Nachrichtenbrücke wird gestoppt..."
-            case "stop_success": return "Nachrichtenbrücke wurde gestoppt."
-            case "stop_failed": return withDetail("Nachrichtenbrücke konnte nicht gestoppt werden.")
+            case "start_running": return "Chat-Verbindung wird gestartet..."
+            case "start_success": return "Chat ist verbunden. Du kannst im verbundenen Chat schreiben."
+            case "start_failed": return withDetail("Chat-Verbindung konnte nicht gestartet werden.")
+            case "restart_running": return "Chat wird neu verbunden..."
+            case "restart_success": return "Chat wurde neu verbunden."
+            case "restart_failed": return withDetail("Chat konnte nicht neu verbunden werden.")
+            case "stop_running": return "Chat-Verbindung wird beendet..."
+            case "stop_success": return "Chat-Verbindung wurde beendet."
+            case "stop_failed": return withDetail("Chat-Verbindung konnte nicht beendet werden.")
             case "configure_running": return "Nachrichtenkanal wird gespeichert..."
             case "configure_success": return "Nachrichtenkanal gespeichert."
             case "configure_failed": return withDetail("Nachrichtenkanal konnte nicht gespeichert werden.")
@@ -1345,21 +1345,21 @@ final class ElephantAppModel: ObservableObject {
             case "qr_start_failed": return withDetail("WeChat-QR konnte nicht erstellt werden.")
             case "qr_checking": return "Scanstatus wird geprüft..."
             case "qr_poll_failed": return withDetail("Scanstatus konnte nicht geprüft werden.")
-            case "qr_confirmed_starting": return "WeChat bestätigt. Konto wird aktualisiert und Brücke gestartet..."
+            case "qr_confirmed_starting": return "WeChat bestätigt. Konto wird aktualisiert und Chat verbunden..."
             case "qr_confirmed_missing_service": return "WeChat ist bestätigt, aber die lokale Runtime hat keinen WeChat-Dienst zurückgegeben."
             default: return detail
             }
         case .en:
             switch key {
-            case "start_running": return "Starting messaging bridge..."
-            case "start_success": return "Messaging bridge started. You can message from the connected chat now."
-            case "start_failed": return withDetail("Messaging bridge failed to start.")
-            case "restart_running": return "Restarting messaging bridge..."
-            case "restart_success": return "Messaging bridge restarted."
-            case "restart_failed": return withDetail("Messaging bridge failed to restart.")
-            case "stop_running": return "Stopping messaging bridge..."
-            case "stop_success": return "Messaging bridge stopped."
-            case "stop_failed": return withDetail("Messaging bridge failed to stop.")
+            case "start_running": return "Connecting chat..."
+            case "start_success": return "Chat connected. You can message from the connected chat now."
+            case "start_failed": return withDetail("Chat connection failed to start.")
+            case "restart_running": return "Reconnecting chat..."
+            case "restart_success": return "Chat reconnected."
+            case "restart_failed": return withDetail("Chat failed to reconnect.")
+            case "stop_running": return "Disconnecting chat..."
+            case "stop_success": return "Chat disconnected."
+            case "stop_failed": return withDetail("Chat failed to disconnect.")
             case "configure_running": return "Saving messaging channel..."
             case "configure_success": return "Messaging channel saved."
             case "configure_failed": return withDetail("Messaging channel failed to save.")
@@ -1367,7 +1367,7 @@ final class ElephantAppModel: ObservableObject {
             case "qr_start_failed": return withDetail("WeChat QR failed to start.")
             case "qr_checking": return "Checking scan status..."
             case "qr_poll_failed": return withDetail("Scan status check failed.")
-            case "qr_confirmed_starting": return "WeChat confirmed. Refreshing the account and starting the bridge..."
+            case "qr_confirmed_starting": return "WeChat confirmed. Refreshing the account and connecting chat..."
             case "qr_confirmed_missing_service": return "WeChat is confirmed, but the local runtime did not return the WeChat service."
             default: return detail
             }

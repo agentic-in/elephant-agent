@@ -823,7 +823,7 @@ enum AppText {
         case .toolsPageSubtitle:
             return pick(language, en: "Operator actions Elephant can call from local agent loops.", zh: "Elephant 在本地 agent loops 中可调用的操作。", fr: "Actions opérateur qu'Elephant peut appeler depuis les boucles locales.", de: "Operator-Aktionen, die Elephant aus lokalen Agent-Loops aufrufen kann.")
         case .messagingPageSubtitle:
-            return pick(language, en: "IM bridges for WeChat, Feishu, Discord, DingDing, and WeCom.", zh: "连接微信、飞书、Discord、钉钉和企业微信的消息桥。", fr: "Passerelles IM pour WeChat, Feishu, Discord, DingDing et WeCom.", de: "IM-Brücken für WeChat, Feishu, Discord, DingDing und WeCom.")
+            return pick(language, en: "Messaging connections for WeChat, Feishu, Discord, DingDing, and WeCom.", zh: "连接微信、飞书、Discord、钉钉和企业微信等聊天服务。", fr: "Connexions de messagerie pour WeChat, Feishu, Discord, DingDing et WeCom.", de: "Chat-Verbindungen für WeChat, Feishu, Discord, DingDing und WeCom.")
         case .herdPageSubtitle:
             return pick(language, en: "Manage the local elephants that share this desktop runtime.", zh: "管理共享这个桌面 runtime 的本地 elephants。", fr: "Gérez les elephants locaux qui partagent ce runtime desktop.", de: "Lokale Elephants verwalten, die diese Desktop-Runtime teilen.")
         case .newElephant:
