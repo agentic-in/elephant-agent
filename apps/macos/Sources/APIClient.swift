@@ -431,7 +431,7 @@ struct APIClient {
             return "\(service) \(action) completed."
         }
         let stderr = SnapshotParser.findString(in: json, keys: ["stderr"]) ?? ""
-        return stderr.isEmpty ? "\(service) \(action) returned \(status)." : stderr
+        throw APIClientError.badStatus(stderr.isEmpty ? "\(service) \(action) returned \(status)." : stderr)
     }
 
     func configureGatewayService(

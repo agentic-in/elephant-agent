@@ -5997,7 +5997,8 @@ struct MessagingView: View {
                     if !model.gatewayActionResult.isEmpty {
                         Text(model.gatewayActionResult)
                             .font(.callout)
-                            .foregroundStyle(ElephantTheme.green)
+                            .foregroundStyle(model.gatewayActionFailed ? ElephantTheme.orange : ElephantTheme.green)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if model.snapshot.gatewayItems.isEmpty {
                         EmptyLine(
@@ -6065,24 +6066,33 @@ struct GatewayServiceCard: View {
                     }
                     HStack(spacing: 8) {
                         if service.configured {
-                            Button(service.running ? localizedYouText(model.appLanguage, en: "Restart", zh: "重启", fr: "Redémarrer", de: "Neu starten") : localizedYouText(model.appLanguage, en: "Start", zh: "启动", fr: "Démarrer", de: "Starten")) {
+                            Button {
                                 Task { await model.runGatewayAction(service: service, action: service.running ? "restart" : "start") }
+                            } label: {
+                                Label(
+                                    service.running ? localizedYouText(model.appLanguage, en: "Restart", zh: "重启", fr: "Redémarrer", de: "Neu starten") : localizedYouText(model.appLanguage, en: "Start", zh: "启动", fr: "Démarrer", de: "Starten"),
+                                    systemImage: service.running ? "arrow.clockwise" : "play.fill"
+                                )
                             }
-                            Button(localizedYouText(model.appLanguage, en: "Stop", zh: "停止", fr: "Arrêter", de: "Stoppen")) {
+                            .settingsActionButton(.primary)
+                            .disabled(model.gatewayActionInFlight)
+                            Button {
                                 Task { await model.runGatewayAction(service: service, action: "stop") }
+                            } label: {
+                                Label(localizedYouText(model.appLanguage, en: "Stop", zh: "停止", fr: "Arrêter", de: "Stoppen"), systemImage: "stop.fill")
                             }
-                            .disabled(!service.running && !service.starting)
-                        } else if service.id == "weixin" {
-                            Button(localizedYouText(model.appLanguage, en: "Connect with QR", zh: "扫码连接", fr: "Connecter par QR", de: "Per QR verbinden")) {
-                                Task { await model.startWeixinQR() }
-                            }
-                        } else {
-                            Button(localizedYouText(model.appLanguage, en: "Save Configuration", zh: "保存配置", fr: "Enregistrer la configuration", de: "Konfiguration speichern")) {
+                            .settingsActionButton(.secondary)
+                            .disabled((!service.running && !service.starting) || model.gatewayActionInFlight)
+                        } else if service.id != "weixin" {
+                            Button {
                                 Task { await model.configureGatewayService(service) }
+                            } label: {
+                                Label(localizedYouText(model.appLanguage, en: "Save Configuration", zh: "保存配置", fr: "Enregistrer la configuration", de: "Konfiguration speichern"), systemImage: "square.and.arrow.down")
                             }
+                            .settingsActionButton(.primary)
+                            .disabled(model.gatewayActionInFlight)
                         }
                     }
-                    .controlSize(.small)
                 }
                 .padding(12)
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -6182,7 +6192,12 @@ struct GatewaySecretEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(service.secretFields) { field in
                 LabeledContent(field.label) {
-                    SecureField(field.hasValue ? "stored locally" : "paste once", text: binding(for: field.key))
+                    SecureField(
+                        field.hasValue
+                            ? localizedYouText(model.appLanguage, en: "stored locally", zh: "已保存在本机", fr: "stocké localement", de: "lokal gespeichert")
+                            : localizedYouText(model.appLanguage, en: "paste once", zh: "粘贴一次即可", fr: "coller une fois", de: "einmal einfügen"),
+                        text: binding(for: field.key)
+                    )
                         .textFieldStyle(.roundedBorder)
                 }
             }
@@ -6205,17 +6220,31 @@ struct WeixinQRPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Button("Start QR") {
+                Button {
                     Task { await model.startWeixinQR() }
+                } label: {
+                    Label(startButtonTitle, systemImage: "qrcode")
                 }
-                Button("Check Scan") {
+                .settingsActionButton(.primary)
+                .disabled(model.gatewayActionInFlight)
+
+                Button {
                     Task { await model.pollWeixinQR() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Check Scan", zh: "检查扫码", fr: "Vérifier le scan", de: "Scan prüfen"), systemImage: "arrow.clockwise")
                 }
-                .disabled(model.gatewayQR.sessionID.isEmpty)
+                .settingsActionButton(.secondary)
+                .disabled(model.gatewayQR.sessionID.isEmpty || model.gatewayQRPolling || model.gatewayActionInFlight)
+                if model.gatewayQRPolling || model.gatewayQRAutoPolling {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.72)
+                        .help(localizedYouText(model.appLanguage, en: "Checking scan status automatically.", zh: "正在自动检查扫码状态。", fr: "Vérification automatique du scan.", de: "Scanstatus wird automatisch geprüft."))
+                }
                 if !model.gatewayQR.status.isEmpty {
-                    Pill(text: model.gatewayQR.status, symbol: "qrcode.viewfinder", tint: qrTint)
+                    Pill(text: qrStatusLabel, symbol: "qrcode.viewfinder", tint: qrTint)
                 }
             }
             if !model.gatewayQR.matrix.isEmpty {
@@ -6223,27 +6252,99 @@ struct WeixinQRPanel: View {
                     GatewayQRMatrixView(matrix: model.gatewayQR.matrix)
                         .frame(width: 160, height: 160)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Scan with WeChat")
+                        Text(localizedYouText(model.appLanguage, en: "Scan with WeChat", zh: "用微信扫码", fr: "Scanner avec WeChat", de: "Mit WeChat scannen"))
                             .font(.headline)
                             .foregroundStyle(ElephantTheme.ink)
-                        Text(model.gatewayQR.message.isEmpty ? "Scan, confirm on phone, then click Check Scan." : model.gatewayQR.message)
+                        Text(qrInstruction)
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.muted)
-                        if !model.gatewayQR.qrcodeURL.isEmpty {
-                            Text(model.gatewayQR.qrcodeURL)
-                                .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if model.gatewayQRAutoPolling {
+                            Label(localizedYouText(model.appLanguage, en: "Auto-checking every 2 seconds", zh: "每 2 秒自动检查一次", fr: "Vérification toutes les 2 secondes", de: "Prüft alle 2 Sekunden automatisch"), systemImage: "dot.radiowaves.left.and.right")
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(ElephantTheme.accent)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                        }
+                        if !model.gatewayQR.qrcodeURL.isEmpty {
+                            Button {
+                                openQRCodeURL()
+                            } label: {
+                                Label(localizedYouText(model.appLanguage, en: "Open scan link", zh: "打开扫码链接", fr: "Ouvrir le lien QR", de: "Scan-Link öffnen"), systemImage: "link")
+                            }
+                            .settingsActionButton(.secondary)
                         }
                     }
                 }
+            } else {
+                EmptyLine(
+                    symbol: "qrcode.viewfinder",
+                    text: localizedYouText(
+                        model.appLanguage,
+                        en: "Generate a WeChat QR code. After scanning, this panel will update automatically.",
+                        zh: "生成微信二维码后扫码，这里会自动反馈成功、确认或过期状态。",
+                        fr: "Générez un QR WeChat. Après le scan, ce panneau se mettra à jour automatiquement.",
+                        de: "Erstelle einen WeChat-QR. Nach dem Scan aktualisiert sich dieser Bereich automatisch."
+                    )
+                )
             }
         }
     }
 
+    private var startButtonTitle: String {
+        model.gatewayQR.sessionID.isEmpty
+            ? localizedYouText(model.appLanguage, en: "Generate QR", zh: "生成二维码", fr: "Générer le QR", de: "QR erstellen")
+            : localizedYouText(model.appLanguage, en: "New QR", zh: "重新生成", fr: "Nouveau QR", de: "Neuer QR")
+    }
+
+    private var qrInstruction: String {
+        switch normalizedQRStatus {
+        case "confirmed":
+            return localizedYouText(model.appLanguage, en: "Confirmed. Starting the WeChat messaging bridge now.", zh: "微信已确认，正在启动消息桥。", fr: "Confirmé. Démarrage de la passerelle WeChat.", de: "Bestätigt. WeChat-Brücke wird gestartet.")
+        case "need_verifycode":
+            return localizedYouText(model.appLanguage, en: "Scanned. Confirm the verification code on your phone.", zh: "已扫描，请在手机上确认验证码。", fr: "QR scanné. Confirmez le code sur votre téléphone.", de: "QR gescannt. Bitte Code am Telefon bestätigen.")
+        case "scaned_but_redirect":
+            return localizedYouText(model.appLanguage, en: "Scanned. Switching verification channel.", zh: "已扫描，正在切换校验通道。", fr: "QR scanné. Changement du canal de vérification.", de: "QR gescannt. Prüfkanal wird gewechselt.")
+        default:
+            if normalizedQRStatus.contains("expire") {
+                return localizedYouText(model.appLanguage, en: "This QR code expired. Generate a new one.", zh: "二维码已过期，请重新生成。", fr: "Ce QR a expiré. Générez-en un nouveau.", de: "Dieser QR ist abgelaufen. Bitte neu erstellen.")
+            }
+            return localizedYouText(model.appLanguage, en: "Scan and confirm on your phone. The app checks the result automatically.", zh: "扫码并在手机上确认，Mac 会自动检查结果。", fr: "Scannez et confirmez sur le téléphone. L'app vérifie automatiquement.", de: "Scannen und am Telefon bestätigen. Die App prüft automatisch.")
+        }
+    }
+
+    private var qrStatusLabel: String {
+        switch normalizedQRStatus {
+        case "confirmed":
+            return localizedYouText(model.appLanguage, en: "confirmed", zh: "已确认", fr: "confirmé", de: "bestätigt")
+        case "need_verifycode":
+            return localizedYouText(model.appLanguage, en: "confirm on phone", zh: "手机确认", fr: "confirmer", de: "bestätigen")
+        case "scaned_but_redirect":
+            return localizedYouText(model.appLanguage, en: "scanned", zh: "已扫描", fr: "scanné", de: "gescannt")
+        default:
+            if normalizedQRStatus.contains("expire") {
+                return localizedYouText(model.appLanguage, en: "expired", zh: "已过期", fr: "expiré", de: "abgelaufen")
+            }
+            if normalizedQRStatus.contains("fail") || normalizedQRStatus.contains("error") || normalizedQRStatus.contains("reject") {
+                return localizedYouText(model.appLanguage, en: "failed", zh: "失败", fr: "échec", de: "fehlgeschlagen")
+            }
+            return localizedYouText(model.appLanguage, en: "waiting", zh: "等待扫码", fr: "attente", de: "wartet")
+        }
+    }
+
     private var qrTint: Color {
-        model.gatewayQR.status == "confirmed" ? ElephantTheme.green : ElephantTheme.orange
+        if normalizedQRStatus == "confirmed" { return ElephantTheme.green }
+        if normalizedQRStatus.contains("expire") || normalizedQRStatus.contains("fail") || normalizedQRStatus.contains("error") || normalizedQRStatus.contains("reject") {
+            return ElephantTheme.orange
+        }
+        return ElephantTheme.accent
+    }
+
+    private var normalizedQRStatus: String {
+        model.gatewayQR.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func openQRCodeURL() {
+        guard let url = URL(string: model.gatewayQR.qrcodeURL) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -11304,13 +11405,13 @@ struct MessagingSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsRow(label: "Services", value: "\(model.snapshot.gatewayServices)")
-            SettingsRow(label: "Configured", value: "\(model.snapshot.gatewayConfigured)")
-            SettingsRow(label: "Running", value: "\(model.snapshot.gatewayRunning)")
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Services", zh: "服务", fr: "Services", de: "Dienste"), value: "\(model.snapshot.gatewayServices)")
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Configured", zh: "已配置", fr: "Configurés", de: "Konfiguriert"), value: "\(model.snapshot.gatewayConfigured)")
+            SettingsRow(label: localizedYouText(model.appLanguage, en: "Running", zh: "运行中", fr: "Actifs", de: "Läuft"), value: "\(model.snapshot.gatewayRunning)")
             if !model.gatewayActionResult.isEmpty {
                 Text(model.gatewayActionResult)
                     .font(.callout)
-                    .foregroundStyle(ElephantTheme.green)
+                    .foregroundStyle(model.gatewayActionFailed ? ElephantTheme.orange : ElephantTheme.green)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !model.snapshot.gatewayItems.isEmpty {
@@ -11321,7 +11422,7 @@ struct MessagingSettingsContent: View {
                     }
                 }
             } else if model.snapshot.gatewayNames.isEmpty {
-                EmptyLine(symbol: "message.badge", text: "No messaging service configured yet.")
+                EmptyLine(symbol: "message.badge", text: localizedYouText(model.appLanguage, en: "No messaging service configured yet.", zh: "还没有配置消息服务。", fr: "Aucun service de messagerie configuré.", de: "Noch kein Nachrichtendienst konfiguriert."))
             } else {
                 FlowLayout(items: model.snapshot.gatewayNames)
             }
@@ -11348,17 +11449,17 @@ struct GatewayServiceRow: View {
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 if service.configured {
-                    Button(service.running ? "Restart" : "Start") {
+                    Button(service.running ? localizedYouText(model.appLanguage, en: "Restart", zh: "重启", fr: "Redémarrer", de: "Neu starten") : localizedYouText(model.appLanguage, en: "Start", zh: "启动", fr: "Démarrer", de: "Starten")) {
                         Task { await model.runGatewayAction(service: service, action: service.running ? "restart" : "start") }
                     }
                     .controlSize(.small)
-                    Button("Stop") {
+                    Button(localizedYouText(model.appLanguage, en: "Stop", zh: "停止", fr: "Arrêter", de: "Stoppen")) {
                         Task { await model.runGatewayAction(service: service, action: "stop") }
                     }
                     .controlSize(.small)
                     .disabled(!service.running && !service.starting)
                 } else {
-                    Text("Configure in secrets")
+                    Text(localizedYouText(model.appLanguage, en: "Configure in secrets", zh: "请先配置密钥", fr: "Configurer les secrets", de: "Secrets konfigurieren"))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.faint)
                 }
@@ -11375,7 +11476,13 @@ struct GatewayServiceRow: View {
     }
 
     private var detail: String {
-        let status = service.running ? "running" : service.starting ? "starting" : service.configured ? "configured" : "not configured"
+        let status = service.running
+            ? localizedRuntimeStatus("running", language: model.appLanguage)
+            : service.starting
+                ? localizedRuntimeStatus("starting", language: model.appLanguage)
+                : service.configured
+                    ? localizedProviderState("configured", language: model.appLanguage)
+                    : localizedYouText(model.appLanguage, en: "not configured", zh: "未配置", fr: "non configuré", de: "nicht konfiguriert")
         return [status, service.transport, service.detail].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

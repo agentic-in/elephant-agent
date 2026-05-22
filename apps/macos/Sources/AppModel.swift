@@ -519,6 +519,10 @@ final class ElephantAppModel: ObservableObject {
     @Published var providerActionInFlight = false
     @Published var embeddingActionResult = ""
     @Published var gatewayActionResult = ""
+    @Published var gatewayActionFailed = false
+    @Published var gatewayActionInFlight = false
+    @Published var gatewayQRPolling = false
+    @Published var gatewayQRAutoPolling = false
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
     @Published var gatewayQR = GatewayQRState()
     @Published var cronActionResult = ""
@@ -545,6 +549,7 @@ final class ElephantAppModel: ObservableObject {
     private var client = APIClient(baseURL: nil)
     private var readinessPollTask: Task<Void, Never>?
     private var sleepIdleMonitorTask: Task<Void, Never>?
+    private var weixinQRPollTask: Task<Void, Never>?
     private var onboardingCreatedStateID = ""
     private static let onboardingCompleteKey = "elephant.mac.onboardingComplete"
     private static let userAvatarPathKey = "elephant.mac.userAvatarImagePath"
@@ -1273,6 +1278,148 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    private func localizedGatewayActionText(_ key: String, detail: String = "") -> String {
+        func withDetail(_ base: String) -> String {
+            detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? base : "\(base) \(detail)"
+        }
+        switch appLanguage {
+        case .zh:
+            switch key {
+            case "start_running": return "正在启动消息桥..."
+            case "start_success": return "消息桥已启动，可以回到对应聊天里发消息了。"
+            case "start_failed": return withDetail("消息桥启动失败。")
+            case "restart_running": return "正在重启消息桥..."
+            case "restart_success": return "消息桥已重启。"
+            case "restart_failed": return withDetail("消息桥重启失败。")
+            case "stop_running": return "正在停止消息桥..."
+            case "stop_success": return "消息桥已停止。"
+            case "stop_failed": return withDetail("消息桥停止失败。")
+            case "configure_running": return "正在保存消息渠道配置..."
+            case "configure_success": return "消息渠道配置已保存。"
+            case "configure_failed": return withDetail("消息渠道配置保存失败。")
+            case "qr_starting": return "正在生成微信二维码..."
+            case "qr_start_failed": return withDetail("微信二维码生成失败。")
+            case "qr_checking": return "正在检查扫码状态..."
+            case "qr_poll_failed": return withDetail("扫码状态检查失败。")
+            case "qr_confirmed_starting": return "微信已确认，正在刷新账号并启动消息桥..."
+            case "qr_confirmed_missing_service": return "微信已确认，但本地运行时没有返回 WeChat 服务；请刷新后再启动。"
+            default: return detail
+            }
+        case .fr:
+            switch key {
+            case "start_running": return "Démarrage de la passerelle..."
+            case "start_success": return "Passerelle démarrée. Vous pouvez écrire dans le chat connecté."
+            case "start_failed": return withDetail("Échec du démarrage de la passerelle.")
+            case "restart_running": return "Redémarrage de la passerelle..."
+            case "restart_success": return "Passerelle redémarrée."
+            case "restart_failed": return withDetail("Échec du redémarrage de la passerelle.")
+            case "stop_running": return "Arrêt de la passerelle..."
+            case "stop_success": return "Passerelle arrêtée."
+            case "stop_failed": return withDetail("Échec de l'arrêt de la passerelle.")
+            case "configure_running": return "Enregistrement de la configuration..."
+            case "configure_success": return "Configuration de messagerie enregistrée."
+            case "configure_failed": return withDetail("Échec de l'enregistrement de la configuration.")
+            case "qr_starting": return "Génération du QR WeChat..."
+            case "qr_start_failed": return withDetail("Échec de la génération du QR WeChat.")
+            case "qr_checking": return "Vérification du scan..."
+            case "qr_poll_failed": return withDetail("Échec de la vérification du scan.")
+            case "qr_confirmed_starting": return "WeChat confirmé. Actualisation du compte et démarrage de la passerelle..."
+            case "qr_confirmed_missing_service": return "WeChat est confirmé, mais le runtime local n'a pas renvoyé le service WeChat."
+            default: return detail
+            }
+        case .de:
+            switch key {
+            case "start_running": return "Nachrichtenbrücke wird gestartet..."
+            case "start_success": return "Nachrichtenbrücke läuft. Du kannst im verbundenen Chat schreiben."
+            case "start_failed": return withDetail("Nachrichtenbrücke konnte nicht gestartet werden.")
+            case "restart_running": return "Nachrichtenbrücke wird neu gestartet..."
+            case "restart_success": return "Nachrichtenbrücke wurde neu gestartet."
+            case "restart_failed": return withDetail("Neustart der Nachrichtenbrücke fehlgeschlagen.")
+            case "stop_running": return "Nachrichtenbrücke wird gestoppt..."
+            case "stop_success": return "Nachrichtenbrücke wurde gestoppt."
+            case "stop_failed": return withDetail("Nachrichtenbrücke konnte nicht gestoppt werden.")
+            case "configure_running": return "Nachrichtenkanal wird gespeichert..."
+            case "configure_success": return "Nachrichtenkanal gespeichert."
+            case "configure_failed": return withDetail("Nachrichtenkanal konnte nicht gespeichert werden.")
+            case "qr_starting": return "WeChat-QR wird erstellt..."
+            case "qr_start_failed": return withDetail("WeChat-QR konnte nicht erstellt werden.")
+            case "qr_checking": return "Scanstatus wird geprüft..."
+            case "qr_poll_failed": return withDetail("Scanstatus konnte nicht geprüft werden.")
+            case "qr_confirmed_starting": return "WeChat bestätigt. Konto wird aktualisiert und Brücke gestartet..."
+            case "qr_confirmed_missing_service": return "WeChat ist bestätigt, aber die lokale Runtime hat keinen WeChat-Dienst zurückgegeben."
+            default: return detail
+            }
+        case .en:
+            switch key {
+            case "start_running": return "Starting messaging bridge..."
+            case "start_success": return "Messaging bridge started. You can message from the connected chat now."
+            case "start_failed": return withDetail("Messaging bridge failed to start.")
+            case "restart_running": return "Restarting messaging bridge..."
+            case "restart_success": return "Messaging bridge restarted."
+            case "restart_failed": return withDetail("Messaging bridge failed to restart.")
+            case "stop_running": return "Stopping messaging bridge..."
+            case "stop_success": return "Messaging bridge stopped."
+            case "stop_failed": return withDetail("Messaging bridge failed to stop.")
+            case "configure_running": return "Saving messaging channel..."
+            case "configure_success": return "Messaging channel saved."
+            case "configure_failed": return withDetail("Messaging channel failed to save.")
+            case "qr_starting": return "Generating WeChat QR..."
+            case "qr_start_failed": return withDetail("WeChat QR failed to start.")
+            case "qr_checking": return "Checking scan status..."
+            case "qr_poll_failed": return withDetail("Scan status check failed.")
+            case "qr_confirmed_starting": return "WeChat confirmed. Refreshing the account and starting the bridge..."
+            case "qr_confirmed_missing_service": return "WeChat is confirmed, but the local runtime did not return the WeChat service."
+            default: return detail
+            }
+        }
+    }
+
+    private func localizedWeixinQRStatusText(_ status: String, fallback: String = "") -> String {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "confirmed" {
+            return localizedGatewayActionText("qr_confirmed_starting")
+        }
+        if normalized == "expired" || normalized.contains("expire") {
+            switch appLanguage {
+            case .zh: return "二维码已过期，请重新生成。"
+            case .fr: return "Le QR a expiré. Générez-en un nouveau."
+            case .de: return "Der QR ist abgelaufen. Bitte neu erstellen."
+            case .en: return "The QR code expired. Generate a new one."
+            }
+        }
+        if normalized == "need_verifycode" {
+            switch appLanguage {
+            case .zh: return "已扫描，请在手机上确认验证码。"
+            case .fr: return "QR scanné. Confirmez le code sur votre téléphone."
+            case .de: return "QR gescannt. Bitte Code am Telefon bestätigen."
+            case .en: return "Scanned. Confirm the verification code on your phone."
+            }
+        }
+        if normalized == "scaned_but_redirect" {
+            switch appLanguage {
+            case .zh: return "已扫描，正在切换校验通道..."
+            case .fr: return "QR scanné. Changement du canal de vérification..."
+            case .de: return "QR gescannt. Prüfkanal wird gewechselt..."
+            case .en: return "Scanned. Switching verification channel..."
+            }
+        }
+        if normalized.contains("fail") || normalized.contains("error") || normalized.contains("cancel") || normalized.contains("reject") {
+            let trimmed = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch appLanguage {
+            case .zh: return trimmed.isEmpty ? "扫码登录失败，请重新生成二维码。" : "扫码登录失败：\(trimmed)"
+            case .fr: return trimmed.isEmpty ? "Connexion QR échouée. Générez un nouveau QR." : "Connexion QR échouée : \(trimmed)"
+            case .de: return trimmed.isEmpty ? "QR-Anmeldung fehlgeschlagen. Bitte neu erstellen." : "QR-Anmeldung fehlgeschlagen: \(trimmed)"
+            case .en: return trimmed.isEmpty ? "QR login failed. Generate a new QR code." : "QR login failed: \(trimmed)"
+            }
+        }
+        switch appLanguage {
+        case .zh: return "二维码已生成。扫码后这里会自动更新状态。"
+        case .fr: return "QR généré. Le statut se mettra à jour automatiquement après le scan."
+        case .de: return "QR erstellt. Der Status aktualisiert sich nach dem Scan automatisch."
+        case .en: return "QR code generated. This status updates automatically after scanning."
+        }
+    }
+
     func setConsoleItem(kind: String, id: String, enabled: Bool) async {
         do {
             try await client.setConsoleItemEnabled(kind: kind, itemID: id, enabled: enabled)
@@ -1416,6 +1563,10 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func runGatewayAction(service: GatewayServiceItem, action: String) async {
+        gatewayActionInFlight = true
+        gatewayActionFailed = false
+        gatewayActionResult = localizedGatewayActionText("\(action)_running")
+        defer { gatewayActionInFlight = false }
         do {
             let result = try await client.runGatewayAction(
                 service: service.id,
@@ -1424,55 +1575,132 @@ final class ElephantAppModel: ObservableObject {
                 transport: service.transport,
                 force: action == "stop"
             )
-            gatewayActionResult = result
+            gatewayActionFailed = false
+            gatewayActionResult = localizedGatewayActionText("\(action)_success", detail: result)
             try await refreshDashboard()
         } catch {
-            gatewayActionResult = ""
+            gatewayActionFailed = true
+            gatewayActionResult = localizedGatewayActionText("\(action)_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
 
     func configureGatewayService(_ service: GatewayServiceItem) async {
+        gatewayActionInFlight = true
+        gatewayActionFailed = false
+        gatewayActionResult = localizedGatewayActionText("configure_running")
+        defer { gatewayActionInFlight = false }
         do {
-            let result = try await client.configureGatewayService(
+            _ = try await client.configureGatewayService(
                 service: service.id,
                 accountID: service.accountID,
                 transport: service.transport,
                 secrets: gatewaySecretDrafts[service.id] ?? [:]
             )
-            gatewayActionResult = result
+            gatewayActionFailed = false
+            gatewayActionResult = localizedGatewayActionText("configure_success")
             gatewaySecretDrafts[service.id] = [:]
             try await refreshDashboard()
         } catch {
-            gatewayActionResult = ""
+            gatewayActionFailed = true
+            gatewayActionResult = localizedGatewayActionText("configure_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
 
     func startWeixinQR() async {
+        gatewayActionInFlight = true
+        gatewayActionFailed = false
+        gatewayActionResult = localizedGatewayActionText("qr_starting")
+        stopWeixinQRAutoPoll()
+        defer { gatewayActionInFlight = false }
         do {
             gatewayQR = try await client.startWeixinQR()
-            gatewayActionResult = gatewayQR.message.isEmpty ? "Scan the WeChat QR code." : gatewayQR.message
+            gatewayActionFailed = false
+            gatewayActionResult = localizedWeixinQRStatusText(gatewayQR.status, fallback: gatewayQR.message)
+            startWeixinQRAutoPoll(sessionID: gatewayQR.sessionID)
         } catch {
             gatewayQR = GatewayQRState()
-            gatewayActionResult = ""
+            gatewayActionFailed = true
+            gatewayActionResult = localizedGatewayActionText("qr_start_failed", detail: error.localizedDescription)
             lastError = error.localizedDescription
         }
     }
 
-    func pollWeixinQR() async {
+    func pollWeixinQR(auto: Bool = false) async {
         guard !gatewayQR.sessionID.isEmpty else { return }
+        guard !gatewayQRPolling else { return }
+        gatewayQRPolling = true
+        if !auto {
+            gatewayActionFailed = false
+            gatewayActionResult = localizedGatewayActionText("qr_checking")
+        }
+        defer { gatewayQRPolling = false }
         do {
             gatewayQR = try await client.pollWeixinQR(sessionID: gatewayQR.sessionID)
-            gatewayActionResult = gatewayQR.message
+            gatewayActionFailed = weixinQRStatusIsFailure(gatewayQR.status)
+            gatewayActionResult = localizedWeixinQRStatusText(gatewayQR.status, fallback: gatewayQR.message)
             if gatewayQR.status == "confirmed" {
+                stopWeixinQRAutoPoll(cancelTask: !auto)
+                gatewayActionFailed = false
+                gatewayActionResult = localizedGatewayActionText("qr_confirmed_starting")
+                try await refreshDashboard()
                 if let weixin = snapshot.gatewayItems.first(where: { $0.id == "weixin" }) {
                     await runGatewayAction(service: weixin, action: "start")
+                } else {
+                    gatewayActionFailed = true
+                    gatewayActionResult = localizedGatewayActionText("qr_confirmed_missing_service")
                 }
+            } else if weixinQRStatusIsTerminal(gatewayQR.status) {
+                stopWeixinQRAutoPoll(cancelTask: !auto)
             }
         } catch {
+            if !auto {
+                gatewayActionFailed = true
+                gatewayActionResult = localizedGatewayActionText("qr_poll_failed", detail: error.localizedDescription)
+            }
             lastError = error.localizedDescription
         }
+    }
+
+    private func startWeixinQRAutoPoll(sessionID: String) {
+        guard !sessionID.isEmpty else { return }
+        gatewayQRAutoPolling = true
+        weixinQRPollTask?.cancel()
+        weixinQRPollTask = Task { [weak self] in
+            for _ in 0..<240 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if Task.isCancelled { return }
+                guard let self else { return }
+                let shouldContinue = await MainActor.run {
+                    self.gatewayQR.sessionID == sessionID && !self.weixinQRStatusIsTerminal(self.gatewayQR.status)
+                }
+                if !shouldContinue { break }
+                await self.pollWeixinQR(auto: true)
+            }
+            await MainActor.run {
+                guard self?.gatewayQR.sessionID == sessionID else { return }
+                self?.gatewayQRAutoPolling = false
+            }
+        }
+    }
+
+    private func stopWeixinQRAutoPoll(cancelTask: Bool = true) {
+        if cancelTask {
+            weixinQRPollTask?.cancel()
+        }
+        weixinQRPollTask = nil
+        gatewayQRAutoPolling = false
+    }
+
+    private func weixinQRStatusIsTerminal(_ status: String) -> Bool {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "confirmed" || normalized == "expired" || normalized.contains("expire") || normalized.contains("fail") || normalized.contains("error") || normalized.contains("cancel") || normalized.contains("reject")
+    }
+
+    private func weixinQRStatusIsFailure(_ status: String) -> Bool {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "expired" || normalized.contains("expire") || normalized.contains("fail") || normalized.contains("error") || normalized.contains("cancel") || normalized.contains("reject")
     }
 
     func createCronJob(name: String, schedule: String, prompt: String) async {
@@ -1992,7 +2220,12 @@ final class ElephantAppModel: ObservableObject {
         providerActionInFlight = false
         embeddingActionResult = ""
         gatewayActionResult = ""
+        gatewayActionFailed = false
+        gatewayActionInFlight = false
+        gatewayQRPolling = false
+        gatewayQRAutoPolling = false
         gatewaySecretDrafts.removeAll()
+        stopWeixinQRAutoPoll()
         gatewayQR = GatewayQRState()
         cronActionResult = ""
         diaryActionResult = ""
