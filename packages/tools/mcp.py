@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import asynccontextmanager
+from functools import lru_cache
 from pathlib import Path
+import asyncio
 import json
+import os
+import shlex
 import subprocess
-import tempfile
+import threading
+import time
 from typing import Any
 
 from packages.contracts.runtime import ExecutionResult
@@ -16,6 +22,17 @@ from .runtime import ToolAvailability, ToolDefinition, ToolHandler, ToolInvocati
 _MCP_TOOL_VERSION = "1.0.0"
 _MCP_TOOL_KIND = "custom-mcp"
 _MCP_CALL_TIMEOUT_MS = 120_000
+_MCP_DISCOVERY_TIMEOUT_MS = 15_000
+_COMMON_PATH_ENTRIES = (
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+)
 
 
 def mcp_runtime_tool_id(server_id: str, tool_name: str) -> str:
@@ -178,6 +195,328 @@ def _text_list(payload: Any) -> tuple[str, ...]:
     return tuple(values)
 
 
+def discover_mcp_tools_sync(
+    *,
+    server_id: str,
+    server_label: str,
+    transport: str,
+    command: str,
+    args: tuple[str, ...],
+    url: str,
+    env: Mapping[str, str],
+    headers: Mapping[str, str],
+    cwd: str | Path,
+    timeout_ms: int = _MCP_DISCOVERY_TIMEOUT_MS,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    try:
+        tools = _run_async(
+            _discover_mcp_tools(
+                transport=transport,
+                command=command,
+                args=args,
+                url=url,
+                env=env,
+                headers=headers,
+                cwd=Path(cwd),
+                timeout_seconds=timeout_ms / 1000,
+            )
+        )
+        return {
+            "status": "ok",
+            "serverId": server_id,
+            "serverLabel": server_label,
+            "transport": transport,
+            "toolCount": len(tools),
+            "durationMs": int((time.monotonic() - started) * 1000),
+            "tools": tools,
+            "returnCode": 0,
+            "stdout": "",
+            "stderr": "",
+            "error": None,
+        }
+    except TimeoutError as exc:
+        return _mcp_failure_result(
+            server_id=server_id,
+            server_label=server_label,
+            transport=transport,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            error=f"MCP discovery timed out after {timeout_ms}ms: {exc}",
+        )
+    except Exception as exc:
+        return _mcp_failure_result(
+            server_id=server_id,
+            server_label=server_label,
+            transport=transport,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            error=_mcp_exception_message(exc),
+        )
+
+
+def _mcp_failure_result(
+    *,
+    server_id: str,
+    server_label: str,
+    transport: str,
+    duration_ms: int,
+    error: str,
+) -> dict[str, Any]:
+    return {
+        "status": "failed",
+        "serverId": server_id,
+        "serverLabel": server_label,
+        "transport": transport,
+        "toolCount": 0,
+        "durationMs": duration_ms,
+        "tools": [],
+        "returnCode": None,
+        "stdout": "",
+        "stderr": "",
+        "error": error,
+    }
+
+
+async def _discover_mcp_tools(
+    *,
+    transport: str,
+    command: str,
+    args: tuple[str, ...],
+    url: str,
+    env: Mapping[str, str],
+    headers: Mapping[str, str],
+    cwd: Path,
+    timeout_seconds: float,
+) -> list[dict[str, Any]]:
+    async def _list() -> list[dict[str, Any]]:
+        async with _mcp_client_session(
+            transport=transport,
+            command=command,
+            args=args,
+            url=url,
+            env=env,
+            headers=headers,
+            cwd=cwd,
+        ) as session:
+            result = await session.list_tools()
+            return [_mcp_tool_payload(tool) for tool in result.tools]
+
+    return await asyncio.wait_for(_list(), timeout=timeout_seconds)
+
+
+def _call_mcp_tool_sync(
+    *,
+    server_id: str,
+    tool_name: str,
+    transport: str,
+    command: str,
+    args: tuple[str, ...],
+    url: str,
+    env: Mapping[str, str],
+    headers: Mapping[str, str],
+    arguments: Mapping[str, Any],
+    cwd: Path,
+) -> dict[str, Any]:
+    return _run_async(
+        _call_mcp_tool(
+            tool_name=tool_name,
+            transport=transport,
+            command=command,
+            args=args,
+            url=url,
+            env=env,
+            headers=headers,
+            arguments=arguments,
+            cwd=cwd,
+        )
+    )
+
+
+async def _call_mcp_tool(
+    *,
+    tool_name: str,
+    transport: str,
+    command: str,
+    args: tuple[str, ...],
+    url: str,
+    env: Mapping[str, str],
+    headers: Mapping[str, str],
+    arguments: Mapping[str, Any],
+    cwd: Path,
+) -> dict[str, Any]:
+    async def _call() -> dict[str, Any]:
+        async with _mcp_client_session(
+            transport=transport,
+            command=command,
+            args=args,
+            url=url,
+            env=env,
+            headers=headers,
+            cwd=cwd,
+        ) as session:
+            result = await session.call_tool(tool_name, dict(arguments))
+            return _model_dump(result)
+
+    return await asyncio.wait_for(_call(), timeout=_MCP_CALL_TIMEOUT_MS / 1000)
+
+
+@asynccontextmanager
+async def _mcp_client_session(
+    *,
+    transport: str,
+    command: str,
+    args: tuple[str, ...],
+    url: str,
+    env: Mapping[str, str],
+    headers: Mapping[str, str],
+    cwd: Path,
+):
+    try:
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.sse import sse_client
+        from mcp.client.stdio import stdio_client
+        from mcp.client.streamable_http import streamablehttp_client
+    except ImportError as exc:
+        raise RuntimeError("Python package 'mcp' is required for custom MCP tools. Install project dependencies and retry.") from exc
+
+    normalized_transport = (transport or "stdio").strip().lower() or "stdio"
+    if normalized_transport == "stdio":
+        resolved_command, command_args = _stdio_command_parts(command, args)
+        server = StdioServerParameters(
+            command=resolved_command,
+            args=command_args,
+            env=_mcp_process_env(env),
+            cwd=cwd,
+        )
+        async with stdio_client(server) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                yield session
+        return
+
+    if not url:
+        raise ValueError("url is required for remote MCP transport")
+    if normalized_transport == "sse":
+        async with sse_client(url, headers=dict(headers)) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                yield session
+        return
+
+    async with streamablehttp_client(url, headers=dict(headers)) as (read_stream, write_stream, _session_id):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            yield session
+
+
+def _stdio_command_parts(command: str, args: tuple[str, ...]) -> tuple[str, list[str]]:
+    command_text = str(command or "").strip()
+    if not command_text:
+        raise ValueError("command is required for stdio transport")
+    command_parts = shlex.split(command_text)
+    if not command_parts:
+        raise ValueError("command is required for stdio transport")
+    return command_parts[0], [*command_parts[1:], *args]
+
+
+def _mcp_process_env(overrides: Mapping[str, str]) -> dict[str, str]:
+    process_env = dict(os.environ)
+    process_env["PATH"] = _merged_shell_path(process_env.get("PATH", ""))
+    for key, value in overrides.items():
+        normalized = str(key).strip()
+        if normalized:
+            process_env[normalized] = str(value)
+    return process_env
+
+
+def _merged_shell_path(current_path: str) -> str:
+    entries: list[str] = []
+    for path in (current_path, _login_shell_path(), os.defpath):
+        entries.extend(path.split(os.pathsep))
+    entries.extend(_COMMON_PATH_ENTRIES)
+    home = str(Path.home())
+    entries.extend([f"{home}/.local/bin", f"{home}/.cargo/bin", f"{home}/.npm-global/bin"])
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        normalized = entry.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return os.pathsep.join(deduped)
+
+
+@lru_cache(maxsize=1)
+def _login_shell_path() -> str:
+    shell = os.environ.get("SHELL", "").strip() or "/bin/zsh"
+    if not Path(shell).exists():
+        return ""
+    try:
+        completed = subprocess.run(
+            [shell, "-lc", 'printf "%s" "$PATH"'],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if completed.returncode != 0:
+        return ""
+    return completed.stdout.strip()
+
+
+def _mcp_tool_payload(tool: Any) -> dict[str, Any]:
+    payload = _model_dump(tool)
+    schema = payload.get("inputSchema")
+    if not isinstance(schema, Mapping):
+        schema = {}
+    return {
+        "name": str(payload.get("name") or "").strip(),
+        "description": str(payload.get("description") or "").strip(),
+        "inputSchema": dict(schema),
+    }
+
+
+def _model_dump(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        return dict(value.model_dump(mode="json", exclude_none=True))
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
+
+
+def _run_async(coro: Any) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    result: dict[str, Any] = {}
+
+    def _runner() -> None:
+        try:
+            result["value"] = asyncio.run(coro)
+        except BaseException as exc:
+            result["error"] = exc
+
+    thread = threading.Thread(target=_runner, name="elephant-mcp-client", daemon=True)
+    thread.start()
+    thread.join()
+    if "error" in result:
+        raise result["error"]
+    return result.get("value")
+
+
+def _mcp_exception_message(exc: Exception) -> str:
+    message = str(exc).strip()
+    if isinstance(exc, FileNotFoundError):
+        return f"{message}. If this command works in Terminal, use an absolute path or ensure the macOS app can see your shell PATH."
+    if message:
+        return message
+    return exc.__class__.__name__
+
+
 def _build_mcp_tool_handler(
     *,
     server_id: str,
@@ -191,31 +530,19 @@ def _build_mcp_tool_handler(
     cwd: Path,
 ) -> ToolHandler:
     def _handler(invocation: ToolInvocation) -> ExecutionResult:
-        command_line, tempdir = _mcporter_call_command(
-            server_id=server_id,
-            tool_name=tool_name,
-            transport=transport,
-            command=command,
-            args=args,
-            url=url,
-            env=env,
-            headers=headers,
-            arguments=invocation.arguments,
-            cwd=cwd,
-        )
         try:
-            try:
-                completed = subprocess.run(
-                    command_line,
-                    cwd=cwd,
-                    capture_output=True,
-                    text=True,
-                    timeout=_MCP_CALL_TIMEOUT_MS / 1000,
-                    check=False,
-                )
-            finally:
-                if tempdir is not None:
-                    tempdir.cleanup()
+            result = _call_mcp_tool_sync(
+                server_id=server_id,
+                tool_name=tool_name,
+                transport=transport,
+                command=command,
+                args=args,
+                url=url,
+                env=env,
+                headers=headers,
+                arguments=invocation.arguments,
+                cwd=cwd,
+            )
         except subprocess.TimeoutExpired:
             return ExecutionResult(
                 execution_id=invocation.invocation_id,
@@ -234,10 +561,26 @@ def _build_mcp_tool_handler(
                 summary=f"MCP tool {server_id}.{tool_name} failed to start: {exc}",
                 side_effects=("mcp", f"server={server_id}", f"transport={transport}"),
             )
+        except TimeoutError:
+            return ExecutionResult(
+                execution_id=invocation.invocation_id,
+                episode_id=invocation.session_id,
+                outcome="failed",
+                summary=f"MCP tool {server_id}.{tool_name} timed out after {_MCP_CALL_TIMEOUT_MS}ms",
+                side_effects=("mcp", f"server={server_id}", f"transport={transport}"),
+            )
+        except Exception as exc:
+            return ExecutionResult(
+                execution_id=invocation.invocation_id,
+                episode_id=invocation.session_id,
+                outcome="failed",
+                summary=f"MCP tool {server_id}.{tool_name} failed: {_mcp_exception_message(exc)}",
+                side_effects=("mcp", f"server={server_id}", f"transport={transport}"),
+            )
 
-        summary = _mcporter_output_summary(completed.stdout)
-        if completed.returncode != 0:
-            error_text = (completed.stderr or summary or "MCP tool execution failed").strip()
+        summary = _mcp_result_summary(result)
+        if bool(result.get("isError")):
+            error_text = summary or "MCP tool execution failed"
             return ExecutionResult(
                 execution_id=invocation.invocation_id,
                 episode_id=invocation.session_id,
@@ -256,89 +599,8 @@ def _build_mcp_tool_handler(
     return _handler
 
 
-def _mcporter_call_command(
-    *,
-    server_id: str,
-    tool_name: str,
-    transport: str,
-    command: str,
-    args: tuple[str, ...],
-    url: str,
-    env: Mapping[str, str],
-    headers: Mapping[str, str],
-    arguments: Mapping[str, Any],
-    cwd: Path,
-) -> tuple[list[str], tempfile.TemporaryDirectory[str] | None]:
-    serialized_arguments = json.dumps(dict(arguments), ensure_ascii=False, default=str)
-    if transport == "stdio":
-        command_line = [
-            "npx",
-            "--yes",
-            "mcporter",
-            "call",
-            "--stdio",
-            command,
-            "--name",
-            server_id,
-            "--cwd",
-            str(cwd),
-        ]
-        for value in args:
-            command_line.extend(["--stdio-arg", value])
-        for key, value in env.items():
-            command_line.extend(["--env", f"{key}={value}"])
-        command_line.extend(
-            [
-                tool_name,
-                "--args",
-                serialized_arguments,
-                "--output",
-                "json",
-                "--timeout",
-                str(_MCP_CALL_TIMEOUT_MS),
-            ]
-        )
-        return command_line, None
-
-    tempdir: tempfile.TemporaryDirectory[str] | None = tempfile.TemporaryDirectory(prefix="elephant-mcporter-call-")
-    config_path = Path(tempdir.name) / "mcporter.json"
-    entry: dict[str, Any] = {
-        "url": url,
-    }
-    if headers:
-        entry["headers"] = dict(headers)
-    if transport in {"streamable-http", "sse"}:
-        entry["transportType"] = transport
-    config_path.write_text(json.dumps({"mcpServers": {server_id: entry}}, indent=2), encoding="utf-8")
-    command_line = [
-        "npx",
-        "--yes",
-        "mcporter",
-        "--config",
-        str(config_path),
-        "call",
-        f"{server_id}.{tool_name}",
-        "--args",
-        serialized_arguments,
-        "--output",
-        "json",
-        "--timeout",
-        str(_MCP_CALL_TIMEOUT_MS),
-    ]
-    if url.startswith("http://"):
-        command_line.append("--allow-http")
-    return command_line, tempdir
-
-
-def _mcporter_output_summary(stdout: str) -> str:
-    text = str(stdout or "").strip()
-    if not text:
-        return ""
-    try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        return text
-    return _json_summary(payload)
+def _mcp_result_summary(result: Mapping[str, Any]) -> str:
+    return _json_summary(dict(result))
 
 
 def _json_summary(payload: Any) -> str:
@@ -372,6 +634,7 @@ def _json_summary(payload: Any) -> str:
 
 __all__ = [
     "custom_mcp_runtime_entries",
+    "discover_mcp_tools_sync",
     "mcp_runtime_tool_id",
     "sync_custom_mcp_tools",
 ]

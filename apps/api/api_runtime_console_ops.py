@@ -11,11 +11,11 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
 from packages.tools import sync_custom_mcp_tools
+from packages.tools.mcp import discover_mcp_tools_sync
 from packages.runtime_config import (
     global_config_path_for_state_dir,
     global_config_schema,
@@ -1658,61 +1658,6 @@ def _mcp_discover_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _mcporter_command_for_discovery(payload: Mapping[str, Any]) -> tuple[list[str], Any | None]:
-    repo_root = Path(__file__).resolve().parents[2]
-    transport = str(payload.get("transport") or "stdio")
-    server_id = str(payload.get("serverId") or "mcp-probe")
-    if transport == "stdio":
-        command = [
-            "npx",
-            "--yes",
-            "mcporter",
-            "list",
-            "--stdio",
-            str(payload.get("command") or ""),
-            "--name",
-            server_id,
-            "--schema",
-            "--json",
-            "--timeout",
-            "15000",
-            "--cwd",
-            str(repo_root),
-        ]
-        for arg in payload.get("args", ()):
-            command.extend(["--stdio-arg", str(arg)])
-        for key, value in dict(payload.get("env") or {}).items():
-            command.extend(["--env", f"{key}={value}"])
-        return command, None
-    tempdir = tempfile.TemporaryDirectory(prefix="elephant-mcporter-")
-    config_path = Path(tempdir.name) / "mcporter.json"
-    entry: dict[str, Any] = {
-        "url": str(payload.get("url") or ""),
-    }
-    headers = dict(payload.get("headers") or {})
-    if headers:
-        entry["headers"] = headers
-    if transport in {"streamable-http", "sse"}:
-        entry["transportType"] = transport
-    config_path.write_text(json.dumps({"mcpServers": {server_id: entry}}, indent=2), encoding="utf-8")
-    command = [
-        "npx",
-        "--yes",
-        "mcporter",
-        "--config",
-        str(config_path),
-        "list",
-        server_id,
-        "--schema",
-        "--json",
-        "--timeout",
-        "15000",
-    ]
-    if str(payload.get("url") or "").startswith("http://"):
-        command.append("--allow-http")
-    return command, tempdir
-
-
 def _mcp_discovered_tool_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in payload.get("tools", ()):
@@ -1768,69 +1713,31 @@ def _merge_discovered_mcp_tools(
 
 def discover_operator_mcp_server(self, payload: Mapping[str, Any]) -> dict[str, Any]:
     probe = _mcp_discover_payload(payload)
-    command, tempdir = _mcporter_command_for_discovery(probe)
-    try:
-        try:
-            result = subprocess.run(
-                command,
-                cwd=Path(__file__).resolve().parents[2],
-                text=True,
-                capture_output=True,
-                timeout=20,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            return {
-                "status": "failed",
-                "serverId": probe["serverId"],
-                "serverLabel": probe["serverLabel"],
-                "transport": probe["transport"],
-                "toolCount": 0,
-                "error": f"mcporter discovery timed out after {exc.timeout}s",
-                "stdout": str(exc.stdout or "")[-8_000:],
-                "stderr": str(exc.stderr or "")[-8_000:],
-                "returnCode": None,
-            }
-        except OSError as exc:
-            return {
-                "status": "failed",
-                "serverId": probe["serverId"],
-                "serverLabel": probe["serverLabel"],
-                "transport": probe["transport"],
-                "toolCount": 0,
-                "error": str(exc),
-                "stdout": "",
-                "stderr": "",
-                "returnCode": None,
-            }
-    finally:
-        if tempdir is not None:
-            tempdir.cleanup()
-    parsed: dict[str, Any] = {}
-    stdout_text = result.stdout.strip()
-    if stdout_text:
-        try:
-            loaded = json.loads(stdout_text)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            loaded = None
-        if isinstance(loaded, Mapping):
-            parsed = dict(loaded)
-    tools = _mcp_discovered_tool_rows(parsed)
-    error_text = str(parsed.get("error") or "").strip() if parsed else ""
-    if not error_text and result.returncode != 0:
-        error_text = (result.stderr or result.stdout or "mcporter discovery failed").strip()
-    status = str(parsed.get("status") or ("ok" if result.returncode == 0 and not error_text else "failed")).strip() or "failed"
+    result = discover_mcp_tools_sync(
+        server_id=str(probe["serverId"]),
+        server_label=str(probe["serverLabel"]),
+        transport=str(probe["transport"]),
+        command=str(probe.get("command") or ""),
+        args=tuple(str(arg) for arg in probe.get("args", ())),
+        url=str(probe.get("url") or ""),
+        env={str(key): str(value) for key, value in dict(probe.get("env") or {}).items()},
+        headers={str(key): str(value) for key, value in dict(probe.get("headers") or {}).items()},
+        cwd=Path(__file__).resolve().parents[2],
+    )
+    tools = _mcp_discovered_tool_rows({"tools": result.get("tools", ())})
+    error_text = str(result.get("error") or "").strip()
+    status = str(result.get("status") or ("failed" if error_text else "ok")).strip() or "failed"
     return {
         "status": status,
         "serverId": probe["serverId"],
         "serverLabel": probe["serverLabel"],
         "transport": probe["transport"],
         "toolCount": len(tools),
-        "durationMs": parsed.get("durationMs"),
+        "durationMs": result.get("durationMs"),
         "tools": tools,
-        "returnCode": result.returncode,
-        "stdout": result.stdout[-8_000:],
-        "stderr": result.stderr[-8_000:],
+        "returnCode": result.get("returnCode"),
+        "stdout": str(result.get("stdout") or "")[-8_000:],
+        "stderr": str(result.get("stderr") or "")[-8_000:],
         "error": error_text or None,
     }
 

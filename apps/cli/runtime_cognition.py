@@ -557,7 +557,56 @@ class _CliContextCapability:
                     for step in recent_steps
                 )
                 artifacts.append(f"active-loop-checkpoint-steps: {step_lines}")
+        mother_artifact = self._mother_herd_artifact(session)
+        if mother_artifact:
+            artifacts.append(mother_artifact)
         return tuple(artifacts)
+
+    def _mother_herd_artifact(self, session: Episode) -> str:
+        state = self.repository.load_state(session.state_id) if session.state_id else None
+        if state is None:
+            return ""
+        metadata = dict(getattr(state, "metadata", {}) or {})
+        herd_kind = str(metadata.get("herd_kind") or "").strip()
+        if herd_kind != "mother" and getattr(state, "elephant_id", "") != "mother-elephant":
+            return ""
+        babies = []
+        for candidate in self.repository.list_states(status="active"):
+            child_metadata = dict(getattr(candidate, "metadata", {}) or {})
+            if str(child_metadata.get("herd_kind") or "").strip() != "baby":
+                continue
+            role_title = str(child_metadata.get("role_title") or candidate.elephant_name or "").strip()
+            provider_id = str(child_metadata.get("provider_id") or "").strip()
+            backend = str(child_metadata.get("backend") or "").strip().lower() or ("local_cli" if child_metadata.get("runtime_id") else "provider")
+            enabled = str(child_metadata.get("enabled") or "").strip().lower() == "true"
+            can_execute = "yes" if backend == "provider" and provider_id and child_metadata.get("provider_model") else "unknown"
+            runtime_id = str(child_metadata.get("runtime_id") or "").strip()
+            load_runtime = getattr(self.repository, "load_local_agent_runtime", None)
+            if callable(load_runtime) and runtime_id:
+                try:
+                    runtime = load_runtime(runtime_id)
+                    if runtime is not None:
+                        provider_id = provider_id or runtime.provider_id
+                        can_execute = "yes" if runtime.can_execute else "no"
+                except Exception:
+                    pass
+            babies.append(
+                f"- baby_id={candidate.elephant_id}; role={role_title or '<unset>'}; "
+                f"backend={backend}; provider={provider_id or '<unset>'}; model={child_metadata.get('provider_model') or '<default>'}; "
+                f"enabled={'yes' if enabled else 'no'}; can_execute={can_execute}"
+            )
+        if not babies:
+            return (
+                "herd-delegation: If work would benefit from a specialist sub-agent, check the Herd first. "
+                "No enabled baby elephants are currently available."
+            )
+        return "\n".join(
+            (
+                "herd-delegation: When a user request would benefit from a professional specialist, check the available baby elephants and delegate a bounded task through tool.sub_agents with backend=local_cli or backend=provider and baby_id or role. Babies cannot delegate further.",
+                "Available baby elephants:",
+                *babies[:12],
+            )
+        )
 
     def _runtime_path_artifact(self, session: Episode) -> str:
         lines: list[str] = []

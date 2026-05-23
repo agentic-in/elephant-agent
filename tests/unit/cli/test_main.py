@@ -1180,7 +1180,7 @@ class WizardChoiceMenuTest(unittest.TestCase):
         self.assertEqual(suggested, captured["options"][0])
         self.assertNotIn("Ada", captured["options"])
 
-    def test_run_setup_uses_random_name_suggestion_when_no_initial_name_is_given(self) -> None:
+    def test_run_setup_defaults_first_elephant_to_mother_when_no_initial_name_is_given(self) -> None:
         runtime = mock.Mock()
         runtime.current_profile.return_value = SimpleNamespace(
             state=SimpleNamespace(display_name="Elephant Agent"),
@@ -1211,14 +1211,15 @@ class WizardChoiceMenuTest(unittest.TestCase):
         with (
             mock.patch.object(cli_main, "_interactive_shell_supported", return_value=True),
             mock.patch.object(cli_main, "_print_birth_wizard_intro"),
-            mock.patch.object(cli_main, "_suggest_elephant_name", return_value="Rowan"),
+            mock.patch.object(cli_main, "_suggest_elephant_name", return_value="Rowan") as suggest_name,
             mock.patch.object(cli_main, "_run_interactive_birth_wizard", return_value=None) as birth_wizard,
             mock.patch.object(cli_main, "_print_birth_paused"),
         ):
             exit_code = cli_main._run_setup(runtime, args)
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(birth_wizard.call_args.kwargs["display_name"], "Rowan")
+        suggest_name.assert_not_called()
+        self.assertEqual(birth_wizard.call_args.kwargs["display_name"], "Mother Elephant")
 
     def test_run_setup_allows_oauth_provider_without_explicit_key(self) -> None:
         runtime = mock.Mock()

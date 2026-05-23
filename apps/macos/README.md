@@ -11,7 +11,7 @@ make macos-build
 open -n "apps/macos/.build/release/$(uname -m | sed 's/arm64/aarch64/')-apple-darwin/Elephant Agent.app"
 ```
 
-Full Xcode is not required when the installed Command Line Tools and macOS SDK match. The packaging script creates a local `.app`, copies the site brand assets into the bundle resources, signs ad hoc by default, and emits a `.dmg`, `.app.zip`, and SHA256 files under `apps/macos/.build/artifacts/<target>/`.
+Full Xcode is not required when the installed Command Line Tools and macOS SDK match. The packaging script creates a local `.app`, copies the site brand assets into the bundle resources, skips codesign by default for local speed, and emits a `.dmg`, `.app.zip`, and SHA256 files under `apps/macos/.build/artifacts/<target>/`.
 
 By default, `make macos-build` attempts to produce a self-contained app on the current Mac architecture. When `uv` is available and the requested `MACOS_TARGET` matches the host architecture, the bundle includes:
 
@@ -45,8 +45,8 @@ make macos-build-all \
   APPLE_TEAM_ID="TEAMID"
 ```
 
-Without `MACOS_SIGNING_IDENTITY`, builds remain ad-hoc signed and notarization is skipped so local developers can still build a DMG. Ad-hoc artifacts are useful for testing but are not Gatekeeper-clean for broad distribution. Official shareable releases should use Developer ID signing and notarization.
+Local builds default to `MACOS_SIGNING_IDENTITY=none`, which skips app and DMG signing entirely. Use `MACOS_SIGNING_IDENTITY=-` when you specifically need an ad-hoc signed test artifact. Official shareable releases should use Developer ID signing and notarization.
 
 `make macos-release-latest` expects `gh` authentication and replaces the GitHub `latest` release/tag with the current local artifacts. The CI workflow `.github/workflows/macos-latest-release.yml` runs the same build on each push to `main`, uploads both macOS architecture artifacts, writes `latest.json`, and replaces the `latest` GitHub release.
 
-The `latest` CI release forces `MACOS_BUNDLE_RUNTIME=1`, installs `uv`, builds each architecture on a matching macOS runner, and checks `Contents/Resources/Runtime` before upload. It also validates the signed app and DMG, plus stapled notarization tickets when Developer ID signing is active. If the self-contained runtime or distribution signing path is missing on a push to `main`, CI fails instead of publishing a bootstrap-sized or ad-hoc DMG. The bootstrap/ad-hoc fallback remains available for local or manually dispatched emergency builds with `MACOS_BUNDLE_RUNTIME=0` or `allow_unsigned=true`.
+The `latest` CI release forces `MACOS_BUNDLE_RUNTIME=1`, installs `uv`, builds each architecture on a matching macOS runner, and checks `Contents/Resources/Runtime` before upload. The workflow explicitly sets either a Developer ID signing identity or `MACOS_SIGNING_IDENTITY=-` for the manual `allow_unsigned=true` fallback, then validates codesign and stapled notarization tickets when Developer ID signing is active. If the self-contained runtime or distribution signing path is missing on a push to `main`, CI fails instead of publishing a bootstrap-sized or unsigned DMG. The bootstrap/ad-hoc fallback remains available for local or manually dispatched emergency builds with `MACOS_BUNDLE_RUNTIME=0` or `allow_unsigned=true`.

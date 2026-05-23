@@ -234,6 +234,36 @@ class CliRuntimeLearningTest(unittest.TestCase):
             self.assertEqual(loaded.result_json["status"], "no_op")
             self.assertIn("No durable facts found", str(loaded.result_json["summary"]))
 
+    def test_init_profile_completion_queues_onboarding_letter(self) -> None:
+        from apps.learning_worker_runtime import run_learning_job
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            state_dir = Path(tempdir) / "state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            runtime = CliRuntime.create(state_dir=state_dir)
+            session = runtime.create_elephant(elephant_id="atlas", display_name="Atlas")
+            job = runtime.schedule_learning_for_session(
+                session_id=session.episode_id,
+                trigger="init_profile",
+                summary="initial profile learning",
+                metadata={"source": "unit-test"},
+                start_worker=False,
+            )
+            agent_result = SimpleNamespace(
+                status="completed",
+                summary="profile facts written",
+                result_source_id="",
+                child_episode_id="",
+            )
+
+            with mock.patch("apps.learning_agents.run_background_learning_agent", return_value=agent_result):
+                run_learning_job(runtime, job, worker_id="worker:test")
+
+            jobs = runtime.repository.list_learning_jobs(episode_id=session.episode_id, limit=10)
+            letter_jobs = [item for item in jobs if item.trigger == "onboarding_letter"]
+            self.assertEqual(len(letter_jobs), 1)
+            self.assertEqual(letter_jobs[0].metadata["letter_kind"], "onboarding_letter")
+
     def test_once_learning_worker_processes_only_one_queued_job(self) -> None:
         from apps.learning_worker_runtime import run_learning_worker
 

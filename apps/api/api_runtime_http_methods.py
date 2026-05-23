@@ -48,6 +48,16 @@ from .api_runtime_personal_model_methods import (
 from .api_runtime_context_compression import (
     compact_context_after_usage as _compact_context_after_usage,
 )
+from .api_runtime_herd_local_agents import (
+    baby_identity_text as _baby_identity_text,
+    default_baby_display_name as _default_baby_display_name,
+    herd_metadata_from_payload as _herd_metadata_from_payload,
+    list_persisted_local_agents as _list_persisted_local_agents,
+    local_agent_payload as _local_agent_payload,
+    metadata_bool_payload as _metadata_bool_payload,
+    metadata_str_payload as _metadata_str_payload,
+    scan_and_persist_local_agents as _scan_and_persist_local_agents,
+)
 
 _STREAM_KEEPALIVE_SECONDS = 15.0
 
@@ -341,6 +351,7 @@ def _elephant_identity_text_from_payload(payload: Mapping[str, Any], *, elephant
         _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
         or _default_elephant_identity_text(elephant_id=elephant_id, display_name=display_name)
     )
+
 def _write_elephant_identity_file(self, *, elephant_id: str, text: str) -> str:
     path = write_elephant_identity_file(
         elephant_file_path(elephant_id, install_root=self.config.install_root),
@@ -349,6 +360,96 @@ def _write_elephant_identity_file(self, *, elephant_id: str, text: str) -> str:
     return str(path)
 def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
     normalized_method = method.upper()
+    if normalized_method == "POST" and parts == ("discovery", "scan"):
+        records = _scan_and_persist_local_agents(self)
+        return APIResponse(
+            200,
+            _jsonable(
+                {
+                    "status": "ok",
+                    "discovery": [_local_agent_payload(record) for record in records],
+                    "local_agent_runtimes": [_local_agent_payload(record) for record in records],
+                }
+            ),
+        )
+    if normalized_method == "GET" and parts == ("discovery",):
+        records = _list_persisted_local_agents(self)
+        return APIResponse(
+            200,
+            _jsonable(
+                {
+                    "status": "ok",
+                    "discovery": [_local_agent_payload(record) for record in records],
+                    "local_agent_runtimes": [_local_agent_payload(record) for record in records],
+                }
+            ),
+        )
+    if normalized_method == "POST" and parts == ("babies",):
+        payload = _read_json_bytes(body)
+        runtime_id = str(payload.get("runtime_id") or payload.get("runtimeId") or "").strip()
+        if not runtime_id:
+            raise ValueError("runtime_id is required")
+        load_runtime = getattr(self.repository, "load_local_agent_runtime", None)
+        record = load_runtime(runtime_id) if callable(load_runtime) else None
+        if record is None:
+            raise KeyError(runtime_id)
+        if not record.can_execute:
+            raise ValueError(f"runtime is not executable yet: {runtime_id}")
+        role_title = _metadata_str_payload(payload, "role_title", "roleTitle") or record.role_title
+        role_prompt = _metadata_str_payload(payload, "role_prompt", "rolePrompt") or record.role_prompt
+        display_name = str(payload.get("display_name") or payload.get("name") or "").strip()
+        if not display_name:
+            display_name = _default_baby_display_name(record, role_title)
+        raw_elephant_id = str(payload.get("elephant_id") or payload.get("elephantId") or "").strip()
+        if raw_elephant_id and _elephant_state_for_id(self, raw_elephant_id) is not None:
+            raise ValueError(f"elephant already exists: {raw_elephant_id}")
+        elephant_id = raw_elephant_id or _unique_elephant_id(self, display_name)
+        mother = _elephant_state_for_id(self, "mother-elephant")
+        personal_model_id = str(
+            payload.get("personal_model_id")
+            or payload.get("profile_id")
+            or (mother.personal_model_id if mother is not None else self.repository.ensure_default_personal_model().personal_model_id)
+        ).strip()
+        enabled = _metadata_bool_payload(payload, "enabled", "isEnabled") or "false"
+        metadata = _herd_metadata_from_payload(
+            {
+                **dict(payload),
+                "herd_kind": "baby",
+                "parent_elephant_id": str(payload.get("parent_elephant_id") or payload.get("parentElephantId") or "mother-elephant"),
+                "runtime_id": record.runtime_id,
+                "provider_id": record.provider_id,
+                "role_title": role_title,
+                "role_prompt": role_prompt,
+                "enabled": enabled,
+                "max_concurrency": str(payload.get("max_concurrency") or payload.get("maxConcurrency") or "1"),
+            },
+            current={"profile_id": personal_model_id},
+        )
+        identity_text = (
+            _optional_str(payload.get("elephant_identity_text") or payload.get("text") or payload.get("content"))
+            or _baby_identity_text(
+                display_name=display_name,
+                role_title=role_title,
+                role_prompt=role_prompt,
+                provider_name=record.display_name,
+            )
+        )
+        state = self.repository.create_state(
+            personal_model_id=personal_model_id,
+            state_id=f"state:{elephant_id}",
+            state_anchor=f"elephant:{elephant_id}",
+            elephant_id=elephant_id,
+            elephant_name=display_name,
+            identity_mode="baby",
+            initiative="delegated",
+            working_style="local_agent",
+            surface_bindings=("api", "dashboard", "local-agent"),
+            elephant_identity_text=identity_text,
+            summary=f"{display_name} is available as a baby elephant for {role_title}.",
+            metadata=metadata,
+        )
+        elephant_identity_path = _write_elephant_identity_file(self, elephant_id=elephant_id, text=identity_text)
+        return APIResponse(201, _jsonable({"elephant": state, "eggIdentityPath": elephant_identity_path}))
     if normalized_method == "POST" and not parts:
         payload = _read_json_bytes(body)
         display_name = str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name") or "").strip()
@@ -379,7 +480,7 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             surface_bindings=("api", "dashboard"),
             elephant_identity_text=identity_text,
             summary=f"{display_name} is ready to continue this elephant line.",
-            metadata={"profile_id": personal_model_id},
+            metadata=_herd_metadata_from_payload(payload, current={"profile_id": personal_model_id}),
         )
         elephant_identity_path = _write_elephant_identity_file(self, elephant_id=elephant_id, text=identity_text)
         return APIResponse(201, _jsonable({"elephant": state, "eggIdentityPath": elephant_identity_path}))
@@ -405,7 +506,7 @@ def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes |
             working_style=personality_preset if personality_preset is not None else state.working_style,
             elephant_identity_text=identity_text if identity_text is not None else state.elephant_identity_text,
             summary=f"{display_name or state.elephant_name} is ready to continue this elephant line.",
-            metadata={**dict(state.metadata), "profile_id": state.personal_model_id},
+            metadata=_herd_metadata_from_payload(payload, current={**dict(state.metadata), "profile_id": state.personal_model_id}),
         )
         self.repository.upsert_state(updated)
         elephant_identity_path = ""

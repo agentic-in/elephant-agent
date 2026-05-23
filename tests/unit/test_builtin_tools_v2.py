@@ -171,7 +171,11 @@ class _ConversationSearchStub:
 
 
 class _DiaryStub:
+    def __init__(self) -> None:
+        self.last_write_kwargs = None
+
     def write_diary_entry(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.last_write_kwargs = kwargs
         return {"entry_date": kwargs["entry_date"]}
 
     def list_diary_entries(self, **kwargs):  # type: ignore[no-untyped-def]
@@ -554,6 +558,9 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertNotIn("importing os", code_properties["code"]["description"])
         self.assertIn("os", code_properties["code"]["description"])
         self.assertIn("blocked", code_properties["code"]["description"])
+        self.assertIn("backend", sub_agent_properties)
+        self.assertIn("baby_id", sub_agent_properties)
+        self.assertIn("role", sub_agent_properties)
         self.assertIn("Mutually exclusive", sub_agent_properties["tasks"]["description"])
         self.assertIn("execution board", todo["description"])
         self.assertIn("in-session execution steps", todo["description"])
@@ -700,6 +707,32 @@ class BuiltinToolsV2Test(unittest.TestCase):
         self.assertEqual(batch.summary, "sub-agent pool finished")
         tasks = stub.batch["tasks"]
         self.assertEqual(tasks[0]["skills"], ("codebase-inspection",))
+
+    def test_sub_agents_local_cli_single_task_routes_through_task_batch(self) -> None:
+        stub = _SubAgentsStub()
+        runtime = self._make_builtin_runtime(
+            cwd=Path("/tmp"),
+            dependencies=BuiltinToolDependencies(cwd=Path("/tmp"), sub_agents_surface=stub),
+        )
+
+        result = runtime.invoke(
+            "tool.sub_agents",
+            {
+                "task": "run focused validation",
+                "name": "Codex Baby",
+                "backend": "local_cli",
+                "baby_id": "codex-baby",
+                "role": "coding implementer",
+            },
+            session_id="session-sub-agent",
+        )
+
+        self.assertEqual(result.summary, "sub-agent pool finished")
+        self.assertIsNone(stub.single)
+        self.assertEqual(stub.batch["max_concurrency"], 1)
+        self.assertEqual(stub.batch["tasks"][0]["backend"], "local_cli")
+        self.assertEqual(stub.batch["tasks"][0]["baby_id"], "codex-baby")
+        self.assertEqual(stub.batch["tasks"][0]["role"], "coding implementer")
 
     def test_sub_agents_failed_result_sets_error_outcome(self) -> None:
         runtime = self._make_builtin_runtime(
@@ -1585,6 +1618,27 @@ class BuiltinToolsV2Test(unittest.TestCase):
             )
 
             self.assertIn("warning: entry_date is in the future", future.summary)
+
+    def test_diary_write_passes_metadata_to_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            diary = _DiaryStub()
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(cwd=cwd, diary_surface=diary),
+            )
+
+            runtime.invoke(
+                "tool.diary.write",
+                {
+                    "entry_date": "2026-05-23",
+                    "content": "Letter",
+                    "metadata": {"kind": "onboarding_letter", "empty": ""},
+                },
+                session_id="session-diary",
+            )
+
+            self.assertEqual(diary.last_write_kwargs["metadata"], {"kind": "onboarding_letter"})
 
     def test_diary_list_returns_structured_payload_not_tool_description(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

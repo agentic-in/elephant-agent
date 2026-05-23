@@ -29,11 +29,20 @@ def run_diary_write(
     source_episode_ids: tuple[str, ...] = ()
     if isinstance(source_episode_ids_raw, (list, tuple)):
         source_episode_ids = tuple(str(s).strip() for s in source_episode_ids_raw if str(s).strip())
+    metadata_raw = invocation.arguments.get("metadata")
+    metadata: dict[str, str] = {}
+    if isinstance(metadata_raw, Mapping):
+        metadata = {
+            str(key).strip(): str(value).strip()
+            for key, value in metadata_raw.items()
+            if str(key).strip() and str(value).strip()
+        }
     result = surface.write_diary_entry(
         personal_model_id=invocation.context.personal_model_id,
         entry_date=entry_date,
         content=content,
         source_episode_ids=source_episode_ids,
+        metadata=metadata,
     )
     warning = ""
     if parsed_date > date.today() + timedelta(days=1):

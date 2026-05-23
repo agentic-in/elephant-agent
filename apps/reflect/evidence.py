@@ -7,6 +7,7 @@ the job, the user, and what happened in the episode.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import date
 import json
 import re
 from typing import Any
@@ -469,6 +470,30 @@ def build_evidence(
             "",
             "## Who this person is (active PM facts)",
             *(portrait or ("(no facts yet)",)),
+        ])
+
+    if "onboarding_letter" in feature_ids:
+        target_date = str(metadata.get("target_date") or date.today().isoformat()).strip() or date.today().isoformat()
+        user_tz = "Asia/Shanghai"
+        try:
+            user = runtime.inspect_user(session_id=job.episode_id)
+            if user and user.timezone:
+                user_tz = user.timezone
+        except Exception:
+            pass
+        portrait = _pm_portrait_lines(active_facts, limit=80)
+        lines.extend([
+            "",
+            "## Onboarding letter context",
+            f"target_date: {target_date}",
+            f"user_timezone: {user_tz}",
+            "letter_kind: onboarding_letter",
+            "",
+            "## Grounded Personal Model portrait",
+            *(portrait or ("(no facts yet)",)),
+            "",
+            "## Product promise to weave into the letter",
+            "AI is becoming more capable, many people worry about being replaced, and Elephant's answer is: 别怕，我们一同进化.",
         ])
 
     return "\n".join(lines)

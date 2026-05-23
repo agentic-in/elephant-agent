@@ -34,6 +34,13 @@ def sub_agents_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, 
                     "name": {"type": "string", "description": "Optional label for a single sub-agent task."},
                     "task": {"type": "string", "description": "Single assignment. Mutually exclusive with tasks."},
                     "prompt": {"type": "string", "description": "Alias for task. Mutually exclusive with tasks."},
+                    "backend": {
+                        "type": "string",
+                        "enum": ["native", "local_cli", "provider"],
+                        "description": "Execution backend. Use local_cli for an enabled baby backed by a local agent CLI, or provider for an enabled baby backed by the configured model provider.",
+                    },
+                    "baby_id": {"type": "string", "description": "Baby elephant id to use when backend=local_cli or backend=provider."},
+                    "role": {"type": "string", "description": "Baby elephant role title to resolve when baby_id is omitted."},
                     "tasks": {
                         "type": "array",
                         "description": "Small parallel pool of assignments. Mutually exclusive with top-level task/prompt. Each child cannot call tool.sub_agents, tool.clarify, or tool.message.send.",
@@ -43,6 +50,13 @@ def sub_agents_tool_definitions(*, reason: str | None) -> tuple[ToolDefinition, 
                                 "name": {"type": "string", "description": "Optional label for this sub-agent task."},
                                 "task": {"type": "string", "description": "Assignment for this sub-agent task."},
                                 "prompt": {"type": "string", "description": "Alias for task in a task-list item."},
+                                "backend": {
+                                    "type": "string",
+                                    "enum": ["native", "local_cli", "provider"],
+                                    "description": "Execution backend for this task.",
+                                },
+                                "baby_id": {"type": "string", "description": "Baby elephant id to use when backend=local_cli or backend=provider."},
+                                "role": {"type": "string", "description": "Baby elephant role title to resolve when baby_id is omitted."},
                                 "skills": {
                                     "oneOf": [
                                         {"type": "array", "items": {"type": "string"}},

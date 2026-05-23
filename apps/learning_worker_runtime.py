@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 import json
 import os
 from pathlib import Path
@@ -242,6 +242,49 @@ def close_finished_learning_child_episode(runtime: CliRuntime, job: LearningJob,
     return True
 
 
+def _enqueue_onboarding_letter_after_init(runtime: CliRuntime, job: LearningJob) -> None:
+    if str(job.trigger or "").strip().lower() not in {"init", "init_profile"}:
+        return
+    try:
+        entries = runtime.repository.list_diary_entries(personal_model_id=job.personal_model_id, limit=30)
+    except Exception:
+        entries = ()
+    for entry in entries:
+        metadata = dict(getattr(entry, "metadata", {}) or {})
+        if metadata.get("kind") == "onboarding_letter" or metadata.get("source") == "onboarding_letter":
+            return
+    try:
+        existing_jobs = runtime.repository.list_learning_jobs(
+            personal_model_id=job.personal_model_id,
+            episode_id=job.episode_id,
+            limit=30,
+        )
+    except Exception:
+        existing_jobs = ()
+    for existing in existing_jobs:
+        if str(getattr(existing, "trigger", "") or "").strip().lower() == "onboarding_letter":
+            return
+    try:
+        runtime.repository.enqueue_learning_job(
+            job_type=LEARNING_JOB_TYPE,
+            trigger="onboarding_letter",
+            personal_model_id=job.personal_model_id,
+            state_id=job.state_id,
+            episode_id=job.episode_id,
+            loop_id=None,
+            summary="first onboarding letter",
+            metadata={
+                "source": "onboarding_letter",
+                "letter_kind": "onboarding_letter",
+                "target_date": date.today().isoformat(),
+                "parent_learning_job_id": job.job_id,
+            },
+            force_new=True,
+        )
+    except Exception:
+        return
+
+
 def run_learning_job(runtime: CliRuntime, job: LearningJob, *, worker_id: str) -> None:
     repository = runtime.repository
     episode = repository.load_episode(job.episode_id)
@@ -270,6 +313,7 @@ def run_learning_job(runtime: CliRuntime, job: LearningJob, *, worker_id: str) -
         worker_id=worker_id,
         progress_detail=f"{result.status}: {result.summary} (result={result.result_source_id})",
     )
+    _enqueue_onboarding_letter_after_init(runtime, job)
 
 
 def run_learning_worker(

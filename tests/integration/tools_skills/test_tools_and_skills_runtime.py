@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import json
 from pathlib import Path
-import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -554,16 +553,11 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
                 }
             }
         }
-        observed_commands: list[tuple[list[str], dict[str, object]]] = []
+        observed_calls: list[dict[str, object]] = []
 
-        def fake_run(command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
-            observed_commands.append((command, kwargs))
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                stdout=json.dumps({"content": [{"type": "text", "text": "read ok"}]}),
-                stderr="",
-            )
+        def fake_call(**kwargs) -> dict[str, object]:
+            observed_calls.append(dict(kwargs))
+            return {"content": [{"type": "text", "text": "read ok"}]}
 
         synced = sync_custom_mcp_tools(
             runtime,
@@ -579,7 +573,7 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         self.assertEqual(runtime.list_tools(audience="operator"), ())
         self.assertTrue(runtime.describe("mcp.filesystem.read_file").side_effects.reads_state)
 
-        with mock.patch("packages.tools.mcp.subprocess.run", side_effect=fake_run):
+        with mock.patch("packages.tools.mcp._call_mcp_tool_sync", side_effect=fake_call):
             result = runtime.invoke(
                 "mcp.filesystem.read_file",
                 {"path": "/tmp/demo.txt"},
@@ -588,16 +582,13 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
 
         self.assertEqual(result.outcome, "success")
         self.assertEqual(result.summary, "read ok")
-        self.assertEqual(len(observed_commands), 1)
-        command, kwargs = observed_commands[0]
-        self.assertIn("mcporter", command)
-        self.assertIn("call", command)
-        self.assertIn("--stdio", command)
-        self.assertIn("read_file", command)
-        self.assertEqual(kwargs["cwd"], Path("/tmp/tool-root"))
-        self.assertIn("--args", command)
-        serialized_arguments = command[command.index("--args") + 1]
-        self.assertEqual(json.loads(serialized_arguments), {"path": "/tmp/demo.txt"})
+        self.assertEqual(len(observed_calls), 1)
+        self.assertEqual(observed_calls[0]["tool_name"], "read_file")
+        self.assertEqual(observed_calls[0]["transport"], "stdio")
+        self.assertEqual(observed_calls[0]["command"], "npx")
+        self.assertEqual(observed_calls[0]["args"], ("-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"))
+        self.assertEqual(observed_calls[0]["arguments"], {"path": "/tmp/demo.txt"})
+        self.assertEqual(observed_calls[0]["cwd"], Path("/tmp/tool-root"))
 
         disabled_config = {
             **config,
@@ -620,7 +611,7 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         )
         self.assertIsNone(runtime.describe("mcp.filesystem.read_file"))
 
-    def test_sync_custom_mcp_tools_remote_runtime_uses_mcporter_config_shape(self) -> None:
+    def test_sync_custom_mcp_tools_remote_runtime_uses_native_mcp_client_shape(self) -> None:
         runtime = ToolRuntime(approval_gateway=CallableApprovalGateway(lambda *_: True))
         config = {
             "mcp_servers": {
@@ -642,17 +633,11 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
                 }
             }
         }
-        observed_remote_config: dict[str, Any] = {}
+        observed_calls: list[dict[str, object]] = []
 
-        def fake_run(command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
-            config_path = Path(command[command.index("--config") + 1])
-            observed_remote_config.update(json.loads(config_path.read_text(encoding="utf-8")))
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                stdout=json.dumps({"content": [{"type": "text", "text": "pong"}]}),
-                stderr="",
-            )
+        def fake_call(**kwargs) -> dict[str, object]:
+            observed_calls.append(dict(kwargs))
+            return {"content": [{"type": "text", "text": "pong"}]}
 
         sync_custom_mcp_tools(
             runtime,
@@ -661,7 +646,7 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
             cwd=Path("/tmp/tool-root"),
         )
 
-        with mock.patch("packages.tools.mcp.subprocess.run", side_effect=fake_run):
+        with mock.patch("packages.tools.mcp._call_mcp_tool_sync", side_effect=fake_call):
             result = runtime.invoke(
                 "mcp.remote-demo.ping",
                 {"message": "hello"},
@@ -670,18 +655,9 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
 
         self.assertEqual(result.outcome, "success")
         self.assertEqual(result.summary, "pong")
-        self.assertEqual(
-            observed_remote_config["mcpServers"]["remote-demo"]["headers"]["Authorization"],
-            "Bearer demo",
-        )
-        self.assertEqual(
-            observed_remote_config["mcpServers"]["remote-demo"]["transportType"],
-            "streamable-http",
-        )
-        self.assertEqual(
-            observed_remote_config["mcpServers"]["remote-demo"]["url"],
-            "https://example.com/mcp",
-        )
+        self.assertEqual(observed_calls[0]["headers"], {"Authorization": "Bearer demo"})
+        self.assertEqual(observed_calls[0]["transport"], "streamable-http")
+        self.assertEqual(observed_calls[0]["url"], "https://example.com/mcp")
 
     def test_skill_loader_resolves_scope_and_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

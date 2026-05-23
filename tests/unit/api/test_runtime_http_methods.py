@@ -11,11 +11,12 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
-from apps.api.api_runtime_http_methods import __call__ as wsgi_call
+from apps.api.api_runtime_http_io_methods import __call__ as wsgi_call
 from apps.api.api_runtime_context_compression import (
     compact_context_after_usage,
 )
 from apps.api.api_runtime_http_methods import (
+    _dispatch_elephants,
     _dispatch_internal,
     _dispatch_operator,
     stream_loop_events,
@@ -24,6 +25,8 @@ from apps.api.capabilities import APITelemetrySink
 from packages.context.epoch_store import FileEpochStore
 from packages.context.session_projection import SessionContextEpoch
 from packages.contracts.runtime import PromptMessage
+from packages.operator.local_agents import LocalAgentRuntimeRecord
+from packages.storage import RuntimeStorageRepository
 from packages.tools.runtime import ToolInvocation, ToolLifecycleEvent, ToolRuntimeContext
 
 
@@ -84,6 +87,118 @@ class _CronRuntimeStub:
         if self.job is None:
             raise KeyError(job_id)
         return self.job
+
+
+def _herd_app(root: Path) -> SimpleNamespace:
+    repository = RuntimeStorageRepository(root / "state" / "elephant.sqlite3")
+    repository.bootstrap()
+    return SimpleNamespace(
+        repository=repository,
+        config=SimpleNamespace(install_root=root / "install"),
+    )
+
+
+def _local_runtime(
+    *,
+    runtime_id: str,
+    provider_id: str = "codex",
+    can_execute: bool = True,
+) -> LocalAgentRuntimeRecord:
+    return LocalAgentRuntimeRecord(
+        runtime_id=runtime_id,
+        provider_id=provider_id,
+        command=provider_id,
+        display_name="Codex" if provider_id == "codex" else provider_id,
+        resolved_path=f"/tmp/{provider_id}",
+        version=f"{provider_id} 1",
+        status="detected",
+        auth_status="configured",
+        source="env",
+        default_model="",
+        can_execute=can_execute,
+        role_title="coding implementer",
+        role_prompt="Run focused coding work.",
+        detected_at="2026-05-23T00:00:00+00:00",
+        metadata={"adapter": "argv_prompt" if can_execute else ""},
+    )
+
+
+class HerdDiscoveryAPITest(unittest.TestCase):
+    def test_discovery_scan_persists_local_agent_runtimes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            record = _local_runtime(runtime_id="local-agent:codex:test")
+
+            with mock.patch("apps.api.api_runtime_herd_local_agents.scan_local_agents", return_value=(record,)):
+                response = _dispatch_elephants(app, "POST", ("discovery", "scan"), b"{}")
+
+            persisted = app.repository.load_local_agent_runtime(record.runtime_id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(persisted)
+        assert persisted is not None
+        self.assertEqual(persisted.provider_id, "codex")
+        self.assertTrue(response.payload["local_agent_runtimes"][0]["can_execute"])
+
+    def test_adopt_creates_baby_elephant_with_runtime_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            app.repository.create_state(
+                personal_model_id="you",
+                elephant_id="mother-elephant",
+                state_id="state:mother-elephant",
+                elephant_name="Mother Elephant",
+                metadata={"herd_kind": "mother"},
+            )
+            record = _local_runtime(runtime_id="local-agent:codex:test")
+            app.repository.upsert_local_agent_runtime(record)
+
+            response = _dispatch_elephants(
+                app,
+                "POST",
+                ("babies",),
+                json.dumps(
+                    {
+                        "runtime_id": record.runtime_id,
+                        "elephant_id": "codex-baby",
+                        "display_name": "Codex Baby",
+                        "role_title": "implementation runner",
+                        "role_prompt": "Run focused implementation checks.",
+                        "enabled": True,
+                    }
+                ).encode("utf-8"),
+            )
+            state = app.repository.load_state("state:codex-baby")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state.elephant_name, "Codex Baby")
+        self.assertEqual(state.personal_model_id, "you")
+        self.assertEqual(state.metadata["herd_kind"], "baby")
+        self.assertEqual(state.metadata["parent_elephant_id"], "mother-elephant")
+        self.assertEqual(state.metadata["runtime_id"], record.runtime_id)
+        self.assertEqual(state.metadata["provider_id"], "codex")
+        self.assertEqual(state.metadata["role_title"], "implementation runner")
+        self.assertEqual(state.metadata["enabled"], "true")
+
+    def test_adopt_rejects_discovered_runtime_without_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            record = _local_runtime(
+                runtime_id="local-agent:cursor:test",
+                provider_id="cursor-agent",
+                can_execute=False,
+            )
+            app.repository.upsert_local_agent_runtime(record)
+
+            with self.assertRaisesRegex(ValueError, "not executable"):
+                _dispatch_elephants(
+                    app,
+                    "POST",
+                    ("babies",),
+                    json.dumps({"runtime_id": record.runtime_id}).encode("utf-8"),
+                )
 
 
 class OperatorCronDispatchTest(unittest.TestCase):

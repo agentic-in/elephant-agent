@@ -8,7 +8,7 @@ from .builtins import (
 )
 from .factory import build_secured_tool_runtime, build_tool_runtime
 from .inventory import TOOL_SURFACES
-from .mcp import custom_mcp_runtime_entries, mcp_runtime_tool_id, sync_custom_mcp_tools
+from .mcp import custom_mcp_runtime_entries, discover_mcp_tools_sync, mcp_runtime_tool_id, sync_custom_mcp_tools
 from .adapters import RequesterScopedToolCapability
 from .runtime import (
     ApprovalGateway,
@@ -46,6 +46,7 @@ __all__ = [
     "build_tool_fallback_prompt",
     "BuiltinToolDependencies",
     "custom_mcp_runtime_entries",
+    "discover_mcp_tools_sync",
     "InMemorySessionTodoStore",
     "InMemoryToolExecutor",
     "InMemoryToolRegistry",

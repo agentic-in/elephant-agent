@@ -48,6 +48,7 @@ from packages.models.provider_catalog import default_provider_definitions, provi
 from packages.models.prompt_sections import context_with_fallback_tool_prompt
 from packages.models.provider_runtime import ProviderRuntimeResolver
 from packages.models.providers import build_model_adapter
+from packages.models.runtime_describe import embedding_bootstrap_summary_fields, invalid_provider_resolution_summary
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolDefinition, ToolRuntime, build_tool_fallback_prompt
 
@@ -597,21 +598,19 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
         if profile is None:
             summary = provider_fallback_summary()
             summary["model_id"] = summary.get("default_model")
-            summary["embedding_bootstrap_status"] = embedding_bootstrap.status
-            summary["embedding_bootstrap_summary"] = embedding_bootstrap.summary
-            summary["embedding_bootstrap_updated_at"] = embedding_bootstrap.updated_at
-            summary["embedding_bootstrap_failure_message"] = embedding_bootstrap.failure_message
-            summary["embedding_model_id"] = embedding_bootstrap.model_id
-            summary["embedding_model_root"] = embedding_bootstrap.model_root
-            summary["embedding_model_source_url"] = embedding_bootstrap.model_source_url
-            summary["embedding_bootstrap_source"] = embedding_bootstrap.source
+            summary.update(embedding_bootstrap_summary_fields(embedding_bootstrap))
             return summary
         summary = provider_profile_summary(profile)
-        resolution = self.runtime_resolver.resolve(
-            profile.provider_id,
-            model_id=profile.default_model,
-            base_url=profile.base_url,
-        )
+        try:
+            resolution = self.runtime_resolver.resolve(
+                profile.provider_id,
+                model_id=profile.default_model,
+                base_url=profile.base_url,
+            )
+        except LookupError as error:
+            summary.update(invalid_provider_resolution_summary(profile, error))
+            summary.update(embedding_bootstrap_summary_fields(embedding_bootstrap))
+            return summary
         summary.update(
             {
                 "display_name": resolution.display_name,
@@ -623,14 +622,7 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
                 "secret_status": self._profile_secret_status(profile)[0],
                 "secret_source": self._profile_secret_status(profile)[1],
                 "model_id": profile.default_model,
-                "embedding_bootstrap_status": embedding_bootstrap.status,
-                "embedding_bootstrap_summary": embedding_bootstrap.summary,
-                "embedding_bootstrap_updated_at": embedding_bootstrap.updated_at,
-                "embedding_bootstrap_failure_message": embedding_bootstrap.failure_message,
-                "embedding_model_id": embedding_bootstrap.model_id,
-                "embedding_model_root": embedding_bootstrap.model_root,
-                "embedding_model_source_url": embedding_bootstrap.model_source_url,
-                "embedding_bootstrap_source": embedding_bootstrap.source,
+                **embedding_bootstrap_summary_fields(embedding_bootstrap),
             }
         )
         return summary

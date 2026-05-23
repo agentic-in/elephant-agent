@@ -44,6 +44,28 @@ CREATE UNIQUE INDEX idx_states_elephant_id
 CREATE INDEX idx_states_personal_model
     ON states(personal_model_id, status);
 
+CREATE TABLE local_agent_runtimes (
+    runtime_id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    resolved_path TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'detected',
+    auth_status TEXT NOT NULL DEFAULT 'unknown',
+    source TEXT NOT NULL DEFAULT 'path',
+    default_model TEXT NOT NULL DEFAULT '',
+    can_execute INTEGER NOT NULL DEFAULT 0,
+    role_title TEXT NOT NULL DEFAULT '',
+    role_prompt TEXT NOT NULL DEFAULT '',
+    detected_at TEXT NOT NULL,
+    last_error TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX idx_local_agent_runtimes_provider
+    ON local_agent_runtimes(provider_id, status);
+
 CREATE TABLE current_state_bindings (
     binding_id TEXT PRIMARY KEY CHECK(binding_id = 'current'),
     state_id TEXT,

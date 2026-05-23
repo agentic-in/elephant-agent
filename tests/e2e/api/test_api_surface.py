@@ -1647,59 +1647,45 @@ class APISurfaceE2ETest(unittest.TestCase):
         )
 
     def test_operator_mcp_discover_supports_stdio_and_remote_headers(self) -> None:
-        observed_remote_config: dict[str, object] = {}
+        observed_payloads: list[dict[str, object]] = []
 
-        def fake_run(command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
-            self.assertEqual(kwargs.get("cwd"), ROOT)
-            if "--stdio" in command:
-                self.assertIn("--env", command)
-                self.assertIn("ALLOW=1", command)
-                return subprocess.CompletedProcess(
-                    command,
-                    0,
-                    stdout=json.dumps(
+        def fake_discover(**kwargs) -> dict[str, object]:
+            observed_payloads.append(dict(kwargs))
+            if kwargs["transport"] == "stdio":
+                self.assertEqual(kwargs["cwd"], ROOT)
+                self.assertEqual(kwargs["command"], "uvx")
+                self.assertEqual(kwargs["args"], ("mcp-server-filesystem", "/tmp/demo"))
+                self.assertEqual(kwargs["env"], {"ALLOW": "1"})
+                return {
+                    "status": "ok",
+                    "durationMs": 123,
+                    "tools": [
                         {
-                            "status": "ok",
-                            "durationMs": 123,
-                            "tools": [
-                                {
-                                    "name": "read_file",
-                                    "description": "Read one file.",
-                                    "inputSchema": {
-                                        "type": "object",
-                                        "properties": {"path": {"type": "string"}},
-                                        "required": ["path"],
-                                    },
-                                    "options": [{"property": "path", "required": True}],
-                                }
-                            ],
+                            "name": "read_file",
+                            "description": "Read one file.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {"path": {"type": "string"}},
+                                "required": ["path"],
+                            },
+                            "options": [{"property": "path", "required": True}],
                         }
-                    ),
-                    stderr="",
-                )
-            config_path = Path(command[command.index("--config") + 1])
-            observed_remote_config.update(json.loads(config_path.read_text(encoding="utf-8")))
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                stdout=json.dumps(
+                    ],
+                }
+            return {
+                "status": "ok",
+                "durationMs": 88,
+                "tools": [
                     {
-                        "status": "ok",
-                        "durationMs": 88,
-                        "tools": [
-                            {
-                                "name": "ping",
-                                "description": "Ping the remote MCP server.",
-                                "inputSchema": {"type": "object", "properties": {}},
-                                "options": [],
-                            }
-                        ],
+                        "name": "ping",
+                        "description": "Ping the remote MCP server.",
+                        "inputSchema": {"type": "object", "properties": {}},
+                        "options": [],
                     }
-                ),
-                stderr="",
-            )
+                ],
+            }
 
-        with patch("apps.api.api_runtime_console_ops.subprocess.run", side_effect=fake_run):
+        with patch("apps.api.api_runtime_console_ops.discover_mcp_tools_sync", side_effect=fake_discover):
             discovered_stdio = self.app.dispatch(
                 "POST",
                 "/v1/operator/mcp/discover",
@@ -1707,8 +1693,8 @@ class APISurfaceE2ETest(unittest.TestCase):
                     {
                         "serverId": "filesystem",
                         "transport": "stdio",
-                        "command": "npx",
-                        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/demo"],
+                        "command": "uvx",
+                        "args": ["mcp-server-filesystem", "/tmp/demo"],
                         "env": {"ALLOW": "1"},
                     }
                 ),
@@ -1735,14 +1721,8 @@ class APISurfaceE2ETest(unittest.TestCase):
             self.assertEqual(discovered_remote.payload["transport"], "streamable-http")
             self.assertEqual(discovered_remote.payload["toolCount"], 1)
             self.assertEqual(discovered_remote.payload["tools"][0]["name"], "ping")
-            self.assertEqual(
-                observed_remote_config["mcpServers"]["remote-demo"]["headers"]["Authorization"],
-                "Bearer demo",
-            )
-            self.assertEqual(
-                observed_remote_config["mcpServers"]["remote-demo"]["transportType"],
-                "streamable-http",
-            )
+            self.assertEqual(observed_payloads[-1]["headers"], {"Authorization": "Bearer demo"})
+            self.assertEqual(observed_payloads[-1]["transport"], "streamable-http")
 
     def test_internal_dashboard_keeps_durable_state_after_episode_delete(self) -> None:
         created = self.app.dispatch(

@@ -21,6 +21,7 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(!model.showingOnboarding)
             .accessibilityHidden(model.isSleepDisplayPresented || model.showingOnboarding)
+            .blur(radius: model.showingOnboardingLetterEnvelope ? 8 : 0)
             .animation(.easeInOut(duration: 0.18), value: sidebarVisible)
 
             if model.isSleepDisplayPresented {
@@ -39,6 +40,26 @@ struct RootView: View {
                 .transition(.opacity)
                 .zIndex(40)
             }
+
+            if model.showingOnboardingLetterPrompt, let entry = model.onboardingLetterEntry, !model.showingOnboarding {
+                OnboardingLetterToast(entry: entry)
+                    .environmentObject(model)
+                    .padding(.trailing, 28)
+                    .padding(.bottom, 28)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.98, anchor: .bottomTrailing)),
+                        removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .bottomTrailing))
+                    ))
+                    .zIndex(55)
+            }
+
+            if model.showingOnboardingLetterEnvelope, let entry = model.onboardingLetterEntry {
+                ElephantLetterEnvelopeOverlay(entry: entry)
+                    .environmentObject(model)
+                    .transition(.opacity)
+                    .zIndex(60)
+            }
         }
         .background(AppActivityMonitor {
             model.registerUserActivity()
@@ -46,6 +67,8 @@ struct RootView: View {
         .environment(\.locale, Locale(identifier: model.appLanguage.localeIdentifier))
         .animation(.spring(response: 0.42, dampingFraction: 0.86), value: model.isSleepDisplayPresented)
         .animation(.easeInOut(duration: 0.24), value: model.showingOnboarding)
+        .animation(.spring(response: 0.42, dampingFraction: 0.88), value: model.showingOnboardingLetterPrompt)
+        .animation(.spring(response: 0.46, dampingFraction: 0.86), value: model.showingOnboardingLetterEnvelope)
         .onChange(of: model.snapshot.hasElephant) { hasElephant in
             if hasElephant {
                 onboardingComplete = true
@@ -78,6 +101,207 @@ struct RootView: View {
         model.snapshot.providerOptions
             .map { "\($0.id):\($0.displayName)" }
             .joined(separator: "|")
+    }
+}
+
+struct OnboardingLetterToast: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var entry: DiaryEntry
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            model.openOnboardingLetter(entry)
+        } label: {
+            HStack(spacing: 13) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(LinearGradient(
+                            colors: [ElephantTheme.gold.opacity(0.26), ElephantTheme.ember.opacity(0.18)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                    Image(systemName: "envelope.open.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(ElephantTheme.orange)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localizedYouText(model.appLanguage, en: "A letter from Elephant", zh: "Elephant 给你写了一封信", fr: "Une lettre d'Elephant", de: "Ein Brief von Elephant"))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(localizedYouText(model.appLanguage, en: "Open the first note it wrote after getting to know you.", zh: "打开它认识你之后写下的第一封信。", fr: "Ouvrez sa première note après vous avoir connu.", de: "Öffne die erste Nachricht nach dem Kennenlernen."))
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(ElephantTheme.faint)
+            }
+            .padding(14)
+            .frame(width: 356, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(hovering ? ElephantTheme.orange.opacity(0.36) : Color.white.opacity(0.42), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(hovering ? 0.18 : 0.12), radius: hovering ? 24 : 18, y: hovering ? 14 : 10)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .scaleEffect(hovering ? 1.012 : 1)
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .overlay(alignment: .topTrailing) {
+            Button {
+                model.dismissOnboardingLetterPrompt()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .frame(width: 24, height: 24)
+                    .background(.thinMaterial, in: Circle())
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .offset(x: 8, y: -8)
+            .help(localizedYouText(model.appLanguage, en: "Dismiss", zh: "暂不查看", fr: "Ignorer", de: "Schliessen"))
+        }
+        .onHover { hovering = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(localizedYouText(model.appLanguage, en: "A letter from Elephant", zh: "Elephant 给你写了一封信", fr: "Une lettre d'Elephant", de: "Ein Brief von Elephant"))
+    }
+}
+
+struct ElephantLetterEnvelopeOverlay: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var entry: DiaryEntry
+    @State private var opened = false
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color.black.opacity(0.18))
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    model.closeOnboardingLetterEnvelope()
+                }
+
+            VStack(spacing: 0) {
+                envelopeHeader
+                Divider().opacity(0.7)
+                ScrollView {
+                    MarkdownBody(text: entry.content, font: .body, color: ElephantTheme.ink)
+                        .padding(.horizontal, 34)
+                        .padding(.top, 26)
+                        .padding(.bottom, 34)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 520)
+            }
+            .frame(width: 660)
+            .background(letterPaper)
+            .overlay(letterDecoration)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.58), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.22), radius: 38, y: 24)
+            .scaleEffect(opened ? 1 : 0.92)
+            .rotation3DEffect(.degrees(opened ? 0 : -6), axis: (x: 1, y: 0, z: 0), perspective: 0.72)
+            .opacity(opened ? 1 : 0)
+        }
+        .onAppear {
+            guard !reduceMotion else {
+                opened = true
+                return
+            }
+            withAnimation(.spring(response: 0.56, dampingFraction: 0.82, blendDuration: 0.08)) {
+                opened = true
+            }
+        }
+        .onExitCommand {
+            model.closeOnboardingLetterEnvelope()
+        }
+    }
+
+    private var envelopeHeader: some View {
+        HStack(alignment: .center, spacing: 15) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [ElephantTheme.gold.opacity(0.30), ElephantTheme.ember.opacity(0.20), Color.white.opacity(0.22)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                Image(systemName: "envelope.open.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(ElephantTheme.orange)
+            }
+            .frame(width: 54, height: 54)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizedYouText(model.appLanguage, en: "Elephant's first letter", zh: "Elephant 给你的第一封信", fr: "La première lettre d'Elephant", de: "Elephants erster Brief"))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Text(entry.generatedAt.isEmpty ? localizedYouText(model.appLanguage, en: "written after onboarding", zh: "在认识你之后写下", fr: "écrite après l'accueil", de: "nach dem Onboarding geschrieben") : MacLocalDateTime.formatted(entry.generatedAt, language: model.appLanguage))
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                model.closeOnboardingLetterEnvelope()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.callout.weight(.bold))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .help(localizedYouText(model.appLanguage, en: "Close letter", zh: "收起信", fr: "Fermer la lettre", de: "Brief schliessen"))
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+    }
+
+    private var letterPaper: some View {
+        LinearGradient(
+            colors: [
+                Color(nsColor: .textBackgroundColor),
+                ElephantTheme.gold.opacity(0.050),
+                ElephantTheme.ember.opacity(0.035)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var letterDecoration: some View {
+        ZStack(alignment: .top) {
+            LetterEnvelopeFlap()
+                .fill(ElephantTheme.gold.opacity(0.10))
+                .frame(height: 118)
+                .allowsHitTesting(false)
+            LetterEnvelopeFlap()
+                .stroke(ElephantTheme.gold.opacity(0.16), lineWidth: 1)
+                .frame(height: 118)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+struct LetterEnvelopeFlap: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -2801,8 +3025,89 @@ struct ChatEmptyState: View {
             }
             HomeMemoryPulseRow()
                 .frame(maxWidth: 520)
+            ChatHerdInvitation()
+                .frame(maxWidth: 520)
         }
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+struct ChatHerdInvitation: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            model.selectedSection = .herd
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "person.3.sequence.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 32, height: 32)
+                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localizedYouText(model.appLanguage, en: "Mother can bring baby elephants into the work", zh: "母象可以带上本地小象", fr: "Mother peut inviter les baby elephants", de: "Mother kann Baby Elephants dazuholen"))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(invitationDetail)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if enabledBabyCount > 0 {
+                    Pill(
+                        text: localizedFormat(model.appLanguage, en: "%d active", zh: "%d 只小象", fr: "%d actifs", de: "%d aktiv", enabledBabyCount),
+                        symbol: "bolt.fill",
+                        tint: ElephantTheme.green
+                    )
+                } else if executableCandidateCount > 0 {
+                    Pill(
+                        text: localizedFormat(model.appLanguage, en: "%d ready", zh: "%d 个可领养", fr: "%d prêts", de: "%d bereit", executableCandidateCount),
+                        symbol: "plus.circle.fill",
+                        tint: ElephantTheme.accent
+                    )
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.faint)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.72 : 0.48),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(ElephantTheme.line.opacity(hovering ? 0.82 : 0.56), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .help(localizedYouText(model.appLanguage, en: "Open Herd", zh: "打开象群", fr: "Ouvrir le Herd", de: "Herd öffnen"))
+    }
+
+    private var enabledBabyCount: Int {
+        model.snapshot.herdItems.filter { $0.herdKind == "baby" && $0.enabled }.count
+    }
+
+    private var executableCandidateCount: Int {
+        model.snapshot.localAgentRuntimes.filter(\.canExecute).count
+    }
+
+    private var invitationDetail: String {
+        if enabledBabyCount > 0 {
+            return localizedYouText(model.appLanguage, en: "For code, research, or GitHub work, Mother can delegate to the right local specialist.", zh: "需要代码、研究或 GitHub 帮手时，母象会按角色委派。", fr: "Pour code, recherche ou GitHub, Mother délègue au bon spécialiste.", de: "Für Code, Recherche oder GitHub delegiert Mother passend.")
+        }
+        if executableCandidateCount > 0 {
+            return localizedYouText(model.appLanguage, en: "Local agents were found. Adopt the ones you trust as baby elephants.", zh: "已经发现本地 agent，可以去 Herd 里领养成小象。", fr: "Des agents locaux sont prêts à être adoptés.", de: "Lokale Agents können als Baby Elephants übernommen werden.")
+        }
+        return localizedYouText(model.appLanguage, en: "Open Herd to scan Codex, Gemini CLI, Copilot CLI, and other local agents.", zh: "去 Herd 扫描 Codex、Gemini CLI、Copilot CLI 等本地 agent。", fr: "Ouvrez Herd pour analyser Codex, Gemini CLI et autres agents.", de: "Öffne Herd, um Codex, Gemini CLI und weitere Agents zu finden.")
     }
 }
 
@@ -3482,6 +3787,19 @@ struct ToolUseStack: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            ForEach(childAgentEvents.suffix(3)) { event in
+                ChildAgentRunCard(event: event, isLive: isLive)
+            }
+
+            if !regularEvents.isEmpty {
+                regularToolStack
+            }
+        }
+        .frame(maxWidth: 520, alignment: .leading)
+    }
+
+    private var regularToolStack: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "wrench.and.screwdriver")
                     .font(.caption2.weight(.semibold))
@@ -3508,7 +3826,7 @@ struct ToolUseStack: View {
                 Spacer(minLength: 0)
             }
 
-            ForEach(events.suffix(5)) { event in
+            ForEach(regularEvents.suffix(5)) { event in
                 ToolUseEventRow(event: event)
             }
         }
@@ -3521,8 +3839,16 @@ struct ToolUseStack: View {
         )
     }
 
+    private var childAgentEvents: [ToolUseEvent] {
+        events.filter(\.isChildAgentRun)
+    }
+
+    private var regularEvents: [ToolUseEvent] {
+        events.filter { !$0.isChildAgentRun }
+    }
+
     private var hasRunningEvent: Bool {
-        events.contains { event in
+        regularEvents.contains { event in
             let status = event.status.lowercased()
             return status.contains("running")
                 || status.contains("preparing")
@@ -3530,6 +3856,251 @@ struct ToolUseStack: View {
                 || status.contains("requested")
                 || status.contains("classified")
         }
+    }
+}
+
+struct ChildAgentRunCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var event: ToolUseEvent
+    var isLive = false
+    @State private var expanded = false
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                expanded.toggle()
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    ZStack(alignment: .bottomTrailing) {
+                        ProviderLogoView(providerID: event.providerID, displayName: providerLabel, size: 38)
+                        if isRunning {
+                            ChildAgentPulse(tint: statusTint)
+                                .offset(x: 3, y: 3)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(titleText)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                            .lineLimit(1)
+                        Text(subtitleText)
+                            .font(.caption)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Pill(text: statusText, symbol: statusSymbol, tint: statusTint)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(ElephantTheme.faint)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                }
+
+                if expanded {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !taskText.isEmpty {
+                            ChildAgentDetailLine(label: localizedYouText(model.appLanguage, en: "Task", zh: "任务", fr: "Tâche", de: "Aufgabe"), value: taskText)
+                        }
+                        if !summaryText.isEmpty {
+                            ChildAgentDetailLine(label: localizedYouText(model.appLanguage, en: "Update", zh: "进展", fr: "Mise à jour", de: "Update"), value: summaryText)
+                        }
+                        HStack(spacing: 8) {
+                            if !runtimeLabel.isEmpty {
+                                Pill(text: runtimeLabel, symbol: "terminal", tint: ElephantTheme.accent)
+                            }
+                            if !event.childEpisodeID.isEmpty {
+                                Pill(text: "child \(event.childEpisodeID.prefix(8))", symbol: "rectangle.stack", tint: ElephantTheme.faint)
+                            }
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .frame(maxWidth: 520, alignment: .leading)
+            .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(statusTint.opacity(isRunning ? 0.34 : 0.22), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .help(expanded ? model.text(.hideToolDetails) : model.text(.showToolDetails))
+        .accessibilityLabel("\(titleText), \(statusText)")
+    }
+
+    private var titleText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "\(babyName) is working",
+            zh: "\(babyName) 正在工作",
+            fr: "\(babyName) travaille",
+            de: "\(babyName) arbeitet"
+        )
+    }
+
+    private var subtitleText: String {
+        let provider = providerLabel
+        let role = event.babyRole.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !role.isEmpty {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Mother delegated to \(role) through \(provider).",
+                zh: "母象把任务交给 \(role)，运行时是 \(provider)。",
+                fr: "Mother délègue à \(role) via \(provider).",
+                de: "Mother delegiert an \(role) über \(provider)."
+            )
+        }
+        return localizedYouText(
+            model.appLanguage,
+            en: "Mother delegated this to \(provider).",
+            zh: "母象把这一步交给 \(provider)。",
+            fr: "Mother délègue ceci à \(provider).",
+            de: "Mother delegiert das an \(provider)."
+        )
+    }
+
+    private var babyName: String {
+        let value = [event.babyName, event.babyRole, cleanedToolName].first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? ""
+        if !value.isEmpty { return value }
+        return localizedYouText(model.appLanguage, en: "Baby elephant", zh: "小象", fr: "Baby elephant", de: "Baby Elephant")
+    }
+
+    private var cleanedToolName: String {
+        let value = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value == "tool.sub_agents" || value == "sub_agents" || value == "tool" { return "" }
+        return value
+    }
+
+    private var providerLabel: String {
+        let candidates = [event.runtimeName, event.providerID, event.backend].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let raw = candidates.first { !$0.isEmpty } ?? "local CLI"
+        let lower = raw.lowercased()
+        if lower.contains("copilot") { return "GitHub Copilot" }
+        if lower.contains("gemini") { return "Gemini CLI" }
+        if lower.contains("claude") { return "Claude Code" }
+        if lower.contains("cursor") { return "Cursor Agent" }
+        if lower.contains("codex") || lower.contains("openai") { return "Codex" }
+        if lower == "local_cli" { return "local CLI" }
+        return raw
+    }
+
+    private var statusText: String {
+        localizedToolStatus(event.status, language: model.appLanguage)
+    }
+
+    private var statusSymbol: String {
+        if isFailure { return "exclamationmark.triangle.fill" }
+        if isRunning { return "arrow.triangle.2.circlepath" }
+        return "checkmark.circle.fill"
+    }
+
+    private var statusTint: Color {
+        if isFailure {
+            return ElephantTheme.orange
+        }
+        if isComplete {
+            return ElephantTheme.green
+        }
+        return ElephantTheme.accent
+    }
+
+    private var isFailure: Bool {
+        let value = event.status.lowercased()
+        return value.contains("fail") || value.contains("error") || value.contains("blocked")
+    }
+
+    private var isComplete: Bool {
+        let value = event.status.lowercased()
+        return value.contains("complete") || value.contains("success") || value.contains("done")
+    }
+
+    private var isRunning: Bool {
+        let value = event.status.lowercased() + " " + event.phase.lowercased()
+        return isLive && (
+            value.contains("running")
+                || value.contains("start")
+                || value.contains("preparing")
+                || value.contains("requested")
+                || value.contains("planned")
+        )
+    }
+
+    private var taskText: String {
+        let value = event.task.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty { return value }
+        return event.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var summaryText: String {
+        let value = event.result.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty { return value }
+        return event.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var runtimeLabel: String {
+        let modelName = event.runtimeModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !modelName.isEmpty {
+            return "\(providerLabel) · \(modelName)"
+        }
+        return providerLabel
+    }
+
+    private var cardFill: Color {
+        let base = statusTint.opacity(isRunning ? 0.095 : 0.065)
+        return hovering ? base.opacity(1.30) : base
+    }
+}
+
+private struct ChildAgentPulse: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var tint: Color
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { timeline in
+            let phase = reduceMotion ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
+            let wave = reduceMotion ? 0.0 : (sin(phase * 5.0) + 1.0) / 2.0
+            Circle()
+                .fill(tint)
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle()
+                        .stroke(tint.opacity(0.32), lineWidth: 2)
+                        .scaleEffect(1.0 + wave * 0.85)
+                        .opacity(reduceMotion ? 0 : 0.55 - wave * 0.34)
+                )
+        }
+        .frame(width: 12, height: 12)
+    }
+}
+
+private struct ChildAgentDetailLine: View {
+    var label: String
+    var value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(ElephantTheme.muted)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(ElephantTheme.ink.opacity(0.78))
+                .lineLimit(6)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -3782,6 +4353,69 @@ private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr
     String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
 }
 
+private func localizedRuntimeRoleTitle(_ runtime: LocalAgentRuntimeItem, language: AppLanguage) -> String {
+    let provider = runtime.providerID.lowercased()
+    let rawTitle = runtime.roleTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    if language == .en, !rawTitle.isEmpty {
+        return rawTitle
+    }
+    if provider.contains("codex") {
+        return localizedYouText(language, en: "coding implementer", zh: "编码小象", fr: "implémentation code", de: "Code-Implementierung")
+    }
+    if provider.contains("gemini") {
+        return localizedYouText(language, en: "research analyst", zh: "研究小象", fr: "analyse recherche", de: "Recherche")
+    }
+    if provider.contains("copilot") {
+        return localizedYouText(language, en: "GitHub assistant", zh: "GitHub 小象", fr: "assistant GitHub", de: "GitHub-Assistent")
+    }
+    if provider.contains("claude") {
+        return localizedYouText(language, en: "code reviewer", zh: "审查小象", fr: "revue de code", de: "Code-Review")
+    }
+    return localizedYouText(language, en: "local specialist", zh: "本地专长小象", fr: "spécialiste local", de: "Lokaler Spezialist")
+}
+
+private func localizedRuntimeRolePrompt(_ runtime: LocalAgentRuntimeItem, language: AppLanguage) -> String {
+    let provider = runtime.providerID.lowercased()
+    let rawPrompt = runtime.rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    if language == .en, !rawPrompt.isEmpty {
+        return rawPrompt
+    }
+    if provider.contains("codex") {
+        return localizedYouText(
+            language,
+            en: "Use Codex for repository changes, code review, terminal-driven investigation, and validation-heavy engineering work.",
+            zh: "把代码修改、代码审查、终端排查和需要严格验证的工程任务交给这只小象。",
+            fr: "Confiez-lui les changements repo, revues de code, investigations terminal et validations exigeantes.",
+            de: "Nutze es für Repository-Änderungen, Code-Review, Terminal-Recherche und validierungsintensive Arbeit."
+        )
+    }
+    if provider.contains("gemini") {
+        return localizedYouText(
+            language,
+            en: "Use Gemini for research, comparison, synthesis, and broad context gathering.",
+            zh: "把研究、对比、资料综合和大范围上下文收集交给这只小象。",
+            fr: "Confiez-lui la recherche, la comparaison, la synthèse et le contexte large.",
+            de: "Nutze es für Recherche, Vergleich, Synthese und breiten Kontext."
+        )
+    }
+    if provider.contains("copilot") {
+        return localizedYouText(
+            language,
+            en: "Use Copilot for GitHub-centric code questions and repository workflow assistance.",
+            zh: "把 GitHub 相关代码问题和仓库工作流协助交给这只小象。",
+            fr: "Confiez-lui les questions GitHub et les workflows de dépôt.",
+            de: "Nutze es für GitHub-nahe Codefragen und Repository-Workflows."
+        )
+    }
+    return localizedYouText(
+        language,
+        en: "Use this baby elephant for focused local CLI work that matches its specialist runtime.",
+        zh: "把适合这个本地 CLI 专长的边界清晰任务交给这只小象。",
+        fr: "Confiez-lui le travail CLI local ciblé qui correspond à son runtime spécialisé.",
+        de: "Nutze es für fokussierte lokale CLI-Arbeit, die zu seiner spezialisierten Runtime passt."
+    )
+}
+
 private func companionDayText(snapshot: DashboardSnapshot, language: AppLanguage) -> String? {
     guard let days = companionDayCount(snapshot: snapshot) else { return nil }
     return localizedFormat(
@@ -3956,6 +4590,9 @@ private func localizedRuntimeStatus(_ rawValue: String, language: AppLanguage) -
     }
     if value.contains("ready") {
         return localizedYouText(language, en: "ready", zh: "就绪", fr: "prêt", de: "bereit")
+    }
+    if value.contains("detect") || value.contains("found") {
+        return localizedYouText(language, en: "detected", zh: "已发现", fr: "détecté", de: "gefunden")
     }
     if value.contains("complete") || value.contains("done") {
         return localizedYouText(language, en: "completed", zh: "已完成", fr: "terminé", de: "abgeschlossen")
@@ -6273,10 +6910,25 @@ struct DiaryPanel: View {
                     ForEach(model.snapshot.diaryEntries) { entry in
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
-                                Label(entry.date.isEmpty ? localizedYouText(model.appLanguage, en: "Diary entry", zh: "日记", fr: "Entrée de journal", de: "Tagebucheintrag") : entry.date, systemImage: "book.closed")
+                                Label(
+                                    entry.isOnboardingLetter
+                                        ? localizedYouText(model.appLanguage, en: "Elephant's first letter", zh: "Elephant 的第一封信", fr: "Première lettre d'Elephant", de: "Elephants erster Brief")
+                                        : (entry.date.isEmpty ? localizedYouText(model.appLanguage, en: "Diary entry", zh: "日记", fr: "Entrée de journal", de: "Tagebucheintrag") : entry.date),
+                                    systemImage: entry.isOnboardingLetter ? "envelope.open" : "book.closed"
+                                )
                                     .font(.headline)
                                     .foregroundStyle(ElephantTheme.ink)
                                 Spacer()
+                                if entry.isOnboardingLetter {
+                                    Button {
+                                        model.openOnboardingLetter(entry)
+                                    } label: {
+                                        Label(localizedYouText(model.appLanguage, en: "Open letter", zh: "打开信", fr: "Ouvrir", de: "Offnen"), systemImage: "envelope.open")
+                                            .labelStyle(.titleAndIcon)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
                                 if !entry.generatedAt.isEmpty {
                                     Text(entry.generatedAt)
                                         .font(.caption)
@@ -7170,64 +7822,839 @@ struct GatewayQRMatrixView: View {
 struct HerdView: View {
     @EnvironmentObject private var model: ElephantAppModel
     @State private var showingCreate = false
+    @State private var selectedKind = "mother"
+    @State private var selectedID = ""
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 330, maximum: 520), spacing: 14, alignment: .top)
-    ]
+    private var motherItems: [HerdItem] {
+        let mothers = model.snapshot.herdItems.filter { $0.herdKind == "mother" || $0.elephantID == "mother-elephant" }
+        if !mothers.isEmpty { return mothers }
+        return model.snapshot.herdItems.filter { !$0.herdKind.elementsEqual("baby") }.prefix(1).map { $0 }
+    }
+
+    private var babyItems: [HerdItem] {
+        model.snapshot.herdItems.filter { $0.herdKind == "baby" }
+    }
+
+    private var discoveredCandidates: [LocalAgentRuntimeItem] {
+        let adoptedRuntimeIDs = Set(model.snapshot.herdItems.map(\.runtimeID).filter { !$0.isEmpty })
+        return model.snapshot.localAgentRuntimes.filter { !adoptedRuntimeIDs.contains($0.runtimeID) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
                 title: AppSection.herd.title(language: model.appLanguage),
-                subtitle: model.text(.herdPageSubtitle),
-                actionTitle: model.text(.newElephant),
-                actionSymbol: "plus"
+                subtitle: localizedYouText(model.appLanguage, en: "Mother keeps context. Baby elephants bring local CLI skills when she delegates.", zh: "母象守住上下文，小象在需要时带着本地 CLI 技能加入。", fr: "Mother garde le contexte; les babies apportent les CLI locaux.", de: "Mother hält Kontext; Babies bringen lokale CLI-Fähigkeiten."),
+                actionTitle: localizedYouText(model.appLanguage, en: "Rescan", zh: "重新扫描", fr: "Réanalyser", de: "Neu scannen"),
+                actionSymbol: "arrow.clockwise"
             ) {
-                showingCreate = true
+                Task { await model.scanLocalAgentsForHerd() }
             }
 
             NativePanel {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(
-                            title: localizedYouText(model.appLanguage, en: "Local Elephants", zh: "本机 Elephants", fr: "Elephants locaux", de: "Lokale Elephants"),
-                            subtitle: localizedFormat(model.appLanguage, en: "%d state(s)", zh: "%d 个状态", fr: "%d état(s)", de: "%d Status", model.snapshot.herdItems.count)
-                        )
-                        Spacer(minLength: 0)
-                        Button {
-                            Task { try? await model.refreshDashboard() }
-                        } label: {
-                            Label(model.text(.refresh), systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
-                    }
+                HStack(alignment: .top, spacing: 0) {
+                    HerdRosterPane(
+                        motherItems: motherItems,
+                        babyItems: babyItems,
+                        candidates: discoveredCandidates,
+                        selectedKind: $selectedKind,
+                        selectedID: $selectedID
+                    )
+                    .frame(width: 330)
 
-                    if model.snapshot.herdItems.isEmpty {
-                        EmptyLine(
-                            symbol: "person.3",
-                            text: localizedYouText(
-                                model.appLanguage,
-                                en: "No local elephant has been created yet. Run onboarding from Settings after provider setup.",
-                                zh: "还没有创建本机 Elephant。先配好模型，再从设置里重新初始化。",
-                                fr: "Aucun elephant local créé. Lancez l'onboarding depuis Réglages après le provider.",
-                                de: "Noch kein lokaler Elephant. Starte Onboarding nach Provider-Setup in den Einstellungen."
-                            )
-                        )
-                    } else {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                            ForEach(model.snapshot.herdItems) { item in
-                                HerdElephantCard(item: item)
-                            }
-                        }
-                    }
+                    Divider()
+
+                    HerdDetailPane(
+                        selectedKind: selectedKind,
+                        selectedID: selectedID,
+                        motherItems: motherItems,
+                        babyItems: babyItems,
+                        candidates: discoveredCandidates,
+                        showingCreate: $showingCreate
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+                .frame(minHeight: 520, alignment: .top)
             }
         }
         .sheet(isPresented: $showingCreate) {
             HerdCreateSheet(isPresented: $showingCreate)
                 .environmentObject(model)
         }
+        .onAppear {
+            if selectedID.isEmpty {
+                if let mother = motherItems.first {
+                    selectedKind = "mother"
+                    selectedID = mother.id
+                } else if let baby = babyItems.first {
+                    selectedKind = "baby"
+                    selectedID = baby.id
+                } else if let candidate = discoveredCandidates.first {
+                    selectedKind = "candidate"
+                    selectedID = candidate.runtimeID
+                }
+            }
+        }
+    }
+}
+
+struct HerdRosterPane: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var motherItems: [HerdItem]
+    var babyItems: [HerdItem]
+    var candidates: [LocalAgentRuntimeItem]
+    @Binding var selectedKind: String
+    @Binding var selectedID: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Herd", zh: "象群", fr: "Herd", de: "Herd"),
+                    subtitle: localizedFormat(model.appLanguage, en: "Mother + %d baby elephant(s)", zh: "母象 + %d 个小象", fr: "Mother + %d baby elephants", de: "Mother + %d Baby Elephants", babyItems.count)
+                )
+                Spacer()
+                Button {
+                    Task { await model.scanLocalAgentsForHerd() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help(model.text(.refresh))
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    HerdRosterSectionTitle(title: localizedYouText(model.appLanguage, en: "Mother", zh: "母象", fr: "Mother", de: "Mother"))
+                    ForEach(motherItems) { item in
+                        HerdRosterRow(
+                            title: item.title,
+                            subtitle: localizedYouText(model.appLanguage, en: "keeps context and delegates", zh: "理解你，并负责委派", fr: "garde le contexte", de: "hält Kontext"),
+                            symbol: "sparkles",
+                            tint: ElephantTheme.accent,
+                            providerID: "mother-elephant",
+                            selected: selectedKind == "mother" && selectedID == item.id
+                        ) {
+                            selectedKind = "mother"
+                            selectedID = item.id
+                        }
+                    }
+                    if motherItems.isEmpty {
+                        EmptyLine(symbol: "sparkles", text: localizedYouText(model.appLanguage, en: "No Mother Elephant yet.", zh: "还没有母象。", fr: "Pas encore de Mother Elephant.", de: "Noch kein Mother Elephant."))
+                    }
+
+                    HerdRosterSectionTitle(title: localizedYouText(model.appLanguage, en: "Baby Elephants", zh: "小象", fr: "Baby elephants", de: "Baby Elephants"))
+                    ForEach(babyItems) { item in
+                        HerdRosterRow(
+                            title: item.title,
+                            subtitle: [item.roleTitle, item.providerID].filter { !$0.isEmpty }.joined(separator: " · "),
+                            symbol: item.enabled ? "checkmark.circle" : "pause.circle",
+                            tint: item.enabled ? ElephantTheme.green : ElephantTheme.orange,
+                            providerID: item.providerID,
+                            selected: selectedKind == "baby" && selectedID == item.id
+                        ) {
+                            selectedKind = "baby"
+                            selectedID = item.id
+                        }
+                    }
+                    if babyItems.isEmpty {
+                        EmptyLine(symbol: "figure.child", text: localizedYouText(model.appLanguage, en: "No baby elephants adopted yet.", zh: "还没有领养小象。", fr: "Aucun baby elephant adopté.", de: "Noch keine Baby Elephants."))
+                    }
+
+                    HerdRosterSectionTitle(title: localizedYouText(model.appLanguage, en: "Discovered", zh: "已发现", fr: "Découverts", de: "Gefunden"))
+                    ForEach(candidates) { runtime in
+                        HerdRosterRow(
+                            title: runtime.displayName,
+                            subtitle: runtime.canExecute ? candidateSubtitle(runtime) : localizedYouText(model.appLanguage, en: "detected, not adoptable yet", zh: "已发现，暂不可领养", fr: "détecté, pas encore adoptable", de: "gefunden, noch nicht übernehmbar"),
+                            symbol: runtime.canExecute ? "terminal" : "terminal.badge.ellipsis",
+                            tint: runtime.canExecute ? ElephantTheme.accent : ElephantTheme.muted,
+                            providerID: runtime.providerID,
+                            selected: selectedKind == "candidate" && selectedID == runtime.runtimeID
+                        ) {
+                            selectedKind = "candidate"
+                            selectedID = runtime.runtimeID
+                        }
+                    }
+                    if candidates.isEmpty {
+                        EmptyLine(symbol: "terminal", text: localizedYouText(model.appLanguage, en: "No new local agents found.", zh: "没有新的本地 agent。", fr: "Aucun nouvel agent local.", de: "Keine neuen lokalen Agents."))
+                    }
+                }
+                .padding(.trailing, 12)
+            }
+        }
+        .padding(14)
+    }
+
+    private func candidateSubtitle(_ runtime: LocalAgentRuntimeItem) -> String {
+        localizedRuntimeRoleTitle(runtime, language: model.appLanguage)
+    }
+}
+
+struct HerdRosterSectionTitle: View {
+    var title: String
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(ElephantTheme.muted)
+            .padding(.top, 4)
+    }
+}
+
+struct HerdRosterRow: View {
+    var title: String
+    var subtitle: String
+    var symbol: String
+    var tint: Color
+    var providerID: String = ""
+    var selected: Bool
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Image(systemName: symbol)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 32, height: 32)
+                        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    ProviderLogoView(providerID: providerID, displayName: title, size: 32)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(subtitle.isEmpty ? " " : subtitle)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(minHeight: 58)
+            .background(rowFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? ElephantTheme.accent.opacity(0.28) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .help(title)
+    }
+
+    private var rowFill: Color {
+        if selected { return ElephantTheme.accent.opacity(0.12) }
+        return hovering ? Color(nsColor: .controlBackgroundColor).opacity(0.62) : Color.clear
+    }
+}
+
+struct HerdDetailPane: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var selectedKind: String
+    var selectedID: String
+    var motherItems: [HerdItem]
+    var babyItems: [HerdItem]
+    var candidates: [LocalAgentRuntimeItem]
+    @Binding var showingCreate: Bool
+
+    var body: some View {
+        Group {
+            if selectedKind == "candidate", let runtime = candidates.first(where: { $0.runtimeID == selectedID }) {
+                LocalAgentRuntimeDetail(runtime: runtime)
+                    .id(runtime.runtimeID)
+            } else if let item = (motherItems + babyItems).first(where: { $0.id == selectedID || $0.elephantID == selectedID }) {
+                HerdElephantDetail(item: item)
+                    .id(item.id)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionLabel(
+                        title: localizedYouText(model.appLanguage, en: "No selection", zh: "未选择", fr: "Aucune sélection", de: "Keine Auswahl"),
+                        subtitle: localizedYouText(model.appLanguage, en: "Choose Mother, a baby elephant, or a discovered local agent.", zh: "选择母象、小象，或一个发现到的本地 agent。", fr: "Choisissez Mother, un baby elephant ou un agent local.", de: "Wähle Mother, ein Baby Elephant oder einen lokalen Agent.")
+                    )
+                    Button {
+                        showingCreate = true
+                    } label: {
+                        Label(model.text(.newElephant), systemImage: "plus")
+                    }
+                }
+                .padding(18)
+            }
+        }
+        .padding(18)
+    }
+}
+
+struct HerdElephantDetail: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var item: HerdItem
+    @State private var name = ""
+    @State private var identityText = ""
+    @State private var roleTitle = ""
+    @State private var rolePrompt = ""
+    @State private var enabled = false
+    @State private var editingDetails = false
+    @State private var confirmDelete = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                detailAvatar
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.title)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(subtitleLine)
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.muted)
+                    HStack(spacing: 8) {
+                        Pill(text: item.current ? model.text(.phaseStatusCurrent) : localizedRuntimeStatus(item.status, language: model.appLanguage), symbol: item.current ? "checkmark" : "circle.fill", tint: item.current ? ElephantTheme.green : ElephantTheme.accent)
+                        if item.herdKind == "baby" {
+                            Pill(
+                                text: enabled
+                                    ? localizedYouText(model.appLanguage, en: "enabled", zh: "可调度", fr: "activé", de: "aktiv")
+                                    : localizedYouText(model.appLanguage, en: "paused", zh: "已暂停", fr: "en pause", de: "pausiert"),
+                                symbol: enabled ? "bolt.fill" : "pause.fill",
+                                tint: enabled ? ElephantTheme.green : ElephantTheme.orange
+                            )
+                        }
+                    }
+                }
+                Spacer()
+                editToolbar
+            }
+
+            Divider()
+
+            HerdOperationalSummary(
+                item: item,
+                babyCount: model.snapshot.herdItems.filter { $0.herdKind == "baby" && $0.enabled }.count,
+                candidateCount: model.snapshot.localAgentRuntimes.filter(\.canExecute).count
+            )
+
+            if editingDetails {
+                HerdEditCard(title: localizedYouText(model.appLanguage, en: "Identity", zh: "身份", fr: "Identité", de: "Identität")) {
+                    TextField(localizedYouText(model.appLanguage, en: "Name", zh: "名称", fr: "Nom", de: "Name"), text: $name)
+                        .textFieldStyle(.roundedBorder)
+                    if item.herdKind == "baby" {
+                        Toggle(localizedYouText(model.appLanguage, en: "Mother may delegate to this baby", zh: "允许母象调度这只小象", fr: "Mother peut déléguer", de: "Mother darf delegieren"), isOn: $enabled)
+                        TextField(localizedYouText(model.appLanguage, en: "Role", zh: "角色", fr: "Rôle", de: "Rolle"), text: $roleTitle)
+                            .textFieldStyle(.roundedBorder)
+                        TextField(localizedYouText(model.appLanguage, en: "Role instruction", zh: "角色指令", fr: "Instruction", de: "Anweisung"), text: $rolePrompt, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(3...6)
+                    }
+                    TextField("ELEPHANT.md", text: $identityText, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(10...18)
+                }
+            } else {
+                if item.herdKind == "baby" {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        HerdReadField(
+                            label: localizedYouText(model.appLanguage, en: "Role", zh: "角色", fr: "Rôle", de: "Rolle"),
+                            value: roleTitle.isEmpty ? localizedYouText(model.appLanguage, en: "Local specialist", zh: "本地专长小象", fr: "Spécialiste local", de: "Lokaler Spezialist") : roleTitle,
+                            symbol: "sparkles",
+                            tint: ElephantTheme.accent
+                        )
+                        HerdReadField(
+                            label: localizedYouText(model.appLanguage, en: "Delegation", zh: "调度", fr: "Délégation", de: "Delegation"),
+                            value: enabled
+                                ? localizedYouText(model.appLanguage, en: "Mother may delegate", zh: "母象可以调度", fr: "Mother peut déléguer", de: "Mother darf delegieren")
+                                : localizedYouText(model.appLanguage, en: "Paused", zh: "暂不调度", fr: "En pause", de: "Pausiert"),
+                            symbol: enabled ? "bolt.fill" : "pause.fill",
+                            tint: enabled ? ElephantTheme.green : ElephantTheme.orange
+                        )
+                    }
+                    if !rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        HerdReadField(
+                            label: localizedYouText(model.appLanguage, en: "Mother's instruction", zh: "母象给它的指令", fr: "Instruction de Mother", de: "Mother-Anweisung"),
+                            value: rolePrompt,
+                            symbol: "quote.bubble",
+                            tint: ElephantTheme.green,
+                            minHeight: 62
+                        )
+                    }
+                }
+                HerdMarkdownReadCard(
+                    title: localizedYouText(model.appLanguage, en: "Vibe", zh: "Vibe", fr: "Vibe", de: "Vibe"),
+                    text: identityText
+                )
+            }
+
+            HerdTechnicalDisclosure {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Runtime", zh: "运行时", fr: "Runtime", de: "Runtime"), value: item.runtimeID.isEmpty ? "none" : item.runtimeID)
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Path", zh: "路径", fr: "Chemin", de: "Pfad"), value: item.cliPath.isEmpty ? "none" : item.cliPath)
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Created", zh: "创建时间", fr: "Créé", de: "Erstellt"), value: MacLocalDateTime.formatted(item.createdAt, language: model.appLanguage))
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Updated", zh: "更新时间", fr: "Mis à jour", de: "Aktualisiert"), value: MacLocalDateTime.formatted(item.updatedAt, language: model.appLanguage))
+                }
+            }
+
+            if editingDetails && item.herdKind == "baby" {
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"), systemImage: "trash")
+                }
+                .controlSize(.small)
+                .disabled(item.current)
+            }
+        }
+        .onAppear(perform: loadDraft)
+        .onChange(of: item.id) { _ in loadDraft() }
+        .confirmationDialog(localizedFormat(model.appLanguage, en: "Delete %@?", zh: "删除 %@？", fr: "Supprimer %@ ?", de: "%@ löschen?", item.title), isPresented: $confirmDelete) {
+            Button(localizedYouText(model.appLanguage, en: "Delete Elephant", zh: "删除 Elephant", fr: "Supprimer Elephant", de: "Elephant löschen"), role: .destructive) {
+                Task { await model.deleteHerdElephant(item) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailAvatar: some View {
+        if item.herdKind == "baby", !item.providerID.isEmpty {
+            ProviderLogoView(providerID: item.providerID, displayName: item.title, size: 68)
+        } else {
+            HerdAvatarImage(size: 68, name: item.title, url: model.herdAvatarURL(for: item))
+        }
+    }
+
+    private var editToolbar: some View {
+        HStack(spacing: 8) {
+            if editingDetails {
+                Button {
+                    model.pickHerdAvatar(for: item)
+                } label: {
+                    Label(model.text(.changeImage), systemImage: "camera")
+                }
+                .controlSize(.small)
+
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
+                    loadDraft()
+                    editingDetails = false
+                }
+                .controlSize(.small)
+
+                Button {
+                    saveDraft()
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Save", zh: "保存", fr: "Enregistrer", de: "Speichern"), systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(ElephantTheme.accent)
+            } else {
+                Button {
+                    editingDetails = true
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"), systemImage: "pencil")
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var kindLabel: String {
+        if isMotherKind { return localizedYouText(model.appLanguage, en: "Mother Elephant", zh: "母象", fr: "Mother Elephant", de: "Mother Elephant") }
+        if item.herdKind == "baby" { return localizedYouText(model.appLanguage, en: "Baby Elephant", zh: "小象", fr: "Baby Elephant", de: "Baby Elephant") }
+        return "Elephant"
+    }
+
+    private var isMotherKind: Bool {
+        item.herdKind == "mother" || item.elephantID == "mother-elephant"
+    }
+
+    private var subtitleLine: String {
+        [kindLabel, item.providerID, localizedRuntimeStatus(item.runtimeStatus, language: model.appLanguage)]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: " · ")
+    }
+
+    private func saveDraft() {
+        Task {
+            await model.updateHerdElephant(
+                item,
+                name: name,
+                identityText: identityText,
+                roleTitle: roleTitle,
+                rolePrompt: rolePrompt,
+                enabled: item.herdKind == "baby" ? enabled : nil
+            )
+            await MainActor.run {
+                editingDetails = false
+            }
+        }
+    }
+
+    private func loadDraft() {
+        name = item.title
+        identityText = sanitizedText(item.identityText)
+        roleTitle = item.roleTitle
+        rolePrompt = item.rolePrompt
+        enabled = item.enabled
+        if isMotherKind && isLegacyMotherIdentity(identityText) {
+            identityText = model.appLanguage.defaultMotherElephantMarkdown(name: item.title)
+        }
+        if identityText.isEmpty {
+            identityText = isMotherKind
+                ? model.appLanguage.defaultMotherElephantMarkdown(name: item.title)
+                : model.appLanguage.defaultElephantMarkdown(name: item.title)
+        }
+    }
+
+    private func sanitizedText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: #"(?s)<!--\s*Internal metadata.*?-->\s*"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func isLegacyMotherIdentity(_ text: String) -> Bool {
+        let normalized = text.lowercased()
+        return normalized.contains("discover local agents and help the user adopt")
+            || normalized.contains("你可以发现本机已有的 agents")
+            || normalized.contains("vous pouvez découvrir des agents locaux")
+            || normalized.contains("kannst du lokale agents entdecken")
+    }
+}
+
+struct HerdOperationalSummary: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var item: HerdItem
+    var babyCount: Int
+    var candidateCount: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HerdPromiseTile(
+                symbol: item.herdKind == "baby" ? "bolt.fill" : "ear",
+                title: firstTitle,
+                detail: firstDetail,
+                tint: ElephantTheme.accent
+            )
+            HerdPromiseTile(
+                symbol: item.herdKind == "baby" ? "terminal" : "point.3.connected.trianglepath.dotted",
+                title: secondTitle,
+                detail: secondDetail,
+                tint: ElephantTheme.green
+            )
+            HerdPromiseTile(
+                symbol: item.herdKind == "baby" ? "checkmark.shield" : "person.3.sequence",
+                title: thirdTitle,
+                detail: thirdDetail,
+                tint: ElephantTheme.ember
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var firstTitle: String {
+        item.herdKind == "baby"
+            ? localizedYouText(model.appLanguage, en: "Specialist", zh: "专长", fr: "Spécialiste", de: "Spezialist")
+            : localizedYouText(model.appLanguage, en: "Listens first", zh: "先理解", fr: "Écoute d'abord", de: "Hört zuerst")
+    }
+
+    private var firstDetail: String {
+        if item.herdKind == "baby" {
+            return item.roleTitle.isEmpty ? localizedYouText(model.appLanguage, en: "Focused local work", zh: "处理清晰的本地任务", fr: "Travail local ciblé", de: "Fokussierte lokale Arbeit") : item.roleTitle
+        }
+        return localizedYouText(model.appLanguage, en: "Mother keeps the user's context before acting.", zh: "母象先守住用户上下文，再行动。", fr: "Mother garde le contexte avant d'agir.", de: "Mother hält Kontext vor Aktion.")
+    }
+
+    private var secondTitle: String {
+        item.herdKind == "baby"
+            ? localizedYouText(model.appLanguage, en: "Runtime", zh: "运行时", fr: "Runtime", de: "Runtime")
+            : localizedYouText(model.appLanguage, en: "Delegates clearly", zh: "清晰委派", fr: "Délègue clairement", de: "Delegiert klar")
+    }
+
+    private var secondDetail: String {
+        if item.herdKind == "baby" {
+            return [item.providerID, localizedRuntimeStatus(item.runtimeStatus, language: model.appLanguage)].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
+        return localizedFormat(model.appLanguage, en: "%d enabled baby elephant(s)", zh: "%d 只已启用小象", fr: "%d babies actifs", de: "%d aktive Babies", babyCount)
+    }
+
+    private var thirdTitle: String {
+        item.herdKind == "baby"
+            ? localizedYouText(model.appLanguage, en: "Guardrail", zh: "边界", fr: "Garde-fou", de: "Leitplanke")
+            : localizedYouText(model.appLanguage, en: "Grows the Herd", zh: "扩展象群", fr: "Fait grandir le Herd", de: "Herd wächst")
+    }
+
+    private var thirdDetail: String {
+        if item.herdKind == "baby" {
+            return item.enabled
+                ? localizedYouText(model.appLanguage, en: "Mother may delegate to it.", zh: "母象可以调度它。", fr: "Mother peut déléguer.", de: "Mother darf delegieren.")
+                : localizedYouText(model.appLanguage, en: "Paused until enabled.", zh: "暂时暂停。", fr: "En pause.", de: "Pausiert.")
+        }
+        return localizedFormat(model.appLanguage, en: "%d local agent(s) ready nearby", zh: "附近有 %d 个可用本地 agent", fr: "%d agents locaux prêts", de: "%d lokale Agents bereit", candidateCount)
+    }
+}
+
+private struct HerdPromiseTile: View {
+    var symbol: String
+    var title: String
+    var detail: String
+    var tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+                Text(detail.isEmpty ? " " : detail)
+                    .font(.caption2)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 74, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.46), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1))
+    }
+}
+
+private struct HerdReadField: View {
+    var label: String
+    var value: String
+    var symbol: String
+    var tint: Color
+    var minHeight: CGFloat = 56
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Text(value.isEmpty ? " " : value)
+                    .font(.callout)
+                    .foregroundStyle(ElephantTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.42), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.56), lineWidth: 1))
+    }
+}
+
+private struct HerdMarkdownReadCard: View {
+    var title: String
+    var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(ElephantTheme.muted)
+            MarkdownBody(text: text, font: .callout, color: ElephantTheme.ink)
+                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.62), lineWidth: 1))
+        }
+    }
+}
+
+private struct HerdEditCard<Content: View>: View {
+    var title: String
+    var content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title.uppercased())
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(ElephantTheme.muted)
+            content
+        }
+        .padding(12)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.66), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1))
+    }
+}
+
+struct LocalAgentRuntimeDetail: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var runtime: LocalAgentRuntimeItem
+    @State private var displayName = ""
+    @State private var roleTitle = ""
+    @State private var rolePrompt = ""
+    @State private var enabled = true
+    @State private var editingDetails = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                ProviderLogoView(providerID: runtime.providerID, displayName: runtime.displayName, size: 58)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(runtime.displayName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(candidateSummary)
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.ink.opacity(0.76))
+                    Text(candidateRoleLine)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                    HStack(spacing: 8) {
+                        Pill(text: localizedRuntimeStatus(runtime.status, language: model.appLanguage), symbol: "circle.fill", tint: ElephantTheme.accent)
+                        Pill(
+                            text: runtime.canExecute
+                                ? localizedYouText(model.appLanguage, en: "ready to adopt", zh: "可以领养", fr: "prêt à adopter", de: "bereit")
+                                : localizedYouText(model.appLanguage, en: "not adoptable yet", zh: "暂不可领养", fr: "pas encore adoptable", de: "noch nicht übernehmbar"),
+                            symbol: runtime.canExecute ? "bolt.fill" : "pause.fill",
+                            tint: runtime.canExecute ? ElephantTheme.green : ElephantTheme.orange
+                        )
+                    }
+                }
+                Spacer()
+                Button {
+                    editingDetails.toggle()
+                } label: {
+                    Label(
+                        editingDetails
+                            ? localizedYouText(model.appLanguage, en: "Preview", zh: "预览", fr: "Aperçu", de: "Vorschau")
+                            : localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"),
+                        systemImage: editingDetails ? "eye" : "pencil"
+                    )
+                }
+                .controlSize(.small)
+                .disabled(!runtime.canExecute)
+            }
+
+            Divider()
+
+            if editingDetails {
+                HerdEditCard(title: localizedYouText(model.appLanguage, en: "Adoption details", zh: "领养信息", fr: "Détails d'adoption", de: "Übernahmedetails")) {
+                    TextField(localizedYouText(model.appLanguage, en: "Baby name", zh: "小象名称", fr: "Nom", de: "Baby-Name"), text: $displayName)
+                        .textFieldStyle(.roundedBorder)
+                    TextField(localizedYouText(model.appLanguage, en: "Role", zh: "角色", fr: "Rôle", de: "Rolle"), text: $roleTitle)
+                        .textFieldStyle(.roundedBorder)
+                    TextField(localizedYouText(model.appLanguage, en: "Mother's instruction", zh: "母象给它的指令", fr: "Instruction de Mother", de: "Mother-Anweisung"), text: $rolePrompt, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(4...7)
+                    Toggle(localizedYouText(model.appLanguage, en: "Let Mother delegate immediately", zh: "领养后允许母象立即调度", fr: "Autoriser Mother à déléguer", de: "Mother darf sofort delegieren"), isOn: $enabled)
+                        .disabled(!runtime.canExecute)
+                }
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    HerdReadField(
+                        label: localizedYouText(model.appLanguage, en: "Proposed baby", zh: "建议小象", fr: "Baby proposé", de: "Vorgeschlagenes Baby"),
+                        value: displayName,
+                        symbol: "figure.child",
+                        tint: ElephantTheme.accent
+                    )
+                    HerdReadField(
+                        label: localizedYouText(model.appLanguage, en: "Role", zh: "角色", fr: "Rôle", de: "Rolle"),
+                        value: roleTitle,
+                        symbol: "sparkles",
+                        tint: ElephantTheme.green
+                    )
+                }
+                HerdReadField(
+                    label: localizedYouText(model.appLanguage, en: "Mother's instruction", zh: "母象给它的指令", fr: "Instruction de Mother", de: "Mother-Anweisung"),
+                    value: rolePrompt,
+                    symbol: "quote.bubble",
+                    tint: ElephantTheme.orange,
+                    minHeight: 68
+                )
+            }
+
+            HerdTechnicalDisclosure {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Provider", zh: "Provider", fr: "Provider", de: "Provider"), value: runtime.providerID)
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Path", zh: "路径", fr: "Chemin", de: "Pfad"), value: runtime.resolvedPath.isEmpty ? "unknown" : runtime.resolvedPath)
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Version", zh: "版本", fr: "Version", de: "Version"), value: runtime.version.isEmpty ? "unknown" : runtime.version)
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Auth", zh: "认证", fr: "Auth", de: "Auth"), value: runtime.authStatus.isEmpty ? "unknown" : runtime.authStatus)
+                    HerdMeta(label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"), value: runtime.source)
+                }
+            }
+
+            Button {
+                Task {
+                    await model.adoptLocalAgent(
+                        runtime,
+                        displayName: displayName,
+                        roleTitle: roleTitle,
+                        rolePrompt: rolePrompt,
+                        enabled: enabled
+                    )
+                }
+            } label: {
+                Label(localizedYouText(model.appLanguage, en: "Adopt Baby Elephant", zh: "领养小象", fr: "Adopter baby elephant", de: "Baby Elephant übernehmen"), systemImage: "plus.circle.fill")
+                    .frame(minWidth: 138, minHeight: 30)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(ElephantTheme.accent)
+            .disabled(!runtime.canExecute || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if !runtime.canExecute {
+                EmptyLine(symbol: "info.circle", text: localizedYouText(model.appLanguage, en: "Elephant found this CLI. It will become adoptable after a stable non-interactive adapter is added.", zh: "Elephant 已经发现这个 CLI；等稳定的非交互 adapter 加上后就能领养。", fr: "CLI détecté; il sera adoptable après ajout d'un adapter stable.", de: "CLI gefunden; übernehmbar nach stabilem Adapter."))
+            }
+        }
+        .onAppear(perform: loadDraft)
+        .onChange(of: runtime.runtimeID) { _ in loadDraft() }
+    }
+
+    private func loadDraft() {
+        roleTitle = localizedRuntimeRoleTitle(runtime, language: model.appLanguage)
+        rolePrompt = localizedRuntimeRolePrompt(runtime, language: model.appLanguage)
+        displayName = "\(runtime.displayName) \(roleTitle)".trimmingCharacters(in: .whitespacesAndNewlines)
+        enabled = runtime.canExecute
+    }
+
+    private var candidateSummary: String {
+        if runtime.canExecute {
+            return localizedYouText(model.appLanguage, en: "Ready to become a baby elephant.", zh: "可以成为一只小象。", fr: "Prêt à devenir un baby elephant.", de: "Bereit als Baby Elephant.")
+        }
+        return localizedYouText(model.appLanguage, en: "Elephant can see this CLI, but cannot safely run it yet.", zh: "Elephant 能看到这个 CLI，但还不能稳定执行它。", fr: "CLI visible, exécution pas encore sûre.", de: "CLI sichtbar, aber noch nicht sicher ausführbar.")
+    }
+
+    private var candidateRoleLine: String {
+        let title = roleTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty {
+            return title
+        }
+        let provider = runtime.providerID.lowercased()
+        if provider.contains("codex") {
+            return localizedYouText(model.appLanguage, en: "Repository changes, review, and validation-heavy work.", zh: "负责代码修改、审查和验证密集的工程任务。", fr: "Changements repo, revue et validation.", de: "Repository-Änderungen, Review und Validierung.")
+        }
+        if provider.contains("gemini") {
+            return localizedYouText(model.appLanguage, en: "Research, comparison, and broad context gathering.", zh: "负责研究、对比和大范围上下文收集。", fr: "Recherche, comparaison et contexte large.", de: "Recherche, Vergleich und Kontext.")
+        }
+        if provider.contains("copilot") {
+            return localizedYouText(model.appLanguage, en: "GitHub-centric assistance and repository workflow support.", zh: "负责 GitHub 和仓库工作流相关协助。", fr: "Assistance GitHub et workflows repo.", de: "GitHub- und Repository-Unterstützung.")
+        }
+        return localizedYouText(model.appLanguage, en: "A focused local helper Mother can delegate to.", zh: "母象可以委派的本地专长帮手。", fr: "Un spécialiste local pour Mother.", de: "Ein lokaler Spezialist für Mother.")
     }
 }
 
@@ -7517,6 +8944,33 @@ struct HerdAvatarImage: View {
     private var image: NSImage? {
         guard let url else { return nil }
         return NSImage(contentsOf: url)
+    }
+}
+
+struct HerdTechnicalDisclosure<Content: View>: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var expanded = false
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            content
+                .padding(.top, 8)
+        } label: {
+            Label(
+                localizedYouText(model.appLanguage, en: "Technical details", zh: "技术细节", fr: "Détails techniques", de: "Technische Details"),
+                systemImage: "terminal"
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(ElephantTheme.muted)
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.32), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.50), lineWidth: 1))
     }
 }
 
@@ -9027,6 +10481,15 @@ struct LearnControlsPanel: View {
             tint: ElephantTheme.orange,
             trigger: "diary",
             features: "diary"
+        ),
+        LearnActionSpec(
+            id: "letter",
+            title: localizedYouText(model.appLanguage, en: "Letter", zh: "写一封信", fr: "Lettre", de: "Brief"),
+            subtitle: localizedYouText(model.appLanguage, en: "Ask Elephant to write from what it understands about you.", zh: "让 Elephant 基于对你的理解写一封信。", fr: "Demander a Elephant d'ecrire depuis ce qu'il comprend de vous.", de: "Elephant schreibt aus dem, was es uber dich versteht."),
+            symbol: "envelope.open",
+            tint: ElephantTheme.gold,
+            trigger: "onboarding_letter",
+            features: nil
         )
         ]
     }
@@ -9046,7 +10509,13 @@ struct LearnControlsPanel: View {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(actions) { action in
                         LearnActionButton(action: action, disabled: model.isReflecting) {
-                            Task { await model.runReflect(trigger: action.trigger, features: action.features) }
+                            Task {
+                                if action.id == "letter" {
+                                    await model.requestOnboardingLetter()
+                                } else {
+                                    await model.runReflect(trigger: action.trigger, features: action.features)
+                                }
+                            }
                         }
                     }
                 }
@@ -9078,9 +10547,7 @@ struct LearnControlsPanel: View {
 
     private var columns: [GridItem] {
         [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12)
+            GridItem(.adaptive(minimum: 210), spacing: 12)
         ]
     }
 
@@ -11768,7 +13235,7 @@ private struct MCPManagementPanel: View {
                 HStack(alignment: .top, spacing: 13) {
                     OperatorCatalogLogo(symbol: "server.rack", tint: ElephantTheme.green)
                     SectionLabel(
-                        title: localizedYouText(model.appLanguage, en: "Custom MCP", zh: "自定义 MCP", fr: "MCP personnalisé", de: "Eigenes MCP"),
+                        title: localizedYouText(model.appLanguage, en: "Add Tools", zh: "新增工具", fr: "Ajouter des outils", de: "Tools hinzufügen"),
                         subtitle: localizedYouText(
                             model.appLanguage,
                             en: "Add MCP servers, verify live tools, and choose which tools Chat can use.",
@@ -11779,13 +13246,8 @@ private struct MCPManagementPanel: View {
                     )
                     Spacer(minLength: 0)
                     HStack(spacing: 8) {
-                        Button {
-                            openEditor(draft: .minimax(), discovery: nil)
-                        } label: {
-                            Label("MiniMax", systemImage: "photo.on.rectangle.angled")
-                        }
-                        .controlSize(.small)
-
+                        Pill(text: localizedFormat(model.appLanguage, en: "%d server(s)", zh: "%d 个服务", fr: "%d serveur(s)", de: "%d Server", model.snapshot.mcpServerItems.count), symbol: "server.rack", tint: ElephantTheme.green)
+                        Pill(text: "\(enabledMCPToolCount)/\(model.snapshot.mcpToolItems.count)", symbol: "checkmark.seal", tint: ElephantTheme.orange)
                         Button {
                             openEditor(draft: .empty, discovery: nil)
                         } label: {
@@ -11796,18 +13258,27 @@ private struct MCPManagementPanel: View {
                     }
                 }
 
-                if !model.mcpActionResult.isEmpty {
-                    Label(model.mcpActionResult, systemImage: model.mcpActionFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(model.mcpActionFailed ? ElephantTheme.orange : ElephantTheme.green)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 8) {
-                    Pill(text: configPathLabel, symbol: "doc.text", tint: ElephantTheme.accent)
-                    Pill(text: localizedFormat(model.appLanguage, en: "%d server(s)", zh: "%d 个服务", fr: "%d serveur(s)", de: "%d Server", model.snapshot.mcpServerItems.count), symbol: "server.rack", tint: ElephantTheme.green)
-                    Pill(text: "\(enabledMCPToolCount)/\(model.snapshot.mcpToolItems.count)", symbol: "checkmark.seal", tint: ElephantTheme.orange)
-                    Spacer(minLength: 0)
+                if model.mcpActionInFlight || !model.mcpActionResult.isEmpty {
+                    HStack(spacing: 8) {
+                        if model.mcpActionInFlight {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: model.mcpActionFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                                .font(.caption.weight(.semibold))
+                        }
+                        Text(mcpActionMessage)
+                            .font(.caption.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(mcpActionTint)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(mcpActionTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(mcpActionTint.opacity(0.24), lineWidth: 1)
+                    )
                 }
 
                 if model.snapshot.mcpServerItems.isEmpty {
@@ -11843,12 +13314,53 @@ private struct MCPManagementPanel: View {
         model.snapshot.mcpToolItems.filter(\.enabled).count
     }
 
-    private var configPathLabel: String {
-        let path = model.snapshot.mcpConfigPath.isEmpty ? model.snapshot.settingsPath : model.snapshot.mcpConfigPath
-        guard !path.isEmpty else {
-            return localizedYouText(model.appLanguage, en: "not resolved", zh: "未解析", fr: "non résolu", de: "nicht aufgelöst")
+    private var mcpActionTint: Color {
+        if model.mcpActionInFlight { return ElephantTheme.accent }
+        return model.mcpActionFailed ? ElephantTheme.orange : ElephantTheme.green
+    }
+
+    private var mcpActionMessage: String {
+        if model.mcpActionInFlight {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Updating MCP tools...",
+                zh: "正在更新 MCP 工具...",
+                fr: "Mise à jour des outils MCP...",
+                de: "MCP-Tools werden aktualisiert..."
+            )
         }
-        return URL(fileURLWithPath: path).lastPathComponent
+
+        let raw = model.mcpActionResult.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch raw.lowercased() {
+        case "runtime_reloaded":
+            return localizedYouText(
+                model.appLanguage,
+                en: "Runtime reloaded. Tool changes are active.",
+                zh: "运行时已重新加载，工具变更已生效。",
+                fr: "Runtime rechargé. Les outils sont actifs.",
+                de: "Runtime neu geladen. Tool-Änderungen sind aktiv."
+            )
+        case "runtime_reload_pending":
+            return localizedYouText(
+                model.appLanguage,
+                en: "Tool changes are saved. Restart the runtime to apply them.",
+                zh: "工具变更已保存，重启运行时后生效。",
+                fr: "Outils enregistrés. Redémarrez le runtime pour appliquer.",
+                de: "Tool-Änderungen gespeichert. Runtime zum Anwenden neu starten."
+            )
+        case "ok", "success":
+            return localizedYouText(
+                model.appLanguage,
+                en: "MCP tools updated.",
+                zh: "MCP 工具已更新。",
+                fr: "Outils MCP mis à jour.",
+                de: "MCP-Tools aktualisiert."
+            )
+        default:
+            return raw.isEmpty
+                ? localizedYouText(model.appLanguage, en: "MCP tools updated.", zh: "MCP 工具已更新。", fr: "Outils MCP mis à jour.", de: "MCP-Tools aktualisiert.")
+                : raw
+        }
     }
 
     private func tools(for server: MCPServerItem) -> [MCPToolItem] {
@@ -11919,10 +13431,10 @@ private struct MCPEmptyStateRow: View {
                 .frame(width: 34, height: 34)
                 .background(ElephantTheme.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(localizedYouText(model.appLanguage, en: "No custom MCP server", zh: "还没有自定义 MCP 服务", fr: "Aucun serveur MCP personnalisé", de: "Kein eigener MCP-Server"))
+                Text(localizedYouText(model.appLanguage, en: "No added tool server", zh: "还没有新增工具服务", fr: "Aucun serveur d'outils ajouté", de: "Noch kein Tool-Server hinzugefügt"))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text(localizedYouText(model.appLanguage, en: "Add one server or start with the MiniMax preset.", zh: "可以新增服务，或直接使用 MiniMax 预设。", fr: "Ajoutez un serveur ou utilisez le preset MiniMax.", de: "Server hinzufügen oder MiniMax-Preset nutzen."))
+                Text(localizedYouText(model.appLanguage, en: "Add a server from your MCP JSON or fill the connection fields manually.", zh: "可以粘贴 MCP JSON 自动转换，也可以手动填写连接字段。", fr: "Collez un JSON MCP ou remplissez les champs de connexion.", de: "MCP-JSON einfügen oder Verbindung manuell ausfüllen."))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -11964,13 +13476,24 @@ private struct MCPServerCard: View {
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
-                    Button(localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"), action: onEdit)
-                    Button(localizedYouText(model.appLanguage, en: "Test & Sync", zh: "测试并同步", fr: "Tester et sync", de: "Testen & sync"), action: onVerifySync)
-                    Button(role: .destructive, action: onDelete) {
-                        Text(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"))
+                    Button(action: onEdit) {
+                        Label(localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"), systemImage: "pencil")
                     }
+                    .settingsActionButton()
+                    .help(localizedYouText(model.appLanguage, en: "Edit server configuration", zh: "编辑服务配置", fr: "Modifier la configuration", de: "Serverkonfiguration bearbeiten"))
+
+                    Button(action: onVerifySync) {
+                        Label(localizedYouText(model.appLanguage, en: "Test & Sync", zh: "测试并同步", fr: "Tester et sync", de: "Testen & sync"), systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .settingsActionButton(.primary)
+                    .help(localizedYouText(model.appLanguage, en: "Test the server and sync tools", zh: "测试服务并同步工具", fr: "Tester et synchroniser", de: "Server testen und Tools synchronisieren"))
+
+                    Button(role: .destructive, action: onDelete) {
+                        Label(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"), systemImage: "trash")
+                    }
+                    .settingsActionButton(.destructive)
+                    .help(localizedYouText(model.appLanguage, en: "Delete this MCP server", zh: "删除这个 MCP 服务", fr: "Supprimer ce serveur MCP", de: "Diesen MCP-Server löschen"))
                 }
-                .controlSize(.small)
                 .disabled(model.mcpActionInFlight)
             }
 
@@ -12004,12 +13527,16 @@ private struct MCPToolToggleRow: View {
     var tool: MCPToolItem
 
     var body: some View {
-        HStack(alignment: .center, spacing: 11) {
+        HStack(alignment: .top, spacing: 11) {
             Image(systemName: "wrench.and.screwdriver")
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(tool.enabled ? ElephantTheme.green : ElephantTheme.faint)
+                .foregroundStyle(statusTint)
                 .frame(width: 32, height: 32)
-                .background((tool.enabled ? ElephantTheme.green : ElephantTheme.faint).opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(statusTint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(statusTint.opacity(0.20), lineWidth: 1)
+                )
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
                     Text(tool.displayName)
@@ -12021,14 +13548,18 @@ private struct MCPToolToggleRow: View {
                         .foregroundStyle(ElephantTheme.faint)
                         .lineLimit(1)
                 }
-                Text(tool.description.isEmpty ? localizedYouText(model.appLanguage, en: "No description returned.", zh: "没有返回工具说明。", fr: "Aucune description.", de: "Keine Beschreibung.") : tool.description)
+                Text(descriptionText)
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(2)
-                if !tool.requiredFields.isEmpty {
-                    Text("required · \(tool.requiredFields.joined(separator: ", "))")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(ElephantTheme.faint)
+                    .lineLimit(3)
+                HStack(spacing: 6) {
+                    Pill(text: statusText, symbol: statusSymbol, tint: statusTint)
+                    if !tool.requiredFields.isEmpty {
+                        Pill(text: "required · \(tool.requiredFields.joined(separator: ", "))", symbol: "text.badge.checkmark", tint: ElephantTheme.faint)
+                    }
+                    if !tool.availabilityReason.isEmpty, !tool.available {
+                        Pill(text: tool.availabilityReason, symbol: "exclamationmark.triangle", tint: ElephantTheme.orange)
+                    }
                 }
             }
             Spacer(minLength: 10)
@@ -12038,10 +13569,56 @@ private struct MCPToolToggleRow: View {
             ))
             .labelsHidden()
             .toggleStyle(.switch)
+            .tint(ElephantTheme.green)
             .disabled(model.mcpActionInFlight)
+            .help(toggleHelp)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
+    }
+
+    private var descriptionText: String {
+        let raw = tool.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else {
+            return localizedYouText(model.appLanguage, en: "No description returned.", zh: "没有返回工具说明。", fr: "Aucune description.", de: "Keine Beschreibung.")
+        }
+        let normalized = raw
+            .replacingOccurrences(of: "\\\\n", with: "\n")
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\\\t", with: " ")
+            .replacingOccurrences(of: "\\t", with: " ")
+        return normalized
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    }
+
+    private var statusText: String {
+        if !tool.available {
+            return localizedYouText(model.appLanguage, en: "Unavailable", zh: "不可用", fr: "Indisponible", de: "Nicht verfügbar")
+        }
+        if tool.enabled {
+            return localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activé", de: "Aktiv")
+        }
+        return localizedYouText(model.appLanguage, en: "Disabled", zh: "已停用", fr: "Désactivé", de: "Inaktiv")
+    }
+
+    private var statusSymbol: String {
+        if !tool.available { return "exclamationmark.triangle.fill" }
+        return tool.enabled ? "checkmark.circle.fill" : "pause.circle"
+    }
+
+    private var statusTint: Color {
+        if !tool.available { return ElephantTheme.orange }
+        return tool.enabled ? ElephantTheme.green : ElephantTheme.muted
+    }
+
+    private var toggleHelp: String {
+        tool.enabled
+            ? localizedYouText(model.appLanguage, en: "Disable this tool for Chat", zh: "在 Chat 中停用这个工具", fr: "Désactiver cet outil pour Chat", de: "Dieses Tool für Chat deaktivieren")
+            : localizedYouText(model.appLanguage, en: "Enable this tool for Chat", zh: "在 Chat 中启用这个工具", fr: "Activer cet outil pour Chat", de: "Dieses Tool für Chat aktivieren")
     }
 }
 
@@ -12136,11 +13713,6 @@ private struct MCPServerEditorSheet: View {
 
             Divider()
             HStack {
-                Text(model.snapshot.mcpConfigPath.isEmpty ? model.snapshot.settingsPath : model.snapshot.mcpConfigPath)
-                    .font(.caption)
-                    .foregroundStyle(ElephantTheme.faint)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
                 Spacer(minLength: 0)
                 Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                     isPresented = false
@@ -12168,6 +13740,9 @@ private struct MCPServerEditorSheet: View {
             if mode == .form {
                 rawJSON = next.jsonText()
             }
+        }
+        .onChange(of: rawJSON) { next in
+            autoConvertJSONIfPossible(next)
         }
     }
 
@@ -12206,6 +13781,19 @@ private struct MCPServerEditorSheet: View {
             localError = error.localizedDescription
             mode = .json
         }
+    }
+
+    private func autoConvertJSONIfPossible(_ text: String) {
+        guard mode == .json else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.first == "{" else { return }
+        guard let nextDraft = try? MCPServerDraft.from(jsonText: text) else { return }
+        mode = .form
+        draft = nextDraft
+        rawJSON = nextDraft.jsonText()
+        discovery = nil
+        enabledToolNames = []
+        localError = ""
     }
 
     private func effectiveDraft() throws -> MCPServerDraft {
@@ -13631,6 +15219,7 @@ struct OnboardingFlow: View {
     var onComplete: () -> Void
     @State private var transitionForward = true
     @State private var showLearningSkip = false
+    @State private var advancingAsync = false
     private let welcomeStep = 0
     private let languageStep = 1
     private let groundingDepthStep = 8
@@ -13650,6 +15239,10 @@ struct OnboardingFlow: View {
         groundingQuestionStartStep + groundingQuestionCount
     }
 
+    private var herdDiscoveryStep: Int {
+        elephantStep + 4
+    }
+
     private var providerStep: Int {
         elephantStep + 1
     }
@@ -13663,11 +15256,11 @@ struct OnboardingFlow: View {
     }
 
     private var learnStep: Int {
-        elephantStep + 4
+        elephantStep + 5
     }
 
     private var readyStep: Int {
-        elephantStep + 5
+        elephantStep + 6
     }
 
     private var isGroundingPhase: Bool {
@@ -13678,8 +15271,12 @@ struct OnboardingFlow: View {
         model.onboardingStep >= providerStep && model.onboardingStep <= endpointStep
     }
 
+    private var isHerdDiscoveryStep: Bool {
+        model.onboardingStep == herdDiscoveryStep
+    }
+
     private var isCompactPanelPhase: Bool {
-        isGroundingPhase || isModelSetupPhase
+        isGroundingPhase || isModelSetupPhase || isHerdDiscoveryStep
     }
 
     private var usesExpandedPanel: Bool {
@@ -13799,6 +15396,8 @@ struct OnboardingFlow: View {
             OnboardingGroundingQuestionStep(questionIndex: step - groundingQuestionStartStep)
         case let step where step == elephantStep:
             OnboardingElephantStep()
+        case let step where step == herdDiscoveryStep:
+            OnboardingHerdDiscoveryStep()
         case let step where step == providerStep:
             OnboardingProviderModelStep()
         case let step where step == modelStep:
@@ -13871,12 +15470,12 @@ struct OnboardingFlow: View {
                         Button {
                             advanceIfPossible()
                         } label: {
-                            Label(nextTitle, systemImage: "chevron.right")
+                            Label(nextTitle, systemImage: advancingAsync ? "hourglass" : "chevron.right")
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .tint(ElephantTheme.accent)
-                        .disabled(nextDisabled)
+                        .disabled(nextDisabled || advancingAsync)
                         .help(nextRequirement ?? nextTitle)
                         .accessibilityHint(nextRequirement ?? nextTitle)
                         .keyboardShortcut(.defaultAction)
@@ -13926,9 +15525,38 @@ struct OnboardingFlow: View {
     }
 
     private func advanceIfPossible() {
-        guard model.onboardingStep < learnStep, !nextDisabled else { return }
+        guard model.onboardingStep < learnStep, !nextDisabled, !advancingAsync else { return }
         if model.onboardingStep == 3 {
             _ = model.persistOnboardingLockPassword()
+        }
+        if model.onboardingStep == endpointStep {
+            transitionForward = true
+            advancingAsync = true
+            Task {
+                await model.createElephantFromOnboarding()
+                _ = await model.scanLocalAgentsForHerd()
+                await MainActor.run {
+                    advancingAsync = false
+                    withAnimation(stepAnimation) {
+                        model.onboardingStep = herdDiscoveryStep
+                    }
+                }
+            }
+            return
+        }
+        if model.onboardingStep == herdDiscoveryStep {
+            transitionForward = true
+            advancingAsync = true
+            Task {
+                await model.adoptSelectedBabyFromOnboarding()
+                await MainActor.run {
+                    advancingAsync = false
+                    withAnimation(stepAnimation) {
+                        model.onboardingStep = learnStep
+                    }
+                }
+            }
+            return
         }
         transitionForward = true
         withAnimation(stepAnimation) {
@@ -13993,6 +15621,11 @@ struct OnboardingFlow: View {
 
     private var nextTitle: String {
         if model.onboardingStep == 0 { return model.text(.continueAction) }
+        if model.onboardingStep == herdDiscoveryStep {
+            return model.onboardingSelectedBabyBackend.isEmpty
+                ? localizedYouText(model.appLanguage, en: "Skip for now", zh: "暂时跳过", fr: "Passer", de: "Überspringen")
+                : localizedYouText(model.appLanguage, en: "Adopt baby", zh: "领养小象", fr: "Adopter", de: "Übernehmen")
+        }
         if model.onboardingStep == endpointStep { return model.text(.startSetup) }
         return model.text(.next)
     }
@@ -14031,6 +15664,7 @@ struct OnboardingFlow: View {
             OnboardingPhase(id: "patterns", title: .phasePattern, symbol: "checklist", range: groundingDepthStep...groundingQuestionRange.upperBound),
             OnboardingPhase(id: "elephant", title: .phaseElephant, symbol: "sparkles", range: elephantStep...elephantStep),
             OnboardingPhase(id: "model", title: .phaseModel, symbol: "cpu", range: providerStep...endpointStep),
+            OnboardingPhase(id: "herd", title: .phaseHerd, symbol: "person.3.sequence", range: herdDiscoveryStep...herdDiscoveryStep),
             OnboardingPhase(id: "ready", title: .phaseReady, symbol: "checkmark.seal", range: learnStep...readyStep)
         ]
     }
@@ -14045,7 +15679,9 @@ struct OnboardingFlow: View {
             return model.onboardingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || model.onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case let step where step == providerStep:
-            return model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let provider = model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let catalog = onboardingProviderChoices(snapshotOptions: model.snapshot.providerOptions, language: model.appLanguage)
+            return provider.isEmpty || !catalog.contains(where: { $0.id == provider })
         case let step where step == modelStep:
             return model.onboardingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case let step where step == endpointStep:
@@ -14068,6 +15704,8 @@ struct OnboardingFlow: View {
         let provider = model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines)
         let modelID = model.onboardingModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !provider.isEmpty, !modelID.isEmpty else { return false }
+        let catalog = onboardingProviderChoices(snapshotOptions: model.snapshot.providerOptions, language: model.appLanguage)
+        guard catalog.contains(where: { $0.id == provider }) else { return false }
         if provider == "openai-compatible" {
             if model.snapshot.providerID == provider, !model.snapshot.providerModelID.isEmpty {
                 return true
@@ -14082,6 +15720,7 @@ struct OnboardingWelcomeStep: View {
     @EnvironmentObject private var model: ElephantAppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var enter: () -> Void
+    @State private var hoveringCTA = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -14129,16 +15768,23 @@ struct OnboardingWelcomeStep: View {
                     }
 
                     Button(action: enter) {
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .frame(width: 42, height: 42)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .overlay(Circle().stroke(.white.opacity(0.30), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
-                            .contentShape(Circle())
+                        HStack(spacing: 10) {
+                            Text(model.text(.continueAction))
+                                .font(.callout.weight(.semibold))
+                            Image(systemName: "arrow.right")
+                                .font(.callout.weight(.bold))
+                        }
+                        .foregroundStyle(.white.opacity(0.94))
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 48)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(.white.opacity(hoveringCTA ? 0.46 : 0.30), lineWidth: 1))
+                        .shadow(color: .black.opacity(hoveringCTA ? 0.28 : 0.18), radius: hoveringCTA ? 18 : 12, y: hoveringCTA ? 9 : 6)
+                        .contentShape(Capsule())
+                        .scaleEffect(hoveringCTA ? 1.025 : 1)
                     }
                     .buttonStyle(PressablePlainButtonStyle())
+                    .onHover { hoveringCTA = $0 }
                     .keyboardShortcut(.defaultAction)
                     .help(model.text(.continueAction))
                     .accessibilityLabel(model.text(.continueAction))
@@ -14241,6 +15887,7 @@ struct OnboardingPhaseRailItem: View {
     var language: AppLanguage
     var isSelectable: Bool
     var onSelect: () -> Void
+    @SwiftUI.State private var hovering = false
 
     var body: some View {
         Button {
@@ -14255,6 +15902,7 @@ struct OnboardingPhaseRailItem: View {
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(accessibilityHint)
         .accessibilityRemoveTraits(.isSelected)
+        .onHover { hovering = $0 && isSelectable }
     }
 
     private var content: some View {
@@ -14270,10 +15918,13 @@ struct OnboardingPhaseRailItem: View {
                 .minimumScaleFactor(0.82)
         }
         .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, minHeight: 30)
+        .frame(maxWidth: .infinity, minHeight: 34)
         .background(background, in: Capsule())
         .overlay(Capsule().stroke(borderColor, lineWidth: 1))
         .contentShape(Capsule())
+        .scaleEffect(hovering ? 1.025 : 1)
+        .shadow(color: ElephantTheme.accent.opacity(hovering ? 0.10 : 0), radius: hovering ? 8 : 0, y: hovering ? 3 : 0)
+        .animation(.easeOut(duration: 0.14), value: hovering)
     }
 
     private var accessibilityLabel: String {
@@ -14319,17 +15970,17 @@ struct OnboardingPhaseRailItem: View {
 
     private var background: Color {
         switch state {
-        case .complete: return ElephantTheme.green.opacity(0.10)
-        case .active: return ElephantTheme.accent.opacity(0.13)
-        case .upcoming: return Color(nsColor: .controlBackgroundColor).opacity(0.52)
+        case .complete: return ElephantTheme.green.opacity(hovering ? 0.16 : 0.10)
+        case .active: return ElephantTheme.accent.opacity(hovering ? 0.20 : 0.13)
+        case .upcoming: return Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.74 : 0.52)
         }
     }
 
     private var borderColor: Color {
         switch state {
-        case .complete: return ElephantTheme.green.opacity(0.22)
-        case .active: return ElephantTheme.accent.opacity(0.32)
-        case .upcoming: return ElephantTheme.line.opacity(0.42)
+        case .complete: return ElephantTheme.green.opacity(hovering ? 0.38 : 0.22)
+        case .active: return ElephantTheme.accent.opacity(hovering ? 0.52 : 0.32)
+        case .upcoming: return ElephantTheme.line.opacity(hovering ? 0.58 : 0.42)
         }
     }
 }
@@ -14375,6 +16026,10 @@ struct OnboardingField: View {
     @FocusState private var focused: Bool
     @State private var hovering = false
 
+    private var hasValue: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -14382,13 +16037,15 @@ struct OnboardingField: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(focused ? ElephantTheme.accent : ElephantTheme.muted)
                 Spacer(minLength: 0)
-                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if hasValue {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.green)
                         .transition(.opacity.combined(with: .scale))
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
             Group {
                 if secure {
                     SecureField(placeholder, text: $text)
@@ -14403,8 +16060,8 @@ struct OnboardingField: View {
             .font(.callout)
             .foregroundStyle(ElephantTheme.ink)
             .padding(.horizontal, 12)
-            .padding(.vertical, lines.upperBound > 1 ? 11 : 9)
-            .frame(minHeight: lines.upperBound > 1 ? 78 : 38, alignment: .topLeading)
+            .padding(.vertical, lines.upperBound > 1 ? 12 : 11)
+            .frame(maxWidth: .infinity, minHeight: fieldMinHeight, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(fieldFill)
@@ -14414,15 +16071,27 @@ struct OnboardingField: View {
                     .stroke(fieldStroke, lineWidth: focused ? 1.4 : 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .onHover { hovering = $0 }
+            .onTapGesture { focused = true }
+            .onHover { isHovering in
+                hovering = isHovering
+                if isHovering { NSCursor.iBeam.set() }
+            }
+            .shadow(color: ElephantTheme.accent.opacity(focused ? 0.10 : 0), radius: focused ? 10 : 0, y: focused ? 4 : 0)
+            .help(hasValue ? "\(title): \(text)" : placeholder)
+            .accessibilityLabel("\(title), \(hasValue ? text : placeholder)")
             .animation(.easeOut(duration: 0.16), value: focused)
             .animation(.easeOut(duration: 0.16), value: hovering)
+            .animation(.easeOut(duration: 0.16), value: hasValue)
 
             if !suggestions.isEmpty {
                 OnboardingSuggestionChips(suggestions: suggestions, selection: $text)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var fieldMinHeight: CGFloat {
+        lines.upperBound > 1 ? 92 : 46
     }
 
     private var fieldFill: Color {
@@ -14536,7 +16205,7 @@ struct OnboardingMenuField: View {
                         .foregroundStyle(ElephantTheme.muted)
                 }
                 .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 38)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(
@@ -14612,7 +16281,7 @@ struct OnboardingGenderPickerField: View {
                         .foregroundStyle(ElephantTheme.muted)
                 }
                 .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 38)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(hovering || expanded ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
@@ -14961,7 +16630,7 @@ struct OnboardingDateField: View {
                 partField(.day, placeholder: "DD", width: 36, limit: 2)
             }
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38, alignment: .center)
+            .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44, alignment: .center)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isFocused || hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
@@ -14972,7 +16641,10 @@ struct OnboardingDateField: View {
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .onTapGesture { focusFirstEmptyPart() }
-            .onHover { hovering = $0 }
+            .onHover { isHovering in
+                hovering = isHovering
+                if isHovering { NSCursor.iBeam.set() }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { syncPartsFromText() }
@@ -14990,7 +16662,7 @@ struct OnboardingDateField: View {
             .foregroundStyle(ElephantTheme.ink)
             .monospacedDigit()
             .focused($focusedPart, equals: part)
-            .frame(width: width, height: 28)
+            .frame(width: width, height: 32)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(focusedPart == part ? ElephantTheme.accent.opacity(0.12) : Color(nsColor: .textBackgroundColor).opacity(0.72))
@@ -15214,7 +16886,7 @@ struct OnboardingMultiSelectMenuField: View {
                         .foregroundStyle(ElephantTheme.muted)
                 }
                 .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 38)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72))
@@ -15803,27 +17475,561 @@ struct OnboardingElephantStep: View {
     }
 }
 
+struct OnboardingHerdDiscoveryStep: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    private var adoptedRuntimeIDs: Set<String> {
+        Set(model.snapshot.herdItems.map(\.runtimeID).filter { !$0.isEmpty })
+    }
+
+    private var candidates: [LocalAgentRuntimeItem] {
+        model.snapshot.localAgentRuntimes.filter { !adoptedRuntimeIDs.contains($0.runtimeID) }
+    }
+
+    private var selectedProvider: ProviderOption? {
+        onboardingProviderChoices(snapshotOptions: model.snapshot.providerOptions, language: model.appLanguage)
+            .first(where: { $0.id == model.onboardingProviderID })
+    }
+
+    private var providerModels: [ProviderModelOption] {
+        var rows = selectedProvider?.models ?? []
+        if !model.onboardingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !rows.contains(where: { $0.id == model.onboardingModelID }) {
+            rows.insert(ProviderModelOption(id: model.onboardingModelID, label: model.onboardingModelID, source: "mother", contextWindowTokens: 0, maxOutputTokens: 0), at: 0)
+        }
+        return rows
+    }
+
+    private var roleTemplates: [OnboardingBabyRoleTemplate] {
+        onboardingBabyRoleTemplates(for: model.onboardingOccupation, language: model.appLanguage)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingStepHeader(
+                title: localizedYouText(model.appLanguage, en: "Choose one baby elephant.", zh: "选择第一只小象。", fr: "Choisissez un baby elephant.", de: "Wähle ein Baby Elephant."),
+                subtitle: localizedYouText(model.appLanguage, en: "Use a local CLI when available, or reuse your provider with a different model.", zh: "有本地 CLI 就用 CLI；没有也可以复用刚配置的 provider，并给小象单独选模型。", fr: "Utilisez un CLI local ou réutilisez le provider avec un autre modèle.", de: "Nutze lokale CLI oder denselben Provider mit anderem Modell."),
+                symbol: "person.3.sequence"
+            )
+
+            HStack(spacing: 10) {
+                Pill(text: discoveryStatusText, symbol: model.onboardingHerdDiscoveryComplete ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath", tint: model.onboardingHerdDiscoveryComplete ? ElephantTheme.green : ElephantTheme.accent)
+                if selectedCount > 0 {
+                    Pill(
+                        text: localizedYouText(model.appLanguage, en: "1 selected", zh: "已选择 1 个", fr: "1 sélectionné", de: "1 ausgewählt"),
+                        symbol: "checkmark.square.fill",
+                        tint: ElephantTheme.accent
+                    )
+                }
+                Spacer()
+                Button {
+                    Task { _ = await model.scanLocalAgentsForHerd() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Rescan", zh: "重新扫描", fr: "Réanalyser", de: "Neu scannen"), systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .help(localizedYouText(model.appLanguage, en: "Look again for local agents", zh: "重新查找本机 agent", fr: "Chercher à nouveau", de: "Erneut suchen"))
+            }
+
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 14) {
+                    OnboardingBabyTemplatePicker(
+                        templates: roleTemplates,
+                        selection: $model.onboardingBabyTemplateID,
+                        language: model.appLanguage
+                    )
+
+                    if let selectedProvider {
+                        OnboardingProviderBabyRuntimeCard(
+                            option: selectedProvider,
+                            motherModelID: model.onboardingModelID,
+                            babyModelID: $model.onboardingBabyProviderModelID,
+                            models: providerModels,
+                            selected: model.onboardingSelectedBabyBackend == "provider"
+                        ) {
+                            model.onboardingSelectedBabyBackend = "provider"
+                            model.onboardingSelectedBabyRuntimeID = "provider:\(selectedProvider.id)"
+                            model.onboardingSelectedRuntimeIDs.removeAll()
+                            if model.onboardingBabyProviderModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                model.onboardingBabyProviderModelID = model.onboardingModelID
+                            }
+                        }
+                    }
+
+                    if candidates.isEmpty {
+                        EmptyLine(
+                            symbol: model.onboardingHerdDiscoveryComplete ? "terminal" : "arrow.triangle.2.circlepath",
+                            text: model.onboardingHerdDiscoveryStatus.isEmpty
+                                ? localizedYouText(model.appLanguage, en: "Scanning local CLI agents...", zh: "正在扫描本地 CLI agent...", fr: "Analyse des agents CLI locaux...", de: "Lokale CLI-Agents werden gesucht...")
+                                : model.onboardingHerdDiscoveryStatus
+                        )
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.42), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1))
+                    }
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(candidates) { runtime in
+                        OnboardingHerdRuntimeCard(
+                            runtime: runtime,
+                            selected: model.onboardingSelectedBabyBackend == "local_cli" && model.onboardingSelectedBabyRuntimeID == runtime.runtimeID
+                        ) {
+                            guard runtime.canExecute else { return }
+                            model.onboardingSelectedBabyBackend = "local_cli"
+                            model.onboardingSelectedBabyRuntimeID = runtime.runtimeID
+                            model.onboardingSelectedRuntimeIDs = [runtime.runtimeID]
+                        }
+                    }
+                    }
+                }
+                .padding(2)
+            }
+            .frame(height: 330)
+
+            Text(localizedYouText(model.appLanguage, en: "Only one baby is created during onboarding. You can add more later from Herd.", zh: "onboarding 里先只领养一只小象；之后可以在 Herd 里继续添加。", fr: "Un seul baby est créé pendant l'onboarding.", de: "Beim Onboarding wird nur ein Baby erstellt."))
+                .font(.caption)
+                .foregroundStyle(ElephantTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .task {
+            if !model.onboardingHerdDiscoveryStarted {
+                _ = await model.scanLocalAgentsForHerd()
+            }
+        }
+    }
+
+    private var selectedCount: Int {
+        model.onboardingSelectedBabyBackend.isEmpty ? 0 : 1
+    }
+
+    private var discoveryStatusText: String {
+        if !model.onboardingHerdDiscoveryStatus.isEmpty {
+            return model.onboardingHerdDiscoveryStatus
+        }
+        return localizedYouText(model.appLanguage, en: "Scanning...", zh: "扫描中...", fr: "Analyse...", de: "Sucht...")
+    }
+}
+
+private struct OnboardingHerdRuntimeCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var runtime: LocalAgentRuntimeItem
+    var selected: Bool
+    var toggle: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(alignment: .top, spacing: 12) {
+                ProviderLogoView(providerID: runtime.providerID, displayName: runtime.displayName, size: 42)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(runtime.displayName)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(selected ? ElephantTheme.accent : ElephantTheme.faint)
+                    }
+                    Text(roleLine)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        StatusDot(tint: runtime.canExecute ? ElephantTheme.green : ElephantTheme.orange)
+                        Text(runtime.canExecute
+                             ? localizedYouText(model.appLanguage, en: "ready to adopt", zh: "可以领养", fr: "prêt", de: "bereit")
+                             : localizedYouText(model.appLanguage, en: "detected, not adoptable yet", zh: "已发现，暂不可领养", fr: "détecté, pas encore adoptable", de: "gefunden, noch nicht übernehmbar"))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(runtime.canExecute ? ElephantTheme.green : ElephantTheme.orange)
+                    }
+                }
+            }
+            .padding(12)
+            .frame(minHeight: 92, alignment: .top)
+            .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? ElephantTheme.accent.opacity(0.64) : ElephantTheme.line.opacity(0.70), lineWidth: selected ? 1.4 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .disabled(!runtime.canExecute)
+        .onHover { hovering = $0 }
+        .help(runtime.canExecute ? roleLine : runtime.lastError)
+        .accessibilityLabel("\(runtime.displayName), \(runtime.canExecute ? "ready" : "not executable")")
+    }
+
+    private var roleLine: String {
+        localizedRuntimeRoleTitle(runtime, language: model.appLanguage)
+    }
+
+    private var cardFill: Color {
+        if selected { return ElephantTheme.accent.opacity(hovering ? 0.15 : 0.11) }
+        return Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.72 : 0.48)
+    }
+}
+
+private struct OnboardingBabyTemplatePicker: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var templates: [OnboardingBabyRoleTemplate]
+    @Binding var selection: String
+    var language: AppLanguage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(
+                title: localizedYouText(language, en: "Baby specialty", zh: "小象专业方向", fr: "Spécialité du baby", de: "Baby-Spezialgebiet"),
+                subtitle: localizedYouText(language, en: "Four suggestions inferred from your profession", zh: "根据你的职业推荐 4 个方向", fr: "Quatre suggestions selon votre métier", de: "Vier Vorschläge aus deinem Beruf")
+            )
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(visibleTemplates) { template in
+                    OnboardingBabyTemplateCard(
+                        template: template,
+                        selected: isSelected(template),
+                        tint: tint(for: template)
+                    ) {
+                        selection = template.id
+                    }
+                }
+            }
+        }
+        .onAppear {
+            if selection.isEmpty {
+                selection = templates.first?.id ?? ""
+            }
+        }
+        .onChange(of: templates) { nextTemplates in
+            let visible = Array(nextTemplates.prefix(4))
+            if !visible.contains(where: { $0.id == selection }) {
+                selection = nextTemplates.first?.id ?? ""
+            }
+        }
+    }
+
+    private var visibleTemplates: [OnboardingBabyRoleTemplate] {
+        Array(templates.prefix(4))
+    }
+
+    private func isSelected(_ template: OnboardingBabyRoleTemplate) -> Bool {
+        selection == template.id || (selection.isEmpty && visibleTemplates.first?.id == template.id)
+    }
+
+    private func tint(for template: OnboardingBabyRoleTemplate) -> Color {
+        let id = template.id.lowercased()
+        if id.contains("coding") || id.contains("engineering") { return ElephantTheme.accent }
+        if id.contains("research") || id.contains("literature") || id.contains("learning") { return ElephantTheme.green }
+        if id.contains("review") || id.contains("strategy") || id.contains("planning") { return ElephantTheme.orange }
+        if id.contains("debug") || id.contains("market") { return ElephantTheme.ember }
+        if id.contains("design") || id.contains("ux") || id.contains("copy") || id.contains("writing") || id.contains("expression") { return ElephantTheme.accent.opacity(0.88) }
+        return ElephantTheme.accent
+    }
+}
+
+private struct OnboardingBabyTemplateCard: View {
+    var template: OnboardingBabyRoleTemplate
+    var selected: Bool
+    var tint: Color
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(iconFill)
+                    Image(systemName: template.symbol)
+                        .font(.system(size: 16, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(iconTint)
+                }
+                .frame(width: 34, height: 34)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(template.title)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(selected ? .white : ElephantTheme.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Spacer(minLength: 0)
+                        if selected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.92))
+                        }
+                    }
+                    Text(template.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(selected ? .white.opacity(0.82) : ElephantTheme.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
+            .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? Color.white.opacity(0.18) : hovering ? tint.opacity(0.36) : ElephantTheme.line.opacity(0.58), lineWidth: selected ? 1.2 : 1)
+            )
+            .overlay(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(selected ? Color.white.opacity(0.48) : tint.opacity(0.48))
+                    .frame(height: 3)
+                    .padding(.horizontal, 12)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .help(template.prompt)
+        .accessibilityLabel(template.title)
+    }
+
+    private var cardFill: Color {
+        if selected { return tint }
+        return Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.78 : 0.56)
+    }
+
+    private var iconFill: Color {
+        selected ? Color.white.opacity(0.18) : tint.opacity(hovering ? 0.16 : 0.10)
+    }
+
+    private var iconTint: Color {
+        selected ? .white : tint
+    }
+}
+
+private struct OnboardingProviderBabyRuntimeCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var option: ProviderOption
+    var motherModelID: String
+    @Binding var babyModelID: String
+    var models: [ProviderModelOption]
+    var selected: Bool
+    var select: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                ProviderLogoMark(option: option, size: 42)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localizedYouText(model.appLanguage, en: "Use current provider", zh: "复用当前 provider", fr: "Réutiliser le provider", de: "Provider wiederverwenden"))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text("\(option.displayName) · \(resolvedBabyModelID)")
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(selected ? ElephantTheme.accent : ElephantTheme.faint)
+            }
+
+            HStack(spacing: 10) {
+                Pill(text: localizedYouText(model.appLanguage, en: "provider-backed", zh: "模型服务小象", fr: "provider", de: "Provider"), symbol: "cpu", tint: ElephantTheme.accent)
+                if !motherModelID.isEmpty, resolvedBabyModelID != motherModelID {
+                    Pill(text: localizedYouText(model.appLanguage, en: "different model", zh: "不同模型", fr: "modèle différent", de: "anderes Modell"), symbol: "arrow.triangle.branch", tint: ElephantTheme.green)
+                }
+            }
+
+            OnboardingMenuField(
+                title: localizedYouText(model.appLanguage, en: "Baby model", zh: "小象模型", fr: "Modèle du baby", de: "Baby-Modell"),
+                placeholder: localizedYouText(model.appLanguage, en: "Choose model", zh: "选择模型", fr: "Choisir modèle", de: "Modell wählen"),
+                options: modelOptions,
+                selection: $babyModelID
+            )
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(selected ? ElephantTheme.accent.opacity(0.62) : ElephantTheme.line.opacity(0.68), lineWidth: selected ? 1.4 : 1))
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onTapGesture(perform: select)
+        .onHover { hovering = $0 }
+        .onAppear {
+            if babyModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                babyModelID = motherModelID.isEmpty ? (models.first?.id ?? "") : motherModelID
+            }
+        }
+    }
+
+    private var modelOptions: [String] {
+        let rows = models.map(\.id).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return rows.isEmpty ? [motherModelID].filter { !$0.isEmpty } : Array(dictUnique(rows))
+    }
+
+    private var resolvedBabyModelID: String {
+        let value = babyModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty { return value }
+        if !motherModelID.isEmpty { return motherModelID }
+        return option.defaultModel.isEmpty ? option.id : option.defaultModel
+    }
+
+    private var cardFill: Color {
+        if selected { return ElephantTheme.accent.opacity(hovering ? 0.14 : 0.10) }
+        return Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.76 : 0.54)
+    }
+
+    private func dictUnique(_ values: [String]) -> [String] {
+        Array(dictUniqueSequence(values))
+    }
+
+    private func dictUniqueSequence(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values where !seen.contains(value) {
+            seen.insert(value)
+            result.append(value)
+        }
+        return result
+    }
+}
+
 struct OnboardingWorkStep: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             OnboardingStepHeader(
                 title: model.text(.workTitle),
                 subtitle: model.text(.workSubtitle),
                 symbol: "location.magnifyingglass"
             )
-            OnboardingField(title: model.text(.currentWork), placeholder: model.text(.currentWorkPlaceholder), text: $model.onboardingOccupation)
+            OnboardingProfessionPickerField(
+                title: model.text(.currentWork),
+                placeholder: model.text(.currentWorkPlaceholder),
+                options: onboardingProfessionOptions(for: model.appLanguage),
+                selection: $model.onboardingOccupation,
+                language: model.appLanguage
+            )
             HStack(alignment: .top, spacing: 12) {
                 OnboardingField(title: model.text(.school), placeholder: model.text(.optional), text: $model.onboardingSchool)
                 OnboardingField(
                     title: model.text(.cityTimezone),
                     placeholder: model.text(.cityTimezonePlaceholder),
-                    text: $model.onboardingCity,
-                    suggestions: ["Asia/Shanghai", "America/Los_Angeles", "Europe/London"]
+                    text: $model.onboardingCity
                 )
             }
+            OnboardingField(
+                title: localizedYouText(model.appLanguage, en: "Current main line", zh: "当下主线和关注点", fr: "Fil conducteur actuel", de: "Aktueller Fokus"),
+                placeholder: localizedYouText(model.appLanguage, en: "What are you mainly trying to move forward right now?", zh: "最近你最想推进、最在意的主线是什么？", fr: "Qu'essayez-vous surtout de faire avancer ?", de: "Was willst du gerade voranbringen?"),
+                text: $model.onboardingCurrentFocus,
+                lines: 2...3
+            )
         }
+    }
+}
+
+struct OnboardingProfessionOption: Identifiable, Equatable {
+    var id: String
+    var label: String
+    var detail: String
+    var symbol: String
+}
+
+private func onboardingProfessionOptions(for language: AppLanguage) -> [OnboardingProfessionOption] {
+    if language == .zh {
+        return [
+            OnboardingProfessionOption(id: "engineering", label: "工程师 / 开发者", detail: "代码、系统、调试、技术验证", symbol: "curlybraces.square"),
+            OnboardingProfessionOption(id: "product-design", label: "产品 / 设计", detail: "用户体验、产品判断、界面和文案", symbol: "sparkles.rectangle.stack"),
+            OnboardingProfessionOption(id: "research-student", label: "研究者 / 学生", detail: "论文、学习、资料综合和长期问题", symbol: "graduationcap"),
+            OnboardingProfessionOption(id: "founder-business", label: "创业者 / 管理者", detail: "方向、策略、运营和关键决策", symbol: "chart.line.uptrend.xyaxis"),
+            OnboardingProfessionOption(id: "writing-content", label: "写作者 / 内容创作者", detail: "文章、脚本、表达、选题和传播", symbol: "pencil.and.outline"),
+            OnboardingProfessionOption(id: "marketing-sales", label: "市场 / 销售 / 增长", detail: "定位、客户、渠道、转化和外联", symbol: "megaphone"),
+            OnboardingProfessionOption(id: "operations", label: "运营 / 项目管理", detail: "流程、协作、排期、同步和复盘", symbol: "checklist"),
+            OnboardingProfessionOption(id: "other", label: "还不确定 / 其他", detail: "先用通用专业方向，之后随时调整", symbol: "person.crop.circle")
+        ]
+    }
+    return [
+        OnboardingProfessionOption(id: "engineering", label: "Engineer / developer", detail: "Code, systems, debugging, validation", symbol: "curlybraces.square"),
+        OnboardingProfessionOption(id: "product-design", label: "Product / design", detail: "UX, product judgment, interface, copy", symbol: "sparkles.rectangle.stack"),
+        OnboardingProfessionOption(id: "research-student", label: "Researcher / student", detail: "Papers, study, synthesis, long questions", symbol: "graduationcap"),
+        OnboardingProfessionOption(id: "founder-business", label: "Founder / manager", detail: "Direction, strategy, operations, decisions", symbol: "chart.line.uptrend.xyaxis"),
+        OnboardingProfessionOption(id: "writing-content", label: "Writer / creator", detail: "Articles, scripts, voice, ideas, publishing", symbol: "pencil.and.outline"),
+        OnboardingProfessionOption(id: "marketing-sales", label: "Marketing / sales / growth", detail: "Positioning, customers, channels, conversion", symbol: "megaphone"),
+        OnboardingProfessionOption(id: "operations", label: "Ops / project management", detail: "Process, coordination, scheduling, review", symbol: "checklist"),
+        OnboardingProfessionOption(id: "other", label: "Not sure / other", detail: "Start general and tune it later", symbol: "person.crop.circle")
+    ]
+}
+
+struct OnboardingProfessionPickerField: View {
+    var title: String
+    var placeholder: String
+    var options: [OnboardingProfessionOption]
+    @Binding var selection: String
+    var language: AppLanguage
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Spacer(minLength: 0)
+                if selectedOption != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                }
+            }
+
+            Menu {
+                Button(placeholder) { selection = "" }
+                Divider()
+                ForEach(options) { option in
+                    Button {
+                        selection = option.label
+                    } label: {
+                        Label(option.label, systemImage: option.symbol)
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: selectedOption?.symbol ?? "briefcase")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(selectedOption == nil ? ElephantTheme.faint : ElephantTheme.accent)
+                        .frame(width: 28, height: 28)
+                        .background((selectedOption == nil ? ElephantTheme.faint : ElephantTheme.accent).opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedOption?.label ?? placeholder)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(selectedOption == nil ? ElephantTheme.faint : ElephantTheme.ink)
+                            .lineLimit(1)
+                        Text(selectedOption?.detail ?? localizedYouText(language, en: "This shapes the baby elephant templates later.", zh: "后面的小象职责模板会跟着变化。", fr: "Influence les modèles de baby elephants.", de: "Prägt die Baby-Elephant-Vorlagen."))
+                            .font(.caption)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(hovering ? ElephantTheme.accent.opacity(0.46) : ElephantTheme.line.opacity(0.76), lineWidth: 1))
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .onHover { hovering = $0 }
+            .help(selectedOption?.detail ?? placeholder)
+        }
+    }
+
+    private var selectedOption: OnboardingProfessionOption? {
+        options.first { $0.label == selection || $0.id == selection }
     }
 }
 
@@ -15972,7 +18178,10 @@ struct OnboardingLinkField: View {
                 .stroke(focused ? ElephantTheme.accent.opacity(0.70) : hovering ? ElephantTheme.accent.opacity(0.30) : ElephantTheme.line.opacity(0.72), lineWidth: focused ? 1.4 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onHover { hovering = $0 }
+        .onHover { isHovering in
+            hovering = isHovering
+            if isHovering { NSCursor.iBeam.set() }
+        }
         .onTapGesture { focused = true }
         .help(hasValue ? "\(title): \(text)" : subtitle)
         .accessibilityLabel("\(title), \(subtitle)")
@@ -16095,7 +18304,10 @@ struct OnboardingCareField: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onTapGesture { focused = true }
-        .onHover { hovering = $0 }
+        .onHover { isHovering in
+            hovering = isHovering
+            if isHovering { NSCursor.iBeam.set() }
+        }
         .help(hasValue ? "\(title): \(text)" : placeholder)
         .animation(.easeOut(duration: 0.16), value: focused)
         .animation(.easeOut(duration: 0.16), value: hovering)
@@ -16398,12 +18610,20 @@ struct OnboardingGroundingQuestionCard: View {
                     .focused($noteFocused)
                     .disabled(selectedOption == nil)
                     .padding(.horizontal, 11)
-                    .padding(.vertical, 7)
-                    .frame(height: 40, alignment: .topLeading)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
                     .background(Color(nsColor: .textBackgroundColor).opacity(selectedOption == nil ? 0.36 : 0.74), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(noteFocused ? lensTint.opacity(0.58) : ElephantTheme.line.opacity(0.54), lineWidth: noteFocused ? 1.3 : 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .onTapGesture {
+                        guard selectedOption != nil else { return }
+                        noteFocused = true
+                    }
+                    .onHover { hovering in
+                        if hovering, selectedOption != nil { NSCursor.iBeam.set() }
+                    }
             }
-            .frame(height: 64, alignment: .topLeading)
+            .frame(height: 70, alignment: .topLeading)
         }
         .frame(maxWidth: 600, maxHeight: .infinity, alignment: .center)
         .animation(.easeOut(duration: 0.18), value: selectedOption?.id ?? "")
@@ -16724,6 +18944,7 @@ struct OnboardingProviderModelStep: View {
     @State private var loaded = false
     @State private var providerSearch = ""
     @State private var loadingCatalog = false
+    @State private var catalogAttempts = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -16738,29 +18959,13 @@ struct OnboardingProviderModelStep: View {
                     title: model.text(.providerFactory),
                     subtitle: providerFactorySubtitle
                 )
-                ProviderSearchField(
-                    text: $providerSearch,
-                    placeholder: model.text(.providerSearchPlaceholder)
-                )
                 if providerChoices.isEmpty {
-                    VStack(spacing: 12) {
-                        EmptyLine(
-                            symbol: loadingCatalog ? "arrow.clockwise" : "cpu",
-                            text: loadingCatalog
-                                ? localizedYouText(model.appLanguage, en: "Loading provider catalog from the local runtime...", zh: "正在从本地 runtime 读取模型服务目录...", fr: "Chargement du catalogue provider...", de: "Provider-Katalog wird geladen...")
-                                : localizedYouText(model.appLanguage, en: "Provider catalog is not ready yet.", zh: "模型服务目录还没有准备好。", fr: "Le catalogue provider n'est pas encore prêt.", de: "Provider-Katalog ist noch nicht bereit.")
-                        )
-                        Button {
-                            Task { await loadProviderCatalogIfNeeded(force: true) }
-                        } label: {
-                            Label(model.text(.refresh), systemImage: "arrow.clockwise")
-                        }
-                        .controlSize(.small)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 300)
-                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.50), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
+                    providerCatalogWaitingView
                 } else {
+                    ProviderSearchField(
+                        text: $providerSearch,
+                        placeholder: model.text(.providerSearchPlaceholder)
+                    )
                     ScrollView(.vertical, showsIndicators: filteredProviders.count > 6) {
                         ProviderFactoryGrid(
                             options: filteredProviders,
@@ -16782,7 +18987,7 @@ struct OnboardingProviderModelStep: View {
             loaded = true
         }
         .task {
-            await loadProviderCatalogIfNeeded(force: false)
+            await waitForProviderCatalog(force: false)
         }
         .onChange(of: model.snapshot.providerOptions) { _ in
             guard !model.snapshot.providerOptions.isEmpty else { return }
@@ -16803,9 +19008,110 @@ struct OnboardingProviderModelStep: View {
 
     private var providerFactorySubtitle: String {
         if providerChoices.isEmpty {
-            return localizedYouText(model.appLanguage, en: "loading from runtime", zh: "正在读取 runtime 目录", fr: "chargement runtime", de: "lädt aus Runtime")
+            return localizedYouText(model.appLanguage, en: "waiting for runtime catalog", zh: "等待 runtime catalog ready", fr: "attente du catalogue runtime", de: "wartet auf Runtime-Katalog")
         }
         return "\(filteredProviders.count)/\(providerChoices.count) \(model.text(.providerFactorySubtitle))"
+    }
+
+    private var providerCatalogWaitingView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(ElephantTheme.accent.opacity(0.10))
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(localizedYouText(model.appLanguage, en: "Waiting for the real runtime catalog", zh: "正在等待真实 runtime catalog", fr: "Attente du vrai catalogue runtime", de: "Warten auf den echten Runtime-Katalog"))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(localizedYouText(model.appLanguage, en: "Elephant is starting the local runtime, then it will show only the providers and models that are actually available.", zh: "Elephant 正在启动本地 runtime；目录就绪后，只会展示真实可用的 provider 和 model。", fr: "Elephant démarre le runtime local, puis affichera uniquement les providers et modèles disponibles.", de: "Elephant startet die lokale Runtime und zeigt danach nur tatsächlich verfügbare Provider und Modelle."))
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    Task { await waitForProviderCatalog(force: true) }
+                } label: {
+                    Label(model.text(.refresh), systemImage: "arrow.clockwise")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .controlSize(.small)
+                .help(model.text(.refresh))
+            }
+
+            VStack(spacing: 8) {
+                providerCatalogWaitingStep(
+                    title: localizedYouText(model.appLanguage, en: "Start local runtime", zh: "启动本地 runtime", fr: "Démarrer le runtime local", de: "Lokale Runtime starten"),
+                    detail: localizedYouText(model.appLanguage, en: "Connecting to the Python API that owns providers and models.", zh: "连接负责 providers 与 models 的本地 Python API。", fr: "Connexion à l'API Python locale.", de: "Verbindung zur lokalen Python-API."),
+                    symbol: "bolt.horizontal",
+                    active: true
+                )
+                providerCatalogWaitingStep(
+                    title: localizedYouText(model.appLanguage, en: "Read provider catalog", zh: "读取模型服务目录", fr: "Lire le catalogue provider", de: "Provider-Katalog lesen"),
+                    detail: localizedYouText(model.appLanguage, en: "No fallback list is shown here.", zh: "这里不展示兜底列表。", fr: "Aucune liste de secours n'est affichée ici.", de: "Hier wird keine Fallback-Liste angezeigt."),
+                    symbol: "list.bullet.rectangle",
+                    active: catalogAttempts > 0
+                )
+                providerCatalogWaitingStep(
+                    title: localizedYouText(model.appLanguage, en: "Continue with real models", zh: "继续选择真实模型", fr: "Continuer avec les vrais modèles", de: "Mit echten Modellen fortfahren"),
+                    detail: localizedYouText(model.appLanguage, en: "Provider-backed baby elephants will use this same catalog.", zh: "复用 provider 的小象也会使用同一个目录。", fr: "Les baby elephants provider utilisent ce même catalogue.", de: "Provider-Baby-Elephants nutzen denselben Katalog."),
+                    symbol: "checkmark.seal",
+                    active: false
+                )
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(ElephantTheme.accent)
+                Text(catalogAttempts > 1
+                    ? localizedYouText(model.appLanguage, en: "Catalog read \(catalogAttempts) times. Still waiting for a ready response.", zh: "已读取 \(catalogAttempts) 次，仍在等待 ready 响应。", fr: "\(catalogAttempts) lectures; attente d'une réponse prête.", de: "\(catalogAttempts) Leseversuche; warte auf Ready-Antwort.")
+                    : localizedYouText(model.appLanguage, en: "The Next button unlocks when the runtime catalog is ready.", zh: "runtime catalog ready 后，下一步会自动可用。", fr: "Le bouton Suivant s'active quand le catalogue est prêt.", de: "Weiter wird aktiv, sobald der Runtime-Katalog bereit ist.")
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.muted)
+                .lineLimit(2)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(ElephantTheme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 242, alignment: .topLeading)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 8)
+    }
+
+    private func providerCatalogWaitingStep(title: String, detail: String, symbol: String, active: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: active ? "checkmark.circle.fill" : symbol)
+                .font(.callout.weight(.semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(active ? ElephantTheme.green : ElephantTheme.faint)
+                .frame(width: 22, height: 22)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(active ? 0.70 : 0.46), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var filteredProviders: [ProviderOption] {
@@ -16851,18 +19157,29 @@ struct OnboardingProviderModelStep: View {
 
     private func loadFromSnapshot() {
         guard !providerChoices.isEmpty else { return }
-        model.onboardingProviderID = model.snapshot.providerID.isEmpty
-            ? (providerChoices.first?.id ?? model.onboardingProviderID)
-            : model.snapshot.providerID
-        model.onboardingModelID = model.snapshot.providerModelID
-        model.onboardingBaseURL = model.snapshot.providerBaseURL
+        let activeID = model.snapshot.providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let activeOption = providerChoices.first(where: { $0.id == activeID })
+        let preferredOption = activeOption
+            ?? providerChoices.first(where: { $0.connected || $0.active || $0.storedKeyCount > 0 })
+            ?? providerChoices.first
+        guard let preferredOption else { return }
+        model.onboardingProviderID = preferredOption.id
+        model.onboardingModelID = activeOption == nil ? "" : model.snapshot.providerModelID
+        model.onboardingBaseURL = activeOption == nil ? "" : model.snapshot.providerBaseURL
         applyProviderDefaults(onlyWhenEmpty: true)
     }
 
-    private func loadProviderCatalogIfNeeded(force: Bool) async {
+    private func waitForProviderCatalog(force: Bool) async {
         guard force || providerChoices.isEmpty else { return }
         loadingCatalog = true
-        await model.refreshProviderCatalogForOnboarding()
+        while !Task.isCancelled && providerChoices.isEmpty {
+            catalogAttempts += 1
+            await model.refreshProviderCatalogForOnboarding()
+            if !providerChoices.isEmpty {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+        }
         loadingCatalog = false
         if !providerChoices.isEmpty {
             loadFromSnapshot()
@@ -17191,6 +19508,7 @@ struct OnboardingProviderSecretStep: View {
         let provider = model.onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines)
         let modelID = model.onboardingModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !provider.isEmpty, !modelID.isEmpty else { return false }
+        guard selectedOption != nil else { return false }
         if provider == "openai-compatible" {
             if model.snapshot.providerID == provider, !model.snapshot.providerModelID.isEmpty {
                 return true

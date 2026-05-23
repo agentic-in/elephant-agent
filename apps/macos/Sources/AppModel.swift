@@ -131,6 +131,26 @@ struct ToolUseEvent: Identifiable, Equatable {
     var status: String
     var arguments: String
     var result: String
+    var phase: String = ""
+    var detail: String = ""
+    var backend: String = ""
+    var babyID: String = ""
+    var babyName: String = ""
+    var babyRole: String = ""
+    var providerID: String = ""
+    var runtimeID: String = ""
+    var runtimeName: String = ""
+    var runtimePath: String = ""
+    var runtimeModel: String = ""
+    var childEpisodeID: String = ""
+    var task: String = ""
+
+    var isChildAgentRun: Bool {
+        backend == "local_cli"
+            || !babyID.isEmpty
+            || !childEpisodeID.isEmpty
+            || arguments.contains("sub_agent_child")
+    }
 }
 
 struct ChatMessage: Identifiable, Equatable {
@@ -213,6 +233,13 @@ struct DiaryEntry: Identifiable, Equatable {
     var date: String
     var content: String
     var generatedAt: String
+    var metadata: [String: String] = [:]
+
+    var isOnboardingLetter: Bool {
+        let kind = (metadata["kind"] ?? metadata["letter_kind"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let source = (metadata["source"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return kind == "onboarding_letter" || source == "onboarding_letter"
+    }
 }
 
 struct ProviderOption: Identifiable, Equatable {
@@ -236,6 +263,98 @@ struct ProviderModelOption: Identifiable, Equatable {
     var source: String
     var contextWindowTokens: Int
     var maxOutputTokens: Int
+}
+
+struct OnboardingBabyRoleTemplate: Identifiable, Equatable {
+    var id: String
+    var title: String
+    var subtitle: String
+    var prompt: String
+    var symbol: String
+}
+
+func onboardingBabyRoleTemplates(for occupation: String, language: AppLanguage) -> [OnboardingBabyRoleTemplate] {
+    let normalized = occupation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    func pick(en: String, zh: String, fr: String? = nil, de: String? = nil) -> String {
+        switch language {
+        case .zh: return zh
+        case .fr: return fr ?? en
+        case .de: return de ?? en
+        case .en: return en
+        }
+    }
+    func template(_ id: String, _ titleEn: String, _ titleZh: String, _ subtitleEn: String, _ subtitleZh: String, _ promptEn: String, _ promptZh: String, _ symbol: String) -> OnboardingBabyRoleTemplate {
+        OnboardingBabyRoleTemplate(
+            id: id,
+            title: pick(en: titleEn, zh: titleZh),
+            subtitle: pick(en: subtitleEn, zh: subtitleZh),
+            prompt: pick(en: promptEn, zh: promptZh),
+            symbol: symbol
+        )
+    }
+
+    if normalized.contains("engineer") || normalized.contains("developer") || normalized.contains("程序") || normalized.contains("工程") || normalized.contains("技术") || normalized.contains("研发") {
+        return [
+            template("engineering-coding", "coding baby elephant", "编码小象", "Code changes and validation.", "写代码、改代码和验证。", "Use this baby elephant for implementation plans, code changes, terminal investigation, and validation-heavy engineering work.", "把实现方案、代码修改、终端排查和验证密集的工程任务交给这只小象。", "curlybraces.square"),
+            template("engineering-research", "research baby elephant", "研究小象", "Context, APIs, and tradeoffs.", "查上下文、API 和技术取舍。", "Use this baby elephant for technical research, source reading, API comparison, and implementation options.", "把技术调研、资料阅读、API 对比和实现选型交给这只小象。", "doc.text.magnifyingglass"),
+            template("engineering-review", "review baby elephant", "评审小象", "Risk, quality, and tests.", "风险、质量和测试。", "Use this baby elephant for code review, regression risk checks, edge cases, and missing-test analysis.", "把代码审查、回归风险、边界情况和缺失测试分析交给这只小象。", "checkmark.shield"),
+            template("engineering-debug", "debugging baby elephant", "调试小象", "Failures, logs, and root cause.", "失败、日志和根因。", "Use this baby elephant for reproductions, log reading, failing command triage, and concise root-cause notes.", "把复现、日志阅读、失败命令排查和根因摘要交给这只小象。", "stethoscope")
+        ]
+    }
+    if normalized.contains("product") || normalized.contains("design") || normalized.contains("产品") || normalized.contains("设计") || normalized.contains("ux") || normalized.contains("ui") {
+        return [
+            template("product-ux", "design baby elephant", "设计小象", "UX, interaction, and polish.", "体验、交互和打磨感。", "Use this baby elephant for rigorous product critique, UX acceptance, hierarchy, wording, and interaction polish.", "把严苛产品评审、UX 验收、信息层级、文案和交互打磨交给这只小象。", "sparkles.rectangle.stack"),
+            template("product-strategy", "product baby elephant", "产品小象", "Tradeoffs, framing, and direction.", "取舍、定位和方向。", "Use this baby elephant for product framing, tradeoff analysis, roadmap slices, and user-first alternatives.", "把产品定位、取舍分析、路线切片和用户优先的替代方案交给这只小象。", "point.3.connected.trianglepath.dotted"),
+            template("product-research", "research baby elephant", "研究小象", "Users, competitors, evidence.", "用户、竞品和证据。", "Use this baby elephant for user research, competitor scans, evidence collection, and synthesis.", "把用户研究、竞品扫描、证据收集和综合交给这只小象。", "person.text.rectangle"),
+            template("product-copy", "copy baby elephant", "文案小象", "Interface language and tone.", "界面语言和语气。", "Use this baby elephant for interface copy, empty states, labels, onboarding text, and tone consistency.", "把界面文案、空状态、标签、onboarding 文案和语气一致性交给这只小象。", "text.quote")
+        ]
+    }
+    if normalized.contains("research") || normalized.contains("student") || normalized.contains("研究") || normalized.contains("学生") || normalized.contains("学术") {
+        return [
+            template("research-synthesis", "research baby elephant", "研究小象", "Context, sources, and synthesis.", "上下文、资料和综合。", "Use this baby elephant for research, source comparison, reading notes, and synthesis before the primary Elephant answers.", "把研究、资料对比、阅读笔记和回答前综合交给这只小象。", "doc.text.magnifyingglass"),
+            template("research-learning", "learning baby elephant", "学习小象", "Study paths and examples.", "学习路径和例子。", "Use this baby elephant for study plans, concept checks, examples, and learning follow-ups.", "把学习计划、概念检查、例子和后续学习提醒交给这只小象。", "graduationcap"),
+            template("research-literature", "literature baby elephant", "文献小象", "Papers, docs, and references.", "论文、文档和引用。", "Use this baby elephant for paper digestion, long-document outlines, claims, limitations, and references.", "把论文消化、长文提纲、核心主张、局限和引用整理交给这只小象。", "books.vertical"),
+            template("research-writing", "writing baby elephant", "写作小象", "Drafts, abstracts, and clarity.", "草稿、摘要和表达清晰度。", "Use this baby elephant for abstracts, paper drafts, study notes, and making complex material clear.", "把摘要、论文草稿、学习笔记和复杂材料的清晰表达交给这只小象。", "pencil.and.outline")
+        ]
+    }
+    if normalized.contains("operations") || normalized.contains("project") || normalized.contains("运营") || normalized.contains("项目") || normalized.contains("推进") {
+        return [
+            template("ops-project", "project baby elephant", "项目小象", "Milestones, owners, blockers.", "里程碑、责任人和阻塞。", "Use this baby elephant for project plans, owner mapping, blocker summaries, and execution rhythm.", "把项目计划、责任人梳理、阻塞摘要和推进节奏交给这只小象。", "checklist"),
+            template("ops-process", "process baby elephant", "流程小象", "Systems, handoffs, repeatability.", "系统、交接和可复用流程。", "Use this baby elephant for process design, SOPs, handoffs, and repeatable operating systems.", "把流程设计、SOP、协作交接和可复用运营系统交给这只小象。", "arrow.triangle.2.circlepath"),
+            template("ops-review", "review baby elephant", "复盘小象", "Signals, lessons, next changes.", "信号、经验和下一步改动。", "Use this baby elephant for weekly reviews, retrospectives, metrics notes, and improvement options.", "把周复盘、项目复盘、指标笔记和改进选项交给这只小象。", "chart.line.uptrend.xyaxis"),
+            template("ops-communication", "communication baby elephant", "沟通小象", "Updates, alignment, follow-up.", "同步、对齐和跟进。", "Use this baby elephant for updates, stakeholder notes, meeting follow-ups, and clear asks.", "把进展同步、相关方笔记、会议跟进和清晰请求交给这只小象。", "bubble.left.and.bubble.right")
+        ]
+    }
+    if normalized.contains("founder") || normalized.contains("business") || normalized.contains("manager") || normalized.contains("创业") || normalized.contains("经营") || normalized.contains("管理") {
+        return [
+            template("business-strategy", "strategy baby elephant", "策略小象", "Clarify direction and leverage.", "澄清方向和杠杆点。", "Use this baby elephant for strategy memos, market reads, prioritization, and decision options.", "把策略 memo、市场判断、优先级和决策选项交给这只小象。", "chart.line.uptrend.xyaxis"),
+            template("business-ops", "ops baby elephant", "运营小象", "Turn plans into operating rhythm.", "把计划落成节奏。", "Use this baby elephant for operating checklists, weekly reviews, process design, and follow-through.", "把运营清单、周复盘、流程设计和推进跟踪交给这只小象。", "checklist"),
+            template("business-market", "market baby elephant", "市场小象", "Positioning, audience, channels.", "定位、人群和渠道。", "Use this baby elephant for positioning, audience research, launch copy, and channel ideas.", "把定位、人群研究、发布文案和渠道想法交给这只小象。", "megaphone"),
+            template("business-research", "research baby elephant", "研究小象", "Signals, competitors, evidence.", "信号、竞品和证据。", "Use this baby elephant for market research, competitor notes, customer signals, and concise decision context.", "把市场研究、竞品笔记、客户信号和决策上下文交给这只小象。", "doc.text.magnifyingglass")
+        ]
+    }
+    if normalized.contains("writer") || normalized.contains("content") || normalized.contains("creator") || normalized.contains("写作") || normalized.contains("内容") || normalized.contains("创作") || normalized.contains("媒体") {
+        return [
+            template("writing-draft", "writing baby elephant", "写作小象", "Drafts, outlines, and rewrites.", "起草、提纲和改写。", "Use this baby elephant for drafts, outlines, rewrites, structure, and voice exploration.", "把起草、提纲、改写、结构和语气探索交给这只小象。", "pencil.and.outline"),
+            template("writing-editor", "editor baby elephant", "编辑小象", "Tighten arguments and rhythm.", "收紧论证和节奏。", "Use this baby elephant for editing, clarity, argument flow, repetition, and final polish.", "把编辑、清晰度、论证流、重复检查和最终润色交给这只小象。", "text.magnifyingglass"),
+            template("writing-ideas", "ideas baby elephant", "灵感小象", "Angles, titles, and creative routes.", "角度、标题和创意路线。", "Use this baby elephant for angles, titles, hooks, creative alternatives, and content calendars.", "把角度、标题、开头钩子、创意替代方案和内容日历交给这只小象。", "lightbulb"),
+            template("writing-research", "research baby elephant", "研究小象", "Facts, references, examples.", "事实、引用和例子。", "Use this baby elephant for fact gathering, examples, reference notes, and topic background.", "把事实收集、例子、引用笔记和选题背景交给这只小象。", "doc.text.magnifyingglass")
+        ]
+    }
+    if normalized.contains("marketing") || normalized.contains("sales") || normalized.contains("bd") || normalized.contains("市场") || normalized.contains("销售") || normalized.contains("增长") || normalized.contains("商务") {
+        return [
+            template("market-positioning", "market baby elephant", "市场小象", "Positioning, audience, channels.", "定位、人群和渠道。", "Use this baby elephant for positioning, audience research, launch copy, and channel ideas.", "把定位、人群研究、发布文案和渠道想法交给这只小象。", "megaphone"),
+            template("market-customer", "customer baby elephant", "客户小象", "Pain points, objections, follow-up.", "痛点、异议和跟进。", "Use this baby elephant for customer notes, objection handling, follow-up plans, and account context.", "把客户笔记、异议处理、跟进计划和账户上下文交给这只小象。", "person.2"),
+            template("market-copy", "copy baby elephant", "文案小象", "Messages, landing copy, outreach.", "信息、落地页和外联表达。", "Use this baby elephant for campaign copy, landing-page wording, outreach drafts, and concise messaging.", "把活动文案、落地页措辞、外联草稿和清晰信息表达交给这只小象。", "text.quote"),
+            template("market-research", "research baby elephant", "研究小象", "Signals, competitors, evidence.", "信号、竞品和证据。", "Use this baby elephant for market signals, competitor notes, audience evidence, and synthesis.", "把市场信号、竞品笔记、人群证据和综合交给这只小象。", "doc.text.magnifyingglass")
+        ]
+    }
+    return [
+        template("general-research", "research baby elephant", "研究小象", "Context, comparison, synthesis.", "上下文、对比和综合。", "Use this baby elephant for research, comparison, and concise synthesis.", "把研究、对比和简洁综合交给这只小象。", "doc.text.magnifyingglass"),
+        template("general-planning", "planning baby elephant", "规划小象", "Direction, options, next steps.", "方向、选项和下一步。", "Use this baby elephant for planning, tradeoffs, next steps, and turning unclear work into a path.", "把规划、取舍、下一步和把模糊工作变成路径交给这只小象。", "point.3.connected.trianglepath.dotted"),
+        template("general-coding", "coding baby elephant", "编码小象", "Code and technical validation.", "代码和技术验证。", "Use this baby elephant for technical investigation, implementation, and validation-heavy work.", "把技术排查、实现和验证密集的工作交给这只小象。", "curlybraces.square"),
+        template("general-expression", "expression baby elephant", "表达小象", "Writing, editing, and wording.", "写作、编辑和措辞。", "Use this baby elephant for writing, rewriting, naming, and turning loose material into a clear message.", "把写作、改写、命名和把松散材料变成清晰表达交给这只小象。", "text.quote")
+    ]
 }
 
 struct OperationItem: Identifiable, Equatable {
@@ -316,22 +435,6 @@ struct MCPServerDraft: Equatable {
         envRows: [.empty],
         headerRows: [.empty]
     )
-
-    static func minimax(apiKey: String = "") -> MCPServerDraft {
-        MCPServerDraft(
-            serverID: "MiniMax",
-            serverLabel: "MiniMax",
-            transport: "stdio",
-            command: "uvx",
-            argsText: "[\"minimax-coding-plan-mcp\", \"-y\"]",
-            url: "",
-            envRows: [
-                MCPKeyValueRow(key: "MINIMAX_API_KEY", value: apiKey),
-                MCPKeyValueRow(key: "MINIMAX_API_HOST", value: "https://api.minimaxi.com")
-            ],
-            headerRows: [.empty]
-        )
-    }
 
     static func from(server: MCPServerItem) -> MCPServerDraft {
         MCPServerDraft(
@@ -680,6 +783,38 @@ struct HerdItem: Identifiable, Equatable {
     var createdAt: String
     var updatedAt: String
     var source: String
+    var herdKind: String
+    var parentElephantID: String
+    var roleTitle: String
+    var rolePrompt: String
+    var runtimeID: String
+    var providerID: String
+    var runtimeStatus: String
+    var authStatus: String
+    var canExecute: Bool
+    var cliPath: String
+    var cliVersion: String
+    var enabled: Bool
+    var lastDelegation: String
+}
+
+struct LocalAgentRuntimeItem: Identifiable, Equatable {
+    var id: String { runtimeID }
+    var runtimeID: String
+    var providerID: String
+    var displayName: String
+    var command: String
+    var resolvedPath: String
+    var version: String
+    var status: String
+    var authStatus: String
+    var source: String
+    var defaultModel: String
+    var canExecute: Bool
+    var roleTitle: String
+    var rolePrompt: String
+    var detectedAt: String
+    var lastError: String
 }
 
 struct CronJobItem: Identifiable, Equatable {
@@ -878,6 +1013,7 @@ struct DashboardSnapshot: Equatable {
     var skillAffinityRows: [SkillAffinity] = []
     var diaryEntries: [DiaryEntry] = []
     var skillNames: [String] = []
+    var localAgentRuntimes: [LocalAgentRuntimeItem] = []
     var skillItems: [OperationItem] = []
     var toolNames: [String] = []
     var toolItems: [OperationItem] = []
@@ -950,6 +1086,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingOccupation = ""
     @Published var onboardingSchool = ""
     @Published var onboardingCity = ""
+    @Published var onboardingCurrentFocus = ""
     @Published var onboardingGender = ""
     @Published var onboardingBirthDate = ""
     @Published var onboardingMBTI = ""
@@ -982,12 +1119,25 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingLockPassword = ""
     @Published var onboardingLockPasswordConfirmation = ""
     @Published var onboardingStep = 0
+    @Published var onboardingHerdDiscoveryStarted = false
+    @Published var onboardingHerdDiscoveryComplete = false
+    @Published var onboardingHerdDiscoveryStatus = ""
+    @Published var onboardingSelectedRuntimeIDs: Set<String> = []
+    @Published var onboardingSelectedBabyBackend = ""
+    @Published var onboardingSelectedBabyRuntimeID = ""
+    @Published var onboardingBabyProviderModelID = ""
+    @Published var onboardingBabyTemplateID = ""
+    @Published var onboardingHerdAdoptionInFlight = false
     @Published var onboardingFinalizationStarted = false
     @Published var onboardingFinalizationComplete = false
     @Published var onboardingFinalizationFailed = false
     @Published var onboardingFinalizationStatus = ""
     @Published var onboardingInitReflectJobID = ""
+    @Published var onboardingLetterJobID = ""
     @Published var showingOnboarding = ElephantAppModel.onboardingPreviewMode
+    @Published var onboardingLetterEntry: DiaryEntry?
+    @Published var showingOnboardingLetterPrompt = false
+    @Published var showingOnboardingLetterEnvelope = false
     @Published var showingCommandPalette = false
     @Published var lastError = ""
     @Published var providerTestResult = ""
@@ -1027,10 +1177,13 @@ final class ElephantAppModel: ObservableObject {
     private let runner = CoreRunner()
     private var client = APIClient(baseURL: nil)
     private var readinessPollTask: Task<Void, Never>?
+    private var onboardingLetterPollTask: Task<Void, Never>?
     private var sleepIdleMonitorTask: Task<Void, Never>?
     private var weixinQRPollTask: Task<Void, Never>?
     private var onboardingCreatedStateID = ""
     private static let onboardingCompleteKey = "elephant.mac.onboardingComplete"
+    private static let onboardingLetterSeenEntryIDKey = "elephant.mac.onboardingLetterSeenEntryID"
+    private static let onboardingLetterPendingKey = "elephant.mac.onboardingLetterPending"
     private static let userAvatarPathKey = "elephant.mac.userAvatarImagePath"
     private static let herdAvatarPathsKey = "elephant.mac.herdAvatarImagePaths"
     private static let hiddenEpisodeIDsKey = "elephant.mac.hiddenEpisodeIDs"
@@ -1054,6 +1207,10 @@ final class ElephantAppModel: ObservableObject {
         case .de: return de
         case .en: return en
         }
+    }
+
+    static func localizedPublicText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String) -> String {
+        localizedText(language, en: en, zh: zh, fr: fr, de: de)
     }
 
     private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
@@ -1138,6 +1295,9 @@ final class ElephantAppModel: ObservableObject {
             } else if hasAppLockPassword {
                 beginSleepDisplay(reason: "launch")
             }
+            if UserDefaults.standard.bool(forKey: Self.onboardingLetterPendingKey) {
+                startOnboardingLetterPollingIfNeeded()
+            }
         } catch {
             corePhase = .failed(error.localizedDescription)
             lastError = error.localizedDescription
@@ -1155,6 +1315,7 @@ final class ElephantAppModel: ObservableObject {
         next.episodeThreads.removeAll { hiddenEpisodeIDs.contains($0.id) }
         syncAppLanguageFromSnapshot(next)
         snapshot = next
+        syncOnboardingLetterState(from: next)
         if snapshot.readyForInteraction {
             readinessPollTask?.cancel()
             readinessPollTask = nil
@@ -1171,6 +1332,11 @@ final class ElephantAppModel: ObservableObject {
                 client = APIClient(baseURL: runtime.baseURL)
                 snapshot.apiURL = runtime.baseURL.absoluteString
                 snapshot.databasePath = runtime.databasePath.path
+            }
+            let providerOptions = try await client.fetchProviderCatalog()
+            if !providerOptions.isEmpty {
+                snapshot.providerOptions = providerOptions
+                return
             }
             try await refreshDashboard()
         } catch {
@@ -1201,6 +1367,45 @@ final class ElephantAppModel: ObservableObject {
                 }
             }
             self?.readinessPollTask = nil
+        }
+    }
+
+    private func syncOnboardingLetterState(from snapshot: DashboardSnapshot) {
+        guard let entry = snapshot.diaryEntries.first(where: { $0.isOnboardingLetter }) else { return }
+        onboardingLetterEntry = entry
+        UserDefaults.standard.set(false, forKey: Self.onboardingLetterPendingKey)
+        onboardingLetterPollTask?.cancel()
+        onboardingLetterPollTask = nil
+
+        let seenEntryID = UserDefaults.standard.string(forKey: Self.onboardingLetterSeenEntryIDKey) ?? ""
+        guard !showingOnboarding, seenEntryID != entry.id else { return }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+            showingOnboardingLetterPrompt = true
+        }
+    }
+
+    private func markOnboardingLetterPending() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingLetterPendingKey)
+        startOnboardingLetterPollingIfNeeded()
+    }
+
+    private func startOnboardingLetterPollingIfNeeded() {
+        guard corePhase == .ready, onboardingLetterPollTask == nil else { return }
+        onboardingLetterPollTask = Task { [weak self] in
+            for _ in 0..<96 {
+                guard let self else { return }
+                if Task.isCancelled { return }
+                do {
+                    try await self.refreshDashboard()
+                    if self.onboardingLetterEntry != nil {
+                        return
+                    }
+                } catch {
+                    self.lastError = error.localizedDescription
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+            self?.onboardingLetterPollTask = nil
         }
     }
 
@@ -1296,6 +1501,7 @@ final class ElephantAppModel: ObservableObject {
         if onboardingCreatedStateID.isEmpty {
             stateID = try await client.createElephant(name: onboardingName, identityText: onboardingElephantMarkdown)
             onboardingCreatedStateID = stateID
+            _ = try? await client.scanLocalAgents()
         } else {
             stateID = onboardingCreatedStateID
         }
@@ -1305,6 +1511,7 @@ final class ElephantAppModel: ObservableObject {
             occupation: onboardingOccupation,
             school: onboardingSchool,
             city: onboardingCity,
+            currentFocus: onboardingCurrentFocus,
             gender: onboardingGender,
             birthDate: onboardingBirthDate,
             mbti: onboardingMBTI,
@@ -1346,6 +1553,7 @@ final class ElephantAppModel: ObservableObject {
         onboardingFinalizationFailed = false
         onboardingFinalizationStatus = text(.learningCreateModel)
         onboardingInitReflectJobID = ""
+        onboardingLetterJobID = ""
         lastError = ""
         do {
             let stateID = try await createElephantProfileFromOnboarding()
@@ -1361,6 +1569,7 @@ final class ElephantAppModel: ObservableObject {
             onboardingFinalizationStatus = text(.learningStartReflect)
             let jobID = try await client.runReflect(trigger: "init_profile")
             onboardingInitReflectJobID = jobID
+            markOnboardingLetterPending()
             try await pollOnboardingInitReflectJob(jobID: jobID)
         } catch {
             onboardingFinalizationFailed = true
@@ -1428,6 +1637,10 @@ final class ElephantAppModel: ObservableObject {
         UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
         showingOnboarding = false
         selectedSection = .home
+        syncOnboardingLetterState(from: snapshot)
+        if onboardingLetterEntry == nil, UserDefaults.standard.bool(forKey: Self.onboardingLetterPendingKey) {
+            startOnboardingLetterPollingIfNeeded()
+        }
     }
 
     func skipOnboardingLearningAndContinue() {
@@ -1642,6 +1855,51 @@ final class ElephantAppModel: ObservableObject {
             lastError = error.localizedDescription
         }
         isReflecting = false
+    }
+
+    func requestOnboardingLetter() async {
+        guard !isReflecting else { return }
+        isReflecting = true
+        do {
+            let jobID = try await client.runReflect(trigger: "onboarding_letter")
+            onboardingLetterJobID = jobID
+            markOnboardingLetterPending()
+            diaryActionResult = Self.localizedText(
+                appLanguage,
+                en: "Elephant is writing your letter.",
+                zh: "Elephant 正在给你写信。",
+                fr: "Elephant écrit votre lettre.",
+                de: "Elephant schreibt deinen Brief."
+            )
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            try await refreshDashboard()
+        } catch {
+            lastError = error.localizedDescription
+        }
+        isReflecting = false
+    }
+
+    func openOnboardingLetter(_ entry: DiaryEntry? = nil) {
+        if let entry {
+            onboardingLetterEntry = entry
+        }
+        guard onboardingLetterEntry != nil else { return }
+        showingOnboardingLetterPrompt = false
+        showingOnboardingLetterEnvelope = true
+        if let entryID = onboardingLetterEntry?.id, !entryID.isEmpty {
+            UserDefaults.standard.set(entryID, forKey: Self.onboardingLetterSeenEntryIDKey)
+        }
+    }
+
+    func dismissOnboardingLetterPrompt(markSeen: Bool = true) {
+        showingOnboardingLetterPrompt = false
+        if markSeen, let entryID = onboardingLetterEntry?.id, !entryID.isEmpty {
+            UserDefaults.standard.set(entryID, forKey: Self.onboardingLetterSeenEntryIDKey)
+        }
+    }
+
+    func closeOnboardingLetterEnvelope() {
+        showingOnboardingLetterEnvelope = false
     }
 
     func writeDiary(targetDate: String) async {
@@ -2135,18 +2393,181 @@ final class ElephantAppModel: ObservableObject {
     func updateHerdElephant(
         _ item: HerdItem,
         name: String,
-        identityText: String
+        identityText: String,
+        roleTitle: String? = nil,
+        rolePrompt: String? = nil,
+        enabled: Bool? = nil
     ) async {
         do {
             try await client.updateHerdElephant(
                 item,
                 name: name,
-                identityText: identityText
+                identityText: identityText,
+                roleTitle: roleTitle,
+                rolePrompt: rolePrompt,
+                enabled: enabled
             )
             try await refreshDashboard()
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    @discardableResult
+    func scanLocalAgentsForHerd() async -> [LocalAgentRuntimeItem] {
+        do {
+            onboardingHerdDiscoveryStarted = true
+            onboardingHerdDiscoveryStatus = Self.localizedText(appLanguage, en: "Scanning nearby local agents...", zh: "正在扫描本地 agent...", fr: "Analyse des agents locaux...", de: "Lokale Agents werden gesucht...")
+            let discovered = try await client.scanLocalAgents()
+            try await refreshDashboard()
+            let latest = snapshot.localAgentRuntimes.isEmpty ? discovered : snapshot.localAgentRuntimes
+            if onboardingSelectedBabyBackend.isEmpty {
+                onboardingSelectedBabyBackend = "provider"
+                onboardingSelectedBabyRuntimeID = "provider:\(onboardingProviderID)"
+            }
+            if onboardingBabyProviderModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                onboardingBabyProviderModelID = onboardingModelID
+            }
+            onboardingHerdDiscoveryComplete = true
+            onboardingHerdDiscoveryStatus = latest.isEmpty
+                ? Self.localizedText(appLanguage, en: "No local agents found yet.", zh: "还没有找到本地 agent。", fr: "Aucun agent local trouvé.", de: "Noch keine lokalen Agents gefunden.")
+                : Self.localizedText(appLanguage, en: "Choose which agents should become baby elephants.", zh: "选择哪些 agent 要成为小象。", fr: "Choisissez les agents à adopter.", de: "Wähle Agents als Baby Elephants.")
+            return latest
+        } catch {
+            lastError = error.localizedDescription
+            onboardingHerdDiscoveryComplete = true
+            onboardingHerdDiscoveryStatus = error.localizedDescription
+            return []
+        }
+    }
+
+    func adoptLocalAgent(
+        _ runtime: LocalAgentRuntimeItem,
+        displayName: String,
+        roleTitle: String,
+        rolePrompt: String,
+        enabled: Bool
+    ) async {
+        do {
+            _ = try await client.adoptLocalAgent(
+                runtime: runtime,
+                displayName: displayName,
+                roleTitle: roleTitle,
+                rolePrompt: rolePrompt,
+                enabled: enabled
+            )
+            try await refreshDashboard()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func adoptSelectedBabyFromOnboarding() async {
+        guard !onboardingHerdAdoptionInFlight else { return }
+        onboardingHerdAdoptionInFlight = true
+        defer { onboardingHerdAdoptionInFlight = false }
+        let backend = onboardingSelectedBabyBackend.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !backend.isEmpty else { return }
+        do {
+            let template = onboardingSelectedBabyTemplate
+            if backend == "provider" {
+                try await client.adoptProviderAgent(
+                    providerID: onboardingProviderID,
+                    providerName: onboardingProviderDisplayName,
+                    modelID: onboardingBabyProviderModelID.isEmpty ? onboardingModelID : onboardingBabyProviderModelID,
+                    displayName: onboardingProviderBabyDisplayName(template: template),
+                    roleTitle: template.title,
+                    rolePrompt: template.prompt,
+                    enabled: true
+                )
+            } else if let runtime = snapshot.localAgentRuntimes.first(where: { $0.runtimeID == onboardingSelectedBabyRuntimeID && $0.canExecute }) {
+                _ = try await client.adoptLocalAgent(
+                    runtime: runtime,
+                    displayName: onboardingBabyDisplayName(for: runtime, template: template),
+                    roleTitle: template.title,
+                    rolePrompt: template.prompt,
+                    enabled: true
+                )
+            }
+            onboardingSelectedRuntimeIDs.removeAll()
+            onboardingSelectedBabyBackend = ""
+            onboardingSelectedBabyRuntimeID = ""
+            try await refreshDashboard()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    private var onboardingProviderDisplayName: String {
+        snapshot.providerOptions.first(where: { $0.id == onboardingProviderID })?.displayName
+            ?? onboardingProviderID
+    }
+
+    private var onboardingSelectedBabyTemplate: OnboardingBabyRoleTemplate {
+        let templates = onboardingBabyRoleTemplates(for: onboardingOccupation, language: appLanguage)
+        if let selected = templates.first(where: { $0.id == onboardingBabyTemplateID }) {
+            return selected
+        }
+        return templates.first ?? OnboardingBabyRoleTemplate(
+            id: "general",
+            title: ElephantAppModel.localizedText(appLanguage, en: "focused helper", zh: "专注小象", fr: "assistant ciblé", de: "Fokussierter Helfer"),
+            subtitle: ElephantAppModel.localizedText(appLanguage, en: "Handle one bounded task at a time.", zh: "一次处理一个边界清楚的任务。", fr: "Traite une tâche bornée à la fois.", de: "Bearbeitet jeweils eine klar begrenzte Aufgabe."),
+            prompt: ElephantAppModel.localizedText(appLanguage, en: "Use this baby elephant for bounded specialist work that benefits from an independent pass.", zh: "把适合专业独立处理的边界清晰任务交给这只小象。", fr: "Confiez-lui le travail spécialisé et borné qui bénéficie d'un passage indépendant.", de: "Nutze es für klar begrenzte Spezialarbeit, die von einem unabhängigen Durchgang profitiert."),
+            symbol: "sparkles"
+        )
+    }
+
+    private func onboardingProviderBabyDisplayName(template: OnboardingBabyRoleTemplate) -> String {
+        let provider = onboardingProviderDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = template.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if provider.isEmpty { return title }
+        return "\(provider) \(title)".trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func onboardingBabyDisplayName(for runtime: LocalAgentRuntimeItem, template: OnboardingBabyRoleTemplate? = nil) -> String {
+        let provider = runtime.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let role = template?.title ?? onboardingBabyRoleTitle(for: runtime)
+        if provider.lowercased().contains(role.lowercased()) {
+            return provider
+        }
+        return "\(provider) \(role)".trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func onboardingBabyRoleTitle(for runtime: LocalAgentRuntimeItem) -> String {
+        if appLanguage == .en, !runtime.roleTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return runtime.roleTitle
+        }
+        let provider = runtime.providerID.lowercased()
+        if provider.contains("codex") {
+            return Self.localizedText(appLanguage, en: "coding implementer", zh: "编码小象", fr: "implémentation code", de: "Code-Implementierung")
+        }
+        if provider.contains("gemini") {
+            return Self.localizedText(appLanguage, en: "research analyst", zh: "研究小象", fr: "analyse recherche", de: "Recherche")
+        }
+        if provider.contains("copilot") {
+            return Self.localizedText(appLanguage, en: "GitHub assistant", zh: "GitHub 小象", fr: "assistant GitHub", de: "GitHub-Assistent")
+        }
+        if provider.contains("claude") {
+            return Self.localizedText(appLanguage, en: "code reviewer", zh: "审查小象", fr: "revue de code", de: "Code-Review")
+        }
+        return Self.localizedText(appLanguage, en: "local specialist", zh: "本地专长小象", fr: "spécialiste local", de: "Lokaler Spezialist")
+    }
+
+    private func onboardingBabyRolePrompt(for runtime: LocalAgentRuntimeItem) -> String {
+        if appLanguage == .en, !runtime.rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return runtime.rolePrompt
+        }
+        let provider = runtime.providerID.lowercased()
+        if provider.contains("codex") {
+            return Self.localizedText(appLanguage, en: "Use this baby elephant for repository changes, code review, terminal-driven investigation, and validation-heavy engineering work.", zh: "把代码修改、代码审查、终端排查和需要严格验证的工程任务交给这只小象。", fr: "Confiez-lui les changements repo, revues de code, investigations terminal et validations exigeantes.", de: "Nutze es für Repository-Änderungen, Code-Review, Terminal-Recherche und validierungsintensive Arbeit.")
+        }
+        if provider.contains("gemini") {
+            return Self.localizedText(appLanguage, en: "Use this baby elephant for research, comparison, synthesis, and broad context gathering.", zh: "把研究、对比、资料综合和大范围上下文收集交给这只小象。", fr: "Confiez-lui la recherche, la comparaison, la synthèse et le contexte large.", de: "Nutze es für Recherche, Vergleich, Synthese und breiten Kontext.")
+        }
+        if provider.contains("copilot") {
+            return Self.localizedText(appLanguage, en: "Use this baby elephant for GitHub-centric code questions and repository workflow assistance.", zh: "把 GitHub 相关代码问题和仓库工作流协助交给这只小象。", fr: "Confiez-lui les questions GitHub et les workflows de dépôt.", de: "Nutze es für GitHub-nahe Codefragen und Repository-Workflows.")
+        }
+        return Self.localizedText(appLanguage, en: "Use this baby elephant for focused local CLI work that matches its specialist runtime.", zh: "把适合这个本地 CLI 专长的边界清晰任务交给这只小象。", fr: "Confiez-lui le travail CLI local ciblé qui correspond à son runtime spécialisé.", de: "Nutze es für fokussierte lokale CLI-Arbeit, die zu seiner spezialisierten Runtime passt.")
     }
 
     func deleteHerdElephant(_ item: HerdItem) async {
@@ -2889,7 +3310,22 @@ final class ElephantAppModel: ObservableObject {
 
     private static func toolEventSignature(_ events: [ToolUseEvent]) -> String {
         events
-            .map { [$0.sourceID, $0.invocationID, $0.name, $0.status, $0.arguments, $0.result].joined(separator: "|") }
+            .map {
+                [
+                    $0.sourceID,
+                    $0.invocationID,
+                    $0.name,
+                    $0.status,
+                    $0.arguments,
+                    $0.result,
+                    $0.phase,
+                    $0.backend,
+                    $0.babyID,
+                    $0.providerID,
+                    $0.runtimeID,
+                    $0.childEpisodeID
+                ].joined(separator: "|")
+            }
             .joined(separator: "\n")
     }
 
@@ -2941,7 +3377,20 @@ final class ElephantAppModel: ObservableObject {
             name: incoming.name == "tool" || incoming.name.isEmpty ? existing.name : incoming.name,
             status: incoming.status.isEmpty ? existing.status : incoming.status,
             arguments: incoming.arguments.isEmpty ? existing.arguments : incoming.arguments,
-            result: incoming.result.isEmpty ? existing.result : incoming.result
+            result: incoming.result.isEmpty ? existing.result : incoming.result,
+            phase: incoming.phase.isEmpty ? existing.phase : incoming.phase,
+            detail: incoming.detail.isEmpty ? existing.detail : incoming.detail,
+            backend: incoming.backend.isEmpty ? existing.backend : incoming.backend,
+            babyID: incoming.babyID.isEmpty ? existing.babyID : incoming.babyID,
+            babyName: incoming.babyName.isEmpty ? existing.babyName : incoming.babyName,
+            babyRole: incoming.babyRole.isEmpty ? existing.babyRole : incoming.babyRole,
+            providerID: incoming.providerID.isEmpty ? existing.providerID : incoming.providerID,
+            runtimeID: incoming.runtimeID.isEmpty ? existing.runtimeID : incoming.runtimeID,
+            runtimeName: incoming.runtimeName.isEmpty ? existing.runtimeName : incoming.runtimeName,
+            runtimePath: incoming.runtimePath.isEmpty ? existing.runtimePath : incoming.runtimePath,
+            runtimeModel: incoming.runtimeModel.isEmpty ? existing.runtimeModel : incoming.runtimeModel,
+            childEpisodeID: incoming.childEpisodeID.isEmpty ? existing.childEpisodeID : incoming.childEpisodeID,
+            task: incoming.task.isEmpty ? existing.task : incoming.task
         )
     }
 
@@ -2953,6 +3402,7 @@ final class ElephantAppModel: ObservableObject {
         onboardingOccupation = ""
         onboardingSchool = ""
         onboardingCity = ""
+        onboardingCurrentFocus = ""
         onboardingGender = ""
         onboardingBirthDate = ""
         onboardingMBTI = ""
@@ -2985,11 +3435,26 @@ final class ElephantAppModel: ObservableObject {
         onboardingLockPassword = ""
         onboardingLockPasswordConfirmation = ""
         onboardingStep = 0
+        onboardingHerdDiscoveryStarted = false
+        onboardingHerdDiscoveryComplete = false
+        onboardingHerdDiscoveryStatus = ""
+        onboardingSelectedRuntimeIDs = []
+        onboardingSelectedBabyBackend = ""
+        onboardingSelectedBabyRuntimeID = ""
+        onboardingBabyProviderModelID = ""
+        onboardingBabyTemplateID = ""
+        onboardingHerdAdoptionInFlight = false
         onboardingFinalizationStarted = false
         onboardingFinalizationComplete = false
         onboardingFinalizationFailed = false
         onboardingFinalizationStatus = ""
         onboardingInitReflectJobID = ""
+        onboardingLetterJobID = ""
+        onboardingLetterEntry = nil
+        showingOnboardingLetterPrompt = false
+        showingOnboardingLetterEnvelope = false
+        onboardingLetterPollTask?.cancel()
+        onboardingLetterPollTask = nil
         onboardingCreatedStateID = ""
     }
 
@@ -3028,6 +3493,8 @@ final class ElephantAppModel: ObservableObject {
         let defaults = UserDefaults.standard
         [
             Self.onboardingCompleteKey,
+            Self.onboardingLetterSeenEntryIDKey,
+            Self.onboardingLetterPendingKey,
             Self.userAvatarPathKey,
             Self.herdAvatarPathsKey,
             Self.hiddenEpisodeIDsKey,

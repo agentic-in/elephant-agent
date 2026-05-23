@@ -570,6 +570,7 @@ def builtin_tool_definitions(
                 "entry_date": {"type": "string", "description": "YYYY-MM-DD date for the entry."},
                 "content": {"type": "string", "description": "Markdown diary content (2-4 paragraphs)."},
                 "source_episode_ids": {"type": "array", "items": {"type": "string"}, "description": "Source episode IDs."},
+                "metadata": {"type": "object", "description": "Optional string metadata, such as kind=onboarding_letter."},
             }),
             side_effects=ToolSideEffectMetadata(risk_class="low", approval_class="none", writes_state=True, reads_state=False, categories=("diary", "write"), notes="Upserts one entry per date."),
             availability=_availability(diary_reason is None, diary_reason),

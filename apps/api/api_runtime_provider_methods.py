@@ -106,8 +106,20 @@ def list_providers(self) -> dict[str, Any]:
         except Exception:
             pass
         providers.append(provider)
+    try:
+        active_provider = self.model_provider.describe()
+    except LookupError as error:
+        active_profile = self.model_provider.active_profile()
+        active_provider = {
+            "provider_id": getattr(active_profile, "provider_id", "preview") if active_profile is not None else "preview",
+            "profile_id": getattr(active_profile, "profile_id", "") if active_profile is not None else "",
+            "model_id": getattr(active_profile, "default_model", "") if active_profile is not None else "",
+            "status": "configuration_required",
+            "error": str(error),
+            "source": "active-provider-error",
+        }
     return {
-        "active_provider": self.model_provider.describe(),
+        "active_provider": active_provider,
         "providers": providers,
     }
 

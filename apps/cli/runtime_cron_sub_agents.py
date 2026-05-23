@@ -6,7 +6,8 @@ from collections.abc import Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from threading import Lock
+from pathlib import Path
+from threading import BoundedSemaphore, Lock
 import traceback
 from typing import Any
 from uuid import uuid4
@@ -14,7 +15,15 @@ from uuid import uuid4
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import ExecutionResult
 from packages.cron import CronJob
+from packages.operator.local_agent_adapters import run_local_agent_cli
 from packages.tools.runtime import ToolInvocation, ToolLifecycleEvent
+from apps.cli.runtime_cron_sub_agent_babies import (
+    activate_provider_baby_profile,
+    compose_local_cli_baby_prompt,
+    compose_provider_baby_prompt,
+    resolve_baby,
+)
+from apps.cli.runtime_cron_sub_agent_events import sub_agent_event_arguments
 
 
 @dataclass(slots=True)
@@ -34,6 +43,9 @@ class _AsyncSubAgentRun:
 
 _ASYNC_SUB_AGENT_RUNS: dict[str, _AsyncSubAgentRun] = {}
 _ASYNC_SUB_AGENT_RUNS_LOCK = Lock()
+_LOCAL_CLI_SEMAPHORE = BoundedSemaphore(2)
+_LOCAL_CLI_BABY_LOCKS: dict[str, Lock] = {}
+_LOCAL_CLI_BABY_LOCKS_GUARD = Lock()
 
 
 class _AllowedToolRuntime:
@@ -151,6 +163,10 @@ def run_sub_agent_tasks(
             system_prompt=str(item.get("system_prompt") or ""),
             learning_agent=bool(item.get("learning_agent")),
             child_metadata=item.get("child_metadata") if isinstance(item.get("child_metadata"), Mapping) else None,
+            backend=str(item.get("backend") or ""),
+            baby_id=str(item.get("baby_id") or ""),
+            role=str(item.get("role") or ""),
+            timeout_seconds=str(item.get("timeout_seconds") or ""),
         )
         for item in normalized
     )
@@ -209,6 +225,10 @@ def start_sub_agent_tasks(
             system_prompt=str(item.get("system_prompt") or ""),
             learning_agent=bool(item.get("learning_agent")),
             child_metadata=item.get("child_metadata") if isinstance(item.get("child_metadata"), Mapping) else None,
+            backend=str(item.get("backend") or ""),
+            baby_id=str(item.get("baby_id") or ""),
+            role=str(item.get("role") or ""),
+            timeout_seconds=str(item.get("timeout_seconds") or ""),
         )
         for item in normalized
     )
@@ -306,21 +326,54 @@ def _prepare_sub_agent_child(
     system_prompt: str = "",
     learning_agent: bool = False,
     child_metadata: Mapping[str, Any] | None = None,
+    backend: str = "",
+    baby_id: str = "",
+    role: str = "",
+    timeout_seconds: str = "",
 ) -> Mapping[str, Any]:
+    backend = backend.strip().lower()
+    baby = resolve_baby(runtime, backend=backend, baby_id=baby_id, role=role) if backend in {"local_cli", "provider"} else None
+    effective_metadata = dict(child_metadata or {})
+    if baby is not None:
+        baby_state = baby["state"]
+        effective_metadata.update({
+            "backend": backend,
+            "baby_id": baby_state.elephant_id,
+            "baby_state_id": baby_state.state_id,
+            "baby_name": getattr(baby_state, "elephant_name", "") or baby_state.elephant_id,
+            "baby_role": baby["role_title"],
+            "provider_id": baby.get("provider_id", ""),
+            "runtime_model": baby.get("provider_model", ""),
+            "delegated_by": parent_session_id,
+        })
+        runtime_record = baby.get("runtime")
+        if runtime_record is not None:
+            effective_metadata.update({
+                "runtime_id": runtime_record.runtime_id,
+                "runtime_display_name": runtime_record.display_name,
+                "runtime_path": runtime_record.resolved_path,
+                "runtime_model": runtime_record.default_model,
+            })
     child = _open_sub_agent_child_episode(
         runtime,
         parent_session_id,
         learning_agent=learning_agent,
-        child_metadata=child_metadata,
+        child_metadata=effective_metadata,
+        state=baby["state"] if baby is not None else None,
     )
     child_session_id = child.episode_id
-    prompt = task if system_prompt.strip() else _compose_sub_agent_prompt(
-        runtime,
-        task=task,
-        name=name,
-        skills=skills,
-        session_id=child_session_id,
-    )
+    if baby is not None and backend == "local_cli":
+        prompt = compose_local_cli_baby_prompt(task=task, name=name, baby=baby)
+    elif baby is not None and backend == "provider":
+        prompt = compose_provider_baby_prompt(task=task, name=name, baby=baby)
+    else:
+        prompt = task if system_prompt.strip() else _compose_sub_agent_prompt(
+            runtime,
+            task=task,
+            name=name,
+            skills=skills,
+            session_id=child_session_id,
+        )
     return {
         "name": name or "sub-agent",
         "task": task,
@@ -331,7 +384,10 @@ def _prepare_sub_agent_child(
         "skills": skills,
         "allowed_tools": tuple(dict.fromkeys(item.strip() for item in allowed_tools if item.strip())),
         "learning_agent": learning_agent,
-        "child_metadata": dict(child_metadata or {}),
+        "child_metadata": effective_metadata,
+        "backend": backend or "native",
+        "baby": baby,
+        "timeout_seconds": timeout_seconds or "1800",
     }
 
 
@@ -341,10 +397,14 @@ def _open_sub_agent_child_episode(
     *,
     learning_agent: bool = False,
     child_metadata: Mapping[str, Any] | None = None,
+    state: Any | None = None,
 ) -> Episode:
     parent = runtime.repository.load_episode(parent_session_id)
     if parent is None:
         raise KeyError(f"episode not found: {parent_session_id}")
+    child_state = state
+    if child_state is None:
+        child_state = runtime.repository.load_state(parent.state_id) if parent.state_id else None
     now = datetime.now(timezone.utc)
     metadata = {
         "episode_kind": "sub_agent",
@@ -356,10 +416,10 @@ def _open_sub_agent_child_episode(
         metadata.update({str(key): value for key, value in child_metadata.items() if str(key).strip()})
     child = Episode(
         episode_id=uuid4().hex,
-        state_id=parent.state_id,
-        personal_model_id=parent.personal_model_id,
+        state_id=child_state.state_id if child_state is not None else parent.state_id,
+        personal_model_id=child_state.personal_model_id if child_state is not None else parent.personal_model_id,
         entry_surface=f"{parent.entry_surface}:sub_agent",
-        elephant_id=parent.elephant_id,
+        elephant_id=child_state.elephant_id if child_state is not None else parent.elephant_id,
         status="open",
         started_at=now,
         updated_at=now,
@@ -398,11 +458,24 @@ def _run_prepared_sub_agent_child(
         requested_at=started_at,
     )
     try:
+        if str(prepared_child.get("backend") or "").strip().lower() == "local_cli":
+            return _run_prepared_local_cli_baby(
+                runtime,
+                prepared_child=prepared_child,
+                name=name,
+                prompt=prompt,
+                skills=skills,
+                run_id=run_id,
+                task_index=task_index,
+                started_at=started_at,
+            )
         child_runtime = _create_child_runtime(runtime)
         isolated_snapshot = runtime.paths.state_dir / "sub-agent-snapshots" / f"{child_session_id}.json"
         isolated_snapshot.parent.mkdir(parents=True, exist_ok=True)
         object.__setattr__(child_runtime, "snapshot_path", isolated_snapshot)
         object.__setattr__(child_runtime, "sub_agent_active", True)
+        if str(prepared_child.get("backend") or "").strip().lower() == "provider":
+            activate_provider_baby_profile(runtime, child_runtime, prepared_child=prepared_child)
         child_runtime.prepare_session_surface(child_session_id)
         if allowed_tools or learning_agent_turn:
             # Scope tool runtime: learning agents with empty allowed_tools get NO
@@ -475,11 +548,18 @@ def _run_prepared_sub_agent_child(
         "summary": summary,
         "skills": list(skills),
         "session_id": child_session_id,
+        "child_episode_id": child_session_id,
         "status": status,
         "exit_code": exit_code,
         "execution_id": execution_id,
         "side_effects": tuple(result_execution.side_effects) if result_execution is not None else (),
     }
+    child_metadata = prepared_child.get("child_metadata")
+    if isinstance(child_metadata, Mapping):
+        for key in ("backend", "baby_id", "baby_state_id", "baby_name", "baby_role", "provider_id", "runtime_id", "runtime_display_name", "runtime_model"):
+            value = child_metadata.get(key)
+            if value not in (None, ""):
+                result[key] = value
     _emit_sub_agent_event(
         runtime,
         prepared_child=prepared_child,
@@ -493,6 +573,94 @@ def _run_prepared_sub_agent_child(
     )
     return result
 
+
+def _run_prepared_local_cli_baby(
+    runtime: Any,
+    *,
+    prepared_child: Mapping[str, Any],
+    name: str,
+    prompt: str,
+    skills: tuple[str, ...],
+    run_id: str | None,
+    task_index: int | None,
+    started_at: datetime,
+) -> Mapping[str, Any]:
+    child_session_id = str(prepared_child["session_id"])
+    baby = prepared_child.get("baby")
+    if not isinstance(baby, Mapping):
+        raise RuntimeError("local_cli sub-agent is missing baby elephant binding")
+    baby_state = baby["state"]
+    runtime_record = baby["runtime"]
+    lock = _local_cli_baby_lock(str(baby_state.elephant_id))
+    with _LOCAL_CLI_SEMAPHORE:
+        with lock:
+            result = run_local_agent_cli(
+                runtime_record,
+                prompt=prompt,
+                cwd=_local_cli_cwd(runtime, baby_state),
+                model=str(getattr(runtime_record, "default_model", "") or ""),
+                timeout_seconds=int(str(prepared_child.get("timeout_seconds") or "1800")),
+            )
+    status = "completed" if result.status == "completed" else "failed"
+    summary = _bounded_child_text(result.summary)
+    execution = ExecutionResult(
+        execution_id=f"{child_session_id}:local-cli:{runtime_record.runtime_id}",
+        episode_id=child_session_id,
+        outcome="success" if status == "completed" else "error",
+        summary=summary,
+        side_effects=("sub_agents", "delegation", "local_agent_cli"),
+    )
+    payload = {
+        "name": name,
+        "summary": summary,
+        "skills": list(skills),
+        "session_id": child_session_id,
+        "child_episode_id": child_session_id,
+        "status": status,
+        "exit_code": result.exit_code,
+        "execution_id": execution.execution_id,
+        "side_effects": tuple(execution.side_effects),
+        "backend": "local_cli",
+        "baby_id": str(baby_state.elephant_id),
+        "baby_state_id": str(baby_state.state_id),
+        "baby_role": str(baby.get("role_title") or ""),
+        "provider_id": runtime_record.provider_id,
+        "runtime_id": runtime_record.runtime_id,
+    }
+    _emit_sub_agent_event(
+        runtime,
+        prepared_child=prepared_child,
+        phase="execution.completed" if status == "completed" else "execution.failed",
+        detail=summary,
+        run_id=run_id,
+        task_index=task_index,
+        requested_at=started_at,
+        execution=execution,
+        status=status,
+    )
+    return payload
+
+
+def _local_cli_baby_lock(baby_id: str) -> Lock:
+    with _LOCAL_CLI_BABY_LOCKS_GUARD:
+        lock = _LOCAL_CLI_BABY_LOCKS.get(baby_id)
+        if lock is None:
+            lock = Lock()
+            _LOCAL_CLI_BABY_LOCKS[baby_id] = lock
+        return lock
+
+
+def _local_cli_cwd(runtime: Any, baby_state: Any) -> Path:
+    paths = getattr(runtime, "paths", None)
+    workspaces_dir = getattr(paths, "workspaces_dir", None)
+    if workspaces_dir is not None:
+        path = Path(workspaces_dir) / str(getattr(baby_state, "elephant_id", "") or "local-agent")
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    state_dir = getattr(paths, "state_dir", None)
+    if state_dir is not None:
+        return Path(state_dir)
+    return Path.cwd()
 
 
 def _create_child_runtime(runtime: Any) -> Any:
@@ -551,6 +719,9 @@ def _normalize_sub_agent_task(item: Mapping[str, Any]) -> Mapping[str, Any]:
     system_prompt = str(item.get("system_prompt") or "").strip()
     learning_agent = bool(item.get("learning_agent"))
     child_metadata = item.get("child_metadata") if isinstance(item.get("child_metadata"), Mapping) else {}
+    backend = str(item.get("backend") or "native").strip().lower()
+    if backend not in {"", "native", "local_cli", "provider"}:
+        raise ValueError(f"unsupported sub-agent backend: {backend}")
     return {
         "task": task,
         "name": name_text,
@@ -559,6 +730,10 @@ def _normalize_sub_agent_task(item: Mapping[str, Any]) -> Mapping[str, Any]:
         "system_prompt": system_prompt,
         "learning_agent": learning_agent,
         "child_metadata": dict(child_metadata),
+        "backend": backend if backend in {"local_cli", "provider"} else "native",
+        "baby_id": str(item.get("baby_id") or item.get("babyId") or "").strip(),
+        "role": str(item.get("role") or "").strip(),
+        "timeout_seconds": str(item.get("timeout_seconds") or item.get("timeoutSeconds") or "1800").strip(),
     }
 
 
@@ -662,20 +837,18 @@ def _emit_sub_agent_event(
     if not callable(emitter):
         return
     child_session_id = str(prepared_child.get("session_id") or "")
-    task = str(prepared_child.get("task") or "")
-    name = str(prepared_child.get("name") or "sub-agent")
     invocation = ToolInvocation(
         invocation_id=f"{child_session_id}:tool.sub_agents.child:{run_id or 'run'}:{task_index if task_index is not None else 0}",
         tool_id="tool.sub_agents",
         session_id=child_session_id,
-        arguments={
-            "name": name,
-            "task": task,
-            "sub_agent_child": True,
-            "run_id": run_id or "",
-            "task_index": task_index if task_index is not None else 0,
-            "status": status or "",
-        },
+        arguments=sub_agent_event_arguments(
+            prepared_child,
+            phase=phase,
+            detail=detail,
+            run_id=run_id,
+            task_index=task_index,
+            status=status,
+        ),
         requested_at=requested_at,
         requester="model",
     )

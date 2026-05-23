@@ -70,6 +70,7 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
                 "diary_entries",
                 "personal_model_growth",
                 "canonical_elephant_identities",
+                "local_agent_runtimes",
             }.issubset(table_names)
         )
         self.assertIn("current_context_note", state_columns)

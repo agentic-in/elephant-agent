@@ -337,6 +337,7 @@ enum AppText {
     case phaseProfile
     case phasePattern
     case phaseElephant
+    case phaseHerd
     case phaseModel
     case phaseReady
     case phaseProgressLabel
@@ -450,9 +451,9 @@ enum AppText {
         case .workSubtitle:
             return pick(language, en: "Give Elephant enough context to meet you where life is happening now.", zh: "给 Elephant 一点当前语境，让它知道最近该从哪里接住你。", fr: "Donnez à Elephant assez de contexte pour vous rejoindre là où votre vie se passe maintenant.", de: "Gib Elephant genug Kontext, um dort anzusetzen, wo gerade etwas passiert.")
         case .currentWork:
-            return pick(language, en: "Current work", zh: "当前主线/工作", fr: "Travail actuel", de: "Aktuelle Arbeit")
+            return pick(language, en: "Profession", zh: "职业", fr: "Profession", de: "Beruf")
         case .currentWorkPlaceholder:
-            return pick(language, en: "Current attention or work thread", zh: "最近主要投入的事情", fr: "Sujet ou fil de travail actuel", de: "Aktueller Fokus oder Arbeitsstrang")
+            return pick(language, en: "Choose the closest role", zh: "选择最接近你的职业", fr: "Choisissez le rôle le plus proche", de: "Wähle die passendste Rolle")
         case .school:
             return pick(language, en: "School or organization", zh: "学校/组织", fr: "École ou organisation", de: "Schule oder Organisation")
         case .optional:
@@ -460,7 +461,7 @@ enum AppText {
         case .cityTimezone:
             return pick(language, en: "City or timezone", zh: "城市/时区", fr: "Ville ou fuseau horaire", de: "Stadt oder Zeitzone")
         case .cityTimezonePlaceholder:
-            return pick(language, en: "City or timezone", zh: "例如：上海 / Asia/Shanghai", fr: "Ville ou fuseau horaire", de: "Stadt oder Zeitzone")
+            return pick(language, en: "City or timezone, typed manually", zh: "手动填写城市或时区", fr: "Ville ou fuseau horaire, saisi à la main", de: "Stadt oder Zeitzone manuell eingeben")
         case .interestsTitle:
             return pick(language, en: "Interests and Direction", zh: "兴趣和长期方向", fr: "Centres d'intérêt et direction", de: "Interessen und Richtung")
         case .interestsSubtitle:
@@ -933,6 +934,8 @@ enum AppText {
             return pick(language, en: "Grounding", zh: "建模", fr: "Grounding", de: "Grounding")
         case .phaseElephant:
             return pick(language, en: "Elephant", zh: "Elephant", fr: "Elephant", de: "Elephant")
+        case .phaseHerd:
+            return pick(language, en: "Herd", zh: "象群", fr: "Herd", de: "Herd")
         case .phaseModel:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
         case .phaseReady:
@@ -1097,7 +1100,23 @@ extension AppLanguage {
         }
     }
 
+    var defaultMotherElephantVibe: String {
+        defaultElephantVibe
+    }
+
     func defaultElephantMarkdown(name: String) -> String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? "Elephant" : trimmedName
+        return """
+        # \(resolvedName)
+
+        ## Vibe
+
+        \(defaultElephantVibe)
+        """
+    }
+
+    func defaultMotherElephantMarkdown(name: String) -> String {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? "Elephant" : trimmedName
         return """
@@ -1159,7 +1178,12 @@ extension ElephantAppModel {
     func setAppLanguage(_ language: AppLanguage, updateDefaultVibe: Bool = true) {
         let currentVibe = onboardingPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentIsDefault = AppLanguage.allCases
-            .map { $0.defaultElephantVibe.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap {
+                [
+                    $0.defaultElephantVibe.trimmingCharacters(in: .whitespacesAndNewlines),
+                    $0.defaultMotherElephantVibe.trimmingCharacters(in: .whitespacesAndNewlines)
+                ]
+            }
             .contains(currentVibe)
         onboardingFirstLanguage = language.rawValue
         UserDefaults.standard.set(language.rawValue, forKey: Self.appLanguageKey)

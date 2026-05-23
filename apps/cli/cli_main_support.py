@@ -277,6 +277,20 @@ def build_parser() -> argparse.ArgumentParser:
         "current",
         help="Show which elephant will open next when wake runs without an explicit elephant id.",
     )
+    herd_discover = herd_subparsers.add_parser(
+        "discover",
+        help="Scan local agent CLIs and show adoption candidates.",
+    )
+    herd_discover.add_argument("--rescan", action="store_true", help="Run a fresh scan before printing candidates.")
+    herd_adopt = herd_subparsers.add_parser(
+        "adopt",
+        help="Create a baby elephant from a discovered local agent runtime.",
+    )
+    herd_adopt.add_argument("runtime_id", help="Runtime id from elephant herd discover.")
+    herd_adopt.add_argument("--display-name", default=None)
+    herd_adopt.add_argument("--role-title", default=None)
+    herd_adopt.add_argument("--role-prompt", default=None)
+    herd_adopt.add_argument("--enable", action="store_true", help="Enable the baby elephant immediately.")
     elephant_use = herd_subparsers.add_parser(
         "use",
         help="Select one named elephant as the current wake target.",

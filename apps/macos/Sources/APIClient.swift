@@ -65,6 +65,12 @@ struct APIClient {
         return SnapshotParser.parse(dashboards: dashboards, apiURL: baseURL.absoluteString)
     }
 
+    func fetchProviderCatalog() async throws -> [ProviderOption] {
+        guard baseURL != nil else { return [] }
+        let json = try await request(path: "/v1/providers", method: "GET")
+        return SnapshotParser.providerOptions(fromProviderCatalog: json)
+    }
+
     func configureProvider(
         providerID: String,
         baseURL: String,
@@ -165,8 +171,13 @@ struct APIClient {
             path: "/v1/herd",
             method: "POST",
             body: [
+                "elephant_id": "mother-elephant",
                 "display_name": name,
-                "elephant_identity_text": identityText
+                "elephant_identity_text": identityText,
+                "herd_kind": "mother",
+                "role_title": "Mother Elephant",
+                "role_prompt": "Primary Elephant. When specialist help is useful, inspect the Herd roster and delegate one bounded task through tool.sub_agents.",
+                "enabled": true
             ]
         )
         if let elephant = json["elephant"] as? [String: Any] {
@@ -198,14 +209,26 @@ struct APIClient {
     func updateHerdElephant(
         _ item: HerdItem,
         name: String,
-        identityText: String
+        identityText: String,
+        roleTitle: String? = nil,
+        rolePrompt: String? = nil,
+        enabled: Bool? = nil
     ) async throws {
         let elephantID = item.elephantID.isEmpty ? item.id.replacingOccurrences(of: "state:", with: "") : item.elephantID
         guard !elephantID.isEmpty else { return }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "display_name": name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.title : name,
             "elephant_identity_text": identityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? item.identityText : identityText
         ]
+        if let roleTitle {
+            body["role_title"] = roleTitle
+        }
+        if let rolePrompt {
+            body["role_prompt"] = rolePrompt
+        }
+        if let enabled {
+            body["enabled"] = enabled
+        }
         _ = try await request(path: "/v1/herd/\(Self.pathSegment(elephantID))", method: "PATCH", body: body)
     }
 
@@ -215,12 +238,89 @@ struct APIClient {
         _ = try await request(path: "/v1/herd/\(Self.pathSegment(elephantID))", method: "DELETE")
     }
 
+    func scanLocalAgents() async throws -> [LocalAgentRuntimeItem] {
+        let json = try await request(path: "/v1/herd/discovery/scan", method: "POST", body: [:])
+        let rows = json["local_agent_runtimes"] as? [[String: Any]]
+            ?? json["localAgentRuntimes"] as? [[String: Any]]
+            ?? json["discovery"] as? [[String: Any]]
+            ?? []
+        return rows.compactMap { SnapshotParser.localAgentRuntimeItemForClient(from: $0) }
+    }
+
+    func adoptLocalAgent(
+        runtime: LocalAgentRuntimeItem,
+        displayName: String,
+        roleTitle: String,
+        rolePrompt: String,
+        enabled: Bool
+    ) async throws -> String {
+        let json = try await request(
+            path: "/v1/herd/babies",
+            method: "POST",
+            body: [
+                "runtime_id": runtime.runtimeID,
+                "display_name": displayName,
+                "role_title": roleTitle,
+                "role_prompt": rolePrompt,
+                "enabled": enabled
+            ]
+        )
+        let elephant = SnapshotParser.findDictionary(in: json, keys: ["elephant", "state", "item"]) ?? [:]
+        return SnapshotParser.findString(in: elephant, keys: ["state_id", "stateId", "elephant_id", "elephantId"])
+            ?? SnapshotParser.findString(in: json, keys: ["state_id", "stateId", "elephant_id", "elephantId"])
+            ?? ""
+    }
+
+    func adoptProviderAgent(
+        providerID: String,
+        providerName: String,
+        modelID: String,
+        displayName: String,
+        roleTitle: String,
+        rolePrompt: String,
+        enabled: Bool
+    ) async throws {
+        let resolvedProvider = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedModel = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !resolvedProvider.isEmpty, !resolvedModel.isEmpty else { return }
+        let resolvedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "\(providerName) \(roleTitle)".trimmingCharacters(in: .whitespacesAndNewlines)
+            : displayName
+        _ = try await request(
+            path: "/v1/herd",
+            method: "POST",
+            body: [
+                "display_name": resolvedName,
+                "elephant_identity_text": Self.babyIdentityText(
+                    displayName: resolvedName,
+                    roleTitle: roleTitle,
+                    rolePrompt: rolePrompt,
+                    providerName: providerName,
+                    modelID: resolvedModel
+                ),
+                "herd_kind": "baby",
+                "parent_elephant_id": "mother-elephant",
+                "backend": "provider",
+                "provider_id": resolvedProvider,
+                "provider_model": resolvedModel,
+                "role_title": roleTitle,
+                "role_prompt": rolePrompt,
+                "enabled": enabled,
+                "max_concurrency": "1",
+                "mode": "baby",
+                "initiative": "delegated",
+                "working_style": "provider_agent"
+            ]
+        )
+    }
+
     func updateUserProfile(
         stateID: String,
         preferredName: String,
         occupation: String,
         school: String = "",
         city: String,
+        currentFocus: String = "",
         gender: String,
         birthDate: String,
         mbti: String,
@@ -248,6 +348,7 @@ struct APIClient {
             "current_work": occupation,
             "school": school,
             "current_city": city,
+            "current_focus": currentFocus,
             "gender": gender,
             "birth_date": birthDate,
             "mbti": mbti,
@@ -293,6 +394,34 @@ struct APIClient {
             method: "POST",
             body: body
         )
+    }
+
+    private static func babyIdentityText(
+        displayName: String,
+        roleTitle: String,
+        rolePrompt: String,
+        providerName: String,
+        modelID: String
+    ) -> String {
+        let resolvedRole = roleTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "provider-backed baby elephant" : roleTitle
+        let detail = rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Use \(providerName) \(modelID) for bounded specialist work when the primary Elephant delegates."
+            : rolePrompt
+        return """
+        # \(displayName)
+
+        ## Role
+
+        \(resolvedRole).
+
+        ## Runtime
+
+        \(providerName) · \(modelID)
+
+        ## Operating Notes
+
+        \(detail)
+        """
     }
 
     func configureLearningIntensity(_ intensity: String) async throws {
@@ -937,9 +1066,26 @@ enum SnapshotParser {
                 identityText: string(row["elephant_identity_text"] ?? row["elephantIdentityText"] ?? identityFile["text"]),
                 createdAt: string(row["created_at"] ?? row["createdAt"] ?? stateRow["created_at"] ?? stateRow["createdAt"]),
                 updatedAt: string(row["updated_at"] ?? row["updatedAt"] ?? stateRow["updated_at"] ?? stateRow["updatedAt"]),
-                source: string(row["source"] ?? metadata["source"])
+                source: string(row["source"] ?? metadata["source"]),
+                herdKind: string(row["herd_kind"] ?? row["herdKind"] ?? metadata["herd_kind"]),
+                parentElephantID: string(row["parent_elephant_id"] ?? row["parentElephantId"] ?? metadata["parent_elephant_id"]),
+                roleTitle: string(row["role_title"] ?? row["roleTitle"] ?? metadata["role_title"]),
+                rolePrompt: string(row["role_prompt"] ?? row["rolePrompt"] ?? metadata["role_prompt"]),
+                runtimeID: string(row["runtime_id"] ?? row["runtimeId"] ?? metadata["runtime_id"]),
+                providerID: string(row["provider_id"] ?? row["providerId"] ?? metadata["provider_id"]),
+                runtimeStatus: string(row["runtime_status"] ?? row["runtimeStatus"]),
+                authStatus: string(row["auth_status"] ?? row["authStatus"]),
+                canExecute: bool(row["can_execute"] ?? row["canExecute"], fallback: false),
+                cliPath: string(row["cli_path"] ?? row["cliPath"]),
+                cliVersion: string(row["cli_version"] ?? row["cliVersion"]),
+                enabled: bool(row["enabled"] ?? metadata["enabled"], fallback: false),
+                lastDelegation: string(row["last_delegation"] ?? row["lastDelegation"])
             )
         }
+        let localAgentRows = overviewRoot["local_agent_runtimes"] as? [[String: Any]]
+            ?? overviewRoot["localAgentRuntimes"] as? [[String: Any]]
+            ?? []
+        snapshot.localAgentRuntimes = localAgentRows.compactMap { localAgentRuntimeItemForClient(from: $0) }
         snapshot.stateNames = snapshot.herdItems.map(\.title)
         if let first = snapshot.stateNames.first, !first.isEmpty {
             snapshot.elephantName = first
@@ -1356,7 +1502,8 @@ enum SnapshotParser {
                 id: string(row["entry_id"], fallback: string(row["entry_date"], fallback: content)),
                 date: string(row["entry_date"]),
                 content: content,
-                generatedAt: string(row["generated_at"])
+                generatedAt: string(row["generated_at"]),
+                metadata: stringDictionary(row["metadata"])
             )
         }
 
@@ -1403,6 +1550,18 @@ enum SnapshotParser {
                 activeProviderModelID: activeProviderModelID
             )
         }
+    }
+
+    static func providerOptions(fromProviderCatalog json: [String: Any]) -> [ProviderOption] {
+        let activeProvider = json["active_provider"] as? [String: Any] ?? json["activeProvider"] as? [String: Any] ?? [:]
+        let providerRows = json["providers"] as? [[String: Any]] ?? []
+        let providerKeyRows = json["keys"] as? [[String: Any]] ?? []
+        return providerOptions(
+            from: providerRows,
+            providerKeyRows: providerKeyRows,
+            activeProviderID: string(activeProvider["provider_id"] ?? activeProvider["providerId"]),
+            activeProviderModelID: string(activeProvider["model_id"] ?? activeProvider["modelId"])
+        )
     }
 
     private static func providerOption(
@@ -1569,6 +1728,28 @@ enum SnapshotParser {
             }
         }
         return nil
+    }
+
+    static func localAgentRuntimeItemForClient(from row: [String: Any]) -> LocalAgentRuntimeItem? {
+        let runtimeID = string(row["runtime_id"] ?? row["runtimeId"] ?? row["id"])
+        guard !runtimeID.isEmpty else { return nil }
+        return LocalAgentRuntimeItem(
+            runtimeID: runtimeID,
+            providerID: string(row["provider_id"] ?? row["providerId"]),
+            displayName: string(row["display_name"] ?? row["displayName"] ?? row["name"], fallback: runtimeID),
+            command: string(row["command"]),
+            resolvedPath: string(row["resolved_path"] ?? row["resolvedPath"]),
+            version: string(row["version"]),
+            status: string(row["status"], fallback: "detected"),
+            authStatus: string(row["auth_status"] ?? row["authStatus"]),
+            source: string(row["source"]),
+            defaultModel: string(row["default_model"] ?? row["defaultModel"]),
+            canExecute: bool(row["can_execute"] ?? row["canExecute"], fallback: false),
+            roleTitle: string(row["role_title"] ?? row["roleTitle"]),
+            rolePrompt: string(row["role_prompt"] ?? row["rolePrompt"]),
+            detectedAt: string(row["detected_at"] ?? row["detectedAt"]),
+            lastError: string(row["last_error"] ?? row["lastError"])
+        )
     }
 
     static func findDictionary(in json: [String: Any], keys: [String]) -> [String: Any]? {
@@ -1748,6 +1929,11 @@ enum SnapshotParser {
                 event.name,
                 event.status,
                 event.arguments,
+                event.backend,
+                event.babyID,
+                event.providerID,
+                event.runtimeID,
+                event.childEpisodeID,
                 String(event.result.prefix(120))
             ].joined(separator: "|")
             guard !seen.contains(key) else { continue }
@@ -1788,10 +1974,19 @@ enum SnapshotParser {
     }
 
     private static func collectToolEvent(from dictionary: [String: Any], into events: inout [ToolUseEvent]) {
-        let detail = dictionary["detail"] as? [String: Any] ?? [:]
+        let rawDetail = dictionary["detail"]
+        let detail = rawDetail as? [String: Any] ?? [:]
         let eventType = string(dictionary["event_type"] ?? dictionary["eventType"]).lowercased()
         let action = string(dictionary["action"]).lowercased()
         let metadata = dictionary["metadata"] as? [String: Any] ?? [:]
+        let argumentsValue = detail["tool_arguments"]
+            ?? dictionary["tool_arguments"]
+            ?? dictionary["toolArguments"]
+            ?? metadata["tool_arguments"]
+            ?? metadata["toolArguments"]
+            ?? dictionary["arguments"]
+            ?? dictionary["args"]
+        let argumentObject = object(argumentsValue)
         let invocationID = string(
             detail["invocation_id"]
                 ?? detail["invocationId"]
@@ -1815,15 +2010,7 @@ enum SnapshotParser {
                 ?? metadata["toolName"]
                 ?? dictionary["name"]
         )
-        let arguments = compactToolText(
-            detail["tool_arguments"]
-                ?? dictionary["tool_arguments"]
-                ?? dictionary["toolArguments"]
-                ?? metadata["tool_arguments"]
-                ?? metadata["toolArguments"]
-                ?? dictionary["arguments"]
-                ?? dictionary["args"]
-        )
+        let arguments = compactToolText(argumentsValue)
         let result = compactToolText(
             detail["tool_result"]
                 ?? dictionary["tool_result"]
@@ -1842,7 +2029,18 @@ enum SnapshotParser {
         }
 
         let fallbackStatus = eventType == "tool_call" ? "planned" : "completed"
-        let rawStatus = string(dictionary["status"], fallback: fallbackStatus)
+        let rawStatus = string(dictionary["status"] ?? argumentObject["status"], fallback: fallbackStatus)
+        func field(_ keys: [String]) -> String {
+            for source in [argumentObject, detail, dictionary, metadata] {
+                let value = firstString(in: source, keys: keys)
+                if !value.isEmpty {
+                    return value
+                }
+            }
+            return ""
+        }
+        let phase = field(["phase"])
+        let detailText = compactToolText(rawDetail is [String: Any] ? argumentObject["detail"] : rawDetail ?? argumentObject["detail"])
         events.append(
             ToolUseEvent(
                 sourceID: sourceID,
@@ -1850,7 +2048,20 @@ enum SnapshotParser {
                 name: name.isEmpty ? "tool" : name,
                 status: rawStatus.isEmpty ? fallbackStatus : rawStatus,
                 arguments: abbreviate(arguments, maxLength: 420),
-                result: abbreviate(result, maxLength: 520)
+                result: abbreviate(result, maxLength: 520),
+                phase: phase,
+                detail: abbreviate(detailText, maxLength: 360),
+                backend: field(["backend"]),
+                babyID: field(["baby_id", "babyId"]),
+                babyName: field(["baby_name", "babyName"]),
+                babyRole: field(["baby_role", "babyRole", "role_title", "roleTitle", "role"]),
+                providerID: field(["provider_id", "providerId"]),
+                runtimeID: field(["runtime_id", "runtimeId"]),
+                runtimeName: field(["runtime_display_name", "runtimeDisplayName", "runtime_name", "runtimeName"]),
+                runtimePath: field(["runtime_path", "runtimePath", "resolved_path", "resolvedPath"]),
+                runtimeModel: field(["runtime_model", "runtimeModel", "provider_model", "providerModel", "default_model", "defaultModel", "model"]),
+                childEpisodeID: field(["child_episode_id", "childEpisodeId", "session_id", "sessionId"]),
+                task: field(["task", "prompt"])
             )
         )
     }
@@ -2554,6 +2765,16 @@ enum SnapshotParser {
         return object
     }
 
+    private static func stringDictionary(_ value: Any?) -> [String: String] {
+        object(value).reduce(into: [String: String]()) { result, pair in
+            let key = pair.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = string(pair.value)
+            if !key.isEmpty, !value.isEmpty {
+                result[key] = value
+            }
+        }
+    }
+
     private static func string(_ value: Any?, fallback: String = "") -> String {
         if value == nil || value is NSNull { return fallback }
         if let value = value as? String {
@@ -2622,6 +2843,7 @@ enum SnapshotParser {
     private static let profileUserRows: [(key: String, label: String)] = [
         ("preferred_name", "Name"),
         ("current_work", "Working on"),
+        ("current_focus", "Current focus"),
         ("current_city", "City"),
         ("birth_date", "Birth date"),
         ("age", "Life stage"),

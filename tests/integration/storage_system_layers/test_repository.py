@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
 from datetime import datetime, timezone
 import sys
 import tempfile
@@ -17,6 +18,7 @@ from packages.contracts import (
     SemanticIndexEntry,
     Step,
 )
+from packages.operator.local_agents import LocalAgentRuntimeRecord
 from packages.storage import RuntimeStorageRepository
 from packages.storage.repository_bootstrap_methods import LEGACY_STORAGE_TABLES
 
@@ -237,6 +239,43 @@ class StorageSystemLayerRepositoryTest(unittest.TestCase):
         self.assertIsNone(state_semantic)
         self.assertIsNotNone(personal_semantic)
         self.assertIsNotNone(personal_model)
+
+    def test_local_agent_runtime_round_trips_and_upserts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
+            repository.bootstrap()
+            initial = LocalAgentRuntimeRecord(
+                runtime_id="local-agent:codex:test",
+                provider_id="codex",
+                command="codex",
+                display_name="Codex",
+                resolved_path="/tmp/codex",
+                version="codex 1",
+                status="detected",
+                auth_status="configured",
+                source="env",
+                default_model="gpt-5.4",
+                can_execute=True,
+                role_title="coding implementer",
+                role_prompt="Implement changes.",
+                detected_at="2026-05-23T00:00:00+00:00",
+                metadata={"adapter": "argv_prompt"},
+            )
+            updated = replace(initial, version="codex 2", last_error="version changed")
+
+            repository.upsert_local_agent_runtime(initial)
+            repository.upsert_local_agent_runtime(updated)
+
+            loaded = repository.load_local_agent_runtime(initial.runtime_id)
+            listed = repository.list_local_agent_runtimes()
+
+        self.assertIsNotNone(loaded)
+        assert loaded is not None
+        self.assertEqual(loaded.version, "codex 2")
+        self.assertEqual(loaded.last_error, "version changed")
+        self.assertTrue(loaded.can_execute)
+        self.assertEqual(loaded.metadata, {"adapter": "argv_prompt"})
+        self.assertEqual(tuple(record.runtime_id for record in listed), (initial.runtime_id,))
 
 
 if __name__ == "__main__":

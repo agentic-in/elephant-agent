@@ -69,6 +69,20 @@ class InternalReflectTriggerTest(unittest.TestCase):
         self.assertEqual(result["features"], "pm,questions,skills,init_links")
         self.assertEqual(repository.enqueued_summary, "reflect job (features=pm,questions,skills,init_links)")
 
+    def test_reflect_onboarding_letter_sets_letter_metadata(self) -> None:
+        repository = _RepositoryStub()
+        app = SimpleNamespace(repository=repository)
+
+        with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
+            result = trigger_reflect_job(app, trigger="onboarding_letter", features=None)
+
+        self.assertEqual(result["features"], "onboarding_letter")
+        metadata = repository.enqueued_metadata or {}
+        self.assertEqual(metadata["source"], "onboarding_letter")
+        self.assertEqual(metadata["letter_kind"], "onboarding_letter")
+        self.assertEqual(metadata["target_date"], date_type.today().isoformat())
+        self.assertEqual(repository.enqueued_summary, "reflect job (features=onboarding_letter)")
+
     def test_learning_job_runtime_contract_exposes_init_tools(self) -> None:
         features, tools = _learning_job_runtime_contract("init_profile", metadata={})
 
@@ -76,6 +90,13 @@ class InternalReflectTriggerTest(unittest.TestCase):
         self.assertIn("tool.personal_model.update", tools)
         self.assertIn("tool.skill.list", tools)
         self.assertIn("tool.web.read", tools)
+
+    def test_learning_job_runtime_contract_exposes_onboarding_letter_tools(self) -> None:
+        features, tools = _learning_job_runtime_contract("onboarding_letter", metadata={})
+
+        self.assertEqual(features, ("onboarding_letter",))
+        self.assertIn("tool.diary.write", tools)
+        self.assertIn("tool.personal_model.search", tools)
 
 
 if __name__ == "__main__":

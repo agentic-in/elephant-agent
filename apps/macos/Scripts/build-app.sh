@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "${APP_DIR}/../.." && pwd)"
 APP_NAME="${MACOS_APP_NAME:-Elephant Agent}"
 BUNDLE_IDENTIFIER="${MACOS_BUNDLE_IDENTIFIER:-ai.agentic.elephant.mac}"
 DEPLOYMENT_TARGET="${MACOS_DEPLOYMENT_TARGET:-13.0}"
-SIGNING_IDENTITY="${MACOS_SIGNING_IDENTITY:--}"
+SIGNING_IDENTITY="${MACOS_SIGNING_IDENTITY:-none}"
 NOTARIZE="${MACOS_NOTARIZE:-0}"
 SIGNING_ENTITLEMENTS="${MACOS_CODESIGN_ENTITLEMENTS:-${APP_DIR}/Entitlements.plist}"
 BUNDLE_RUNTIME_REQUEST="${MACOS_BUNDLE_RUNTIME:-auto}"
@@ -145,6 +145,15 @@ BUNDLE_RUNTIME="$(resolve_bundle_runtime)"
 
 if [[ "${NOTARIZE}" == "auto" ]]; then
   if [[ "${SIGNING_IDENTITY}" != "-" \
+    && "${SIGNING_IDENTITY}" != "ad-hoc" \
+    && "${SIGNING_IDENTITY}" != "adhoc" \
+    && "${SIGNING_IDENTITY}" != "none" \
+    && "${SIGNING_IDENTITY}" != "unsigned" \
+    && "${SIGNING_IDENTITY}" != "skip" \
+    && "${SIGNING_IDENTITY}" != "0" \
+    && "${SIGNING_IDENTITY}" != "false" \
+    && "${SIGNING_IDENTITY}" != "off" \
+    && "${SIGNING_IDENTITY}" != "no" \
     && -n "${APPLE_ID:-}" \
     && -n "${APPLE_PASSWORD:-}" \
     && -n "${APPLE_TEAM_ID:-}" ]]; then
@@ -181,8 +190,11 @@ write_sha256_file() {
 
 sign_path() {
   local path="$1"
+  if signing_disabled; then
+    return
+  fi
   require_macos_tool codesign
-  if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
+  if ad_hoc_signing; then
     codesign --force --sign - "${path}" >/dev/null
   else
     if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
@@ -195,8 +207,11 @@ sign_path() {
 
 sign_macho_file() {
   local path="$1"
+  if signing_disabled; then
+    return
+  fi
   require_macos_tool codesign
-  if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
+  if ad_hoc_signing; then
     codesign --force --sign - "${path}" >/dev/null
   else
     if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
@@ -209,6 +224,10 @@ sign_macho_file() {
 
 sign_nested_macho_files() {
   local root="$1"
+  if signing_disabled; then
+    echo "Code signing skipped: MACOS_SIGNING_IDENTITY=none."
+    return
+  fi
   require_macos_tool file
   while IFS= read -r -d '' path; do
     if file "${path}" | grep -q "Mach-O"; then
@@ -223,7 +242,11 @@ notarize_submission() {
   if [[ "${NOTARIZE}" != "1" ]]; then
     return
   fi
-  if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
+  if signing_disabled; then
+    echo "Cannot notarize ${label}: MACOS_SIGNING_IDENTITY=none." >&2
+    exit 1
+  fi
+  if ad_hoc_signing; then
     echo "Cannot notarize ${label}: MACOS_SIGNING_IDENTITY is ad-hoc." >&2
     exit 1
   fi
@@ -250,6 +273,21 @@ notarize_path() {
     return
   fi
   xcrun stapler staple "${path}"
+}
+
+signing_disabled() {
+  case "${SIGNING_IDENTITY}" in
+    ""|none|unsigned|skip|0|false|off|no)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+ad_hoc_signing() {
+  [[ "${SIGNING_IDENTITY}" == "-" || "${SIGNING_IDENTITY}" == "ad-hoc" || "${SIGNING_IDENTITY}" == "adhoc" ]]
 }
 
 require_macos_tool xcrun
@@ -385,7 +423,11 @@ PLIST
 
 sign_nested_macho_files "${CONTENTS}"
 sign_path "${BUNDLE}"
-codesign --verify --deep --strict --verbose=2 "${BUNDLE}"
+if signing_disabled; then
+  echo "App codesign verification skipped: unsigned local build."
+else
+  codesign --verify --deep --strict --verbose=2 "${BUNDLE}"
+fi
 
 if [[ "${NOTARIZE}" == "1" ]]; then
   APP_ZIP_FOR_NOTARY="$(mktemp "/tmp/ElephantAgent-${ARTIFACT_TARGET}-notary-XXXXXX.zip")"
@@ -404,7 +446,9 @@ ditto "${BUNDLE}" "${STAGE}/${APP_NAME}.app"
 ln -s /Applications "${STAGE}/Applications"
 hdiutil create -volname "${APP_NAME}" -srcfolder "${STAGE}" -ov -format UDZO "${DMG}" >/dev/null
 
-if [[ "${SIGNING_IDENTITY}" != "-" ]]; then
+if signing_disabled; then
+  echo "DMG signing/notarization skipped: unsigned local build."
+elif ! ad_hoc_signing; then
   codesign --force --timestamp --sign "${SIGNING_IDENTITY}" "${DMG}" >/dev/null
   notarize_path "${DMG}" "${APP_NAME}.dmg"
 else

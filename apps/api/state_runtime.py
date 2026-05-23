@@ -466,6 +466,7 @@ def _normalized_text(value: str | None) -> str | None:
 _INIT_PROFILE_FACT_FIELDS: dict[str, tuple[str, str, str, bool]] = {
     "preferred_name": ("identity", "identity.anchor.name.preferred", "low", False),
     "current_work": ("pulse", "pulse.chapter.work.role", "low", False),
+    "current_focus": ("pulse", "pulse.chapter.current_focus", "low", True),
     "school": ("world", "world.institutions.school.current", "low", True),
     "current_city": ("world", "world.places.city.current", "low", False),
     "gender": ("identity", "identity.anchor.gender.self_description", "low", False),

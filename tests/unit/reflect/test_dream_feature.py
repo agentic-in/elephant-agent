@@ -57,6 +57,18 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("If the init evidence contains public links", prompt)
         self.assertNotIn("tool.diary.write", prompt)
 
+    def test_onboarding_letter_prompt_writes_diary_metadata(self) -> None:
+        features = resolve_features("onboarding_letter")
+
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("onboarding_letter",))
+        self.assertIn("tool.diary.write", _compose_tools(features))
+
+        prompt = _assemble_system_prompt(features, conservatism="creative")
+
+        self.assertIn("别怕，我们一同进化", prompt)
+        self.assertIn("metadata={\"kind\":\"onboarding_letter\"", prompt)
+        self.assertIn("The diary metadata MUST include kind=onboarding_letter", prompt)
+
     def test_init_profile_alias_from_macos_resolves_to_link_learning_bundle(self) -> None:
         features = resolve_features("init", explicit_features=("profile",))
 
@@ -107,6 +119,49 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertNotIn("## Episode summary", evidence)
         self.assertNotIn("## Conversation turns", evidence)
         self.assertNotIn("## Diary context", evidence)
+
+    def test_onboarding_letter_evidence_uses_full_pm_portrait(self) -> None:
+        class Repository:
+            def load_episode(self, episode_id: str) -> SimpleNamespace:
+                return SimpleNamespace(exit_summary="")
+
+            def list_personal_model_facts(self, **_: object) -> tuple[object, ...]:
+                return (
+                    SimpleNamespace(
+                        lens="identity",
+                        text="用户正在做工程方向的 AI 产品。",
+                        metadata={"topic": "identity.profile.current_work"},
+                    ),
+                    SimpleNamespace(
+                        lens="pulse",
+                        text="用户压力大时需要先安静下来。",
+                        metadata={"topic": "pulse.pattern.recovery"},
+                    ),
+                )
+
+        runtime = SimpleNamespace(
+            repository=Repository(),
+            inspect_user=lambda session_id: SimpleNamespace(timezone="Asia/Shanghai"),
+        )
+        job = LearningJob(
+            job_id="job-letter",
+            job_type="episode_boundary_learning",
+            trigger="onboarding_letter",
+            status="queued",
+            personal_model_id="pm",
+            state_id="state",
+            episode_id="episode",
+            metadata={"target_date": "2026-05-23"},
+        )
+
+        evidence = build_evidence(runtime, job, resolve_features("onboarding_letter"))
+
+        self.assertIn("## Onboarding letter context", evidence)
+        self.assertIn("target_date: 2026-05-23", evidence)
+        self.assertIn("letter_kind: onboarding_letter", evidence)
+        self.assertIn("[identity] 用户正在做工程方向的 AI 产品。", evidence)
+        self.assertIn("[pulse] 用户压力大时需要先安静下来。", evidence)
+        self.assertIn("别怕，我们一同进化", evidence)
 
     def test_dream_prompt_requires_pm_consolidation_and_concise_claims(self) -> None:
         features = resolve_features("dream")

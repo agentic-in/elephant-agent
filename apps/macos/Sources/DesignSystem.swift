@@ -318,6 +318,109 @@ struct EmptyLine: View {
     }
 }
 
+struct ProviderLogoView: View {
+    var providerID: String
+    var displayName: String = ""
+    var size: CGFloat = 32
+
+    var body: some View {
+        Group {
+            if isMotherProvider {
+                BrandMark(size: size, framed: false)
+            } else if let image = BundleAssets.image(named: "\(providerIconKey).png", subdirectory: "ProviderIcons") {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(systemName: fallbackSymbol)
+                    .font(.system(size: size * 0.48, weight: .semibold))
+                    .foregroundStyle(fallbackTint)
+            }
+        }
+        .frame(width: size, height: size)
+        .padding(size * 0.10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.76), in: RoundedRectangle(cornerRadius: min(10, size * 0.24), style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: min(10, size * 0.24), style: .continuous)
+                .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
+        )
+        .accessibilityLabel(providerTitle)
+    }
+
+    private var providerIconKey: String {
+        let normalized = normalizedProvider
+        if normalized.contains("copilot") { return "copilot" }
+        if normalized.contains("gemini") { return "gemini-cli" }
+        if normalized.contains("claude") { return "claude" }
+        if normalized.contains("cursor") { return "cursor" }
+        if normalized.contains("hermes") { return "hermes" }
+        if normalized.contains("openclaw") { return "openclaw" }
+        if normalized.contains("opencode") { return "opencode" }
+        if normalized.contains("kimi") || normalized.contains("moonshot") { return "kimi" }
+        if normalized == "pi" || normalized.contains("inflection") { return "pi" }
+        if normalized.contains("codex") || normalized.contains("openai") { return "codex" }
+        return normalized.isEmpty ? "agent" : normalized
+    }
+
+    private var normalizedProvider: String {
+        let raw = providerID.isEmpty ? displayName : providerID
+        return raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .replacingOccurrences(of: "_", with: "-")
+    }
+
+    private var isMotherProvider: Bool {
+        let normalized = normalizedProvider
+        let title = displayName.lowercased()
+        return normalized.contains("mother-elephant")
+            || normalized == "mother"
+            || title.contains("mother elephant")
+            || title == "elephant agent"
+    }
+
+    private var providerTitle: String {
+        if !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return displayName
+        }
+        if normalizedProvider.contains("copilot") { return "GitHub Copilot" }
+        if normalizedProvider.contains("gemini") { return "Gemini" }
+        if normalizedProvider.contains("claude") { return "Claude Code" }
+        if normalizedProvider.contains("cursor") { return "Cursor" }
+        if normalizedProvider.contains("hermes") { return "Hermes" }
+        if normalizedProvider.contains("openclaw") { return "OpenClaw" }
+        if normalizedProvider.contains("opencode") { return "OpenCode" }
+        if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return "Kimi" }
+        if normalizedProvider.contains("codex") || normalizedProvider.contains("openai") { return "Codex" }
+        return providerID.isEmpty ? "Local agent" : providerID
+    }
+
+    private var fallbackSymbol: String {
+        if normalizedProvider.contains("copilot") { return "chevron.left.forwardslash.chevron.right" }
+        if normalizedProvider.contains("gemini") { return "sparkle" }
+        if normalizedProvider.contains("claude") { return "sparkles.rectangle.stack" }
+        if normalizedProvider.contains("cursor") { return "cursorarrow" }
+        if normalizedProvider.contains("hermes") { return "figure.walk.motion" }
+        if normalizedProvider.contains("openclaw") { return "hand.raised" }
+        if normalizedProvider.contains("opencode") { return "chevron.left.forwardslash.chevron.right" }
+        if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return "moon.stars" }
+        if normalizedProvider.contains("codex") || normalizedProvider.contains("openai") { return "terminal" }
+        return "terminal"
+    }
+
+    private var fallbackTint: Color {
+        if normalizedProvider.contains("copilot") { return ElephantTheme.green }
+        if normalizedProvider.contains("gemini") { return ElephantTheme.accent }
+        if normalizedProvider.contains("claude") { return ElephantTheme.ember }
+        if normalizedProvider.contains("cursor") { return ElephantTheme.ink }
+        if normalizedProvider.contains("hermes") { return ElephantTheme.orange }
+        if normalizedProvider.contains("openclaw") { return ElephantTheme.ember }
+        if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return ElephantTheme.green }
+        return ElephantTheme.accent
+    }
+}
+
 struct SurfaceActionButton: View {
     var title: String
     var subtitle: String? = nil

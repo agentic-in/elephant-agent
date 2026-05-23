@@ -8,6 +8,7 @@ from . import repository_bootstrap_methods as _bootstrap_methods
 from . import repository_canonical_methods as _canonical_methods
 from . import repository_curiosity_methods as _curiosity_methods
 from . import repository_provider_auth_methods as _provider_auth_methods
+from . import repository_local_agent_methods as _local_agent_methods
 from . import repository_scope_methods as _scope_methods
 from . import repository_system_methods as _system_methods
 from .repository_support import StorageBootstrapState
@@ -85,6 +86,10 @@ RuntimeStorageRepository.delete_semantic_index_entries = _scope_methods.delete_s
 RuntimeStorageRepository.upsert_provider_auth_state = _provider_auth_methods.upsert_provider_auth_state
 RuntimeStorageRepository.load_provider_auth_state = _provider_auth_methods.load_provider_auth_state
 RuntimeStorageRepository.list_provider_auth_states = _provider_auth_methods.list_provider_auth_states
+RuntimeStorageRepository.upsert_local_agent_runtime = _local_agent_methods.upsert_local_agent_runtime
+RuntimeStorageRepository.upsert_local_agent_runtimes = _local_agent_methods.upsert_local_agent_runtimes
+RuntimeStorageRepository.load_local_agent_runtime = _local_agent_methods.load_local_agent_runtime
+RuntimeStorageRepository.list_local_agent_runtimes = _local_agent_methods.list_local_agent_runtimes
 
 # Curiosity (v5): Fact / OpenQuestion / Diary tables.
 RuntimeStorageRepository.upsert_personal_model_fact = (

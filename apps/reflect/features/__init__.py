@@ -14,12 +14,13 @@ from .skills import FEATURE as SKILLS
 from .compress import FEATURE as COMPRESS
 from .dream import FEATURE as DREAM
 from .init_links import FEATURE as INIT_LINKS
+from .onboarding_letter import FEATURE as ONBOARDING_LETTER
 from .skill_optimization import FEATURE as SKILL_OPTIMIZATION
 
 
 ALL_FEATURES: dict[str, Feature] = {
     f.feature_id: f
-    for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM, INIT_LINKS, SKILL_OPTIMIZATION)
+    for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM, INIT_LINKS, ONBOARDING_LETTER, SKILL_OPTIMIZATION)
 }
 
 # Trigger → default feature set mapping
@@ -31,12 +32,14 @@ TRIGGER_FEATURES: dict[str, tuple[str, ...]] = {
     "skill_review": ("skill_optimization", "skills"),
     "init": ("pm", "questions", "skills", "init_links"),
     "init_profile": ("pm", "questions", "skills", "init_links"),
+    "onboarding_letter": ("onboarding_letter",),
     "context_compaction": ("compress",),
 }
 
 FEATURE_ALIASES: dict[str, tuple[str, ...]] = {
     "profile": ("pm", "questions", "skills", "init_links"),
     "init_profile": ("pm", "questions", "skills", "init_links"),
+    "letter": ("onboarding_letter",),
 }
 
 # Conservatism levels per trigger (affects system prompt tone)
@@ -48,6 +51,7 @@ TRIGGER_CONSERVATISM: dict[str, str] = {
     "skill_review": "medium",
     "init": "low",
     "init_profile": "low",
+    "onboarding_letter": "creative",
     "context_compaction": "high",
 }
 

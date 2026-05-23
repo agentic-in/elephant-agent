@@ -327,7 +327,12 @@ class CliRuntimeExtensionsMixin(CliRuntimeSubAgentsMixin):
         )
         return {
             "entries": [
-                {"entry_id": e.entry_id, "entry_date": e.entry_date, "content": e.content}
+                {
+                    "entry_id": e.entry_id,
+                    "entry_date": e.entry_date,
+                    "content": e.content,
+                    "metadata": dict(e.metadata) if e.metadata else {},
+                }
                 for e in entries
             ],
             "count": len(entries),

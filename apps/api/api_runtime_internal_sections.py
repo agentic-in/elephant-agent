@@ -40,6 +40,7 @@ from .api_runtime_internal_triggers import (
     trigger_diary_write,
     trigger_reflect_job,
 )
+from .api_runtime_herd_local_agents import latest_episode_touch as _latest_episode_touch
 
 _COUNT_TABLES = {
     "personal_models",
@@ -200,9 +201,26 @@ def _state_projection_rows(
     episode_map = episodes_by_state or {}
     loop_map = loops_by_episode or {}
     step_map = steps_by_loop or {}
+    runtime_by_id: dict[str, Any] = {}
+    if repository is not None and hasattr(repository, "list_local_agent_runtimes"):
+        try:
+            runtime_by_id = {runtime.runtime_id: runtime for runtime in repository.list_local_agent_runtimes()}
+        except Exception:
+            runtime_by_id = {}
     elephant_rows: list[dict[str, Any]] = []
     state_rows: list[dict[str, Any]] = []
     for state in states:
+        state_metadata = dict(getattr(state, "metadata", {}) or {})
+        runtime_id = str(state_metadata.get("runtime_id") or "").strip()
+        runtime = runtime_by_id.get(runtime_id)
+        runtime_payload = runtime.as_payload() if runtime is not None and hasattr(runtime, "as_payload") else {}
+        herd_backend = str(state_metadata.get("backend") or "").strip().lower()
+        provider_backed = herd_backend == "provider"
+        herd_kind = str(state_metadata.get("herd_kind") or "").strip()
+        if not herd_kind and state.elephant_id == "mother-elephant":
+            herd_kind = "mother"
+        if not herd_kind:
+            herd_kind = "elephant"
         state_episodes = episode_map.get(state.state_id, ())
         state_loops = tuple(loop for episode in state_episodes for loop in loop_map.get(episode.episode_id, ()))
         state_steps = tuple(step for loop in state_loops for step in step_map.get(loop.loop_id, ()))
@@ -227,6 +245,20 @@ def _state_projection_rows(
             "summary": state.summary,
             "current_context_note": state.current_context_note,
             "elephant_identity_text": state.elephant_identity_text,
+            "metadata": state_metadata,
+            "herd_kind": herd_kind,
+            "parent_elephant_id": state_metadata.get("parent_elephant_id", ""),
+            "role_title": state_metadata.get("role_title", ""),
+            "role_prompt": state_metadata.get("role_prompt", ""),
+            "runtime_id": runtime_id,
+            "provider_id": state_metadata.get("provider_id", runtime_payload.get("provider_id", "")),
+            "runtime_status": "ready" if provider_backed else runtime_payload.get("status", ""),
+            "auth_status": runtime_payload.get("auth_status", ""),
+            "can_execute": bool(runtime_payload.get("can_execute", False)) or (provider_backed and bool(state_metadata.get("provider_id")) and bool(state_metadata.get("provider_model"))),
+            "cli_path": runtime_payload.get("resolved_path", ""),
+            "cli_version": runtime_payload.get("version", ""),
+            "enabled": str(state_metadata.get("enabled") or "").strip().lower() == "true",
+            "last_delegation": _latest_episode_touch(state_episodes),
             "elephant_identity_file": _elephant_identity_file(
                 state.elephant_id,
                 install_root=install_root,
@@ -420,6 +452,15 @@ def _fill_states(dashboard: dict[str, Any], self) -> tuple[tuple[Any, ...], Any]
     )
     dashboard["herd"] = tuple(elephant_rows)
     dashboard["states"] = tuple(state_rows)
+    if hasattr(self.repository, "list_local_agent_runtimes"):
+        try:
+            dashboard["local_agent_runtimes"] = tuple(
+                runtime.as_payload()
+                for runtime in self.repository.list_local_agent_runtimes()
+                if hasattr(runtime, "as_payload")
+            )
+        except Exception:
+            dashboard["local_agent_runtimes"] = ()
     return states, current_state
 
 
@@ -895,6 +936,7 @@ def _fill_diary(dashboard: dict[str, Any], self) -> None:
                 "entry_date": e.entry_date,
                 "content": e.content,
                 "generated_at": e.generated_at.isoformat() if e.generated_at else "",
+                "metadata": dict(e.metadata) if e.metadata else {},
             }
             for e in entries
         ),

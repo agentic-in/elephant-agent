@@ -20,7 +20,7 @@ from packages.cron import (
     ensure_nightly_learning_crons as _ensure_nightly_learning_cron_rows,
     remove_former_diary_crons as _remove_former_diary_cron_rows,
 )
-from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity, render_user_profile_text
+from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity, render_user_profile_text, write_elephant_identity_file
 
 from .runtime import CliRuntime
 from .provider_flow import (
@@ -1489,7 +1489,8 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
     elif initial_elephant_name:
         display_name = _display_name_from_elephant_name(initial_elephant_name)
     else:
-        display_name = _suggest_elephant_name(runtime)
+        display_name = "Mother Elephant"
+        initial_elephant_name = "mother-elephant"
     mode = "companion"
     personality_preset = _default_personality_preset(
         runtime,
@@ -1689,6 +1690,34 @@ def _run_setup(runtime: CliRuntime, args: argparse.Namespace) -> int:
         display_name=display_name,
         profile_id=configured.state.profile_id,
     )
+    try:
+        state = runtime.repository.load_state(first_elephant.state_id)
+        if state is not None:
+            from dataclasses import replace as _dc_replace
+
+            runtime.repository.upsert_state(
+                _dc_replace(
+                    state,
+                    metadata={
+                        **dict(getattr(state, "metadata", {}) or {}),
+                        "profile_id": state.personal_model_id,
+                        "herd_kind": "mother",
+                        "role_title": "Mother Elephant",
+                        "role_prompt": "Coordinate work, maintain Personal Model continuity, discover baby elephants, and delegate bounded tasks through the Herd.",
+                        "enabled": "true",
+                    },
+                )
+            )
+    except Exception:
+        pass
+    try:
+        from packages.operator.local_agents import scan_local_agents
+
+        upsert = getattr(runtime.repository, "upsert_local_agent_runtimes", None)
+        if callable(upsert):
+            upsert(scan_local_agents())
+    except Exception:
+        pass
     try:
         from dataclasses import replace as _dc_replace
         profile_state = runtime.repository.load_personal_model_runtime_state(first_elephant.personal_model_id)
@@ -2058,6 +2087,10 @@ def _run_herd(runtime: CliRuntime, args: argparse.Namespace) -> int:
     if args.herd_command == "current":
         _print_current_elephant(runtime)
         return 0
+    if args.herd_command == "discover":
+        return _run_herd_discover(runtime, args)
+    if args.herd_command == "adopt":
+        return _run_herd_adopt(runtime, args)
     if args.herd_command == "use":
         if args.elephant_id is None:
             herd = runtime.list_herd(limit=16)
@@ -2108,6 +2141,100 @@ def _run_herd(runtime: CliRuntime, args: argparse.Namespace) -> int:
     if deleted_sessions == 0:
         raise ValueError(f"unknown elephant: {elephant_id}")
     _print_elephant_retired(elephant_id, deleted_sessions)
+    return 0
+
+
+def _run_herd_discover(runtime: CliRuntime, args: argparse.Namespace) -> int:
+    del args
+    from packages.operator.local_agents import scan_local_agents
+
+    records = scan_local_agents()
+    upsert = getattr(runtime.repository, "upsert_local_agent_runtimes", None)
+    if callable(upsert):
+        upsert(records)
+    lines = tuple(
+        f"{record.runtime_id} · {record.display_name} · executable={'yes' if record.can_execute else 'no'} · {record.resolved_path}"
+        for record in records
+    ) or ("<no local agent CLIs found>",)
+    _print_cli_card(
+        "Local agent discovery",
+        "Discovered local agent CLIs that Mother Elephant can adopt as baby elephants.",
+        sections=(CliCardSection("Candidates", lines),),
+        next_commands=("elephant herd adopt <runtime-id> --enable", "elephant herd"),
+    )
+    return 0
+
+
+def _run_herd_adopt(runtime: CliRuntime, args: argparse.Namespace) -> int:
+    runtime_id = str(getattr(args, "runtime_id", "") or "").strip()
+    if not runtime_id:
+        raise ValueError("elephant herd adopt requires <runtime-id>")
+    load_runtime = getattr(runtime.repository, "load_local_agent_runtime", None)
+    record = load_runtime(runtime_id) if callable(load_runtime) else None
+    if record is None:
+        raise ValueError(f"unknown local agent runtime: {runtime_id}")
+    if not getattr(record, "can_execute", False):
+        raise ValueError(f"local agent runtime is not executable yet: {runtime_id}")
+    role_title = str(getattr(args, "role_title", None) or record.role_title or "local agent").strip()
+    role_prompt = str(getattr(args, "role_prompt", None) or record.role_prompt or "").strip()
+    display_name = str(getattr(args, "display_name", None) or f"{record.display_name} {role_title}").strip()
+    elephant_id = _unique_elephant_name(runtime, display_name)
+    mother = runtime.repository.load_state("state:mother-elephant")
+    personal_model_id = mother.personal_model_id if mother is not None else runtime.repository.ensure_default_personal_model().personal_model_id
+    identity_text = "\n".join(
+        (
+            f"# {display_name}",
+            "",
+            "## Role",
+            "",
+            role_title,
+            "",
+            "## Operating Notes",
+            "",
+            role_prompt or f"Use {record.display_name} for delegated local-agent work.",
+        )
+    )
+    state = runtime.repository.create_state(
+        personal_model_id=personal_model_id,
+        state_id=f"state:{elephant_id}",
+        state_anchor=f"elephant:{elephant_id}",
+        elephant_id=elephant_id,
+        elephant_name=display_name,
+        identity_mode="baby",
+        initiative="delegated",
+        working_style="local_agent",
+        surface_bindings=("cli", "local-agent"),
+        elephant_identity_text=identity_text,
+        summary=f"{display_name} is available as a baby elephant for {role_title}.",
+        metadata={
+            "profile_id": personal_model_id,
+            "herd_kind": "baby",
+            "parent_elephant_id": "mother-elephant",
+            "role_title": role_title,
+            "role_prompt": role_prompt,
+            "runtime_id": record.runtime_id,
+            "provider_id": record.provider_id,
+            "enabled": "true" if bool(getattr(args, "enable", False)) else "false",
+            "max_concurrency": "1",
+        },
+    )
+    write_elephant_identity_file(runtime.paths.elephant_file_path(elephant_id), identity_text)
+    _print_cli_card(
+        "Baby elephant adopted",
+        f"{display_name} was added to the Herd.",
+        sections=(
+            CliCardSection(
+                "Baby",
+                (
+                    f"elephant_id · {state.elephant_id}",
+                    f"role · {role_title}",
+                    f"provider · {record.provider_id}",
+                    f"enabled · {'true' if bool(getattr(args, 'enable', False)) else 'false'}",
+                ),
+            ),
+        ),
+        next_commands=("elephant herd", "elephant wake"),
+    )
     return 0
 
 
@@ -3003,6 +3130,42 @@ def build_typer_app() -> typer.Typer:
         params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
         runtime = _cli_runtime(params["state_dir"])
         raise typer.Exit(_run_herd(runtime, _namespace(herd_command="current")))
+
+    @herd_app.command("discover")
+    def herd_discover_command(ctx: typer.Context) -> None:
+        """Scan local agent CLIs and show baby elephant candidates."""
+        params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
+        runtime = _cli_runtime(params["state_dir"])
+        raise typer.Exit(_run_herd(runtime, _namespace(herd_command="discover")))
+
+    @herd_app.command("adopt")
+    def herd_adopt_command(
+        ctx: typer.Context,
+        runtime_id: str = typer.Argument(..., help="Runtime id from elephant herd discover."),
+        display_name: str | None = typer.Option(None, "--display-name", help="Display name for the baby elephant."),
+        role_title: str | None = typer.Option(None, "--role-title", help="Role title for Mother Elephant delegation."),
+        role_prompt: str | None = typer.Option(None, "--role-prompt", help="Role instructions for this baby elephant."),
+        enable: bool = typer.Option(False, "--enable", help="Enable this baby for local CLI delegation immediately."),
+    ) -> None:
+        """Create a baby elephant from a discovered local agent runtime."""
+        params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
+        runtime = _cli_runtime(params["state_dir"])
+        try:
+            raise typer.Exit(
+                _run_herd(
+                    runtime,
+                    _namespace(
+                        herd_command="adopt",
+                        runtime_id=runtime_id,
+                        display_name=display_name,
+                        role_title=role_title,
+                        role_prompt=role_prompt,
+                        enable=enable,
+                    ),
+                )
+            )
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from error
 
     @herd_app.command("use")
     def herd_use_command(

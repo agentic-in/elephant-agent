@@ -9,6 +9,8 @@ from unittest import mock
 
 from apps.cli.runtime_cron_sub_agents import _run_prepared_sub_agent_child
 from packages.contracts import ExecutionResult
+from packages.operator.local_agent_adapters import LocalAgentExecutionResult
+from packages.operator.local_agents import LocalAgentRuntimeRecord
 from packages.tools import ToolInvocation, ToolLifecycleEvent
 
 
@@ -181,6 +183,77 @@ class RuntimeSubAgentTest(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(parent_stream, ["I'll inspect the onboarding facts before updating memory."])
         self.assertIsNone(child_model_provider._stream_observer)
+
+    def test_local_cli_baby_dispatches_directly_to_bound_runtime(self) -> None:
+        parent_tool_runtime = _ParentToolRuntime()
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        baby_state = SimpleNamespace(
+            elephant_id="codex-baby",
+            state_id="state:codex-baby",
+            personal_model_id="you",
+        )
+        runtime_record = LocalAgentRuntimeRecord(
+            runtime_id="local-agent:codex:test",
+            provider_id="codex",
+            command="codex",
+            display_name="Codex",
+            resolved_path="/tmp/codex",
+            can_execute=True,
+            role_title="coding implementer",
+            role_prompt="Run focused coding tasks.",
+        )
+        parent_runtime = SimpleNamespace(
+            tool_runtime=parent_tool_runtime,
+            paths=SimpleNamespace(state_dir=Path(tempdir.name)),
+        )
+        prepared_child = {
+            "session_id": "episode:child",
+            "parent_session_id": "episode:parent",
+            "task": "Run tests",
+            "name": "Codex Baby",
+            "prompt": "Role: coding implementer\nTask: Run tests",
+            "skills": (),
+            "allowed_tools": (),
+            "learning_agent": False,
+            "child_metadata": {},
+            "backend": "local_cli",
+            "baby": {
+                "state": baby_state,
+                "runtime": runtime_record,
+                "role_title": "coding implementer",
+            },
+            "timeout_seconds": "5",
+        }
+        fake_result = LocalAgentExecutionResult(
+            status="completed",
+            summary="tests passed",
+            stdout="tests passed",
+            stderr="",
+            exit_code=0,
+            provider_id="codex",
+            runtime_id=runtime_record.runtime_id,
+        )
+
+        with mock.patch(
+            "apps.cli.runtime_cron_sub_agents.run_local_agent_cli",
+            return_value=fake_result,
+        ) as run_cli, mock.patch(
+            "apps.cli.runtime_cron_sub_agents._create_child_runtime"
+        ) as create_child_runtime:
+            result = _run_prepared_sub_agent_child(parent_runtime, prepared_child=prepared_child)
+
+        create_child_runtime.assert_not_called()
+        run_cli.assert_called_once()
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["child_episode_id"], "episode:child")
+        self.assertEqual(result["baby_id"], "codex-baby")
+        self.assertEqual(result["provider_id"], "codex")
+        self.assertEqual(result["runtime_id"], runtime_record.runtime_id)
+        self.assertEqual(
+            [event.phase for event in parent_tool_runtime.events],
+            ["execution.started", "execution.completed"],
+        )
 
 
 if __name__ == "__main__":

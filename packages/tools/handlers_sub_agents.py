@@ -75,6 +75,9 @@ def run_sub_agents_action(
     task = optional_string(invocation.arguments.get("task") or invocation.arguments.get("prompt"))
     if task is None:
         raise ValueError("tool.sub_agents requires 'task' or 'tasks'")
+    backend = optional_string(invocation.arguments.get("backend"))
+    baby_id = optional_string(invocation.arguments.get("baby_id") or invocation.arguments.get("babyId"))
+    role = optional_string(invocation.arguments.get("role"))
     if action == "start":
         result = surface.start_sub_agents(
             session_id=invocation.session_id,
@@ -82,6 +85,24 @@ def run_sub_agents_action(
                 {
                     "task": task,
                     "name": optional_string(invocation.arguments.get("name")),
+                    "backend": backend,
+                    "baby_id": baby_id,
+                    "role": role,
+                    "skills": _string_list(invocation.arguments.get("skills")),
+                },
+            ),
+            max_concurrency=1,
+        )
+    elif backend or baby_id or role:
+        result = surface.run_sub_agents(
+            session_id=invocation.session_id,
+            tasks=(
+                {
+                    "task": task,
+                    "name": optional_string(invocation.arguments.get("name")),
+                    "backend": backend,
+                    "baby_id": baby_id,
+                    "role": role,
                     "skills": _string_list(invocation.arguments.get("skills")),
                 },
             ),
@@ -134,6 +155,9 @@ def _task_list(value: object) -> tuple[Mapping[str, Any], ...]:
             {
                 "task": task,
                 "name": optional_string(item.get("name")),
+                "backend": optional_string(item.get("backend")),
+                "baby_id": optional_string(item.get("baby_id") or item.get("babyId")),
+                "role": optional_string(item.get("role")),
                 "skills": _string_list(item.get("skills")),
             }
         )

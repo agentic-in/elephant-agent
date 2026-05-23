@@ -75,6 +75,7 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
         return {"status": "error", "detail": "no episodes available"}
     episode = episodes[-1]
     metadata: dict[str, str] = {"source": "dashboard.reflect"}
+    normalized_trigger = resolved_trigger.strip().lower()
     if features:
         metadata["features"] = features
         from datetime import date as date_type, timedelta
@@ -88,6 +89,12 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
                 metadata["diary_target_date"] = diary_target_date
             else:
                 metadata["target_date"] = diary_target_date
+    if normalized_trigger == "onboarding_letter":
+        from datetime import date as date_type
+
+        metadata["target_date"] = date_type.today().isoformat()
+        metadata["letter_kind"] = "onboarding_letter"
+        metadata["source"] = "onboarding_letter"
     summary_features = _resolved_feature_summary(resolved_trigger, features=features)
     job = self.repository.enqueue_learning_job(
         job_type="episode_boundary_learning",
