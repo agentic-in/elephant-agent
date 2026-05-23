@@ -2837,46 +2837,59 @@ struct VoiceListeningOverlay: View {
             let elapsed = elapsedDuration(now: timeline.date)
             ZStack {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.regularMaterial)
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.90))
                     .overlay(
                         MemoryCurrentField(paused: reduceMotion || !isRecording)
-                            .opacity(0.30)
+                            .opacity(0.16)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     )
                     .overlay(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.30),
+                                ElephantTheme.accent.opacity(0.035),
+                                Color.white.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    )
+                    .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(ElephantTheme.accent.opacity(isRecording ? 0.26 : 0.16), lineWidth: 1)
+                            .stroke(ElephantTheme.accent.opacity(isRecording ? 0.20 : 0.12), lineWidth: 1)
                     )
 
-                VStack(spacing: 24) {
+                VStack(spacing: 18) {
                     Spacer(minLength: 24)
                     ZStack {
                         VoiceListeningWaveform(active: isRecording, seconds: timeline.date.timeIntervalSinceReferenceDate)
-                            .frame(width: 420, height: 150)
-                            .opacity(isRecording ? 1 : 0.64)
+                            .frame(width: 340, height: 112)
+                            .opacity(isRecording ? 0.92 : 0.56)
                         Circle()
-                            .fill(Color(nsColor: .textBackgroundColor).opacity(0.82))
-                            .frame(width: 82, height: 82)
-                            .shadow(color: ElephantTheme.accent.opacity(isRecording ? 0.18 : 0.08), radius: 24, y: 10)
+                            .fill(Color(nsColor: .textBackgroundColor).opacity(0.88))
+                            .frame(width: 66, height: 66)
+                            .overlay(Circle().stroke(Color.white.opacity(0.62), lineWidth: 1))
+                            .shadow(color: ElephantTheme.accent.opacity(isRecording ? 0.16 : 0.06), radius: 20, y: 8)
                         Image(systemName: isRecording ? "waveform" : "mic.fill")
-                            .font(.system(size: 30, weight: .semibold))
+                            .font(.system(size: 23, weight: .semibold))
                             .foregroundStyle(isRecording ? ElephantTheme.accent : ElephantTheme.muted)
                     }
                     .accessibilityHidden(true)
 
-                    VStack(spacing: 7) {
+                    VStack(spacing: 5) {
                         Text(title)
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 24, weight: .semibold))
                             .foregroundStyle(ElephantTheme.ink)
                         Text(detail(elapsed: elapsed))
-                            .font(.callout)
+                            .font(.system(.callout, design: .rounded).weight(.medium))
                             .foregroundStyle(ElephantTheme.muted)
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: 520)
 
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         overlayButton(symbol: "xmark", tint: ElephantTheme.muted, action: cancel)
                             .help(localizedYouText(model.appLanguage, en: "Cancel voice", zh: "取消语音", fr: "Annuler la voix", de: "Sprache abbrechen"))
                             .accessibilityLabel(localizedYouText(model.appLanguage, en: "Cancel voice", zh: "取消语音", fr: "Annuler la voix", de: "Sprache abbrechen"))
@@ -2893,7 +2906,7 @@ struct VoiceListeningOverlay: View {
 
                     Spacer(minLength: 24)
                 }
-                .padding(28)
+                .padding(32)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .contain)
@@ -2937,11 +2950,12 @@ struct VoiceListeningOverlay: View {
     private func overlayButton(symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(tint)
-                .frame(width: 46, height: 46)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.72), in: Circle())
-                .overlay(Circle().stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1))
+                .frame(width: 42, height: 42)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.86), in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.72), lineWidth: 1))
+                .shadow(color: Color.black.opacity(0.045), radius: 10, y: 4)
         }
         .buttonStyle(PressablePlainButtonStyle())
     }
@@ -2953,18 +2967,18 @@ struct VoiceListeningWaveform: View {
 
     var body: some View {
         Canvas { context, size in
-            let barCount = 38
-            let gap: CGFloat = 5
+            let barCount = 34
+            let gap: CGFloat = 4
             let width = max(3, (size.width - CGFloat(barCount - 1) * gap) / CGFloat(barCount))
             let midY = size.height / 2
             for index in 0..<barCount {
                 let progress = CGFloat(index) / CGFloat(max(1, barCount - 1))
-                let envelope = 0.24 + 0.76 * CGFloat(sin(Double.pi * Double(progress)))
+                let envelope = 0.18 + 0.82 * CGFloat(sin(Double.pi * Double(progress)))
                 let wave = active ? abs(sin(seconds * 3.2 + Double(index) * 0.47)) : 0.36
-                let height = 14 + CGFloat(wave) * envelope * (size.height - 22)
+                let height = 8 + CGFloat(wave) * envelope * (size.height - 18)
                 let x = CGFloat(index) * (width + gap)
                 let rect = CGRect(x: x, y: midY - height / 2, width: width, height: height)
-                let opacity = 0.28 + 0.42 * envelope
+                let opacity = 0.22 + 0.42 * envelope
                 context.fill(
                     Path(roundedRect: rect, cornerRadius: width / 2),
                     with: .color(ElephantTheme.accent.opacity(opacity))
@@ -2979,6 +2993,15 @@ private func formattedVoiceDuration(_ duration: TimeInterval?) -> String {
     let minutes = totalSeconds / 60
     let seconds = totalSeconds % 60
     return String(format: "%d:%02d", minutes, seconds)
+}
+
+private func formattedVoiceBubbleTime(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar.current
+    formatter.locale = Locale.current
+    formatter.timeZone = TimeZone.current
+    formatter.dateFormat = "HH:mm"
+    return formatter.string(from: date)
 }
 
 struct MacComposerTextView: NSViewRepresentable {
@@ -3981,21 +4004,33 @@ struct MessageBubble: View, Equatable {
                 ToolTraceWaitingView()
             }
         }
-        .padding(.horizontal, message.role == .user ? 16 : 0)
-        .padding(.vertical, message.role == .user ? 11 : 0)
-        .background(background, in: RoundedRectangle(cornerRadius: message.role == .user ? 18 : 14, style: .continuous))
+        .padding(.horizontal, bubbleHorizontalPadding)
+        .padding(.vertical, bubbleVerticalPadding)
+        .background(background, in: RoundedRectangle(cornerRadius: bubbleCornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: message.role == .user ? 18 : 14, style: .continuous)
+            RoundedRectangle(cornerRadius: bubbleCornerRadius, style: .continuous)
                 .stroke(message.role == .user ? ElephantTheme.line.opacity(0.65) : Color.clear, lineWidth: 1)
         )
     }
 
     private var background: Color {
         switch message.role {
-        case .user: return ElephantTheme.accent.opacity(0.08)
+        case .user: return ElephantTheme.accent.opacity(message.isVoiceMessage ? 0.055 : 0.08)
         case .assistant: return Color.clear
         case .system: return Color(nsColor: .controlBackgroundColor)
         }
+    }
+
+    private var bubbleHorizontalPadding: CGFloat {
+        message.role == .user ? (message.isVoiceMessage ? 10 : 16) : 0
+    }
+
+    private var bubbleVerticalPadding: CGFloat {
+        message.role == .user ? (message.isVoiceMessage ? 7 : 11) : 0
+    }
+
+    private var bubbleCornerRadius: CGFloat {
+        message.role == .user ? (message.isVoiceMessage ? 15 : 18) : 14
     }
 
     private var textColor: Color {
@@ -4013,50 +4048,51 @@ struct VoiceMessageBubbleContent: View {
     var message: ChatMessage
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 8) {
             Image(systemName: "waveform")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(ElephantTheme.accent)
-                .frame(width: 28, height: 28)
+                .frame(width: 22, height: 22)
                 .background(ElephantTheme.accent.opacity(0.12), in: Circle())
 
             VoiceMessageMiniWaveform()
-                .frame(width: 106, height: 28)
+                .frame(width: 64, height: 18)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(localizedYouText(model.appLanguage, en: "Voice", zh: "语音", fr: "Voix", de: "Sprache"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.ink)
-                Text("\(formattedVoiceDuration(message.voiceDuration)) · \(MacLocalDateTime.time(message.date))")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(ElephantTheme.muted)
-            }
+            Text(formattedVoiceDuration(message.voiceDuration))
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(ElephantTheme.ink.opacity(0.82))
+
+            Text(formattedVoiceBubbleTime(message.date))
+                .font(.system(.caption2, design: .rounded).weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(ElephantTheme.faint)
         }
-        .frame(minWidth: 240, alignment: .leading)
+        .frame(width: 170, height: 24, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             localizedYouText(
                 model.appLanguage,
-                en: "Voice message, \(formattedVoiceDuration(message.voiceDuration)), sent at \(MacLocalDateTime.time(message.date))",
-                zh: "语音消息，\(formattedVoiceDuration(message.voiceDuration))，发送于 \(MacLocalDateTime.time(message.date))",
-                fr: "Message vocal, \(formattedVoiceDuration(message.voiceDuration)), envoyé à \(MacLocalDateTime.time(message.date))",
-                de: "Sprachnachricht, \(formattedVoiceDuration(message.voiceDuration)), gesendet um \(MacLocalDateTime.time(message.date))"
+                en: "Voice message, \(formattedVoiceDuration(message.voiceDuration)), sent at \(formattedVoiceBubbleTime(message.date))",
+                zh: "语音消息，\(formattedVoiceDuration(message.voiceDuration))，发送于 \(formattedVoiceBubbleTime(message.date))",
+                fr: "Message vocal, \(formattedVoiceDuration(message.voiceDuration)), envoyé à \(formattedVoiceBubbleTime(message.date))",
+                de: "Sprachnachricht, \(formattedVoiceDuration(message.voiceDuration)), gesendet um \(formattedVoiceBubbleTime(message.date))"
             )
         )
     }
 }
 
 struct VoiceMessageMiniWaveform: View {
-    private let levels: [CGFloat] = [0.30, 0.52, 0.78, 0.46, 0.66, 0.90, 0.58, 0.42, 0.72, 0.50, 0.84, 0.36]
+    private let levels: [CGFloat] = [0.34, 0.58, 0.78, 0.46, 0.68, 0.88, 0.54, 0.38, 0.72, 0.50, 0.62]
 
     var body: some View {
         GeometryReader { geometry in
-            HStack(alignment: .center, spacing: 3) {
+            HStack(alignment: .center, spacing: 2.4) {
                 ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(ElephantTheme.accent.opacity(0.54))
-                        .frame(width: 4, height: max(6, geometry.size.height * level))
+                        .fill(ElephantTheme.accent.opacity(0.48))
+                        .frame(width: 3, height: max(5, geometry.size.height * level))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
