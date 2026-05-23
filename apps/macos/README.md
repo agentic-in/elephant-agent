@@ -48,3 +48,5 @@ make macos-build-all \
 Without `MACOS_SIGNING_IDENTITY`, builds remain ad-hoc signed and notarization is skipped so local developers can still build a DMG. Ad-hoc artifacts are useful for testing but are not Gatekeeper-clean for broad distribution. Official shareable releases should use Developer ID signing and notarization.
 
 `make macos-release-latest` expects `gh` authentication and replaces the GitHub `latest` release/tag with the current local artifacts. The CI workflow `.github/workflows/macos-latest-release.yml` runs the same build on each push to `main`, uploads both macOS architecture artifacts, writes `latest.json`, and replaces the `latest` GitHub release.
+
+The `latest` CI release forces `MACOS_BUNDLE_RUNTIME=1`, installs `uv`, builds each architecture on a matching macOS runner, and checks `Contents/Resources/Runtime` before upload. If the self-contained runtime is missing, CI fails instead of publishing a bootstrap-sized DMG. The bootstrap fallback remains available for local or emergency builds with `MACOS_BUNDLE_RUNTIME=0`.

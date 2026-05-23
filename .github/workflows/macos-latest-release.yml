@@ -25,17 +25,20 @@ concurrency:
 jobs:
   build-macos:
     name: Build macOS ${{ matrix.target }}
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     outputs:
       signing_mode: ${{ steps.prepare-signing.outputs.signing_mode }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - aarch64-apple-darwin
-          - x86_64-apple-darwin
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
     env:
       ALLOW_UNSIGNED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_unsigned || 'true' }}
+      MACOS_BUNDLE_RUNTIME: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +49,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Cache macOS runtime payloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ElephantAgent/macos-runtime/${{ matrix.target }}
+          key: macos-runtime-${{ matrix.target }}-${{ hashFiles('pyproject.toml', 'uv.lock', 'apps/macos/Scripts/build-app.sh', 'apps/macos/Scripts/package-runtime.sh') }}
+          restore-keys: |
+            macos-runtime-${{ matrix.target }}-
 
       - name: Prepare Apple signing
         id: prepare-signing
@@ -129,7 +148,19 @@ jobs:
         env:
           MACOS_APP_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          make macos-build MACOS_TARGET="${{ matrix.target }}"
+          make macos-build MACOS_TARGET="${{ matrix.target }}" MACOS_BUNDLE_RUNTIME="${MACOS_BUNDLE_RUNTIME}"
+
+      - name: Verify self-contained runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="apps/macos/.build/release/${{ matrix.target }}/Elephant Agent.app"
+          runtime="${app}/Contents/Resources/Runtime"
+          test -x "${runtime}/python/bin/python3.12"
+          test -d "${runtime}/site-packages"
+          test -d "${runtime}/ms-playwright"
+          test -f "${runtime}/manifest.json"
+          du -sh "${app}" "${runtime}"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
