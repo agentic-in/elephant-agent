@@ -9,7 +9,7 @@ on:
       allow_unsigned:
         description: "Allow ad-hoc signed macOS artifacts when Apple signing secrets are unavailable"
         required: false
-        default: "true"
+        default: "false"
         type: choice
         options:
           - "true"
@@ -37,7 +37,7 @@ jobs:
           - target: x86_64-apple-darwin
             runner: macos-15-intel
     env:
-      ALLOW_UNSIGNED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_unsigned || 'true' }}
+      ALLOW_UNSIGNED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_unsigned || 'false' }}
       MACOS_BUNDLE_RUNTIME: "1"
     steps:
       - name: Checkout
@@ -161,6 +161,22 @@ jobs:
           test -d "${runtime}/ms-playwright"
           test -f "${runtime}/manifest.json"
           du -sh "${app}" "${runtime}"
+
+      - name: Verify signing and notarization
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="apps/macos/.build/release/${{ matrix.target }}/Elephant Agent.app"
+          dmg="$(find "apps/macos/.build/artifacts/${{ matrix.target }}" -maxdepth 1 -name 'ElephantAgent_*_${{ matrix.target }}.dmg' -print -quit)"
+          test -n "${dmg}"
+          codesign --verify --deep --strict --verbose=2 "${app}"
+          codesign --verify --verbose=2 "${dmg}"
+          if [ "${MACOS_SIGNING_IDENTITY}" != "-" ]; then
+            xcrun stapler validate "${app}"
+            xcrun stapler validate "${dmg}"
+            spctl -a -vvv -t exec "${app}"
+            spctl -a -vvv -t open --context context:primary-signature "${dmg}"
+          fi
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
