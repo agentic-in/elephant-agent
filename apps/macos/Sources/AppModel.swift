@@ -160,6 +160,11 @@ struct ChatMessage: Identifiable, Equatable {
         case system
     }
 
+    enum InputModality: Equatable {
+        case text
+        case voice
+    }
+
     var id = UUID()
     var role: Role
     var text: String
@@ -167,6 +172,12 @@ struct ChatMessage: Identifiable, Equatable {
     var attachments: [WakeAttachment] = []
     var toolEvents: [ToolUseEvent] = []
     var isStreaming = false
+    var inputModality: InputModality = .text
+    var voiceDuration: TimeInterval?
+
+    var isVoiceMessage: Bool {
+        role == .user && inputModality == .voice
+    }
 }
 
 struct WakeAttachment: Identifiable, Equatable {
@@ -189,8 +200,13 @@ struct WakeQueuedPrompt: Identifiable, Equatable {
     var text: String
     var attachments: [WakeAttachment] = []
     var date = Date()
+    var inputModality: ChatMessage.InputModality = .text
+    var voiceDuration: TimeInterval?
 
     var previewText: String {
+        if inputModality == .voice {
+            return "Voice message"
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             return trimmed
@@ -1590,7 +1606,6 @@ final class ElephantAppModel: ObservableObject {
                 if status.contains("completed") || status.contains("succeeded") || status == "success" {
                     onboardingFinalizationStatus = text(.learningReady)
                     onboardingFinalizationComplete = true
-                    onboardingStep = 17
                     scheduleOnboardingAutoCompletion()
                     return
                 }
@@ -1602,7 +1617,6 @@ final class ElephantAppModel: ObservableObject {
         }
         onboardingFinalizationStatus = text(.learningReady)
         onboardingFinalizationComplete = true
-        onboardingStep = 17
         scheduleOnboardingAutoCompletion()
     }
 
@@ -2787,12 +2801,20 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func sendWakeMessage() async {
+        await enqueueWakeMessage(inputModality: .text, voiceDuration: nil)
+    }
+
+    func sendVoiceWakeMessage(duration: TimeInterval?) async {
+        await enqueueWakeMessage(inputModality: .voice, voiceDuration: duration)
+    }
+
+    private func enqueueWakeMessage(inputModality: ChatMessage.InputModality, voiceDuration: TimeInterval?) async {
         let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let attachments = wakeAttachments
         guard !text.isEmpty || !attachments.isEmpty else { return }
         wakeDraft = ""
         wakeAttachments = []
-        wakeQueue.append(WakeQueuedPrompt(text: text, attachments: attachments))
+        wakeQueue.append(WakeQueuedPrompt(text: text, attachments: attachments, inputModality: inputModality, voiceDuration: voiceDuration))
         focusComposer()
         await drainWakeQueueIfNeeded()
     }
@@ -2928,12 +2950,22 @@ final class ElephantAppModel: ObservableObject {
         }
         while !wakeQueue.isEmpty {
             let item = wakeQueue.removeFirst()
-            await runWakeMessage(item.text, attachments: item.attachments)
+            await runWakeMessage(
+                item.text,
+                attachments: item.attachments,
+                inputModality: item.inputModality,
+                voiceDuration: item.voiceDuration
+            )
         }
     }
 
-    private func runWakeMessage(_ text: String, attachments: [WakeAttachment]) async {
-        messages.append(ChatMessage(role: .user, text: text, attachments: attachments))
+    private func runWakeMessage(
+        _ text: String,
+        attachments: [WakeAttachment],
+        inputModality: ChatMessage.InputModality,
+        voiceDuration: TimeInterval?
+    ) async {
+        messages.append(ChatMessage(role: .user, text: text, attachments: attachments, inputModality: inputModality, voiceDuration: voiceDuration))
         chatScrollRevision += 1
 
         let prompt = Self.wakePrompt(text: text, attachments: attachments)

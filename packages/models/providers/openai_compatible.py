@@ -21,7 +21,13 @@ from .identity_contract import build_provider_messages, build_provider_system_pr
 from .http import JSONHTTPTransport, UrllibJSONHTTPTransport
 from .message_payloads import openai_chat_messages_payload, openai_responses_input_payload, prompt_message_has_image_parts
 from .openai_usage import openai_compatible_usage_from_payload
-from ..reasoning_parser import combine_reasoning_text, normalize_reasoning_text, split_reasoning_and_content, stitch_text_fragments
+from ..reasoning_parser import (
+    ReasoningStreamSplitter,
+    combine_reasoning_text,
+    normalize_reasoning_text,
+    split_reasoning_and_content,
+    stitch_text_fragments,
+)
 
 _SCHEMA_TYPE_PREFERENCE = ("string", "object", "array", "integer", "number", "boolean")
 
@@ -168,6 +174,7 @@ class OpenAICompatibleProviderAdapter:
         result_model = plan.model_id
         final_payload: Mapping[str, Any] | None = None
         chat_stream_tool_calls: dict[int, dict[str, Any]] = {}
+        stream_splitter = ReasoningStreamSplitter()
         for chunk in transport(url=plan.url, headers=plan.headers, payload=plan.payload):
             payload = chunk.payload
             event_name = chunk.event
@@ -210,10 +217,22 @@ class OpenAICompatibleProviderAdapter:
                 reasoning_parts.append(reasoning_delta)
                 self._emit_stream_delta(reasoning_delta, reasoning=True)
             if delta:
-                text_parts.append(delta)
-                self._emit_stream_delta(delta, reasoning=False)
+                split_delta = stream_splitter.split(delta)
+                if split_delta.reasoning:
+                    reasoning_parts.append(split_delta.reasoning)
+                    self._emit_stream_delta(split_delta.reasoning, reasoning=True)
+                if split_delta.content:
+                    text_parts.append(split_delta.content)
+                    self._emit_stream_delta(split_delta.content, reasoning=False)
             if any((chunk_usage.prompt_tokens, chunk_usage.completion_tokens, chunk_usage.total_tokens)):
                 usage = chunk_usage
+        final_split_delta = stream_splitter.finish()
+        if final_split_delta.reasoning:
+            reasoning_parts.append(final_split_delta.reasoning)
+            self._emit_stream_delta(final_split_delta.reasoning, reasoning=True)
+        if final_split_delta.content:
+            text_parts.append(final_split_delta.content)
+            self._emit_stream_delta(final_split_delta.content, reasoning=False)
         if plan.request_family == "responses":
             payload = (
                 final_payload

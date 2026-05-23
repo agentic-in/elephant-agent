@@ -243,6 +243,46 @@ class _ChatTaggedReasoningTransport:
         )
 
 
+class _ChatSplitTaggedReasoningStreamTransport:
+    def __init__(self) -> None:
+        self.stream_payloads: list[dict[str, object]] = []
+
+    def post_json_stream(self, *, url: str, headers, payload):
+        self.stream_payloads.append(dict(payload))
+        chunks = (
+            {"role": "assistant"},
+            {"content": "<thi"},
+            {"content": "nk>"},
+            {
+                "content": 'The user is asking me to reply with only two characters: "你好".'
+            },
+            {"content": "</think>"},
+            {"content": "\n\n你好"},
+            {},
+        )
+        for delta in chunks:
+            yield JSONHTTPStreamChunk(
+                event=None,
+                payload={
+                    "id": "chat-split-tagged-reasoning-stream",
+                    "model": str(payload["model"]),
+                    "choices": [{"delta": delta}],
+                },
+            )
+        yield JSONHTTPStreamChunk(
+            event=None,
+            payload={
+                "id": "chat-split-tagged-reasoning-stream",
+                "model": str(payload["model"]),
+                "choices": [{"delta": {}}],
+                "usage": {"prompt_tokens": 7, "completion_tokens": 4, "total_tokens": 11},
+            },
+        )
+
+    def post_json(self, *, url: str, headers, payload):
+        raise AssertionError("split tagged reasoning stream transport should not fall back to post_json")
+
+
 class _ProviderStubServer:
     def __init__(self) -> None:
         self.requests: list[dict[str, object]] = []
@@ -949,6 +989,46 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(result.tool_calls[0].arguments, {"query": "native tools"})
         self.assertEqual(streamed, [])
         self.assertEqual(result.metadata["stream"], "true")
+
+    def test_chat_stream_reasoning_tags_split_across_content_deltas_are_not_visible(self) -> None:
+        streamed: list[str] = []
+        transport = _ChatSplitTaggedReasoningStreamTransport()
+        adapter = OpenAICompatibleProviderAdapter(
+            config=OpenAICompatibleProviderConfig(
+                provider_id="minimax",
+                base_url="https://api.minimaxi.com/v1",
+                model_id="MiniMax-M2.7",
+            ),
+            runtime_resolver=ProviderRuntimeResolver.default(),
+            credential_source=_StaticCredentialSource({"minimax": {"api_key": "sk-minimax-123"}}),
+            http_transport=transport,
+            stream_observer=streamed.append,
+        )
+        request = ModelRequest(
+            request_id="request-chat-split-tagged-reasoning-stream",
+            profile_id="profile-companion",
+            session_id="session-chat-split-tagged-reasoning-stream",
+            provider_id="minimax",
+            model_id="MiniMax-M2.7",
+            prompt="你好。请只回复两个字：你好",
+        )
+
+        result = adapter.generate(request, {"api_key": "sk-minimax-123"})
+
+        self.assertEqual(
+            result.reasoning,
+            'The user is asking me to reply with only two characters: "你好".',
+        )
+        self.assertEqual(result.content, "\n\n你好")
+        self.assertNotIn("The user is asking", result.content)
+        self.assertEqual(
+            streamed,
+            [
+                '<think>The user is asking me to reply with only two characters: "你好".</think>',
+                "\n\n你好",
+            ],
+        )
+        self.assertTrue(bool(transport.stream_payloads[0]["stream"]))
 
     def test_responses_stream_reasoning_is_split_from_final_answer(self) -> None:
         streamed: list[str] = []

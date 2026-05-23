@@ -6,6 +6,9 @@ import Speech
 final class SpeechInputController: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var statusText = ""
+    @Published private(set) var recordingStartedAt: Date?
+    @Published private(set) var capturedDuration: TimeInterval = 0
+    @Published private(set) var recognizedText = ""
 
     private let audioEngine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer(locale: Locale.current)
@@ -26,6 +29,9 @@ final class SpeechInputController: NSObject, ObservableObject {
         guard !isRecording else { return }
         baseText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.onText = onText
+        recognizedText = ""
+        capturedDuration = 0
+        recordingStartedAt = nil
         statusText = "Requesting microphone access..."
 
         requestMicrophoneAccess { [weak self] allowed in
@@ -50,6 +56,7 @@ final class SpeechInputController: NSObject, ObservableObject {
 
     func stop() {
         guard isRecording || audioEngine.isRunning else { return }
+        updateCapturedDuration()
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
@@ -57,7 +64,18 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionRequest = nil
         recognitionTask = nil
         isRecording = false
+        recordingStartedAt = nil
         statusText = "Voice input stopped."
+    }
+
+    func resetCapture() {
+        if isRecording || audioEngine.isRunning {
+            stop()
+        }
+        recognizedText = ""
+        capturedDuration = 0
+        recordingStartedAt = nil
+        statusText = ""
     }
 
     private func requestMicrophoneAccess(_ completion: @escaping (Bool) -> Void) {
@@ -105,12 +123,15 @@ final class SpeechInputController: NSObject, ObservableObject {
         }
 
         isRecording = true
+        recordingStartedAt = Date()
+        capturedDuration = 0
         statusText = "Listening..."
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if let result {
                     let spoken = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.recognizedText = spoken
                     let combined = [self.baseText, spoken].filter { !$0.isEmpty }.joined(separator: " ")
                     self.onText?(combined)
                     self.statusText = result.isFinal ? "Voice input captured." : "Listening..."
@@ -124,6 +145,7 @@ final class SpeechInputController: NSObject, ObservableObject {
     }
 
     private func finishRecognition() {
+        updateCapturedDuration()
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -132,5 +154,12 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionRequest = nil
         recognitionTask = nil
         isRecording = false
+        recordingStartedAt = nil
+    }
+
+    private func updateCapturedDuration() {
+        if let recordingStartedAt {
+            capturedDuration = max(capturedDuration, Date().timeIntervalSince(recordingStartedAt))
+        }
     }
 }

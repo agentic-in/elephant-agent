@@ -357,6 +357,7 @@ struct ProviderLogoView: View {
         if normalized.contains("openclaw") { return "openclaw" }
         if normalized.contains("opencode") { return "opencode" }
         if normalized.contains("kimi") || normalized.contains("moonshot") { return "kimi" }
+        if normalized.contains("minimax") { return "minimax" }
         if normalized == "pi" || normalized.contains("inflection") { return "pi" }
         if normalized.contains("codex") || normalized.contains("openai") { return "codex" }
         return normalized.isEmpty ? "agent" : normalized
@@ -392,6 +393,7 @@ struct ProviderLogoView: View {
         if normalizedProvider.contains("openclaw") { return "OpenClaw" }
         if normalizedProvider.contains("opencode") { return "OpenCode" }
         if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return "Kimi" }
+        if normalizedProvider.contains("minimax") { return "MiniMax" }
         if normalizedProvider.contains("codex") || normalizedProvider.contains("openai") { return "Codex" }
         return providerID.isEmpty ? "Local agent" : providerID
     }
@@ -405,6 +407,7 @@ struct ProviderLogoView: View {
         if normalizedProvider.contains("openclaw") { return "hand.raised" }
         if normalizedProvider.contains("opencode") { return "chevron.left.forwardslash.chevron.right" }
         if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return "moon.stars" }
+        if normalizedProvider.contains("minimax") { return "sparkles" }
         if normalizedProvider.contains("codex") || normalizedProvider.contains("openai") { return "terminal" }
         return "terminal"
     }
@@ -417,6 +420,7 @@ struct ProviderLogoView: View {
         if normalizedProvider.contains("hermes") { return ElephantTheme.orange }
         if normalizedProvider.contains("openclaw") { return ElephantTheme.ember }
         if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return ElephantTheme.green }
+        if normalizedProvider.contains("minimax") { return ElephantTheme.green }
         return ElephantTheme.accent
     }
 }

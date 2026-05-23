@@ -15,6 +15,16 @@ import re
 
 _TAG_RE = re.compile(r"<(think|thinking|reasoning)>([\s\S]*?)</\1>", re.IGNORECASE)
 _OPEN_RE = re.compile(r"<(think|thinking|reasoning)>([\s\S]*)$", re.IGNORECASE)
+_STREAM_OPEN_TAG_RE = re.compile(r"<(think|thinking|reasoning)>", re.IGNORECASE)
+_STREAM_CLOSE_TAG_RE = re.compile(r"</(think|thinking|reasoning)>", re.IGNORECASE)
+_STREAM_REASONING_TAG_LITERALS = (
+    "<think>",
+    "<thinking>",
+    "<reasoning>",
+    "</think>",
+    "</thinking>",
+    "</reasoning>",
+)
 _PLACEHOLDER_PREFIX = "\u0000ELEPHANTREASON"
 _PLACEHOLDER_SUFFIX = "\u0000"
 _FENCED_RE = re.compile(r"(^|\n)( {0,3})(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\2\3[ \t]*(?=\n|$)")
@@ -130,6 +140,76 @@ class CombinedReasoning:
     reasoning: str
 
 
+class ReasoningStreamSplitter:
+    """Split reasoning tags that may be fragmented across streaming deltas."""
+
+    def __init__(self) -> None:
+        self._pending = ""
+        self._inside_reasoning = False
+
+    def split(self, content: str) -> CombinedReasoning:
+        text = f"{self._pending}{content}"
+        self._pending = ""
+        if not text:
+            return CombinedReasoning(content="", reasoning="")
+
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        index = 0
+        while index < len(text):
+            if self._inside_reasoning:
+                close_match = _STREAM_CLOSE_TAG_RE.search(text, index)
+                if close_match is None:
+                    safe_end = self._safe_stream_end(text, index)
+                    if safe_end > index:
+                        reasoning_parts.append(text[index:safe_end])
+                    self._pending = text[safe_end:]
+                    break
+                if close_match.start() > index:
+                    reasoning_parts.append(text[index:close_match.start()])
+                index = close_match.end()
+                self._inside_reasoning = False
+                continue
+
+            open_match = _STREAM_OPEN_TAG_RE.search(text, index)
+            if open_match is None:
+                safe_end = self._safe_stream_end(text, index)
+                if safe_end > index:
+                    content_parts.append(text[index:safe_end])
+                self._pending = text[safe_end:]
+                break
+            if open_match.start() > index:
+                content_parts.append(text[index:open_match.start()])
+            index = open_match.end()
+            self._inside_reasoning = True
+
+        return CombinedReasoning(
+            content="".join(content_parts),
+            reasoning="".join(reasoning_parts),
+        )
+
+    def finish(self) -> CombinedReasoning:
+        if not self._pending:
+            return CombinedReasoning(content="", reasoning="")
+        pending = self._pending
+        self._pending = ""
+        if self._inside_reasoning:
+            return CombinedReasoning(content="", reasoning=pending)
+        return CombinedReasoning(content=pending, reasoning="")
+
+    def _safe_stream_end(self, text: str, start: int) -> int:
+        suffix = text[start:]
+        max_length = min(
+            len(suffix),
+            max(len(tag) for tag in _STREAM_REASONING_TAG_LITERALS) - 1,
+        )
+        for length in range(max_length, 0, -1):
+            candidate = suffix[-length:].lower()
+            if any(tag.startswith(candidate) for tag in _STREAM_REASONING_TAG_LITERALS):
+                return len(text) - length
+        return len(text)
+
+
 def _protect_code_blocks(text: str) -> _ProtectedCode:
     blocks: list[str] = []
 
@@ -237,6 +317,7 @@ def split_reasoning_and_content(
 __all__ = [
     "CombinedReasoning",
     "ParsedReasoningContent",
+    "ReasoningStreamSplitter",
     "combine_reasoning_text",
     "normalize_reasoning_text",
     "parse_reasoning_content",
