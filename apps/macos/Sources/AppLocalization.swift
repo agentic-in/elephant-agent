@@ -60,10 +60,10 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
     var languageCardSubtitle: String {
         switch self {
-        case .en: return "Setup and app UI use English."
-        case .zh: return "初始化和系统内部使用中文。"
-        case .fr: return "Onboarding et app en français."
-        case .de: return "Onboarding und App auf Deutsch."
+        case .en: return "Elephant speaks with you in English."
+        case .zh: return "Elephant 会用中文和你交流。"
+        case .fr: return "Elephant parle avec vous en français."
+        case .de: return "Elephant spricht mit dir Deutsch."
         }
     }
 
@@ -385,7 +385,7 @@ enum AppText {
         case .setupTitle:
             return pick(language, en: "Make Elephant Yours", zh: "让 Elephant 认识你", fr: "Adoptez Elephant", de: "Mach Elephant zu deinem Begleiter")
         case .setupSubtitle:
-            return pick(language, en: "Set the language, boundaries, and first memories Elephant should begin with.", zh: "先设定 Elephant 开始理解你所需要的语言、边界和第一批记忆。", fr: "Définissez la langue, les limites et les premières mémoires d'Elephant.", de: "Lege Sprache, Grenzen und erste Erinnerungen für Elephant fest.")
+            return pick(language, en: "A few minutes to teach Elephant your language, boundaries, and preferences.", zh: "用几分钟，让 Elephant 从第一天就懂你的语言、边界和偏好。", fr: "Quelques minutes pour apprendre à Elephant votre langue, vos limites et vos préférences.", de: "Ein paar Minuten, damit Elephant deine Sprache, Grenzen und Vorlieben kennt.")
         case .back:
             return pick(language, en: "Back", zh: "返回", fr: "Retour", de: "Zurück")
         case .next:
@@ -393,13 +393,13 @@ enum AppText {
         case .continueAction:
             return pick(language, en: "Continue", zh: "继续", fr: "Continuer", de: "Fortfahren")
         case .startSetup:
-            return pick(language, en: "Start Setup", zh: "开始初始化", fr: "Lancer la configuration", de: "Einrichtung starten")
+            return pick(language, en: "Begin", zh: "开始", fr: "Commencer", de: "Beginnen")
         case .enterElephant:
             return pick(language, en: "Enter Elephant Agent", zh: "进入 Elephant Agent", fr: "Entrer dans Elephant Agent", de: "Elephant Agent öffnen")
         case .languageTitle:
             return pick(language, en: "Choose your language", zh: "选择语言", fr: "Choisissez votre langue", de: "Sprache auswählen")
         case .languageSubtitle:
-            return pick(language, en: "Pick the language Elephant should use during setup and inside the app.", zh: "选择 Elephant 在初始化和系统内部使用的语言。", fr: "Choisissez la langue utilisée par Elephant pendant l'initialisation et dans l'app.", de: "Wähle die Sprache für Einrichtung und App.")
+            return pick(language, en: "Pick the language Elephant should use with you.", zh: "选择 Elephant 和你交流时使用的语言。", fr: "Choisissez la langue qu'Elephant utilisera avec vous.", de: "Wähle die Sprache, in der Elephant mit dir spricht.")
         case .languageSignalSubtitle:
             return pick(language, en: "Elephant starts in English", zh: "Elephant 会用中文陪你开始", fr: "Elephant commence en français", de: "Elephant startet auf Deutsch")
         case .identityTitle:
@@ -417,11 +417,11 @@ enum AppText {
         case .birthDate:
             return pick(language, en: "Birth date", zh: "生日", fr: "Date de naissance", de: "Geburtsdatum")
         case .personalLogo:
-            return pick(language, en: "Personal Logo", zh: "个人 Logo", fr: "Logo personnel", de: "Persönliches Logo")
+            return pick(language, en: "Profile Photo", zh: "头像", fr: "Photo de profil", de: "Profilfoto")
         case .chooseImage:
-            return pick(language, en: "Choose image", zh: "选择图片", fr: "Choisir une image", de: "Bild wählen")
+            return pick(language, en: "Choose photo", zh: "选择照片", fr: "Choisir une photo", de: "Foto wählen")
         case .changeImage:
-            return pick(language, en: "Change image", zh: "更换图片", fr: "Changer l'image", de: "Bild ändern")
+            return pick(language, en: "Change photo", zh: "更换照片", fr: "Changer la photo", de: "Foto ändern")
         case .changeProfilePhoto:
             return pick(language, en: "Change profile photo", zh: "更换个人照片", fr: "Changer la photo de profil", de: "Profilfoto ändern")
         case .chooseAvatar:
@@ -509,7 +509,7 @@ enum AppText {
         case .leaveEmptyIfNone:
             return pick(language, en: "Leave empty if none", zh: "没有可留空", fr: "Laisser vide si aucune", de: "Leer lassen, falls keine")
         case .surveyTitle:
-            return pick(language, en: "Personal Model Grounding", zh: "Personal Model grounding", fr: "Grounding Personal Model", de: "Personal-Model-Grounding")
+            return pick(language, en: "First Understanding", zh: "第一次了解", fr: "Première compréhension", de: "Erstes Verstehen")
         case .surveySubtitle:
             return pick(language, en: "Choose the closest answer. Add a note if context matters.", zh: "选择最接近的一项。如果有关键背景，可以补一句。", fr: "Choisissez la réponse la plus proche. Ajoutez une note si le contexte compte.", de: "Wähle die passendste Antwort. Füge Kontext hinzu, wenn er wichtig ist.")
         case .innerLandscapeTitle:
@@ -593,7 +593,7 @@ enum AppText {
         case .learningTitle:
             return pick(language, en: "Building Your Elephant", zh: "正在建立你的 Elephant", fr: "Construction de votre Elephant", de: "Dein Elephant wird aufgebaut")
         case .learningPreparing:
-            return pick(language, en: "Preparing the init learning pass", zh: "准备初始化学习任务", fr: "Préparation du premier apprentissage", de: "Initialen Lernlauf vorbereiten")
+            return pick(language, en: "Preparing your first learning pass", zh: "准备第一次学习", fr: "Préparation du premier apprentissage", de: "Ersten Lernlauf vorbereiten")
         case .learningCreateModel:
             return pick(language, en: "Creating your local Personal Model", zh: "正在创建你的本地 Personal Model", fr: "Création de votre Personal Model local", de: "Dein lokales Personal Model wird erstellt")
         case .learningOpenEpisode:
@@ -607,7 +607,7 @@ enum AppText {
         case .learningReady:
             return pick(language, en: "Everything is ready", zh: "全部准备好了", fr: "Tout est prêt", de: "Alles ist bereit")
         case .learningNeedsAttention:
-            return pick(language, en: "Setup needs attention", zh: "初始化需要处理", fr: "La configuration demande votre attention", de: "Einrichtung braucht Aufmerksamkeit")
+            return pick(language, en: "One step needs attention", zh: "还有一步需要处理", fr: "Une étape demande votre attention", de: "Ein Schritt braucht Aufmerksamkeit")
         case .tryAgain:
             return pick(language, en: "Try Again", zh: "重试", fr: "Réessayer", de: "Erneut versuchen")
         case .celebrationTitle:
@@ -625,7 +625,7 @@ enum AppText {
         case .languageSettingsSubtitle:
             return pick(language, en: "App language: ", zh: "当前语言：", fr: "Langue de l'app : ", de: "App-Sprache: ")
         case .languageSettingsDescription:
-            return pick(language, en: "Elephant will speak this language across setup, navigation, settings, and system messages.", zh: "初始化、导航、设置和系统提示都会使用这门语言。", fr: "Elephant utilisera cette langue dans la configuration, la navigation, les réglages et les messages système.", de: "Elephant verwendet diese Sprache für Einrichtung, Navigation, Einstellungen und Systemmeldungen.")
+            return pick(language, en: "Elephant will speak this language across first run, navigation, settings, and system messages.", zh: "开始体验、导航、设置和系统提示都会使用这门语言。", fr: "Elephant utilisera cette langue au premier lancement, dans la navigation, les réglages et les messages système.", de: "Elephant verwendet diese Sprache beim ersten Start, in der Navigation, in Einstellungen und Systemmeldungen.")
         case .runtimeConfig:
             return pick(language, en: "System Config", zh: "系统配置", fr: "Configuration système", de: "Systemkonfiguration")
         case .runtimeConfigMissing:
@@ -643,10 +643,10 @@ enum AppText {
         case .sleepBrandSlogan:
             return pick(
                 language,
-                en: "Don't be afraid. We'll evolve together.",
+                en: "Don't be afraid. We evolve together.",
                 zh: "别怕，我们一起进化",
-                fr: "N'ayez pas peur. Nous évoluerons ensemble.",
-                de: "Keine Angst. Wir wachsen gemeinsam."
+                fr: "N'ayez pas peur. Nous évoluons ensemble.",
+                de: "Keine Angst. Wir entwickeln uns gemeinsam."
             )
         case .sleepLockTitle:
             return pick(language, en: "Welcome back", zh: "欢迎回来", fr: "Bon retour", de: "Willkommen zurück")
@@ -671,9 +671,9 @@ enum AppText {
         case .resetSleepTimer:
             return pick(language, en: "Reset to 10 min", zh: "重置为 10 分钟", fr: "Réinitialiser à 10 min", de: "Auf 10 Min. zurücksetzen")
         case .lockPasswordTitle:
-            return pick(language, en: "Lock Password", zh: "锁屏密码", fr: "Mot de passe de verrouillage", de: "Sperrpasswort")
+            return pick(language, en: "Privacy Password", zh: "隐私密码", fr: "Mot de passe privé", de: "Privates Passwort")
         case .lockPasswordSubtitle:
-            return pick(language, en: "Used only to unlock Elephant's sleep display on this Mac.", zh: "只用于解锁这台 Mac 上的 Elephant 睡眠显示。", fr: "Utilisé uniquement pour déverrouiller l'affichage veille d'Elephant sur ce Mac.", de: "Nur zum Entsperren von Elephants Schlafanzeige auf diesem Mac.")
+            return pick(language, en: "Optional now. If you set one, it protects your private memory on this Mac.", zh: "现在可以跳过；设置后会保护这台 Mac 上的私有记忆。", fr: "Facultatif pour le moment. Si vous en définissez un, il protège votre mémoire privée sur ce Mac.", de: "Jetzt optional. Wenn du eins festlegst, schützt es dein privates Gedächtnis auf diesem Mac.")
         case .lockPassword:
             return pick(language, en: "Password", zh: "密码", fr: "Mot de passe", de: "Passwort")
         case .lockPasswordConfirm:
@@ -711,7 +711,7 @@ enum AppText {
         case .resetData:
             return pick(language, en: "Reset Data", zh: "重置数据", fr: "Réinitialiser les données", de: "Daten zurücksetzen")
         case .resetDataSubtitle:
-            return pick(language, en: "Clear local data and run setup again", zh: "清空本地数据并重新进入初始化", fr: "Effacer les données locales et relancer la configuration", de: "Lokale Daten löschen und Einrichtung erneut starten")
+            return pick(language, en: "Clear local data and start again", zh: "清空本地数据并重新开始", fr: "Effacer les données locales et recommencer", de: "Lokale Daten löschen und neu beginnen")
         case .advancedRuntime:
             return pick(language, en: "Advanced Runtime", zh: "高级运行时", fr: "Runtime avancé", de: "Erweiterte Runtime")
         case .lastError:
@@ -931,7 +931,7 @@ enum AppText {
         case .phaseProfile:
             return pick(language, en: "Profile", zh: "个人资料", fr: "Profil", de: "Profil")
         case .phasePattern:
-            return pick(language, en: "Grounding", zh: "建模", fr: "Grounding", de: "Grounding")
+            return pick(language, en: "Understanding", zh: "了解", fr: "Comprendre", de: "Verstehen")
         case .phaseElephant:
             return pick(language, en: "Elephant", zh: "Elephant", fr: "Elephant", de: "Elephant")
         case .phaseHerd:
@@ -941,7 +941,7 @@ enum AppText {
         case .phaseReady:
             return pick(language, en: "Ready", zh: "完成", fr: "Prêt", de: "Bereit")
         case .phaseProgressLabel:
-            return pick(language, en: "Setup progress", zh: "初始化进度", fr: "Progression de l'initialisation", de: "Einrichtungsfortschritt")
+            return pick(language, en: "Progress", zh: "进度", fr: "Progression", de: "Fortschritt")
         case .phaseStatusComplete:
             return pick(language, en: "Completed", zh: "已完成", fr: "Terminé", de: "Abgeschlossen")
         case .phaseStatusCurrent:

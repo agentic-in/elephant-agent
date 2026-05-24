@@ -165,6 +165,11 @@ struct ChatMessage: Identifiable, Equatable {
         case voice
     }
 
+    enum OutputPresentation: Equatable {
+        case text
+        case voice
+    }
+
     var id = UUID()
     var role: Role
     var text: String
@@ -173,10 +178,15 @@ struct ChatMessage: Identifiable, Equatable {
     var toolEvents: [ToolUseEvent] = []
     var isStreaming = false
     var inputModality: InputModality = .text
+    var outputPresentation: OutputPresentation = .text
     var voiceDuration: TimeInterval?
 
     var isVoiceMessage: Bool {
         role == .user && inputModality == .voice
+    }
+
+    var isAssistantVoiceReply: Bool {
+        role == .assistant && outputPresentation == .voice
     }
 }
 
@@ -1155,7 +1165,13 @@ final class ElephantAppModel: ObservableObject {
     @Published var showingOnboardingLetterPrompt = false
     @Published var showingOnboardingLetterEnvelope = false
     @Published var showingCommandPalette = false
-    @Published var lastError = ""
+    @Published var lastError = "" {
+        didSet {
+            if Self.isBenignCancellationErrorMessage(lastError) {
+                lastError = ""
+            }
+        }
+    }
     @Published var providerTestResult = ""
     @Published var providerActionFailed = false
     @Published var providerActionInFlight = false
@@ -1189,7 +1205,22 @@ final class ElephantAppModel: ObservableObject {
     @Published var lastInteractionDate = Date()
     @Published var isResettingData = false
     @Published var resetDataResult = ""
+    @Published var voiceRepliesEnabled = ElephantAppModel.persistedBool(
+        ElephantAppModel.voiceRepliesEnabledKey,
+        defaultValue: true
+    )
+    @Published var voiceRepliesAutoPlay = ElephantAppModel.persistedBool(
+        ElephantAppModel.voiceRepliesAutoPlayKey,
+        defaultValue: true
+    )
+    @Published var voiceReplyEngineRaw = UserDefaults.standard.string(forKey: ElephantAppModel.voiceReplyEngineKey) ?? SpeechOutputEngine.edgeOnline.rawValue
+    @Published var voiceReplyVoiceIdentifier = UserDefaults.standard.string(forKey: ElephantAppModel.voiceReplyVoiceIdentifierKey) ?? ""
+    @Published var voiceReplyEdgeVoiceIdentifier = UserDefaults.standard.string(forKey: ElephantAppModel.voiceReplyEdgeVoiceIdentifierKey) ?? ""
+    @Published var voiceInputEngineRaw = UserDefaults.standard.string(forKey: ElephantAppModel.voiceInputEngineKey) ?? SpeechRecognitionEngine.automatic.rawValue
+    @Published var voiceRuntimeActionResult = ""
+    @Published var voiceRuntimeActionInFlight = false
 
+    let speechOutput = LocalSpeechOutputController()
     private let runner = CoreRunner()
     private var client = APIClient(baseURL: nil)
     private var readinessPollTask: Task<Void, Never>?
@@ -1204,6 +1235,12 @@ final class ElephantAppModel: ObservableObject {
     private static let herdAvatarPathsKey = "elephant.mac.herdAvatarImagePaths"
     private static let hiddenEpisodeIDsKey = "elephant.mac.hiddenEpisodeIDs"
     static let appLanguageKey = "elephant.mac.appLanguage"
+    private static let voiceRepliesEnabledKey = "elephant.mac.voiceRepliesEnabled"
+    private static let voiceRepliesAutoPlayKey = "elephant.mac.voiceRepliesAutoPlay"
+    private static let voiceReplyEngineKey = "elephant.mac.voiceReplyEngine"
+    private static let voiceReplyVoiceIdentifierKey = "elephant.mac.voiceReplyVoiceIdentifier"
+    private static let voiceReplyEdgeVoiceIdentifierKey = "elephant.mac.voiceReplyEdgeVoiceIdentifier"
+    private static let voiceInputEngineKey = "elephant.mac.voiceInputEngine"
     private static let sleepIdleMinutesKey = "elephant.mac.sleepIdleMinutes"
     private static let appLockPasswordRecordKey = "elephant.mac.appLockPasswordRecord"
     private static let defaultSleepIdleMinutes = 10
@@ -1214,6 +1251,13 @@ final class ElephantAppModel: ObservableObject {
             return AppLanguage(code: code)
         }
         return .preferred
+    }
+
+    private static func persistedBool(_ key: String, defaultValue: Bool) -> Bool {
+        guard UserDefaults.standard.object(forKey: key) != nil else {
+            return defaultValue
+        }
+        return UserDefaults.standard.bool(forKey: key)
     }
 
     private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String) -> String {
@@ -1231,6 +1275,10 @@ final class ElephantAppModel: ObservableObject {
 
     private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
         String(format: localizedText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
+    }
+
+    private static func isBenignCancellationErrorMessage(_ value: String) -> Bool {
+        value.lowercased().contains("cancellationerror")
     }
 
     var userDisplayName: String {
@@ -1665,6 +1713,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func startNewChat() {
+        speechOutput.stop()
         activeEpisodeID = ""
         messages = [
             ChatMessage(role: .system, text: text(.newConversationReady))
@@ -1674,6 +1723,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func openEpisodeThread(_ thread: EpisodeThread) {
+        speechOutput.stop()
         activeEpisodeID = thread.id
         if thread.messages.isEmpty {
             messages = [
@@ -1684,6 +1734,138 @@ final class ElephantAppModel: ObservableObject {
         }
         selectedSection = .wake
         focusComposer()
+    }
+
+    var voiceReplyVoiceOptions: [LocalSpeechVoiceOption] {
+        LocalSpeechOutputController.voiceOptions(for: appLanguage)
+    }
+
+    var voiceReplyEdgeVoiceOptions: [EdgeSpeechVoiceOption] {
+        LocalSpeechOutputController.edgeVoiceOptions(for: appLanguage)
+    }
+
+    var voiceReplyEngine: SpeechOutputEngine {
+        SpeechOutputEngine(rawValue: voiceReplyEngineRaw) ?? .edgeOnline
+    }
+
+    var voiceInputEngine: SpeechRecognitionEngine {
+        SpeechRecognitionEngine(rawValue: voiceInputEngineRaw) ?? .automatic
+    }
+
+    var effectiveEdgeVoiceIdentifier: String {
+        voiceReplyEdgeVoiceOptions.contains { $0.id == voiceReplyEdgeVoiceIdentifier }
+            ? voiceReplyEdgeVoiceIdentifier
+            : LocalSpeechOutputController.defaultEdgeVoiceIdentifier(for: appLanguage)
+    }
+
+    var voiceReplyVoiceSummary: String {
+        if voiceReplyEngine == .edgeOnline {
+            return LocalSpeechOutputController.edgeVoiceDisplayName(
+                identifier: effectiveEdgeVoiceIdentifier,
+                language: appLanguage
+            )
+        }
+        let selected = voiceReplyVoiceOptions.first { $0.id == voiceReplyVoiceIdentifier }
+        if let selected {
+            return selected.displayName
+        }
+        if let voice = LocalSpeechOutputController.preferredVoice(
+            language: appLanguage,
+            preferredIdentifier: voiceReplyVoiceIdentifier
+        ) {
+            return "\(voice.name) · \(voice.language)"
+        }
+        return Self.localizedText(appLanguage, en: "System default", zh: "系统默认", fr: "Voix système", de: "Systemstimme")
+    }
+
+    var voiceReplyEngineLabel: String {
+        switch voiceReplyEngine {
+        case .edgeOnline:
+            return Self.localizedText(appLanguage, en: "High-quality online voice", zh: "高质量在线声音", fr: "Voix en ligne haute qualité", de: "Hochwertige Online-Stimme")
+        case .systemAVSpeech:
+            return Self.localizedText(appLanguage, en: "Apple local voice", zh: "Apple 本机声音", fr: "Voix locale Apple", de: "Lokale Apple-Stimme")
+        }
+    }
+
+    var voiceInputEngineLabel: String {
+        switch voiceInputEngine {
+        case .automatic:
+            return appLanguage == .zh && SpeechInputController.funASRInstalled
+                ? Self.localizedText(appLanguage, en: "Auto · local Chinese", zh: "自动 · 本地中文", fr: "Auto · chinois local", de: "Auto · lokales Chinesisch")
+                : Self.localizedText(appLanguage, en: "Auto · system dictation", zh: "自动 · 系统听写", fr: "Auto · dictée système", de: "Auto · Systemdiktat")
+        case .funASRLocal:
+            return Self.localizedText(appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
+        case .appleSpeech:
+            return Self.localizedText(appLanguage, en: "System dictation", zh: "系统听写", fr: "Dictée système", de: "Systemdiktat")
+        }
+    }
+
+    var chineseSpeechRecognitionStatus: String {
+        if SpeechInputController.funASRInstalled {
+            return Self.localizedText(appLanguage, en: "Installed locally", zh: "已在本机安装", fr: "Installé localement", de: "Lokal installiert")
+        }
+        return Self.localizedText(appLanguage, en: "Not installed; Chinese currently uses system dictation", zh: "未安装；当前使用系统中文听写", fr: "Non installé ; le chinois utilise la dictée système", de: "Nicht installiert; Chinesisch nutzt Systemdiktat")
+    }
+
+    func setVoiceRepliesEnabled(_ enabled: Bool) {
+        voiceRepliesEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.voiceRepliesEnabledKey)
+        if !enabled {
+            speechOutput.stop()
+        }
+    }
+
+    func setVoiceRepliesAutoPlay(_ enabled: Bool) {
+        voiceRepliesAutoPlay = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.voiceRepliesAutoPlayKey)
+    }
+
+    func setVoiceReplyEngine(_ engine: SpeechOutputEngine) {
+        voiceReplyEngineRaw = engine.rawValue
+        UserDefaults.standard.set(engine.rawValue, forKey: Self.voiceReplyEngineKey)
+        speechOutput.stop()
+    }
+
+    func setVoiceReplyVoiceIdentifier(_ identifier: String) {
+        voiceReplyVoiceIdentifier = identifier
+        UserDefaults.standard.set(identifier, forKey: Self.voiceReplyVoiceIdentifierKey)
+    }
+
+    func setVoiceReplyEdgeVoiceIdentifier(_ identifier: String) {
+        voiceReplyEdgeVoiceIdentifier = identifier
+        UserDefaults.standard.set(identifier, forKey: Self.voiceReplyEdgeVoiceIdentifierKey)
+    }
+
+    func setVoiceInputEngine(_ engine: SpeechRecognitionEngine) {
+        voiceInputEngineRaw = engine.rawValue
+        UserDefaults.standard.set(engine.rawValue, forKey: Self.voiceInputEngineKey)
+    }
+
+    func stopVoiceReply() {
+        speechOutput.stop()
+    }
+
+    func previewVoiceReply() {
+        speechOutput.speakPreview(
+            language: appLanguage,
+            engine: voiceReplyEngine,
+            systemVoiceIdentifier: voiceReplyVoiceIdentifier,
+            edgeVoiceIdentifier: effectiveEdgeVoiceIdentifier
+        )
+    }
+
+    func installChineseSpeechRecognition() async {
+        guard !voiceRuntimeActionInFlight else { return }
+        voiceRuntimeActionInFlight = true
+        voiceRuntimeActionResult = Self.localizedText(appLanguage, en: "Installing local Chinese recognition...", zh: "正在安装本地中文识别...", fr: "Installation de la reconnaissance chinoise locale...", de: "Installiere lokale chinesische Erkennung...")
+        do {
+            let result = try await SpeechInputController.installFunASRRuntime()
+            voiceRuntimeActionResult = result
+        } catch {
+            voiceRuntimeActionResult = error.localizedDescription
+            lastError = error.localizedDescription
+        }
+        voiceRuntimeActionInFlight = false
     }
 
     func deleteEpisodeThread(_ thread: EpisodeThread) {
@@ -1697,6 +1879,7 @@ final class ElephantAppModel: ObservableObject {
 
     func beginSleepDisplay(reason: String = "manual") {
         guard !showingOnboarding else { return }
+        speechOutput.stop()
         sleepDisplayReason = reason
         sleepUnlockPassword = ""
         sleepUnlockError = ""
@@ -2804,12 +2987,16 @@ final class ElephantAppModel: ObservableObject {
         await enqueueWakeMessage(inputModality: .text, voiceDuration: nil)
     }
 
-    func sendVoiceWakeMessage(duration: TimeInterval?) async {
-        await enqueueWakeMessage(inputModality: .voice, voiceDuration: duration)
+    func sendVoiceWakeMessage(text: String? = nil, duration: TimeInterval?) async {
+        await enqueueWakeMessage(inputModality: .voice, voiceDuration: duration, textOverride: text)
     }
 
-    private func enqueueWakeMessage(inputModality: ChatMessage.InputModality, voiceDuration: TimeInterval?) async {
-        let text = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func enqueueWakeMessage(
+        inputModality: ChatMessage.InputModality,
+        voiceDuration: TimeInterval?,
+        textOverride: String? = nil
+    ) async {
+        let text = (textOverride ?? wakeDraft).trimmingCharacters(in: .whitespacesAndNewlines)
         let attachments = wakeAttachments
         guard !text.isEmpty || !attachments.isEmpty else { return }
         wakeDraft = ""
@@ -2965,10 +3152,12 @@ final class ElephantAppModel: ObservableObject {
         inputModality: ChatMessage.InputModality,
         voiceDuration: TimeInterval?
     ) async {
+        speechOutput.stop()
         messages.append(ChatMessage(role: .user, text: text, attachments: attachments, inputModality: inputModality, voiceDuration: voiceDuration))
         chatScrollRevision += 1
 
         let prompt = Self.wakePrompt(text: text, attachments: attachments)
+        let shouldPresentVoiceReply = inputModality == .voice && voiceRepliesEnabled
         var assistantMessageID: UUID?
         var currentAssistantTextMessageID: UUID?
         var liveMessageIDs: [UUID] = []
@@ -3112,6 +3301,27 @@ final class ElephantAppModel: ObservableObject {
             }
         }
 
+        func finishVoiceReplyIfNeeded(id: UUID?) {
+            guard shouldPresentVoiceReply,
+                  let id,
+                  let index = messages.firstIndex(where: { $0.id == id }) else {
+                return
+            }
+            let speakableText = Self.speechOutputText(from: messages[index].text)
+            guard !speakableText.isEmpty else { return }
+            messages[index].outputPresentation = .voice
+            chatScrollRevision += 1
+            guard voiceRepliesAutoPlay else { return }
+            speechOutput.speak(
+                messageID: id,
+                text: speakableText,
+                language: appLanguage,
+                engine: voiceReplyEngine,
+                systemVoiceIdentifier: voiceReplyVoiceIdentifier,
+                edgeVoiceIdentifier: effectiveEdgeVoiceIdentifier
+            )
+        }
+
         currentAssistantTextMessageID = appendLiveAssistantMessage()
 
         do {
@@ -3171,7 +3381,7 @@ final class ElephantAppModel: ObservableObject {
                                         isStreaming: true
                                     )
                                 } else {
-                                    _ = appendLiveAssistantMessage(text: reply.text)
+                                    currentAssistantTextMessageID = appendLiveAssistantMessage(text: reply.text)
                                 }
                             }
                         } else if let currentAssistantTextMessageID,
@@ -3193,6 +3403,7 @@ final class ElephantAppModel: ObservableObject {
                             }
                         }
                         finishLiveMessages()
+                        finishVoiceReplyIfNeeded(id: currentAssistantTextMessageID)
                     }
                     break streamLoop
                 case "loop.failed":
@@ -3231,6 +3442,7 @@ final class ElephantAppModel: ObservableObject {
                         toolEvents: toolEvents,
                         isStreaming: false
                     )
+                    finishVoiceReplyIfNeeded(id: assistantMessageID)
                 } catch {
                     updateAssistantMessage(
                         id: assistantMessageID,
@@ -3244,7 +3456,9 @@ final class ElephantAppModel: ObservableObject {
                 let episodeID = activeEpisodeID
                 do {
                     let reply = try await client.runWakeLoop(text, episodeID: episodeID)
-                    messages.append(ChatMessage(role: .assistant, text: reply.text, toolEvents: reply.toolEvents))
+                    let message = ChatMessage(role: .assistant, text: reply.text, toolEvents: reply.toolEvents)
+                    messages.append(message)
+                    finishVoiceReplyIfNeeded(id: message.id)
                 } catch {
                     messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(error)))
                     lastError = chatLoopFailureDetail(error.localizedDescription)
@@ -3303,6 +3517,10 @@ final class ElephantAppModel: ObservableObject {
 
     private func chatLoopFailureMessage(_ error: Error) -> String {
         chatLoopFailureMessage(detail: error.localizedDescription)
+    }
+
+    private static func speechOutputText(from text: String) -> String {
+        LocalSpeechOutputController.sanitizedSpeechText(from: text)
     }
 
     private func chatLoopFailureMessage(detail: String) -> String {
@@ -3518,6 +3736,15 @@ final class ElephantAppModel: ObservableObject {
         sleepUnlockPassword = ""
         sleepUnlockError = ""
         sleepIdleMinutes = Self.defaultSleepIdleMinutes
+        voiceRepliesEnabled = true
+        voiceRepliesAutoPlay = true
+        voiceReplyEngineRaw = SpeechOutputEngine.edgeOnline.rawValue
+        voiceReplyVoiceIdentifier = ""
+        voiceReplyEdgeVoiceIdentifier = ""
+        voiceInputEngineRaw = SpeechRecognitionEngine.automatic.rawValue
+        voiceRuntimeActionResult = ""
+        voiceRuntimeActionInFlight = false
+        speechOutput.stop()
         hiddenEpisodeIDs.removeAll()
         userAvatarPath = ""
         herdAvatarPaths.removeAll()
@@ -3531,6 +3758,12 @@ final class ElephantAppModel: ObservableObject {
             Self.herdAvatarPathsKey,
             Self.hiddenEpisodeIDsKey,
             Self.appLanguageKey,
+            Self.voiceRepliesEnabledKey,
+            Self.voiceRepliesAutoPlayKey,
+            Self.voiceReplyEngineKey,
+            Self.voiceReplyVoiceIdentifierKey,
+            Self.voiceReplyEdgeVoiceIdentifierKey,
+            Self.voiceInputEngineKey,
             Self.sleepIdleMinutesKey,
             Self.appLockPasswordRecordKey
         ].forEach { defaults.removeObject(forKey: $0) }

@@ -1,5 +1,6 @@
-import SwiftUI
 import AppKit
+import AVFoundation
+import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var model: ElephantAppModel
@@ -113,20 +114,22 @@ struct OnboardingLetterToast: View {
         Button {
             model.openOnboardingLetter(entry)
         } label: {
-            HStack(spacing: 13) {
+            HStack(spacing: 14) {
                 ZStack {
-                    BrandMark(size: 42, framed: true)
-                    Image(systemName: "envelope.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(ElephantTheme.orange)
-                        .frame(width: 18, height: 18)
-                        .background(ElephantTheme.gold.opacity(0.80), in: Circle())
-                        .offset(x: 15, y: 15)
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [ElephantTheme.ember.opacity(0.28), ElephantTheme.gold.opacity(0.18)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                    Image(systemName: "heart.text.square.fill")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(ElephantTheme.ember)
                 }
-                .frame(width: 42, height: 42)
+                .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(localizedYouText(model.appLanguage, en: "A letter from Elephant", zh: "Elephant 给你写了一封信", fr: "Une lettre d'Elephant", de: "Ein Brief von Elephant"))
+                    Text(onboardingLetterTitle(model.appLanguage))
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                     Text(localizedYouText(model.appLanguage, en: "Open the first note it wrote after getting to know you.", zh: "打开它认识你之后写下的第一封信。", fr: "Ouvrez sa première note après vous avoir connu.", de: "Öffne die erste Nachricht nach dem Kennenlernen."))
@@ -135,18 +138,26 @@ struct OnboardingLetterToast: View {
                         .lineLimit(2)
                 }
 
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(ElephantTheme.faint)
+                HStack(spacing: 5) {
+                    Image(systemName: "heart.fill")
+                        .font(.caption2.weight(.bold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundStyle(ElephantTheme.ember)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color.white.opacity(0.52), in: Capsule())
+                .overlay(Capsule().stroke(ElephantTheme.ember.opacity(0.22), lineWidth: 1))
             }
             .padding(15)
-            .frame(width: 382, alignment: .leading)
+            .frame(width: 398, alignment: .leading)
             .background(letterToastBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(hovering ? ElephantTheme.orange.opacity(0.40) : Color.white.opacity(0.48), lineWidth: 1)
+                    .stroke(hovering ? ElephantTheme.ember.opacity(0.48) : ElephantTheme.gold.opacity(0.28), lineWidth: hovering ? 1.5 : 1)
             )
-            .shadow(color: Color.black.opacity(hovering ? 0.18 : 0.12), radius: hovering ? 24 : 18, y: hovering ? 14 : 10)
+            .shadow(color: ElephantTheme.ember.opacity(hovering ? 0.20 : 0.12), radius: hovering ? 24 : 18, y: hovering ? 14 : 10)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .scaleEffect(hovering ? 1.012 : 1)
         }
@@ -167,18 +178,18 @@ struct OnboardingLetterToast: View {
         }
         .onHover { hovering = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(localizedYouText(model.appLanguage, en: "A letter from Elephant", zh: "Elephant 给你写了一封信", fr: "Une lettre d'Elephant", de: "Ein Brief von Elephant"))
+        .accessibilityLabel(onboardingLetterTitle(model.appLanguage))
     }
 
     private var letterToastBackground: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(.regularMaterial)
+            .fill(Color(nsColor: .textBackgroundColor).opacity(0.96))
             .overlay(
                 LinearGradient(
                     colors: [
-                        ElephantTheme.gold.opacity(0.16),
-                        ElephantTheme.ember.opacity(0.08),
-                        ElephantTheme.accent.opacity(0.05)
+                        ElephantTheme.ember.opacity(0.12),
+                        ElephantTheme.gold.opacity(0.11),
+                        Color.white.opacity(0.18)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -196,13 +207,22 @@ struct ElephantLetterEnvelopeOverlay: View {
 
     var body: some View {
         ZStack {
-            LetterAmbientBackdrop(paused: reduceMotion)
-                .opacity(0.65)
+            LetterVideoBackdrop(paused: reduceMotion)
                 .ignoresSafeArea()
 
             Rectangle()
-                .fill(Color.black.opacity(0.14))
-                .background(.ultraThinMaterial)
+                .fill(Color.black.opacity(0.28))
+                .overlay(
+                    LinearGradient(
+                        colors: [
+                            ElephantTheme.gold.opacity(0.18),
+                            Color.black.opacity(0.18),
+                            ElephantTheme.accent.opacity(0.12)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .ignoresSafeArea()
                 .onTapGesture {
                     model.closeOnboardingLetterEnvelope()
@@ -212,7 +232,7 @@ struct ElephantLetterEnvelopeOverlay: View {
                 envelopeHeader
                 Divider().opacity(0.7)
                 ScrollView {
-                    MarkdownBody(text: entry.content, font: .body, color: ElephantTheme.ink)
+                    MarkdownBody(text: displayedOnboardingLetterContent(entry.content, language: model.appLanguage), font: .body, color: ElephantTheme.ink)
                         .padding(.horizontal, 34)
                         .padding(.top, 26)
                         .padding(.bottom, 34)
@@ -226,9 +246,14 @@ struct ElephantLetterEnvelopeOverlay: View {
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.58), lineWidth: 1)
+                    .stroke(ElephantTheme.gold.opacity(0.36), lineWidth: 2.2)
             )
-            .shadow(color: Color.black.opacity(0.22), radius: 38, y: 24)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.56), lineWidth: 1)
+                    .padding(6)
+            )
+            .shadow(color: Color.black.opacity(0.34), radius: 46, y: 28)
             .scaleEffect(opened ? 1 : 0.92)
             .rotation3DEffect(.degrees(opened ? 0 : -6), axis: (x: 1, y: 0, z: 0), perspective: 0.72)
             .opacity(opened ? 1 : 0)
@@ -249,22 +274,14 @@ struct ElephantLetterEnvelopeOverlay: View {
 
     private var envelopeHeader: some View {
         HStack(alignment: .center, spacing: 15) {
-            ZStack {
-                BrandMark(size: 54, framed: true)
-                Image(systemName: "envelope.open.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(ElephantTheme.orange)
-                    .frame(width: 20, height: 20)
-                    .background(ElephantTheme.gold.opacity(0.85), in: Circle())
-                    .offset(x: 19, y: 19)
-            }
-            .frame(width: 54, height: 54)
+            BrandMark(size: 58, framed: true)
+                .shadow(color: Color.black.opacity(0.10), radius: 12, y: 6)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(localizedYouText(model.appLanguage, en: "Elephant's first letter", zh: "Elephant 给你的第一封信", fr: "La première lettre d'Elephant", de: "Elephants erster Brief"))
+                Text(onboardingLetterTitle(model.appLanguage))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
-                Text(entry.generatedAt.isEmpty ? localizedYouText(model.appLanguage, en: "written after onboarding", zh: "在认识你之后写下", fr: "écrite après l'accueil", de: "nach dem Onboarding geschrieben") : MacLocalDateTime.formatted(entry.generatedAt, language: model.appLanguage))
+                Text(entry.generatedAt.isEmpty ? localizedYouText(model.appLanguage, en: "written after onboarding", zh: "在认识你之后写下", fr: "écrite après l'accueil", de: "nach dem Onboarding geschrieben") : MacLocalDateTime.formattedDate(entry.generatedAt, language: model.appLanguage))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
             }
@@ -287,27 +304,34 @@ struct ElephantLetterEnvelopeOverlay: View {
 
     private var letterPaper: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(
+            .fill(.ultraThinMaterial)
+            .overlay(
                 LinearGradient(
                     colors: [
-                        Color(nsColor: .textBackgroundColor),
-                        ElephantTheme.gold.opacity(0.075),
-                        ElephantTheme.accent.opacity(0.035)
+                        Color(nsColor: .textBackgroundColor).opacity(0.66),
+                        ElephantTheme.gold.opacity(0.22),
+                        Color(nsColor: .textBackgroundColor).opacity(0.50),
+                        ElephantTheme.ember.opacity(0.10)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             )
     }
 
     private var letterDecoration: some View {
         ZStack(alignment: .top) {
             LetterPaperTexture()
-                .opacity(0.22)
+                .opacity(0.28)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .allowsHitTesting(false)
+            LetterEnvelopeFoldLines()
+                .opacity(0.52)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .allowsHitTesting(false)
             LinearGradient(
-                colors: [ElephantTheme.gold.opacity(0.12), Color.clear],
+                colors: [ElephantTheme.gold.opacity(0.18), Color.clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -325,6 +349,84 @@ struct ElephantLetterEnvelopeOverlay: View {
             }
             .allowsHitTesting(false)
         }
+    }
+}
+
+struct LetterVideoBackdrop: View {
+    var paused: Bool
+
+    var body: some View {
+        if let bundledURL = Bundle.main.url(forResource: "baby-el", withExtension: "mp4") {
+            LetterLoopingVideoBackground(url: bundledURL, paused: paused)
+                .saturation(1.08)
+                .brightness(-0.06)
+        } else {
+            AppBackground()
+        }
+    }
+}
+
+private struct LetterLoopingVideoBackground: NSViewRepresentable {
+    var url: URL
+    var paused: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> LetterVideoLayerView {
+        let view = LetterVideoLayerView()
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer(playerItem: item)
+        let looper = AVPlayerLooper(player: player, templateItem: item)
+        player.isMuted = true
+        player.actionAtItemEnd = .none
+        player.play()
+        view.playerLayer.player = player
+        context.coordinator.player = player
+        context.coordinator.looper = looper
+        return view
+    }
+
+    func updateNSView(_ nsView: LetterVideoLayerView, context: Context) {
+        if paused {
+            context.coordinator.player?.pause()
+        } else {
+            context.coordinator.player?.play()
+        }
+    }
+
+    static func dismantleNSView(_ nsView: LetterVideoLayerView, coordinator: Coordinator) {
+        coordinator.player?.pause()
+        nsView.playerLayer.player = nil
+    }
+
+    final class Coordinator {
+        var player: AVQueuePlayer?
+        var looper: AVPlayerLooper?
+    }
+}
+
+private final class LetterVideoLayerView: NSView {
+    let playerLayer = AVPlayerLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
     }
 }
 
@@ -363,6 +465,28 @@ struct LetterPaperTexture: View {
             margin.move(to: CGPoint(x: 86, y: 76))
             margin.addLine(to: CGPoint(x: 86, y: size.height - 34))
             context.stroke(margin, with: .color(ElephantTheme.ember.opacity(0.08)), lineWidth: 1)
+        }
+    }
+}
+
+struct LetterEnvelopeFoldLines: View {
+    var body: some View {
+        Canvas { context, size in
+            let middle = CGPoint(x: size.width * 0.50, y: size.height * 0.42)
+            var topFlap = Path()
+            topFlap.move(to: CGPoint(x: 26, y: 76))
+            topFlap.addLine(to: middle)
+            topFlap.addLine(to: CGPoint(x: size.width - 26, y: 76))
+            context.stroke(topFlap, with: .color(ElephantTheme.gold.opacity(0.26)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+
+            var lowerFold = Path()
+            lowerFold.move(to: CGPoint(x: 28, y: size.height - 30))
+            lowerFold.addLine(to: CGPoint(x: size.width * 0.50, y: size.height * 0.66))
+            lowerFold.addLine(to: CGPoint(x: size.width - 28, y: size.height - 30))
+            context.stroke(lowerFold, with: .color(ElephantTheme.ember.opacity(0.13)), style: StrokeStyle(lineWidth: 1.1, lineCap: .round, lineJoin: .round))
+
+            let border = CGRect(x: 9, y: 9, width: size.width - 18, height: size.height - 18)
+            context.stroke(Path(roundedRect: border, cornerRadius: 13), with: .color(ElephantTheme.gold.opacity(0.20)), lineWidth: 1.2)
         }
     }
 }
@@ -2484,6 +2608,7 @@ struct WakeComposerPanel: View {
     @State private var composerTextHeight: CGFloat = 26
     @State private var voiceCaptureVisible = false
     @State private var voiceDraftSourceText = ""
+    @State private var voiceRecognizedDraft = ""
     private let chatBottomSpacerID = "chat-active-response-spacer"
 
     var body: some View {
@@ -2506,7 +2631,28 @@ struct WakeComposerPanel: View {
                         .font(.headline)
                         .foregroundStyle(ElephantTheme.ink)
                     Spacer()
-                    Pill(text: providerLabel, symbol: "cpu", tint: providerTint)
+                    if !historyVisible {
+                        Button {
+                            model.startNewChat()
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(ElephantTheme.muted)
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(PressablePlainButtonStyle())
+                        .help(model.text(.newChat))
+                        .accessibilityLabel(model.text(.newChat))
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    }
+                    Button {
+                        model.selectedSection = .provider
+                    } label: {
+                        Pill(text: providerLabel, symbol: "cpu", tint: providerTint)
+                    }
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .help(providerActionHelp)
+                    .accessibilityLabel(providerActionHelp)
                 }
                 .padding(.bottom, 12)
 
@@ -2689,6 +2835,7 @@ struct WakeComposerPanel: View {
                 if voiceCaptureVisible {
                     VoiceListeningOverlay(
                         isRecording: speech.isRecording,
+                        isTranscribing: speech.isTranscribing,
                         statusText: speech.statusText,
                         recognizedText: speech.recognizedText,
                         startedAt: speech.recordingStartedAt,
@@ -2710,16 +2857,23 @@ struct WakeComposerPanel: View {
         }
         .onDisappear {
             speech.resetCapture()
+            voiceRecognizedDraft = ""
         }
     }
 
     private func startVoiceCapture() {
         guard !speech.isRecording else { return }
+        model.stopVoiceReply()
         voiceDraftSourceText = model.wakeDraft
+        voiceRecognizedDraft = model.wakeDraft
         voiceCaptureVisible = true
         composerFocused = false
-        speech.start(startingWith: model.wakeDraft) { text in
-            model.wakeDraft = text
+        speech.start(
+            startingWith: model.wakeDraft,
+            language: model.appLanguage,
+            recognitionEngine: model.voiceInputEngine
+        ) { text in
+            voiceRecognizedDraft = text
         }
     }
 
@@ -2731,6 +2885,7 @@ struct WakeComposerPanel: View {
         speech.resetCapture()
         model.wakeDraft = voiceDraftSourceText
         voiceDraftSourceText = ""
+        voiceRecognizedDraft = ""
         voiceCaptureVisible = false
         focusComposerAfterVoiceCapture()
     }
@@ -2738,12 +2893,15 @@ struct WakeComposerPanel: View {
     private func sendVoiceCapture() {
         guard canSendVoice else { return }
         let duration = currentVoiceDuration
-        speech.stop()
+        let messageText = voiceRecognizedDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !messageText.isEmpty else { return }
+        speech.resetCapture()
+        model.wakeDraft = ""
         voiceDraftSourceText = ""
+        voiceRecognizedDraft = ""
         voiceCaptureVisible = false
         Task {
-            await model.sendVoiceWakeMessage(duration: duration)
-            speech.resetCapture()
+            await model.sendVoiceWakeMessage(text: messageText, duration: duration)
         }
     }
 
@@ -2765,7 +2923,7 @@ struct WakeComposerPanel: View {
     }
 
     private var canSendVoice: Bool {
-        !speech.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !speech.isTranscribing && !speech.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var currentVoiceDuration: TimeInterval {
@@ -2798,6 +2956,16 @@ struct WakeComposerPanel: View {
         return model.snapshot.providerStatus == "unknown" ? model.text(.providerSetup) : model.snapshot.providerStatus
     }
 
+    private var providerActionHelp: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Open model provider settings",
+            zh: "打开模型服务设置",
+            fr: "Ouvrir les réglages du provider",
+            de: "Modelldienst-Einstellungen öffnen"
+        )
+    }
+
     private var visibleMessages: [ChatMessage] {
         model.messages.filter { $0.role != .system }
     }
@@ -2823,6 +2991,7 @@ struct VoiceListeningOverlay: View {
     @EnvironmentObject private var model: ElephantAppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var isRecording: Bool
+    var isTranscribing: Bool
     var statusText: String
     var recognizedText: String
     var startedAt: Date?
@@ -2833,14 +3002,14 @@ struct VoiceListeningOverlay: View {
     var cancel: () -> Void
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || !isRecording)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || (!isRecording && !isTranscribing))) { timeline in
             let elapsed = elapsedDuration(now: timeline.date)
             ZStack {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.90))
+                    .fill(Color(nsColor: .textBackgroundColor))
                     .overlay(
                         MemoryCurrentField(paused: reduceMotion || !isRecording)
-                            .opacity(0.16)
+                            .opacity(0.12)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     )
                     .overlay(
@@ -2857,23 +3026,23 @@ struct VoiceListeningOverlay: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(ElephantTheme.accent.opacity(isRecording ? 0.20 : 0.12), lineWidth: 1)
+                            .stroke(ElephantTheme.accent.opacity(isRecording || isTranscribing ? 0.20 : 0.12), lineWidth: 1)
                     )
 
                 VStack(spacing: 18) {
                     Spacer(minLength: 24)
                     ZStack {
-                        VoiceListeningWaveform(active: isRecording, seconds: timeline.date.timeIntervalSinceReferenceDate)
+                        VoiceListeningWaveform(active: isRecording || isTranscribing, seconds: timeline.date.timeIntervalSinceReferenceDate)
                             .frame(width: 340, height: 112)
-                            .opacity(isRecording ? 0.92 : 0.56)
+                            .opacity(isRecording || isTranscribing ? 0.92 : 0.56)
                         Circle()
                             .fill(Color(nsColor: .textBackgroundColor).opacity(0.88))
                             .frame(width: 66, height: 66)
                             .overlay(Circle().stroke(Color.white.opacity(0.62), lineWidth: 1))
-                            .shadow(color: ElephantTheme.accent.opacity(isRecording ? 0.16 : 0.06), radius: 20, y: 8)
-                        Image(systemName: isRecording ? "waveform" : "mic.fill")
+                            .shadow(color: ElephantTheme.accent.opacity(isRecording || isTranscribing ? 0.16 : 0.06), radius: 20, y: 8)
+                        Image(systemName: isTranscribing ? "text.bubble" : isRecording ? "waveform" : "mic.fill")
                             .font(.system(size: 23, weight: .semibold))
-                            .foregroundStyle(isRecording ? ElephantTheme.accent : ElephantTheme.muted)
+                            .foregroundStyle(isRecording || isTranscribing ? ElephantTheme.accent : ElephantTheme.muted)
                     }
                     .accessibilityHidden(true)
 
@@ -2917,6 +3086,9 @@ struct VoiceListeningOverlay: View {
         if isRecording {
             return localizedYouText(model.appLanguage, en: "Listening", zh: "正在听", fr: "Écoute", de: "Hört zu")
         }
+        if isTranscribing {
+            return localizedYouText(model.appLanguage, en: "Transcribing", zh: "正在识别", fr: "Transcription", de: "Transkribiert")
+        }
         if statusText.lowercased().contains("disabled") || statusText.lowercased().contains("authorized") || statusText.lowercased().contains("unavailable") {
             return localizedYouText(model.appLanguage, en: "Voice unavailable", zh: "语音暂不可用", fr: "Voix indisponible", de: "Sprache nicht verfügbar")
         }
@@ -2933,6 +3105,9 @@ struct VoiceListeningOverlay: View {
         }
         if isRecording {
             return formattedVoiceDuration(elapsed)
+        }
+        if isTranscribing {
+            return statusText
         }
         if canSend {
             return formattedVoiceDuration(max(capturedDuration, elapsed))
@@ -3949,7 +4124,12 @@ struct InlineMarkdownText: View {
 }
 
 struct MessageBubble: View, Equatable {
+    @EnvironmentObject private var model: ElephantAppModel
     var message: ChatMessage
+
+    static func == (lhs: MessageBubble, rhs: MessageBubble) -> Bool {
+        lhs.message == rhs.message
+    }
 
     var body: some View {
         Group {
@@ -3987,6 +4167,12 @@ struct MessageBubble: View, Equatable {
             }
             if message.isVoiceMessage {
                 VoiceMessageBubbleContent(message: message)
+            } else if message.isAssistantVoiceReply {
+                AssistantVoiceReplyBubbleContent(
+                    message: message,
+                    text: visibleText,
+                    speechOutput: model.speechOutput
+                )
             } else if !visibleText.isEmpty {
                 MarkdownBody(
                     text: visibleText,
@@ -3997,7 +4183,7 @@ struct MessageBubble: View, Equatable {
                         transaction.animation = nil
                     }
             }
-            if !message.toolEvents.isEmpty {
+            if !message.isAssistantVoiceReply && !message.toolEvents.isEmpty {
                 ToolUseStack(events: message.toolEvents, isLive: message.isStreaming)
                     .padding(.top, visibleText.isEmpty ? 0 : 1)
             } else if message.isStreaming && visibleText.isEmpty {
@@ -4016,21 +4202,30 @@ struct MessageBubble: View, Equatable {
     private var background: Color {
         switch message.role {
         case .user: return ElephantTheme.accent.opacity(message.isVoiceMessage ? 0.055 : 0.08)
-        case .assistant: return Color.clear
+        case .assistant: return message.isAssistantVoiceReply ? ElephantTheme.accent.opacity(0.055) : Color.clear
         case .system: return Color(nsColor: .controlBackgroundColor)
         }
     }
 
     private var bubbleHorizontalPadding: CGFloat {
-        message.role == .user ? (message.isVoiceMessage ? 10 : 16) : 0
+        if message.role == .user {
+            return message.isVoiceMessage ? 10 : 16
+        }
+        return message.isAssistantVoiceReply ? 10 : 0
     }
 
     private var bubbleVerticalPadding: CGFloat {
-        message.role == .user ? (message.isVoiceMessage ? 7 : 11) : 0
+        if message.role == .user {
+            return message.isVoiceMessage ? 7 : 11
+        }
+        return message.isAssistantVoiceReply ? 8 : 0
     }
 
     private var bubbleCornerRadius: CGFloat {
-        message.role == .user ? (message.isVoiceMessage ? 15 : 18) : 14
+        if message.role == .user {
+            return message.isVoiceMessage ? 15 : 18
+        }
+        return message.isAssistantVoiceReply ? 15 : 14
     }
 
     private var textColor: Color {
@@ -4083,7 +4278,134 @@ struct VoiceMessageBubbleContent: View {
     }
 }
 
+struct AssistantVoiceReplyBubbleContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var message: ChatMessage
+    var text: String
+    @ObservedObject var speechOutput: LocalSpeechOutputController
+    @State private var transcriptExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    speechOutput.toggle(
+                        messageID: message.id,
+                        text: text,
+                        language: model.appLanguage,
+                        engine: model.voiceReplyEngine,
+                        systemVoiceIdentifier: model.voiceReplyVoiceIdentifier,
+                        edgeVoiceIdentifier: model.effectiveEdgeVoiceIdentifier
+                    )
+                } label: {
+                    Image(systemName: isActive ? "stop.fill" : "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(playbackTint)
+                        .frame(width: 26, height: 26)
+                        .background(playbackTint.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .help(playbackHelp)
+                .accessibilityLabel(playbackHelp)
+
+                VoiceMessageMiniWaveform(active: isActive)
+                    .frame(width: 62, height: 18)
+                    .accessibilityHidden(true)
+
+                Text(formattedVoiceBubbleTime(message.date))
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(hasPlaybackError ? ElephantTheme.orange : ElephantTheme.faint)
+                    .frame(width: 34, alignment: .leading)
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        transcriptExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: transcriptExpanded ? "doc.text.fill" : "doc.text")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(transcriptExpanded ? ElephantTheme.accent : ElephantTheme.muted)
+                        .frame(width: 24, height: 24)
+                        .background(
+                            Color(nsColor: .controlBackgroundColor).opacity(transcriptExpanded ? 0.80 : 0.56),
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .help(transcriptHelp)
+                .accessibilityLabel(transcriptHelp)
+            }
+            .frame(width: 172, height: 28, alignment: .leading)
+
+            if transcriptExpanded {
+                MarkdownBody(text: text, font: .body, color: ElephantTheme.ink)
+                    .padding(.top, 1)
+                    .frame(maxWidth: 520, alignment: .leading)
+                    .transition(.opacity)
+                    .transaction { transaction in
+                        transaction.animation = nil
+                    }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var isActive: Bool {
+        speechOutput.activeMessageID == message.id && speechOutput.isSpeaking
+    }
+
+    private var hasPlaybackError: Bool {
+        speechOutput.lastFailedMessageID == message.id
+    }
+
+    private var playbackTint: Color {
+        hasPlaybackError ? ElephantTheme.orange : ElephantTheme.accent
+    }
+
+    private var playbackHelp: String {
+        if hasPlaybackError, !speechOutput.lastError.isEmpty {
+            return speechOutput.lastError
+        }
+        if isActive {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Stop voice reply",
+                zh: "停止语音回复",
+                fr: "Arrêter la réponse vocale",
+                de: "Sprachantwort stoppen"
+            )
+        }
+        return localizedYouText(
+            model.appLanguage,
+            en: "Play voice reply",
+            zh: "播放语音回复",
+            fr: "Lire la réponse vocale",
+            de: "Sprachantwort abspielen"
+        )
+    }
+
+    private var transcriptHelp: String {
+        transcriptExpanded
+            ? localizedYouText(
+                model.appLanguage,
+                en: "Hide reply text",
+                zh: "收起回复文本",
+                fr: "Masquer le texte",
+                de: "Antworttext ausblenden"
+            )
+            : localizedYouText(
+                model.appLanguage,
+                en: "Show reply text",
+                zh: "展开回复文本",
+                fr: "Afficher le texte",
+                de: "Antworttext anzeigen"
+            )
+    }
+}
+
 struct VoiceMessageMiniWaveform: View {
+    var active = false
     private let levels: [CGFloat] = [0.34, 0.58, 0.78, 0.46, 0.68, 0.88, 0.54, 0.38, 0.72, 0.50, 0.62]
 
     var body: some View {
@@ -4091,7 +4413,7 @@ struct VoiceMessageMiniWaveform: View {
             HStack(alignment: .center, spacing: 2.4) {
                 ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(ElephantTheme.accent.opacity(0.48))
+                        .fill(ElephantTheme.accent.opacity(active ? 0.78 : 0.48))
                         .frame(width: 3, height: max(5, geometry.size.height * level))
                 }
             }
@@ -4199,21 +4521,21 @@ struct ToolUseStack: View {
                 regularToolStack
             }
         }
-        .frame(maxWidth: 520, alignment: .leading)
+        .frame(maxWidth: 440, alignment: .leading)
     }
 
     private var regularToolStack: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 Image(systemName: "wrench.and.screwdriver")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(ElephantTheme.accent)
-                    .frame(width: 16, height: 16)
-                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .frame(width: 15, height: 15)
+                    .background(ElephantTheme.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                 Text(model.text(.toolActivity))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink.opacity(0.72))
-                Text("\(events.count)")
+                Text("\(regularEvents.count)")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                     .padding(.horizontal, 4)
@@ -4230,16 +4552,25 @@ struct ToolUseStack: View {
                 Spacer(minLength: 0)
             }
 
-            ForEach(regularEvents.suffix(5)) { event in
+            ForEach(visibleRegularEvents) { event in
                 ToolUseEventRow(event: event)
             }
+
+            if hiddenRegularEventCount > 0 {
+                Text(hiddenEventText)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .padding(.leading, 21)
+                    .lineLimit(1)
+            }
         }
-        .padding(6)
-        .frame(maxWidth: 480, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.66), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .frame(maxWidth: 420, alignment: .leading)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.54), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
+                .stroke(ElephantTheme.line.opacity(0.58), lineWidth: 1)
         )
     }
 
@@ -4249,6 +4580,24 @@ struct ToolUseStack: View {
 
     private var regularEvents: [ToolUseEvent] {
         events.filter { !$0.isChildAgentRun }
+    }
+
+    private var visibleRegularEvents: [ToolUseEvent] {
+        Array(regularEvents.suffix(3))
+    }
+
+    private var hiddenRegularEventCount: Int {
+        max(0, regularEvents.count - visibleRegularEvents.count)
+    }
+
+    private var hiddenEventText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "+\(hiddenRegularEventCount) earlier action",
+            zh: "+\(hiddenRegularEventCount) 个更早动作",
+            fr: "+\(hiddenRegularEventCount) action précédente",
+            de: "+\(hiddenRegularEventCount) frühere Aktion"
+        )
     }
 
     private var hasRunningEvent: Bool {
@@ -4276,10 +4625,10 @@ struct ChildAgentRunCard: View {
                 expanded.toggle()
             }
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center, spacing: 9) {
                     ZStack(alignment: .bottomTrailing) {
-                        ProviderLogoView(providerID: event.providerID, displayName: providerLabel, size: 38)
+                        ProviderLogoView(providerID: event.providerID, displayName: providerLabel, size: 32)
                         if isRunning {
                             ChildAgentPulse(tint: statusTint)
                                 .offset(x: 3, y: 3)
@@ -4294,7 +4643,7 @@ struct ChildAgentRunCard: View {
                         Text(subtitleText)
                             .font(.caption)
                             .foregroundStyle(ElephantTheme.muted)
-                            .lineLimit(2)
+                            .lineLimit(1)
                     }
 
                     Spacer(minLength: 8)
@@ -4324,12 +4673,12 @@ struct ChildAgentRunCard: View {
                             }
                         }
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .frame(maxWidth: 520, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: 440, alignment: .leading)
             .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -4546,7 +4895,7 @@ struct ToolUseEventRow: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             header
 
             if expanded && hasDetails {
@@ -4558,24 +4907,22 @@ struct ToolUseEventRow: View {
                         ToolUseDetailBlock(title: model.text(.toolResult), text: resultText, tint: ElephantTheme.green)
                     }
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .padding(.leading, 12)
+                .transition(.opacity)
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.30), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(ElephantTheme.line.opacity(0.34), lineWidth: 1)
-        )
-        .animation(.easeInOut(duration: 0.16), value: expanded)
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.12), value: expanded)
     }
 
     @ViewBuilder
     private var header: some View {
         if hasDetails {
             Button {
-                expanded.toggle()
+                withAnimation(.easeInOut(duration: 0.12)) {
+                    expanded.toggle()
+                }
             } label: {
                 headerContent
             }
@@ -4594,7 +4941,7 @@ struct ToolUseEventRow: View {
                 .frame(width: 5, height: 5)
             Text(displayName)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(ElephantTheme.ink)
+                .foregroundStyle(ElephantTheme.ink.opacity(0.88))
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
@@ -4610,9 +4957,10 @@ struct ToolUseEventRow: View {
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(ElephantTheme.faint)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
-                    .frame(width: 10)
+                    .frame(width: 9)
             }
         }
+        .frame(minHeight: 18, alignment: .center)
         .contentShape(Rectangle())
     }
 
@@ -4667,19 +5015,18 @@ private struct ToolUseDetailBlock: View {
             Text(text)
                 .font(.caption2.monospaced())
                 .foregroundStyle(ElephantTheme.muted)
-                .lineLimit(8)
+                .lineLimit(4)
                 .truncationMode(.tail)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background(tint.opacity(0.055), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(tint.opacity(0.16), lineWidth: 1)
-        )
+        .padding(.leading, 7)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(tint.opacity(0.34))
+                .frame(width: 2)
+        }
     }
 }
 
@@ -4755,6 +5102,42 @@ private func localizedYouText(_ language: AppLanguage, en: String, zh: String, f
 
 private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr: String, de: String, _ arguments: CVarArg...) -> String {
     String(format: localizedYouText(language, en: en, zh: zh, fr: fr, de: de), arguments: arguments)
+}
+
+private func onboardingLetterTitle(_ language: AppLanguage) -> String {
+    localizedYouText(
+        language,
+        en: "A letter from Elephant",
+        zh: "来自 Elephant 的一封信",
+        fr: "Une lettre d'Elephant",
+        de: "Ein Brief von Elephant"
+    )
+}
+
+private func displayedOnboardingLetterContent(_ content: String, language: AppLanguage) -> String {
+    var lines = content
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\r", with: "\n")
+        .components(separatedBy: "\n")
+    guard let titleIndex = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+        return content
+    }
+    if isLegacyOnboardingLetterTitle(lines[titleIndex]) {
+        lines[titleIndex] = onboardingLetterTitle(language)
+    }
+    return lines.joined(separator: "\n")
+}
+
+private func isLegacyOnboardingLetterTitle(_ line: String) -> Bool {
+    let normalized = line
+        .replacingOccurrences(of: "#", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+    guard normalized.contains("elephant") else { return false }
+    return (normalized.contains("first") && normalized.contains("letter"))
+        || normalized.contains("第一封信")
+        || normalized.contains("première lettre")
+        || normalized.contains("erster brief")
 }
 
 private func localizedLearningToken(_ rawValue: String, language: AppLanguage) -> String {
@@ -4926,12 +5309,30 @@ private enum MacLocalDateTime {
             .joined(separator: " → ")
     }
 
+    static func formattedDate(_ raw: String, language: AppLanguage, fallback: String = "n/a") -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        guard let date = parse(trimmed) else {
+            return String(trimmed.prefix(10))
+        }
+        return formattedDate(date, language: language)
+    }
+
     static func formatted(_ date: Date, language: AppLanguage) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar.current
         formatter.locale = Locale(identifier: language.localeIdentifier)
         formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: date)
+    }
+
+    static func formattedDate(_ date: Date, language: AppLanguage) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
 
@@ -7359,34 +7760,63 @@ struct DiaryPanel: View {
                             HStack {
                                 Label(
                                     entry.isOnboardingLetter
-                                        ? localizedYouText(model.appLanguage, en: "Elephant's first letter", zh: "Elephant 的第一封信", fr: "Première lettre d'Elephant", de: "Elephants erster Brief")
+                                        ? onboardingLetterTitle(model.appLanguage)
                                         : (entry.date.isEmpty ? localizedYouText(model.appLanguage, en: "Diary entry", zh: "日记", fr: "Entrée de journal", de: "Tagebucheintrag") : entry.date),
-                                    systemImage: entry.isOnboardingLetter ? "envelope.open" : "book.closed"
+                                    systemImage: entry.isOnboardingLetter ? "heart.text.square" : "book.closed"
                                 )
                                     .font(.headline)
-                                    .foregroundStyle(ElephantTheme.ink)
+                                    .foregroundStyle(entry.isOnboardingLetter ? ElephantTheme.ember : ElephantTheme.ink)
                                 Spacer()
                                 if entry.isOnboardingLetter {
                                     Button {
                                         model.openOnboardingLetter(entry)
                                     } label: {
-                                        Label(localizedYouText(model.appLanguage, en: "Open letter", zh: "打开信", fr: "Ouvrir", de: "Offnen"), systemImage: "envelope.open")
+                                        Label(localizedYouText(model.appLanguage, en: "Open letter", zh: "打开信", fr: "Ouvrir", de: "Öffnen"), systemImage: "heart.fill")
                                             .labelStyle(.titleAndIcon)
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(ElephantTheme.ember)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 7)
+                                            .background(Color.white.opacity(0.58), in: Capsule())
+                                            .overlay(Capsule().stroke(ElephantTheme.ember.opacity(0.24), lineWidth: 1))
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
+                                    .buttonStyle(PressablePlainButtonStyle())
                                 }
                                 if !entry.generatedAt.isEmpty {
-                                    Text(entry.generatedAt)
+                                    Text(MacLocalDateTime.formattedDate(entry.generatedAt, language: model.appLanguage))
                                         .font(.caption)
                                         .foregroundStyle(ElephantTheme.muted)
                                 }
                             }
-                            MarkdownBody(text: entry.content, font: .callout, color: ElephantTheme.ink)
+                            MarkdownBody(text: entry.isOnboardingLetter ? displayedOnboardingLetterContent(entry.content, language: model.appLanguage) : entry.content, font: .callout, color: ElephantTheme.ink)
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, entry.isOnboardingLetter ? 14 : 6)
+                        .padding(.horizontal, entry.isOnboardingLetter ? 14 : 0)
+                        .background {
+                            if entry.isOnboardingLetter {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                ElephantTheme.ember.opacity(0.060),
+                                                ElephantTheme.gold.opacity(0.080),
+                                                Color.white.opacity(0.20)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                        .overlay {
+                            if entry.isOnboardingLetter {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(ElephantTheme.gold.opacity(0.20), lineWidth: 1)
+                            }
+                        }
                         if entry.id != model.snapshot.diaryEntries.last?.id {
                             Divider()
+                                .padding(.top, entry.isOnboardingLetter ? 2 : 0)
                         }
                     }
                 }
@@ -11194,7 +11624,7 @@ struct LearningJobRow: View {
             return localizedYouText(model.appLanguage, en: "Diary reflection", zh: "日记反思", fr: "Réflexion journal", de: "Tagebuchreflexion")
         }
         if value.contains("onboarding") && value.contains("letter") {
-            return localizedYouText(model.appLanguage, en: "Elephant's first letter", zh: "Elephant 的第一封信", fr: "Première lettre d'Elephant", de: "Elephants erster Brief")
+            return onboardingLetterTitle(model.appLanguage)
         }
         return raw.isEmpty ? localizedYouText(model.appLanguage, en: "Evolution job", zh: "自我进化任务", fr: "Tâche d'évolution", de: "Evolutionsjob") : raw
     }
@@ -11442,6 +11872,7 @@ private struct RuntimeChip: View {
 
 private enum SettingsPane: Hashable {
     case language
+    case voiceReplies
     case memoryEngine
     case curiosity
     case history
@@ -11457,6 +11888,22 @@ struct SettingsView: View {
     @State private var expandedPane: SettingsPane? = nil
 
     var body: some View {
+        Group {
+            if settingsLocked {
+                SettingsLockedView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                settingsContent
+                    .frame(maxWidth: 1120, alignment: .topLeading)
+            }
+        }
+    }
+
+    private var settingsLocked: Bool {
+        model.isSleepDisplayPresented && model.hasAppLockPassword
+    }
+
+    private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
                 title: model.text(.settingsTitle),
@@ -11478,6 +11925,20 @@ struct SettingsView: View {
                         expanded: paneBinding(.language)
                     ) {
                         LanguageSettingsContent()
+                    }
+                    ExpandableSettingsRow(
+                        symbol: "speaker.wave.2",
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Voice",
+                            zh: "语音",
+                            fr: "Voix",
+                            de: "Sprache"
+                        ),
+                        subtitle: voiceRepliesSubtitle,
+                        expanded: paneBinding(.voiceReplies)
+                    ) {
+                        VoiceRepliesSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "questionmark.bubble",
@@ -11564,7 +12025,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(maxWidth: 1120, alignment: .topLeading)
     }
 
     private func abbreviatedCount(_ value: Int) -> String {
@@ -11582,6 +12042,13 @@ struct SettingsView: View {
             return model.snapshot.providerID.isEmpty ? model.text(.providerSetupNeeded) : model.snapshot.providerID
         }
         return "\(model.snapshot.providerID) · \(model.snapshot.providerModelID)"
+    }
+
+    private var voiceRepliesSubtitle: String {
+        let state = model.voiceRepliesEnabled
+            ? localizedYouText(model.appLanguage, en: "On", zh: "已开启", fr: "Activé", de: "Aktiv")
+            : localizedYouText(model.appLanguage, en: "Off", zh: "已关闭", fr: "Désactivé", de: "Inaktiv")
+        return "\(state) · \(model.voiceReplyEngineLabel) · \(model.voiceInputEngineLabel)"
     }
 
     private var memoryEngineSubtitle: String {
@@ -11605,6 +12072,47 @@ struct SettingsView: View {
                 expandedPane = isExpanded ? pane : nil
             }
         )
+    }
+}
+
+private struct SettingsLockedView: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        VStack(spacing: 20) {
+            NativePanel {
+                VStack(spacing: 16) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(ElephantTheme.accent)
+                        .frame(width: 54, height: 54)
+                        .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    VStack(spacing: 6) {
+                        Text(localizedYouText(model.appLanguage, en: "Settings are locked", zh: "设置已锁定", fr: "Réglages verrouillés", de: "Einstellungen gesperrt"))
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                        Text(localizedYouText(model.appLanguage, en: "Unlock Elephant Agent to change private settings.", zh: "解锁 Elephant Agent 后才能调整私有设置。", fr: "Déverrouillez Elephant Agent pour modifier les réglages privés.", de: "Entsperre Elephant Agent, um private Einstellungen zu ändern."))
+                            .font(.callout)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        NSApp.windows.first { $0.title == "Elephant Agent" }?.makeKeyAndOrderFront(nil)
+                        NSApp.activate(ignoringOtherApps: true)
+                    } label: {
+                        Label(localizedYouText(model.appLanguage, en: "Unlock", zh: "去解锁", fr: "Déverrouiller", de: "Entsperren"), systemImage: "arrow.right")
+                    }
+                    .settingsActionButton(.primary)
+                }
+                .frame(maxWidth: 390)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 28)
+            }
+        }
+        .padding(32)
     }
 }
 
@@ -11953,6 +12461,400 @@ struct LanguageSettingsContent: View {
     }
 }
 
+struct VoiceRepliesSettingsContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    private var ttsEngineBinding: Binding<SpeechOutputEngine> {
+        Binding(
+            get: { model.voiceReplyEngine },
+            set: { model.setVoiceReplyEngine($0) }
+        )
+    }
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.voiceRepliesEnabled },
+            set: { model.setVoiceRepliesEnabled($0) }
+        )
+    }
+
+    private var autoPlayBinding: Binding<Bool> {
+        Binding(
+            get: { model.voiceRepliesAutoPlay },
+            set: { model.setVoiceRepliesAutoPlay($0) }
+        )
+    }
+
+    private var edgeVoiceBinding: Binding<String> {
+        Binding(
+            get: { model.effectiveEdgeVoiceIdentifier },
+            set: { model.setVoiceReplyEdgeVoiceIdentifier($0) }
+        )
+    }
+
+    private var voiceBinding: Binding<String> {
+        Binding(
+            get: {
+                model.voiceReplyVoiceOptions.contains { $0.id == model.voiceReplyVoiceIdentifier }
+                    ? model.voiceReplyVoiceIdentifier
+                    : ""
+            },
+            set: { model.setVoiceReplyVoiceIdentifier($0) }
+        )
+    }
+
+    private var sttEngineBinding: Binding<SpeechRecognitionEngine> {
+        Binding(
+            get: { model.voiceInputEngine },
+            set: { model.setVoiceInputEngine($0) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            voiceOutputSection
+            Divider().opacity(0.7)
+            voiceInputSection
+            voiceStatusMessages
+            voiceActions
+        }
+    }
+
+    private var voiceOutputSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 16) {
+                SectionLabel(title: outputTitle, subtitle: outputSubtitle)
+                Spacer(minLength: 0)
+                Pill(text: edgeRuntimeStatusText, symbol: edgeRuntimeStatusSymbol, tint: edgeRuntimeStatusTint)
+            }
+
+            VStack(spacing: 0) {
+                SettingsFieldRow(label: enabledLabel, value: enabledValue) {
+                    Toggle("", isOn: enabledBinding)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(ElephantTheme.green)
+                }
+                SettingsFieldRow(label: autoPlayLabel, value: autoPlayValue) {
+                    Toggle("", isOn: autoPlayBinding)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(ElephantTheme.green)
+                        .disabled(!model.voiceRepliesEnabled)
+                }
+                SettingsFieldRow(label: ttsEngineLabel, value: model.voiceReplyEngineLabel) {
+                    Picker("", selection: ttsEngineBinding) {
+                        Text(edgeEngineLabel).tag(SpeechOutputEngine.edgeOnline)
+                        Text(systemEngineLabel).tag(SpeechOutputEngine.systemAVSpeech)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 300)
+                }
+                if model.voiceReplyEngine == .edgeOnline {
+                    SettingsFieldRow(label: edgeVoiceLabel, value: model.voiceReplyVoiceSummary) {
+                        Picker("", selection: edgeVoiceBinding) {
+                            ForEach(model.voiceReplyEdgeVoiceOptions) { option in
+                                Text(option.displayName).tag(option.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 300)
+                    }
+                } else {
+                    SettingsFieldRow(label: systemVoiceLabel, value: model.voiceReplyVoiceSummary) {
+                        Picker("", selection: voiceBinding) {
+                            Text(automaticVoiceLabel).tag("")
+                            ForEach(model.voiceReplyVoiceOptions) { option in
+                                Text(option.displayName).tag(option.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 300)
+                    }
+                }
+                SettingsRow(
+                    label: localizedYouText(model.appLanguage, en: "Privacy", zh: "隐私", fr: "Confidentialité", de: "Datenschutz"),
+                    value: model.voiceReplyEngine == .edgeOnline ? onlinePrivacyValue : localPrivacyValue
+                )
+            }
+
+            if model.voiceReplyEngine == .systemAVSpeech && model.voiceReplyVoiceOptions.isEmpty {
+                VoiceSettingsNotice(text: noMatchingVoiceText, tint: ElephantTheme.orange)
+            }
+        }
+    }
+
+    private var voiceInputSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 16) {
+                SectionLabel(title: inputTitle, subtitle: inputSubtitle)
+                Spacer(minLength: 0)
+                Pill(text: inputRuntimeStatusText, symbol: inputRuntimeStatusSymbol, tint: inputRuntimeStatusTint)
+            }
+
+            VStack(spacing: 0) {
+                SettingsFieldRow(label: sttEngineLabel, value: model.voiceInputEngineLabel) {
+                    Picker("", selection: sttEngineBinding) {
+                        Text(autoRecognitionLabel).tag(SpeechRecognitionEngine.automatic)
+                        Text(funASRRecognitionLabel).tag(SpeechRecognitionEngine.funASRLocal)
+                        Text(appleRecognitionLabel).tag(SpeechRecognitionEngine.appleSpeech)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 360)
+                }
+                SettingsRow(
+                    label: localizedYouText(model.appLanguage, en: "Chinese recognition", zh: "中文识别", fr: "Reconnaissance chinoise", de: "Chinesische Erkennung"),
+                    value: model.chineseSpeechRecognitionStatus
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var voiceStatusMessages: some View {
+        if !model.voiceRuntimeActionResult.isEmpty {
+            VoiceSettingsNotice(
+                text: model.voiceRuntimeActionResult,
+                tint: model.voiceRuntimeActionResult.lowercased().contains("failed") ? ElephantTheme.orange : ElephantTheme.green
+            )
+        }
+        if !model.speechOutput.lastError.isEmpty {
+            VoiceSettingsNotice(text: model.speechOutput.lastError, tint: ElephantTheme.orange)
+        }
+    }
+
+    private var voiceActions: some View {
+        SettingsActionBar {
+            if model.appLanguage == .zh && (!SpeechInputController.funASRInstalled || model.voiceRuntimeActionInFlight) {
+                Button {
+                    Task { await model.installChineseSpeechRecognition() }
+                } label: {
+                    Label(installChineseSTTLabel, systemImage: "arrow.down.circle")
+                }
+                .settingsActionButton()
+                .disabled(model.voiceRuntimeActionInFlight)
+            }
+
+            Button {
+                model.stopVoiceReply()
+            } label: {
+                Label(stopLabel, systemImage: "stop.fill")
+            }
+            .settingsActionButton()
+            .disabled(!model.speechOutput.isSpeaking)
+
+            Button {
+                model.previewVoiceReply()
+            } label: {
+                Label(testLabel, systemImage: "speaker.wave.2")
+            }
+            .settingsActionButton(.primary)
+        }
+    }
+
+    private var outputTitle: String {
+        localizedYouText(model.appLanguage, en: "Elephant's Voice", zh: "Elephant 的声音", fr: "Voix d'Elephant", de: "Elephants Stimme")
+    }
+
+    private var outputSubtitle: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "When you talk to Elephant, replies can come back as a natural voice. Local playback is available when you need it.",
+            zh: "你用语音和 Elephant 对话时，它可以用更自然的声音说回来；需要离线时可切到本机声音。",
+            fr: "Quand vous parlez à Elephant, les réponses peuvent revenir avec une voix naturelle.",
+            de: "Wenn du mit Elephant sprichst, können Antworten mit natürlicher Stimme zurückkommen."
+        )
+    }
+
+    private var inputTitle: String {
+        localizedYouText(model.appLanguage, en: "Listening to You", zh: "听你说话", fr: "Vous écouter", de: "Dir zuhören")
+    }
+
+    private var inputSubtitle: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Chinese can listen locally after setup. Other languages use the system listener in this version.",
+            zh: "中文可启用本地识别；其他语言本版使用系统听写。",
+            fr: "Le chinois peut être écouté localement après configuration.",
+            de: "Chinesisch kann nach der Einrichtung lokal zuhören."
+        )
+    }
+
+    private var edgeRuntimeStatusText: String {
+        MacVoiceRuntime.isEdgeTTSInstalled()
+            ? localizedYouText(model.appLanguage, en: "Voice ready", zh: "声音就绪", fr: "Voix prête", de: "Stimme bereit")
+            : localizedYouText(model.appLanguage, en: "Voice missing", zh: "声音缺失", fr: "Voix absente", de: "Stimme fehlt")
+    }
+
+    private var edgeRuntimeStatusSymbol: String {
+        MacVoiceRuntime.isEdgeTTSInstalled() ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+    }
+
+    private var edgeRuntimeStatusTint: Color {
+        MacVoiceRuntime.isEdgeTTSInstalled() ? ElephantTheme.green : ElephantTheme.orange
+    }
+
+    private var inputRuntimeStatusText: String {
+        if model.appLanguage == .zh, SpeechInputController.funASRInstalled {
+            return localizedYouText(model.appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
+        }
+        return model.appLanguage == .zh
+            ? localizedYouText(model.appLanguage, en: "System Chinese", zh: "系统中文", fr: "Chinois système", de: "System-Chinesisch")
+            : localizedYouText(model.appLanguage, en: "System English", zh: "系统英文", fr: "Anglais système", de: "System-Englisch")
+    }
+
+    private var inputRuntimeStatusSymbol: String {
+        model.appLanguage == .zh && SpeechInputController.funASRInstalled ? "checkmark.circle.fill" : "mic.fill"
+    }
+
+    private var inputRuntimeStatusTint: Color {
+        model.appLanguage == .zh && SpeechInputController.funASRInstalled ? ElephantTheme.green : ElephantTheme.accent
+    }
+
+    private var descriptionText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Voice messages can use local Chinese recognition and high quality online speech. Text messages keep the normal text reply.",
+            zh: "你发语音时，Elephant 可以听中文并用自然声音回复；文字消息仍显示普通文本回复。",
+            fr: "Les messages vocaux peuvent utiliser la reconnaissance chinoise locale et une voix en ligne de haute qualité.",
+            de: "Sprachnachrichten können lokale chinesische Erkennung und hochwertige Online-Sprache verwenden."
+        )
+    }
+
+    private var enabledLabel: String {
+        localizedYouText(model.appLanguage, en: "Voice replies", zh: "语音回复", fr: "Réponses vocales", de: "Sprachantworten")
+    }
+
+    private var enabledValue: String {
+        model.voiceRepliesEnabled
+            ? localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activées", de: "Aktiviert")
+            : localizedYouText(model.appLanguage, en: "Disabled", zh: "已停用", fr: "Désactivées", de: "Deaktiviert")
+    }
+
+    private var autoPlayLabel: String {
+        localizedYouText(model.appLanguage, en: "Auto-play", zh: "自动播放", fr: "Lecture auto", de: "Auto-Play")
+    }
+
+    private var autoPlayValue: String {
+        model.voiceRepliesAutoPlay
+            ? localizedYouText(model.appLanguage, en: "On", zh: "开启", fr: "Activée", de: "Ein")
+            : localizedYouText(model.appLanguage, en: "Off", zh: "关闭", fr: "Désactivée", de: "Aus")
+    }
+
+    private var ttsEngineLabel: String {
+        localizedYouText(model.appLanguage, en: "Reply voice", zh: "回复声音", fr: "Voix de réponse", de: "Antwortstimme")
+    }
+
+    private var edgeEngineLabel: String {
+        localizedYouText(model.appLanguage, en: "Natural (online)", zh: "自然声音（在线）", fr: "Naturelle (en ligne)", de: "Natürlich (online)")
+    }
+
+    private var systemEngineLabel: String {
+        localizedYouText(model.appLanguage, en: "On this Mac", zh: "本机声音", fr: "Sur ce Mac", de: "Auf diesem Mac")
+    }
+
+    private var edgeVoiceLabel: String {
+        localizedYouText(model.appLanguage, en: "Voice", zh: "声音", fr: "Voix", de: "Stimme")
+    }
+
+    private var systemVoiceLabel: String {
+        localizedYouText(model.appLanguage, en: "Voice", zh: "声音", fr: "Voix", de: "Stimme")
+    }
+
+    private var sttEngineLabel: String {
+        localizedYouText(model.appLanguage, en: "Recognition", zh: "识别方式", fr: "Reconnaissance", de: "Erkennung")
+    }
+
+    private var autoRecognitionLabel: String {
+        localizedYouText(model.appLanguage, en: "Recommended", zh: "推荐", fr: "Recommandé", de: "Empfohlen")
+    }
+
+    private var funASRRecognitionLabel: String {
+        localizedYouText(model.appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
+    }
+
+    private var appleRecognitionLabel: String {
+        localizedYouText(model.appLanguage, en: "System", zh: "系统识别", fr: "Système", de: "System")
+    }
+
+    private var onlinePrivacyValue: String {
+        localizedYouText(model.appLanguage, en: "Reply text is sent to generate speech", zh: "会发送回复文本来生成语音", fr: "Le texte de réponse est envoyé pour générer la voix", de: "Antworttext wird zur Spracherzeugung gesendet")
+    }
+
+    private var localPrivacyValue: String {
+        localizedYouText(model.appLanguage, en: "Local system synthesis", zh: "本机系统合成", fr: "Synthèse système locale", de: "Lokale Systemsynthese")
+    }
+
+    private var voiceInputNote: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Chinese uses local recognition after installation. Until then it uses Apple Chinese recognition. Other languages use Apple English recognition in this version.",
+            zh: "中文安装后使用本地识别；安装前使用 Apple 中文识别。其他语言本版使用 Apple 英文识别。",
+            fr: "Le chinois utilise la reconnaissance locale après installation. Les autres langues utilisent Apple dans cette version.",
+            de: "Chinesisch nutzt nach Installation lokale Erkennung. Andere Sprachen nutzen in dieser Version Apple."
+        )
+    }
+
+    private var automaticVoiceLabel: String {
+        localizedYouText(model.appLanguage, en: "Automatic", zh: "自动", fr: "Automatique", de: "Automatisch")
+    }
+
+    private var noMatchingVoiceText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "No matching local voice is installed. Choose the natural online voice for higher quality.",
+            zh: "当前没有匹配的本机系统声音。需要更自然的声音请使用在线声音。",
+            fr: "Aucune voix locale correspondante n'est installée. macOS utilisera la voix système par défaut.",
+            de: "Keine passende lokale Stimme installiert. macOS nutzt die Standardsystemstimme."
+        )
+    }
+
+    private var testLabel: String {
+        localizedYouText(model.appLanguage, en: "Preview", zh: "试听", fr: "Écouter", de: "Vorschau")
+    }
+
+    private var installChineseSTTLabel: String {
+        if SpeechInputController.funASRInstalled {
+            return localizedYouText(model.appLanguage, en: "Chinese Recognition Ready", zh: "中文识别已就绪", fr: "Reconnaissance chinoise prête", de: "Chinesische Erkennung bereit")
+        }
+        return model.voiceRuntimeActionInFlight
+            ? localizedYouText(model.appLanguage, en: "Installing...", zh: "安装中...", fr: "Installation...", de: "Installiert...")
+            : localizedYouText(model.appLanguage, en: "Enable Local Chinese", zh: "启用本地中文识别", fr: "Activer le chinois local", de: "Lokales Chinesisch aktivieren")
+    }
+
+    private var stopLabel: String {
+        localizedYouText(model.appLanguage, en: "Stop", zh: "停止播放", fr: "Arrêter", de: "Stoppen")
+    }
+}
+
+private struct VoiceSettingsNotice: View {
+    var text: String
+    var tint: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: "info.circle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(ElephantTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(tint.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(tint.opacity(0.16), lineWidth: 1)
+        )
+    }
+}
+
 struct MemoryEngineSettingsContent: View {
     @EnvironmentObject private var model: ElephantAppModel
     @State private var embeddingSource = ""
@@ -11971,8 +12873,8 @@ struct MemoryEngineSettingsContent: View {
                     ),
                     subtitle: localizedYouText(
                         model.appLanguage,
-                        en: "Semantic recall uses this local model. Setup picks the best source for your language.",
-                        zh: "语义回忆会使用这个本地模型；初始化会按语言自动选择默认来源。",
+                        en: "Semantic recall uses this local model. Elephant picks the best source for your language.",
+                        zh: "语义回忆会使用这个本地模型；Elephant 会按语言自动选择默认来源。",
                         fr: "Le rappel sémantique utilise ce modèle local. La configuration choisit la source adaptée à votre langue.",
                         de: "Semantische Erinnerung nutzt dieses lokale Modell. Die Einrichtung wählt die passende Quelle für deine Sprache."
                     )
@@ -11998,7 +12900,7 @@ struct MemoryEngineSettingsContent: View {
             VStack(spacing: 0) {
                 SettingsRow(label: localizedYouText(model.appLanguage, en: "Status", zh: "状态", fr: "Statut", de: "Status"), value: embeddingLine)
                 SettingsRow(label: localizedYouText(model.appLanguage, en: "Active source", zh: "当前来源", fr: "Source active", de: "Aktive Quelle"), value: embeddingSourceLabel(model.snapshot.embeddingBootstrapSource))
-                SettingsRow(label: localizedYouText(model.appLanguage, en: "Setup default", zh: "初始化默认", fr: "Défaut de configuration", de: "Setup-Standard"), value: embeddingSourceLabel(model.appLanguage.defaultEmbeddingModelSource))
+                SettingsRow(label: localizedYouText(model.appLanguage, en: "Default", zh: "默认", fr: "Défaut", de: "Standard"), value: embeddingSourceLabel(model.appLanguage.defaultEmbeddingModelSource))
                 if !model.snapshot.embeddingModelRoot.isEmpty {
                     SettingsRow(label: localizedYouText(model.appLanguage, en: "Model path", zh: "模型路径", fr: "Chemin du modèle", de: "Modellpfad"), value: model.snapshot.embeddingModelRoot)
                 }
@@ -13612,8 +14514,8 @@ struct ResetDataSettingsContent: View {
                 label: localizedYouText(model.appLanguage, en: "After reset", zh: "之后", fr: "Après", de: "Danach"),
                 value: localizedYouText(
                     model.appLanguage,
-                    en: "Setup opens again so you can start clean.",
-                    zh: "会重新打开初始化流程，你可以从干净状态开始。",
+                    en: "Elephant opens the first-run flow again so you can start clean.",
+                    zh: "会重新打开第一次使用流程，你可以从干净状态开始。",
                     fr: "La configuration se rouvre pour repartir de zéro.",
                     de: "Die Einrichtung öffnet sich erneut, damit du sauber starten kannst."
                 )
@@ -15968,7 +16870,7 @@ struct OnboardingFlow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                 } else {
-                    Text("\(min(max(model.onboardingStep, 1), readyStep))/\(readyStep)")
+                    Text(phaseProgressText)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(ElephantTheme.faint)
                         .monospacedDigit()
@@ -16164,6 +17066,9 @@ struct OnboardingFlow: View {
         if model.onboardingStep == endpointStep {
             return localizedYouText(model.appLanguage, en: "Create Elephant", zh: "创建 Elephant", fr: "Créer Elephant", de: "Elephant erstellen")
         }
+        if model.onboardingStep == 3, onboardingLockPasswordDraftIsEmpty {
+            return localizedYouText(model.appLanguage, en: "Skip for now", zh: "稍后", fr: "Plus tard", de: "Später")
+        }
         return model.text(.next)
     }
 
@@ -16173,6 +17078,9 @@ struct OnboardingFlow: View {
         case 2:
             return model.text(.requirementPreferredName)
         case 3:
+            if onboardingLockPasswordDraftIsEmpty {
+                return nil
+            }
             if model.onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines).count < 6 {
                 return model.text(.lockPasswordRequirement)
             }
@@ -16194,6 +17102,26 @@ struct OnboardingFlow: View {
         phases.first { $0.range.contains(min(model.onboardingStep, readyStep)) } ?? phases[0]
     }
 
+    private var phaseProgressText: String {
+        let currentID = currentPhase.id
+        let index = phases.firstIndex { $0.id == currentID } ?? 0
+        let overall = "\(index + 1)/\(phases.count)"
+        guard currentPhase.range.lowerBound < currentPhase.range.upperBound else {
+            return overall
+        }
+        let currentStep = min(max(model.onboardingStep, currentPhase.range.lowerBound), currentPhase.range.upperBound)
+        let phaseIndex = currentStep - currentPhase.range.lowerBound + 1
+        let phaseCount = currentPhase.range.upperBound - currentPhase.range.lowerBound + 1
+        let inPhase = localizedYouText(
+            model.appLanguage,
+            en: "step \(phaseIndex)/\(phaseCount)",
+            zh: "本阶段 \(phaseIndex)/\(phaseCount)",
+            fr: "étape \(phaseIndex)/\(phaseCount)",
+            de: "Schritt \(phaseIndex)/\(phaseCount)"
+        )
+        return "\(overall) · \(inPhase)"
+    }
+
     private var phases: [OnboardingPhase] {
         [
             OnboardingPhase(id: "language", title: .phaseLanguage, symbol: "globe", range: languageStep...languageStep),
@@ -16211,6 +17139,9 @@ struct OnboardingFlow: View {
         case 2:
             return model.onboardingPreferredName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case 3:
+            if onboardingLockPasswordDraftIsEmpty {
+                return false
+            }
             return !model.onboardingLockPasswordIsValid
         case let step where step == elephantStep:
             return model.onboardingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -16230,6 +17161,11 @@ struct OnboardingFlow: View {
 
     private var isGroundingQuestionStep: Bool {
         groundingQuestionRange.contains(model.onboardingStep)
+    }
+
+    private var onboardingLockPasswordDraftIsEmpty: Bool {
+        model.onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && model.onboardingLockPasswordConfirmation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var currentGroundingQuestion: OnboardingGroundingQuestion? {
@@ -16330,21 +17266,33 @@ struct OnboardingWelcomeStep: View {
                     }
 
                     Button(action: enter) {
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.94))
-                            .frame(width: 54, height: 54)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .overlay(Circle().stroke(.white.opacity(hoveringCTA ? 0.50 : 0.32), lineWidth: 1))
-                            .shadow(color: .black.opacity(hoveringCTA ? 0.30 : 0.18), radius: hoveringCTA ? 18 : 12, y: hoveringCTA ? 9 : 6)
-                            .contentShape(Circle())
-                            .scaleEffect(hoveringCTA ? 1.045 : 1)
+                        HStack(spacing: 10) {
+                            Text(model.text(.startSetup))
+                                .font(.body.weight(.semibold))
+                            Image(systemName: "arrow.right")
+                                .font(.body.weight(.bold))
+                        }
+                        .foregroundStyle(.white.opacity(0.96))
+                        .padding(.horizontal, 26)
+                        .frame(minWidth: 188, minHeight: 54)
+                        .background {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Capsule().fill(.white.opacity(hoveringCTA ? 0.16 : 0.10))
+                                }
+                        }
+                        .overlay(Capsule().stroke(.white.opacity(hoveringCTA ? 0.58 : 0.38), lineWidth: 1))
+                        .shadow(color: .black.opacity(hoveringCTA ? 0.32 : 0.20), radius: hoveringCTA ? 20 : 13, y: hoveringCTA ? 10 : 7)
+                        .contentShape(Capsule())
+                        .scaleEffect(hoveringCTA ? 1.035 : 1)
                     }
                     .buttonStyle(PressablePlainButtonStyle())
                     .onHover { hoveringCTA = $0 }
+                    .animation(.easeOut(duration: 0.16), value: hoveringCTA)
                     .keyboardShortcut(.defaultAction)
-                    .help(model.text(.continueAction))
-                    .accessibilityLabel(model.text(.continueAction))
+                    .help(model.text(.startSetup))
+                    .accessibilityLabel(model.text(.startSetup))
                 }
                 .padding(.horizontal, 40)
                 .frame(maxWidth: min(860, proxy.size.width * 0.82), maxHeight: .infinity, alignment: .center)
@@ -16556,7 +17504,7 @@ struct OnboardingStepHeader: View {
                 .frame(width: 34, height: 34)
                 .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 5) {
-                Text(localizedYouText(model.appLanguage, en: "Shaping your Personal Model", zh: "正在形成你的个人模型", fr: "Formation de votre Personal Model", de: "Dein Personal Model entsteht"))
+                Text(localizedYouText(model.appLanguage, en: "Getting to know you", zh: "正在认识你", fr: "Elephant apprend à vous connaître", de: "Elephant lernt dich kennen"))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(ElephantTheme.accent)
                     .textCase(.uppercase)
@@ -18076,6 +19024,16 @@ struct OnboardingLockPasswordStep: View {
         if model.onboardingLockPasswordIsValid {
             return model.text(.lockPasswordSet)
         }
+        if model.onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && model.onboardingLockPasswordConfirmation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Optional. You can add this later in Settings.",
+                zh: "可先留空，之后可以在设置里添加。",
+                fr: "Facultatif. Vous pourrez l'ajouter plus tard dans Réglages.",
+                de: "Optional. Du kannst es später in den Einstellungen hinzufügen."
+            )
+        }
         if model.onboardingLockPassword.trimmingCharacters(in: .whitespacesAndNewlines).count < 6 {
             return model.text(.lockPasswordRequirement)
         }
@@ -19127,7 +20085,7 @@ struct OnboardingGroundingDepthStep: View {
     var body: some View {
         VStack(alignment: .center, spacing: 18) {
             VStack(spacing: 7) {
-                Label(localizedYouText(model.appLanguage, en: "Personal Model grounding", zh: "个人模型建模", fr: "Ancrage du Personal Model", de: "Personal Model Grounding"), systemImage: "slider.horizontal.3")
+                Label(localizedYouText(model.appLanguage, en: "First understanding", zh: "第一次了解", fr: "Première compréhension", de: "Erstes Verstehen"), systemImage: "slider.horizontal.3")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.accent)
                     .labelStyle(.titleAndIcon)
@@ -19136,7 +20094,7 @@ struct OnboardingGroundingDepthStep: View {
                     .foregroundStyle(ElephantTheme.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                Text(localizedYouText(model.appLanguage, en: "Pick a first pass. Every question can be skipped, and the Personal Model stays editable.", zh: "先选一个初始强度。每道题都可以跳过，之后也能继续修正 Personal Model。", fr: "Choisissez un premier niveau. Chaque question peut être passée et le Personal Model reste modifiable.", de: "Wähle einen ersten Durchlauf. Jede Frage kann übersprungen werden und das Personal Model bleibt editierbar."))
+                Text(localizedYouText(model.appLanguage, en: "Pick a first pass. Every question can be skipped, and you can change these answers later.", zh: "先选一个初始深度。每道题都可以跳过，之后也能随时修改。", fr: "Choisissez un premier niveau. Chaque question peut être passée et vous pourrez modifier vos réponses plus tard.", de: "Wähle einen ersten Durchlauf. Jede Frage kann übersprungen werden und du kannst die Antworten später ändern."))
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
                     .multilineTextAlignment(.center)
@@ -19163,7 +20121,7 @@ struct OnboardingGroundingDepthStep: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.accent)
                     .frame(width: 18)
-                Text(localizedYouText(model.appLanguage, en: "Sensitive questions are allowed in deeper paths, but skipping is always a normal answer.", zh: "更深的路径会包含私人议题，但跳过永远是正常回答，不会阻塞初始化。", fr: "Les parcours profonds peuvent contenir des sujets privés, mais passer reste toujours normal.", de: "Tiefere Pfade können private Themen enthalten; Überspringen ist immer normal."))
+                Text(localizedYouText(model.appLanguage, en: "Sensitive questions are allowed in deeper paths, but skipping is always a normal answer.", zh: "更深的路径会包含私人议题，但跳过永远是正常回答，不会影响继续。", fr: "Les parcours profonds peuvent contenir des sujets privés, mais passer reste toujours normal.", de: "Tiefere Pfade können private Themen enthalten; Überspringen ist immer normal."))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -19806,7 +20764,7 @@ struct OnboardingProviderModelStep: View {
 
     private var providerFactorySubtitle: String {
         if providerChoices.isEmpty {
-            return localizedYouText(model.appLanguage, en: "waiting for runtime catalog", zh: "等待 runtime catalog ready", fr: "attente du catalogue runtime", de: "wartet auf Runtime-Katalog")
+            return localizedYouText(model.appLanguage, en: "preparing available model services", zh: "正在准备可用的模型服务", fr: "préparation des services disponibles", de: "verfügbare Modelldienste werden vorbereitet")
         }
         return "\(filteredProviders.count)/\(providerChoices.count) \(model.text(.providerFactorySubtitle))"
     }
@@ -19823,10 +20781,10 @@ struct OnboardingProviderModelStep: View {
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(localizedYouText(model.appLanguage, en: "Waiting for the real runtime catalog", zh: "正在等待真实 runtime catalog", fr: "Attente du vrai catalogue runtime", de: "Warten auf den echten Runtime-Katalog"))
+                    Text(localizedYouText(model.appLanguage, en: "Preparing model services", zh: "正在准备模型服务", fr: "Préparation des services", de: "Modelldienste werden vorbereitet"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text(localizedYouText(model.appLanguage, en: "Elephant is starting the local runtime, then it will show only the providers and models that are actually available.", zh: "Elephant 正在启动本地 runtime；目录就绪后，只会展示真实可用的 provider 和 model。", fr: "Elephant démarre le runtime local, puis affichera uniquement les providers et modèles disponibles.", de: "Elephant startet die lokale Runtime und zeigt danach nur tatsächlich verfügbare Provider und Modelle."))
+                    Text(localizedYouText(model.appLanguage, en: "Elephant is checking which model connections are ready on this Mac.", zh: "Elephant 正在检查这台 Mac 上哪些模型连接可以使用。", fr: "Elephant vérifie les connexions de modèles disponibles sur ce Mac.", de: "Elephant prüft, welche Modellverbindungen auf diesem Mac bereit sind."))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -19847,20 +20805,20 @@ struct OnboardingProviderModelStep: View {
 
             VStack(spacing: 8) {
                 providerCatalogWaitingStep(
-                    title: localizedYouText(model.appLanguage, en: "Start local runtime", zh: "启动本地 runtime", fr: "Démarrer le runtime local", de: "Lokale Runtime starten"),
-                    detail: localizedYouText(model.appLanguage, en: "Connecting to the Python API that owns providers and models.", zh: "连接负责 providers 与 models 的本地 Python API。", fr: "Connexion à l'API Python locale.", de: "Verbindung zur lokalen Python-API."),
+                    title: localizedYouText(model.appLanguage, en: "Wake local service", zh: "唤醒本机服务", fr: "Réveiller le service local", de: "Lokalen Dienst wecken"),
+                    detail: localizedYouText(model.appLanguage, en: "Getting Elephant ready to talk to models.", zh: "让 Elephant 准备好和模型沟通。", fr: "Prépare Elephant à parler aux modèles.", de: "Elephant wird für Modellgespräche vorbereitet."),
                     symbol: "bolt.horizontal",
                     active: true
                 )
                 providerCatalogWaitingStep(
-                    title: localizedYouText(model.appLanguage, en: "Read provider catalog", zh: "读取模型服务目录", fr: "Lire le catalogue provider", de: "Provider-Katalog lesen"),
-                    detail: localizedYouText(model.appLanguage, en: "No fallback list is shown here.", zh: "这里不展示兜底列表。", fr: "Aucune liste de secours n'est affichée ici.", de: "Hier wird keine Fallback-Liste angezeigt."),
+                    title: localizedYouText(model.appLanguage, en: "Find available models", zh: "整理可用模型", fr: "Trouver les modèles disponibles", de: "Verfügbare Modelle finden"),
+                    detail: localizedYouText(model.appLanguage, en: "Only choices that are ready now will appear.", zh: "只显示现在真实可用的选择。", fr: "Seuls les choix prêts apparaissent.", de: "Nur bereite Optionen erscheinen."),
                     symbol: "list.bullet.rectangle",
                     active: catalogAttempts > 0
                 )
                 providerCatalogWaitingStep(
-                    title: localizedYouText(model.appLanguage, en: "Continue with real models", zh: "继续选择真实模型", fr: "Continuer avec les vrais modèles", de: "Mit echten Modellen fortfahren"),
-                    detail: localizedYouText(model.appLanguage, en: "Provider-backed baby elephants will use this same catalog.", zh: "复用 provider 的小象也会使用同一个目录。", fr: "Les baby elephants provider utilisent ce même catalogue.", de: "Provider-Baby-Elephants nutzen denselben Katalog."),
+                    title: localizedYouText(model.appLanguage, en: "Choose the best fit", zh: "选择合适的模型", fr: "Choisir le bon modèle", de: "Passendes Modell wählen"),
+                    detail: localizedYouText(model.appLanguage, en: "Other local elephants can use the same choice later.", zh: "之后的小象也可以沿用这套选择。", fr: "Les autres elephants locaux pourront réutiliser ce choix.", de: "Andere lokale Elephants können diese Wahl später nutzen."),
                     symbol: "checkmark.seal",
                     active: false
                 )
@@ -19870,8 +20828,8 @@ struct OnboardingProviderModelStep: View {
                 Image(systemName: "info.circle")
                     .foregroundStyle(ElephantTheme.accent)
                 Text(catalogAttempts > 1
-                    ? localizedYouText(model.appLanguage, en: "Catalog read \(catalogAttempts) times. Still waiting for a ready response.", zh: "已读取 \(catalogAttempts) 次，仍在等待 ready 响应。", fr: "\(catalogAttempts) lectures; attente d'une réponse prête.", de: "\(catalogAttempts) Leseversuche; warte auf Ready-Antwort.")
-                    : localizedYouText(model.appLanguage, en: "The Next button unlocks when the runtime catalog is ready.", zh: "runtime catalog ready 后，下一步会自动可用。", fr: "Le bouton Suivant s'active quand le catalogue est prêt.", de: "Weiter wird aktiv, sobald der Runtime-Katalog bereit ist.")
+                    ? localizedYouText(model.appLanguage, en: "Checked \(catalogAttempts) times. Still waiting for an available choice.", zh: "已检查 \(catalogAttempts) 次，仍在等待可用选择。", fr: "\(catalogAttempts) vérifications ; attente d'un choix disponible.", de: "\(catalogAttempts) Prüfungen; warte auf eine verfügbare Wahl.")
+                    : localizedYouText(model.appLanguage, en: "Next unlocks as soon as a usable model is ready.", zh: "有可用模型后，下一步会自动可用。", fr: "Suivant s'active dès qu'un modèle est prêt.", de: "Weiter wird aktiv, sobald ein Modell bereit ist.")
                 )
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(ElephantTheme.muted)
@@ -20557,7 +21515,7 @@ struct OnboardingLearningLivePanel: View {
             return localizedYouText(model.appLanguage, en: "Elephant is turning your answers into the first usable memory.", zh: "Elephant 正在把你的回答整理成第一版可用记忆。", fr: "Elephant transforme vos réponses en première mémoire.", de: "Elephant macht aus deinen Antworten die erste Erinnerung.")
         }
         if let latestToolItem {
-            return localizedYouText(model.appLanguage, en: "Following one live signal at a time.", zh: "正在跟随一个实时信号，不打断你的初始化。", fr: "Suit un signal en direct.", de: "Folgt einem Live-Signal.")
+            return localizedYouText(model.appLanguage, en: "Following one live signal at a time.", zh: "正在跟随一个实时信号，不打断你的开始体验。", fr: "Suit un signal en direct.", de: "Folgt einem Live-Signal.")
         }
         return localizedYouText(model.appLanguage, en: "Keep this as one calm moment while setup finishes.", zh: "最后一步保持成一个安静的建立时刻。", fr: "Un moment calme pendant la fin de configuration.", de: "Ein ruhiger Moment, während die Einrichtung endet.")
     }
@@ -20574,7 +21532,7 @@ struct OnboardingLearningLivePanel: View {
         case "queued":
             return localizedYouText(model.appLanguage, en: "Queued for learning", zh: "学习任务已排队", fr: "Tâche en file", de: "Lernjob wartet")
         case "agent_running", "tool_running":
-            return localizedYouText(model.appLanguage, en: "Learning from your setup", zh: "正在学习初始化信息", fr: "Apprentissage en cours", de: "Lernt aus der Einrichtung")
+            return localizedYouText(model.appLanguage, en: "Learning from your answers", zh: "正在学习你的回答", fr: "Apprentissage en cours", de: "Lernt aus deinen Antworten")
         case "completed":
             return localizedYouText(model.appLanguage, en: "Learning pass completed", zh: "学习过程已完成", fr: "Passage terminé", de: "Lernlauf abgeschlossen")
         case "failed":
@@ -20704,7 +21662,7 @@ struct OnboardingLearningLivePanel: View {
             return localizedYouText(model.appLanguage, en: "Checking memory, questions, skills, and links.", zh: "正在检查记忆、问题、技能和链接。", fr: "Vérifie mémoire, questions, skills et liens.", de: "Prüft Gedächtnis, Fragen, Skills und Links.")
         }
         if normalized.contains("reflect agent running") || normalized.contains("features=pm") {
-            return localizedYouText(model.appLanguage, en: "Turning your setup into long-term memory.", zh: "正在把初始化信息整理成长期记忆。", fr: "Transforme la configuration en mémoire durable.", de: "Macht aus der Einrichtung Langzeitgedächtnis.")
+            return localizedYouText(model.appLanguage, en: "Turning your answers into long-term memory.", zh: "正在把你的回答整理成长期记忆。", fr: "Transforme vos réponses en mémoire durable.", de: "Macht aus deinen Antworten Langzeitgedächtnis.")
         }
         if normalized.contains("starting background learning agent") {
             return localizedYouText(model.appLanguage, en: "Turning your setup answers into the first version of memory.", zh: "正在把刚填写的信息整理成第一版记忆。", fr: "Transforme vos réponses en première mémoire.", de: "Macht aus deinen Antworten die erste Erinnerung.")
@@ -20849,7 +21807,7 @@ struct OnboardingLearningToolTimeline: View {
         case "queued":
             return localizedYouText(model.appLanguage, en: "Queued for learning", zh: "学习任务已排队", fr: "Tâche en file", de: "Lernjob wartet")
         case "tool_requested":
-            return localizedYouText(model.appLanguage, en: "Tool call requested", zh: "工具调用已发起", fr: "Appel d'outil demandé", de: "Tool-Aufruf angefordert")
+            return localizedYouText(model.appLanguage, en: "Next step started", zh: "下一步已开始", fr: "Étape suivante lancée", de: "Nächster Schritt gestartet")
         case "starting":
             return localizedYouText(model.appLanguage, en: "Elephant is getting ready", zh: "Elephant 正在准备", fr: "Elephant se prépare", de: "Elephant bereitet sich vor")
         case "agent_starting":
@@ -20857,11 +21815,11 @@ struct OnboardingLearningToolTimeline: View {
         case "agent_running":
             return localizedYouText(model.appLanguage, en: "Reading and updating the model", zh: "正在读取并更新模型", fr: "Lecture et mise à jour", de: "Liest und aktualisiert")
         case "tool_running":
-            return localizedYouText(model.appLanguage, en: "A tool is working", zh: "正在调用工具", fr: "Un outil travaille", de: "Ein Tool arbeitet")
+            return localizedYouText(model.appLanguage, en: "Working through your answers", zh: "正在整理你的回答", fr: "Traitement de vos réponses", de: "Verarbeitet deine Antworten")
         case "tool_completed":
-            return localizedYouText(model.appLanguage, en: "Tool result received", zh: "工具结果已返回", fr: "Résultat d'outil reçu", de: "Tool-Ergebnis erhalten")
+            return localizedYouText(model.appLanguage, en: "One step completed", zh: "已完成一步", fr: "Une étape terminée", de: "Ein Schritt abgeschlossen")
         case "tool_failed":
-            return localizedYouText(model.appLanguage, en: "Tool needs attention", zh: "工具调用需要处理", fr: "Outil à vérifier", de: "Tool braucht Prüfung")
+            return localizedYouText(model.appLanguage, en: "One step needs attention", zh: "有一步需要处理", fr: "Une étape à vérifier", de: "Ein Schritt braucht Prüfung")
         case "result_written":
             return localizedYouText(model.appLanguage, en: "Writing the learning result", zh: "正在写入学习结果", fr: "Écriture du résultat", de: "Schreibt Ergebnis")
         case "completed":
@@ -20934,15 +21892,15 @@ struct OnboardingLearningToolTimeline: View {
     private func toolDisplayName(_ tool: String) -> String {
         switch tool.replacingOccurrences(of: "tool.", with: "") {
         case "personal_model.search":
-            return localizedYouText(model.appLanguage, en: "Read model", zh: "读取模型", fr: "Lire le modele", de: "Modell lesen")
+            return localizedYouText(model.appLanguage, en: "Review memory", zh: "回看记忆", fr: "Relire la mémoire", de: "Erinnerung prüfen")
         case "personal_model.update":
-            return localizedYouText(model.appLanguage, en: "Update model", zh: "更新模型", fr: "Mettre a jour", de: "Modell aktualisieren")
+            return localizedYouText(model.appLanguage, en: "Save memory", zh: "写入记忆", fr: "Enregistrer la mémoire", de: "Erinnerung speichern")
         case "personal_model.questions":
-            return localizedYouText(model.appLanguage, en: "Refine questions", zh: "整理问题", fr: "Questions", de: "Fragen")
+            return localizedYouText(model.appLanguage, en: "Shape questions", zh: "整理问题", fr: "Préparer les questions", de: "Fragen vorbereiten")
         case "skill.list":
-            return localizedYouText(model.appLanguage, en: "List skills", zh: "读取技能", fr: "Lister skills", de: "Skills listen")
+            return localizedYouText(model.appLanguage, en: "Review abilities", zh: "查看能力", fr: "Revoir les capacités", de: "Fähigkeiten prüfen")
         case "skill.view":
-            return localizedYouText(model.appLanguage, en: "Inspect skill", zh: "查看技能", fr: "Voir skill", de: "Skill ansehen")
+            return localizedYouText(model.appLanguage, en: "Open ability", zh: "查看能力", fr: "Ouvrir la capacité", de: "Fähigkeit öffnen")
         case "web.read", "web.extract", "web.search":
             return localizedYouText(model.appLanguage, en: "Read links", zh: "读取链接", fr: "Lire liens", de: "Links lesen")
         default:
@@ -21016,16 +21974,16 @@ struct OnboardingLearningToolTimeline: View {
             return ""
         }
         if isToolProgressDetail(value) {
-            return localizedYouText(model.appLanguage, en: "Following tool calls as they happen.", zh: "正在跟随实际工具调用。", fr: "Suit les appels d'outils en direct.", de: "Folgt den Tool-Aufrufen live.")
+            return localizedYouText(model.appLanguage, en: "Following each step as it happens.", zh: "正在跟随每一步进展。", fr: "Suit chaque étape en direct.", de: "Folgt jedem Schritt live.")
         }
         if normalized.contains("reflect agent running") || normalized.contains("features=pm") {
-            return localizedYouText(model.appLanguage, en: "Turning your setup into long-term memory.", zh: "正在把初始化信息整理成长期记忆。", fr: "Transforme la configuration en mémoire durable.", de: "Macht aus der Einrichtung Langzeitgedächtnis.")
+            return localizedYouText(model.appLanguage, en: "Turning your answers into long-term memory.", zh: "正在把你的回答整理成长期记忆。", fr: "Transforme vos réponses en mémoire durable.", de: "Macht aus deinen Antworten Langzeitgedächtnis.")
         }
         if normalized.contains("starting background learning agent") {
             return localizedYouText(model.appLanguage, en: "Turning your setup answers into the first version of memory.", zh: "正在把刚填写的信息整理成第一版记忆。", fr: "Transforme vos réponses en première mémoire.", de: "Macht aus deinen Antworten die erste Erinnerung.")
         }
         if normalized.contains("tool_event") || normalized.contains("called=") {
-            return localizedYouText(model.appLanguage, en: "Checking memory, questions, skills, and links.", zh: "正在检查记忆、问题、技能和链接。", fr: "Vérifie mémoire, questions, skills et liens.", de: "Prüft Gedächtnis, Fragen, Skills und Links.")
+            return localizedYouText(model.appLanguage, en: "Checking memory, questions, abilities, and links.", zh: "正在检查记忆、问题、能力和链接。", fr: "Vérifie mémoire, questions, capacités et liens.", de: "Prüft Erinnerung, Fragen, Fähigkeiten und Links.")
         }
         return value
             .replacingOccurrences(of: "tool_event=", with: "")
@@ -21193,22 +22151,25 @@ struct OnboardingLearningToolLiveSlot: View {
     private var slotEyebrow: String {
         switch item.phase {
         case "requested":
-            return localizedYouText(model.appLanguage, en: "Requested", zh: "已发起", fr: "Demandé", de: "Angefordert")
+            return localizedYouText(model.appLanguage, en: "Started", zh: "已开始", fr: "Lancé", de: "Gestartet")
         case "execution.completed":
-            return localizedYouText(model.appLanguage, en: "Latest tool", zh: "最新工具", fr: "Dernier outil", de: "Letztes Tool")
+            return localizedYouText(model.appLanguage, en: "Latest step", zh: "最新进展", fr: "Dernière étape", de: "Letzter Schritt")
         case "execution.failed":
             return localizedYouText(model.appLanguage, en: "Needs attention", zh: "需要处理", fr: "À vérifier", de: "Prüfen")
         default:
-            return localizedYouText(model.appLanguage, en: "Running tool", zh: "正在执行", fr: "Outil actif", de: "Aktives Tool")
+            return localizedYouText(model.appLanguage, en: "Working", zh: "正在处理", fr: "En cours", de: "In Arbeit")
         }
     }
 
     private var metaLine: String {
-        let normalizedToolID = item.toolID
+        let preview = item.preview
             .replacingOccurrences(of: "tool.", with: "")
+            .replacingOccurrences(of: "_", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !item.preview.isEmpty else { return normalizedToolID }
-        return "\(normalizedToolID) · \(item.preview)"
+        guard !preview.isEmpty else {
+            return localizedYouText(model.appLanguage, en: "Working in the background", zh: "正在后台处理", fr: "Traitement en arrière-plan", de: "Arbeitet im Hintergrund")
+        }
+        return preview
     }
 }
 

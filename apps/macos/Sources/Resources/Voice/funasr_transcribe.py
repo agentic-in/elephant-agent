@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Transcribe one audio file with local FunASR Paraformer Chinese models."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output-json", required=True)
+    parser.add_argument("--language", default="zh")
+    parser.add_argument("--hotwords")
+    return parser.parse_args()
+
+
+def write_output(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def joined_text(result: Any) -> str:
+    if isinstance(result, list):
+        parts = []
+        for item in result:
+            if isinstance(item, dict):
+                value = item.get("text") or item.get("sentence_info") or ""
+                if isinstance(value, str):
+                    parts.append(value)
+        return "".join(parts).strip()
+    if isinstance(result, dict):
+        return str(result.get("text") or "").strip()
+    return ""
+
+
+def main() -> int:
+    args = parse_args()
+    output = Path(args.output_json)
+    audio = Path(args.input)
+    if not audio.exists():
+        write_output(output, {"text": "", "error": f"Audio file does not exist: {audio}"})
+        return 2
+
+    try:
+        from funasr import AutoModel
+    except Exception as exc:  # pragma: no cover - exercised by app fallback.
+        write_output(
+            output,
+            {
+                "text": "",
+                "error": "FunASR is not installed in the macOS voice runtime.",
+                "detail": str(exc),
+            },
+        )
+        return 2
+
+    model_kwargs: dict[str, Any] = {
+        "model": "paraformer-zh",
+        "vad_model": "fsmn-vad",
+        "punc_model": "ct-punc",
+    }
+
+    try:
+        model = AutoModel(**model_kwargs)
+        hotword_text = ""
+        if args.hotwords:
+            hotword_path = Path(args.hotwords)
+            if hotword_path.exists():
+                hotword_text = hotword_path.read_text(encoding="utf-8").strip()
+        result = model.generate(
+            input=str(audio),
+            language=args.language,
+            hotword=hotword_text,
+            batch_size_s=300,
+        )
+        text = joined_text(result)
+        write_output(output, {"text": text, "segments": result})
+        return 0 if text else 3
+    except Exception as exc:
+        write_output(output, {"text": "", "error": str(exc)})
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

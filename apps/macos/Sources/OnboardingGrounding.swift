@@ -38,11 +38,11 @@ enum OnboardingGroundingDepth: String, CaseIterable, Identifiable {
     func title(_ language: AppLanguage) -> String {
         switch self {
         case .quick:
-            return language == .zh ? "轻量了解" : "Light grounding"
+            return language == .zh ? "轻量了解" : "Light understanding"
         case .standard:
-            return language == .zh ? "标准建模" : "Standard grounding"
+            return language == .zh ? "标准了解" : "Standard understanding"
         case .deep:
-            return language == .zh ? "深入建模" : "Deeper grounding"
+            return language == .zh ? "深入了解" : "Deeper understanding"
         }
     }
 
@@ -62,7 +62,7 @@ enum OnboardingGroundingDepth: String, CaseIterable, Identifiable {
         case .quick:
             return language == .zh ? "当前重点、支持方式、恢复路径、边界信号" : "Current focus, support style, recovery path, boundary signal"
         case .standard:
-            return language == .zh ? "一版可用的 Identity / World / Pulse / Journey grounding" : "A usable first grounding across Identity / World / Pulse / Journey"
+            return language == .zh ? "一版可用的身份、处境、状态、路径理解" : "A usable first understanding across identity, context, state, and path"
         case .deep:
             return language == .zh ? "价值判断、社会处境、压力恢复、长期轨迹" : "Values, social context, pressure recovery, long-term trajectory"
         }
@@ -699,7 +699,7 @@ enum OnboardingGroundingCatalog {
             o("adapter", "The one who adapts to every room", "I may be learning to let the room adapt too.", "总是适应别人的人", "我可能正在学习，不必总是由我适应环境。", "The user may be outgrowing always adapting to others.", "用户可能正在长出总是适应别人的旧身份。"),
             o("observer", "The one who watches from outside", "I may be entering life more directly.", "只在旁边观察的人", "我可能正在更直接地进入生活，而不只是理解它。", "The user may be outgrowing only observing from the outside.", "用户可能正在长出只在旁边观察生活的旧身份。")
         ]),
-        q("daily_ritual", .pulse, "Which daily anchor would most improve your next month?", "哪种日常锚点最可能改善你接下来一个月？", "This turns grounding into near-term support.", "这会把 Personal Model grounding 转成接下来就有用的支持。", "pulse.daily_anchor.next_month", "low", [
+        q("daily_ritual", .pulse, "Which daily anchor would most improve your next month?", "哪种日常锚点最可能改善你接下来一个月？", "This turns early understanding into near-term support.", "这会把刚刚了解你的内容转成接下来就有用的支持。", "pulse.daily_anchor.next_month", "low", [
             o("sleep", "A more protected sleep window", "Energy would improve if sleep had a boundary.", "更被保护的睡眠窗口", "如果睡眠边界更稳，很多事会跟着变好。", "A protected sleep window would likely improve the user's next month.", "更被保护的睡眠窗口可能改善用户接下来一个月。"),
             o("review", "A short daily review", "A few minutes of orientation would reduce drift.", "很短的每日整理", "每天几分钟重新对齐，会减少漂移感。", "A short daily review would likely reduce drift for the user.", "很短的每日整理可能减少用户接下来一个月的漂移感。"),
             o("movement", "Gentle movement", "The body needs a small reliable path.", "温和身体活动", "身体需要一条小而可靠的路径。", "Gentle movement would likely improve the user's next month.", "温和身体活动可能改善用户接下来一个月。"),

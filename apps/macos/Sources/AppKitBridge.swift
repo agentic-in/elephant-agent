@@ -12,6 +12,7 @@ extension Notification.Name {
 
 struct WindowConfigurator: NSViewRepresentable {
     var language: AppLanguage
+    var showTitlebarActions = true
     private static let legacyAutosaveName = "ElephantAgentMainWindow"
     private static var configuredWindowIDs = Set<ObjectIdentifier>()
     private static var titlebarLanguageByWindowID: [ObjectIdentifier: AppLanguage] = [:]
@@ -20,9 +21,9 @@ struct WindowConfigurator: NSViewRepresentable {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            Self.configure(window, language: language)
+            Self.configure(window, language: language, showTitlebarActions: showTitlebarActions)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                Self.configure(window, language: language)
+                Self.configure(window, language: language, showTitlebarActions: showTitlebarActions)
             }
         }
         return view
@@ -31,11 +32,11 @@ struct WindowConfigurator: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             guard let window = nsView.window else { return }
-            Self.configure(window, language: language)
+            Self.configure(window, language: language, showTitlebarActions: showTitlebarActions)
         }
     }
 
-    private static func configure(_ window: NSWindow, language: AppLanguage) {
+    private static func configure(_ window: NSWindow, language: AppLanguage, showTitlebarActions: Bool) {
         let windowID = ObjectIdentifier(window)
         if !configuredWindowIDs.contains(windowID) {
             window.title = "Elephant Agent"
@@ -56,6 +57,12 @@ struct WindowConfigurator: NSViewRepresentable {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             configuredWindowIDs.insert(windowID)
+        }
+
+        guard showTitlebarActions else {
+            removeTitlebarActions(from: window)
+            titlebarLanguageByWindowID.removeValue(forKey: windowID)
+            return
         }
 
         if titlebarLanguageByWindowID[windowID] != language {
@@ -85,11 +92,18 @@ struct WindowConfigurator: NSViewRepresentable {
         window.setFrame(centeredFrame.integral, display: true)
     }
 
+    private static func removeTitlebarActions(from window: NSWindow) {
+        let accessoryID = NSUserInterfaceItemIdentifier("ElephantTitlebarActions")
+        for controller in window.titlebarAccessoryViewControllers.reversed() where controller.view.identifier == accessoryID {
+            if let index = window.titlebarAccessoryViewControllers.firstIndex(of: controller) {
+                window.removeTitlebarAccessoryViewController(at: index)
+            }
+        }
+    }
+
     private static func installTitlebarActions(on window: NSWindow, language: AppLanguage) {
         let accessoryID = NSUserInterfaceItemIdentifier("ElephantTitlebarActions")
-        window.titlebarAccessoryViewControllers
-            .filter { $0.view.identifier == accessoryID }
-            .forEach { window.removeTitlebarAccessoryViewController(at: window.titlebarAccessoryViewControllers.firstIndex(of: $0) ?? 0) }
+        removeTitlebarActions(from: window)
 
         let stack = NSStackView()
         stack.identifier = accessoryID
@@ -140,10 +154,14 @@ struct WindowConfigurator: NSViewRepresentable {
 
 private final class TitlebarIconButton: NSButton {
     private let handler: () -> Void
+    private var trackingAreaRef: NSTrackingArea?
+    private var isHovering = false {
+        didSet { updateVisualState() }
+    }
 
     init(symbolName: String, fallbackSymbolName: String, help: String, handler: @escaping () -> Void) {
         self.handler = handler
-        super.init(frame: NSRect(x: 0, y: 0, width: 26, height: 26))
+        super.init(frame: NSRect(x: 0, y: 0, width: 30, height: 30))
         self.image = Self.symbol(named: symbolName) ?? Self.symbol(named: fallbackSymbolName)
         self.imagePosition = .imageOnly
         self.isBordered = false
@@ -154,10 +172,13 @@ private final class TitlebarIconButton: NSButton {
         self.target = self
         self.action = #selector(runHandler)
         self.translatesAutoresizingMaskIntoConstraints = false
+        self.wantsLayer = true
+        self.layer?.cornerRadius = 8
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 26),
-            heightAnchor.constraint(equalToConstant: 26)
+            widthAnchor.constraint(equalToConstant: 30),
+            heightAnchor.constraint(equalToConstant: 30)
         ])
+        updateVisualState()
     }
 
     required init?(coder: NSCoder) {
@@ -170,8 +191,10 @@ private final class TitlebarIconButton: NSButton {
 
     override func mouseDown(with event: NSEvent) {
         isHighlighted = true
+        updateVisualState()
         handler()
         isHighlighted = false
+        updateVisualState()
     }
 
     override func performClick(_ sender: Any?) {
@@ -181,6 +204,44 @@ private final class TitlebarIconButton: NSButton {
     override func accessibilityPerformPress() -> Bool {
         handler()
         return true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingAreaRef {
+            removeTrackingArea(trackingAreaRef)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingAreaRef = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovering = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovering = false
+    }
+
+    private func updateVisualState() {
+        let fill: NSColor
+        if isHighlighted {
+            fill = NSColor.controlAccentColor.withAlphaComponent(0.16)
+            contentTintColor = NSColor.controlAccentColor
+        } else if isHovering {
+            fill = NSColor.controlAccentColor.withAlphaComponent(0.10)
+            contentTintColor = NSColor.labelColor
+        } else {
+            fill = .clear
+            contentTintColor = .secondaryLabelColor
+        }
+        layer?.backgroundColor = fill.cgColor
     }
 
     private static func symbol(named name: String) -> NSImage? {

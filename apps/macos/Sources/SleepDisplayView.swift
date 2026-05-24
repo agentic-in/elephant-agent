@@ -75,11 +75,13 @@ struct SleepDisplayView: View {
     @EnvironmentObject private var model: ElephantAppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var passwordFocused: Bool
+    @State private var passwordHovering = false
+    @State private var unlockHovering = false
 
     var body: some View {
         GeometryReader { proxy in
             let shortest = min(proxy.size.width, proxy.size.height)
-            let clockSize = min(92, max(64, shortest * 0.082))
+            let clockSize = min(116, max(78, shortest * 0.102))
             let avatarSize = min(132, max(94, shortest * 0.13))
             let brandTitleSize = min(34, max(27, shortest * 0.030))
             let brandSloganSize = min(17, max(14, shortest * 0.014))
@@ -129,14 +131,18 @@ struct SleepDisplayView: View {
 
                 VStack(spacing: 0) {
                     TimelineView(.periodic(from: Date(), by: 1.0)) { timeline in
-                        VStack(spacing: 4) {
+                        VStack(spacing: 5) {
                             Text(dateLine(for: timeline.date))
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.80))
                             Text(timeLine(for: timeline.date))
-                                .font(.system(size: clockSize, weight: .thin, design: .rounded))
+                                .font(.system(size: clockSize, weight: .medium, design: .rounded))
                                 .monospacedDigit()
-                                .foregroundStyle(.white.opacity(0.86))
+                                .foregroundStyle(.white.opacity(0.90))
+                            Text(companionDayLine())
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.76))
+                                .padding(.top, 1)
                         }
                     }
                     .padding(.top, max(42, proxy.size.height * 0.07))
@@ -157,8 +163,11 @@ struct SleepDisplayView: View {
                                 SecureField(model.text(.sleepPasswordPlaceholder), text: $model.sleepUnlockPassword)
                                     .textFieldStyle(.plain)
                                     .focused($passwordFocused)
-                                    .font(.callout.weight(.medium))
+                                    .font(.subheadline.weight(.medium))
                                     .foregroundStyle(.white.opacity(0.92))
+                                    .frame(maxWidth: .infinity)
+                                    .accessibilityLabel(model.text(.sleepPasswordPlaceholder))
+                                    .accessibilityHint(model.text(.sleepLockSubtitle))
                                     .onSubmit {
                                         model.verifySleepUnlock()
                                     }
@@ -166,31 +175,76 @@ struct SleepDisplayView: View {
                                 Button {
                                     model.verifySleepUnlock()
                                 } label: {
-                                    Image(systemName: "arrow.right.circle.fill")
-                                        .font(.system(size: 22, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.92))
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(.white.opacity(unlockHovering ? 0.98 : 0.86))
                                         .frame(width: 34, height: 34)
+                                        .background {
+                                            Circle()
+                                                .fill(.white.opacity(unlockHovering ? 0.24 : 0.14))
+                                        }
+                                        .overlay {
+                                            Circle()
+                                                .stroke(.white.opacity(unlockHovering ? 0.42 : 0.20), lineWidth: 1)
+                                        }
                                         .contentShape(Circle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(PressablePlainButtonStyle())
                                 .help(model.text(.sleepUnlock))
                                 .accessibilityLabel(model.text(.sleepUnlock))
+                                .onHover { hovering in
+                                    withAnimation(.easeOut(duration: 0.14)) {
+                                        unlockHovering = hovering
+                                    }
+                                }
                             }
                             .padding(.leading, 15)
-                            .padding(.trailing, 6)
-                            .frame(width: min(380, proxy.size.width * 0.46), height: 46)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(Capsule().stroke(model.sleepUnlockError.isEmpty ? .white.opacity(0.30) : ElephantTheme.ember.opacity(0.82), lineWidth: model.sleepUnlockError.isEmpty ? 1 : 1.4))
+                            .padding(.trailing, 5)
+                            .frame(width: min(356, max(268, proxy.size.width * 0.36)), height: 46)
+                            .background {
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay {
+                                        Capsule()
+                                            .fill(.white.opacity(passwordFocused ? 0.08 : (passwordHovering ? 0.06 : 0.03)))
+                                    }
+                            }
+                            .overlay {
+                                Capsule()
+                                    .stroke(
+                                        model.sleepUnlockError.isEmpty
+                                            ? .white.opacity(passwordFocused ? 0.48 : (passwordHovering ? 0.38 : 0.28))
+                                            : ElephantTheme.ember.opacity(0.82),
+                                        lineWidth: model.sleepUnlockError.isEmpty ? 1 : 1.4
+                                    )
+                            }
                             .shadow(color: Color.black.opacity(0.18), radius: 12, y: 6)
+                            .contentShape(Capsule())
+                            .onTapGesture {
+                                passwordFocused = true
+                            }
+                            .onHover { hovering in
+                                withAnimation(.easeOut(duration: 0.16)) {
+                                    passwordHovering = hovering
+                                }
+                            }
+                            .animation(.easeOut(duration: 0.16), value: passwordFocused)
+                            .animation(.easeOut(duration: 0.16), value: model.sleepUnlockError)
 
-                            Label(
-                                model.sleepUnlockError.isEmpty ? model.text(.sleepLockSubtitle) : model.sleepUnlockError,
-                                systemImage: model.sleepUnlockError.isEmpty ? "lock.fill" : "exclamationmark.circle.fill"
-                            )
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(model.sleepUnlockError.isEmpty ? .white.opacity(0.68) : ElephantTheme.ember)
-                            .labelStyle(.titleAndIcon)
-                            .multilineTextAlignment(.center)
+                            ZStack {
+                                if !model.sleepUnlockError.isEmpty {
+                                    Label(model.sleepUnlockError, systemImage: "exclamationmark.circle.fill")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(ElephantTheme.ember)
+                                        .labelStyle(.titleAndIcon)
+                                        .multilineTextAlignment(.center)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+                            }
+                            .frame(height: 18)
+                            .animation(.easeOut(duration: 0.16), value: passwordFocused)
+                            .animation(.easeOut(duration: 0.16), value: passwordHovering)
+                            .animation(.easeOut(duration: 0.18), value: model.sleepUnlockError)
                         } else {
                             Button {
                                 model.dismissSleepDisplay()
@@ -214,7 +268,7 @@ struct SleepDisplayView: View {
             }
         }
         .ignoresSafeArea()
-        .accessibilityLabel("Elephant Agent sleep display")
+        .accessibilityElement(children: .contain)
     }
 
     private func timeLine(for date: Date) -> String {
@@ -229,6 +283,68 @@ struct SleepDisplayView: View {
         formatter.locale = Locale(identifier: model.appLanguage.localeIdentifier)
         formatter.setLocalizedDateFormatFromTemplate("MMMMdEEEE")
         return formatter.string(from: date)
+    }
+
+    private func companionDayLine() -> String {
+        let days = companionDayCount()
+        switch model.appLanguage {
+        case .zh:
+            return "Elephant 陪伴你的第 \(days) 天"
+        case .fr:
+            return "Jour \(days) avec Elephant"
+        case .de:
+            return "Tag \(days) mit Elephant"
+        case .en:
+            return "Day \(days) with Elephant"
+        }
+    }
+
+    private func companionDayCount() -> Int {
+        guard let startDate = companionStartDate() else { return 1 }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let today = calendar.startOfDay(for: Date())
+        let dayDelta = calendar.dateComponents([.day], from: start, to: today).day ?? 0
+        return max(1, dayDelta + 1)
+    }
+
+    private func companionStartDate() -> Date? {
+        let currentStateID = model.snapshot.currentStateID.replacingOccurrences(of: "state:", with: "")
+        let current = model.snapshot.herdItems.first { item in
+            let itemID = item.id.replacingOccurrences(of: "state:", with: "")
+            let elephantID = item.elephantID.replacingOccurrences(of: "state:", with: "")
+            return item.current || (!currentStateID.isEmpty && (itemID == currentStateID || elephantID == currentStateID))
+        }
+        if let date = Self.parseDate(current?.createdAt ?? "") {
+            return date
+        }
+        return model.snapshot.herdItems
+            .compactMap { Self.parseDate($0.createdAt) }
+            .min()
+    }
+
+    private static func parseDate(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let date = ISO8601DateFormatter().date(from: trimmed) {
+            return date
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        for format in [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd"
+        ] {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: trimmed) {
+                return date
+            }
+        }
+        return nil
     }
 }
 

@@ -133,7 +133,8 @@ struct BrandMark: View {
 
     var body: some View {
         Group {
-            if let image = BundleAssets.image(named: "elephant-logo.png", subdirectory: "Brand") {
+            if let image = BundleAssets.image(named: "elephant-logo.png", subdirectory: "Brand")
+                ?? BundleAssets.image(named: "elephant-logo.png", subdirectory: "brand") {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
@@ -353,7 +354,6 @@ struct ProviderLogoView: View {
         if normalized.contains("gemini") { return "gemini-cli" }
         if normalized.contains("claude") { return "claude" }
         if normalized.contains("cursor") { return "cursor" }
-        if normalized.contains("hermes") { return "hermes" }
         if normalized.contains("openclaw") { return "openclaw" }
         if normalized.contains("opencode") { return "opencode" }
         if normalized.contains("kimi") || normalized.contains("moonshot") { return "kimi" }
@@ -389,7 +389,6 @@ struct ProviderLogoView: View {
         if normalizedProvider.contains("gemini") { return "Gemini" }
         if normalizedProvider.contains("claude") { return "Claude Code" }
         if normalizedProvider.contains("cursor") { return "Cursor" }
-        if normalizedProvider.contains("hermes") { return "Hermes" }
         if normalizedProvider.contains("openclaw") { return "OpenClaw" }
         if normalizedProvider.contains("opencode") { return "OpenCode" }
         if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return "Kimi" }
@@ -403,7 +402,6 @@ struct ProviderLogoView: View {
         if normalizedProvider.contains("gemini") { return "sparkle" }
         if normalizedProvider.contains("claude") { return "sparkles.rectangle.stack" }
         if normalizedProvider.contains("cursor") { return "cursorarrow" }
-        if normalizedProvider.contains("hermes") { return "figure.walk.motion" }
         if normalizedProvider.contains("openclaw") { return "hand.raised" }
         if normalizedProvider.contains("opencode") { return "chevron.left.forwardslash.chevron.right" }
         if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return "moon.stars" }
@@ -417,7 +415,6 @@ struct ProviderLogoView: View {
         if normalizedProvider.contains("gemini") { return ElephantTheme.accent }
         if normalizedProvider.contains("claude") { return ElephantTheme.ember }
         if normalizedProvider.contains("cursor") { return ElephantTheme.ink }
-        if normalizedProvider.contains("hermes") { return ElephantTheme.orange }
         if normalizedProvider.contains("openclaw") { return ElephantTheme.ember }
         if normalizedProvider.contains("kimi") || normalizedProvider.contains("moonshot") { return ElephantTheme.green }
         if normalizedProvider.contains("minimax") { return ElephantTheme.green }

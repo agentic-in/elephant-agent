@@ -17,7 +17,10 @@ struct ElephantAgentMacApp: App {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 980, idealWidth: 1420, maxWidth: .infinity, minHeight: 700, idealHeight: 900, maxHeight: .infinity)
-                .background(WindowConfigurator(language: model.appLanguage))
+                .background(WindowConfigurator(
+                    language: model.appLanguage,
+                    showTitlebarActions: !model.showingOnboarding && !model.isSleepDisplayPresented
+                ))
                 .preferredColorScheme(.light)
                 .task {
                     await model.launch()
@@ -105,7 +108,6 @@ struct ElephantCommands: Commands {
             Button(AppSection.settings.title(language: model.appLanguage)) {
                 model.selectedSection = .settings
             }
-            .keyboardShortcut(",", modifiers: [.command])
         }
 
         CommandMenu(Text(model.text(.menuActions))) {

@@ -25,6 +25,12 @@ EMBEDDING_RUNTIME_REQUIREMENTS=(
   "huggingface-hub>=0.30,<1"
   "modelscope>=1.10,<2"
 )
+VOICE_RUNTIME_REQUIREMENTS=(
+  "edge-tts>=7.2,<8"
+  "funasr>=1.2,<2"
+  "modelscope>=1.10,<2"
+  "torchaudio>=2.11,<3"
+)
 
 fail() {
   echo "Runtime packaging failed: $*" >&2
@@ -112,6 +118,20 @@ install_embedding_runtime_dependencies() {
   fi
 }
 
+install_voice_runtime_dependencies() {
+  local target="${1:-${SITE_PACKAGES}}"
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install \
+      --python "${bundled_python}" \
+      --target "${target}" \
+      --link-mode copy \
+      --prerelease=allow \
+      "${VOICE_RUNTIME_REQUIREMENTS[@]}"
+  else
+    "${bundled_python}" -m pip install --target "${target}" "${VOICE_RUNTIME_REQUIREMENTS[@]}"
+  fi
+}
+
 runtime_dependency_cache_key() {
   local requirements="$1"
   local python_version="$2"
@@ -123,6 +143,8 @@ runtime_dependency_cache_key() {
     cat "${requirements}"
     printf '\nembedding_requirements=\n'
     printf '%s\n' "${EMBEDDING_RUNTIME_REQUIREMENTS[@]}"
+    printf '\nvoice_requirements=\n'
+    printf '%s\n' "${VOICE_RUNTIME_REQUIREMENTS[@]}"
   } > "${key_source}"
   shasum -a 256 "${key_source}" | awk '{print $1}'
 }
@@ -159,12 +181,13 @@ install_runtime_dependency_layer() {
     "${bundled_python}" -m pip install --target "${temp_cache}" --requirements "${requirements}"
   fi
   install_embedding_runtime_dependencies "${temp_cache}"
+  install_voice_runtime_dependencies "${temp_cache}"
   PYTHONPATH="${temp_cache}" "${bundled_python}" - <<'PY'
 import importlib.util
 
 import playwright  # noqa: F401
 
-for module_name in ("sentence_transformers", "huggingface_hub", "modelscope"):
+for module_name in ("sentence_transformers", "huggingface_hub", "modelscope", "edge_tts"):
     if importlib.util.find_spec(module_name) is None:
         raise SystemExit(f"missing bundled runtime dependency: {module_name}")
 PY
@@ -215,6 +238,7 @@ else
   "${bundled_python}" -m pip install --upgrade pip
   "${bundled_python}" -m pip install --target "${SITE_PACKAGES}" "${REPO_ROOT}"
   install_embedding_runtime_dependencies "${SITE_PACKAGES}"
+  install_voice_runtime_dependencies "${SITE_PACKAGES}"
 fi
 
 PYTHONPATH="${SITE_PACKAGES}" "${bundled_python}" - <<'PY'
@@ -223,9 +247,9 @@ import importlib.util
 import apps.api  # noqa: F401
 import playwright  # noqa: F401
 
-for module_name in ("sentence_transformers", "huggingface_hub", "modelscope"):
+for module_name in ("sentence_transformers", "huggingface_hub", "modelscope", "edge_tts"):
     if importlib.util.find_spec(module_name) is None:
-        raise SystemExit(f"missing bundled embedding runtime dependency: {module_name}")
+        raise SystemExit(f"missing bundled runtime dependency: {module_name}")
 PY
 
 seed_playwright_browser_cache() {
