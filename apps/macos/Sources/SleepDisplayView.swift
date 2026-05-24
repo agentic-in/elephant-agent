@@ -81,7 +81,7 @@ struct SleepDisplayView: View {
     var body: some View {
         GeometryReader { proxy in
             let shortest = min(proxy.size.width, proxy.size.height)
-            let clockSize = min(116, max(78, shortest * 0.102))
+            let clockSize = min(128, max(86, shortest * 0.114))
             let avatarSize = min(132, max(94, shortest * 0.13))
             let brandTitleSize = min(34, max(27, shortest * 0.030))
             let brandSloganSize = min(17, max(14, shortest * 0.014))
@@ -136,9 +136,11 @@ struct SleepDisplayView: View {
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.80))
                             Text(timeLine(for: timeline.date))
-                                .font(.system(size: clockSize, weight: .medium, design: .rounded))
+                                .font(.system(size: clockSize, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(.white.opacity(0.90))
+                                .scaleEffect(x: 1.0, y: 1.12, anchor: .center)
+                                .padding(.vertical, 5)
                             Text(companionDayLine())
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.76))
@@ -200,7 +202,7 @@ struct SleepDisplayView: View {
                             }
                             .padding(.leading, 15)
                             .padding(.trailing, 5)
-                            .frame(width: min(356, max(268, proxy.size.width * 0.36)), height: 46)
+                            .frame(width: min(304, max(232, proxy.size.width * 0.28)), height: 43)
                             .background {
                                 Capsule()
                                     .fill(.ultraThinMaterial)
