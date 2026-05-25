@@ -11,7 +11,6 @@ provider-secrets.key
 .worktrees/
 apps/site/dist/
 apps/site/.docusaurus/
-apps/site/static/install.sh
 apps/site/node_modules/
 apps/dashboard/dist/
 apps/dashboard/node_modules/
