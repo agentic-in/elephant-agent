@@ -16796,7 +16796,7 @@ struct OnboardingFlow: View {
 
     private var panelHeight: CGFloat {
         if isHerdDiscoveryStep { return 668 }
-        if model.onboardingStep == learnStep { return 574 }
+        if model.onboardingStep == learnStep { return 604 }
         if isDropdownProfileStep { return 592 }
         return usesExpandedPanel ? 568 : 486
     }
@@ -21408,8 +21408,7 @@ struct OnboardingLearningStep: View {
             job: model.onboardingLearningJob,
             statusText: model.onboardingFinalizationStatus.isEmpty ? model.text(.learningPreparing) : model.onboardingFinalizationStatus
         )
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task {
             await model.startOnboardingFinalization()
         }
@@ -21425,12 +21424,12 @@ struct OnboardingLearningLivePanel: View {
     var body: some View {
         VStack(spacing: 12) {
             OnboardingLearningAnimation()
-                .frame(width: 62, height: 62)
+                .frame(width: 260, height: 156)
                 .accessibilityHidden(true)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text(model.text(.learningTitle))
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
                     .multilineTextAlignment(.center)
                 Text(panelSubtitle)
@@ -21439,7 +21438,7 @@ struct OnboardingLearningLivePanel: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 500)
+                    .frame(maxWidth: 520)
             }
 
             HStack(alignment: .center, spacing: 14) {
@@ -21451,15 +21450,15 @@ struct OnboardingLearningLivePanel: View {
                             .controlSize(.small)
                     } else {
                         Image(systemName: statusSymbol)
-                            .font(.callout.weight(.bold))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(statusTint)
                     }
                 }
-                .frame(width: 42, height: 42)
+                .frame(width: 36, height: 36)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(stageTitle)
-                        .font(.callout.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
                         .lineLimit(1)
                     Text(stageDetail)
@@ -21471,38 +21470,19 @@ struct OnboardingLearningLivePanel: View {
                 Spacer(minLength: 0)
                 Pill(text: statusLabel, tint: statusTint)
             }
-            .padding(12)
-            .frame(maxWidth: 540, minHeight: 76, alignment: .leading)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.64), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(statusTint.opacity(0.20), lineWidth: 1))
+            .frame(maxWidth: 590, minHeight: 52, alignment: .leading)
+
+            Divider()
+                .frame(maxWidth: 590)
+                .opacity(0.55)
 
             OnboardingLearningToolTimeline(job: job, statusText: statusText)
-                .frame(maxWidth: 540)
+                .frame(maxWidth: 590)
         }
-        .padding(.horizontal, 26)
-        .padding(.vertical, 20)
-        .frame(maxWidth: .infinity, minHeight: 442, alignment: .center)
-        .background(learningPanelBackground)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.white.opacity(0.50), lineWidth: 1))
-        .shadow(color: ElephantTheme.accent.opacity(0.10), radius: 30, x: 0, y: 18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: activityKey)
-    }
-
-    private var learningPanelBackground: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(.regularMaterial)
-            .overlay(
-                LinearGradient(
-                    colors: [
-                        ElephantTheme.accent.opacity(0.080),
-                        ElephantTheme.green.opacity(0.045),
-                        ElephantTheme.ember.opacity(0.035)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            )
     }
 
     private var activityKey: String {
@@ -21706,7 +21686,7 @@ struct OnboardingLearningToolTimeline: View {
     var statusText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .center, spacing: 9) {
                 Image(systemName: "waveform.path.ecg")
                     .font(.caption.weight(.bold))
@@ -21719,14 +21699,12 @@ struct OnboardingLearningToolTimeline: View {
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(statusTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(statusTint.opacity(0.18), lineWidth: 1))
+            .padding(.horizontal, 2)
+            .padding(.vertical, 2)
 
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 9) {
                         if !modelProgress.isEmpty {
                             OnboardingLearningModelLiveSlot(progress: modelProgress)
                                 .id("model")
@@ -21761,10 +21739,7 @@ struct OnboardingLearningToolTimeline: View {
             .frame(maxWidth: .infinity, alignment: .top)
             .clipped()
         }
-        .padding(11)
         .frame(maxWidth: .infinity, minHeight: timelineHeight, maxHeight: timelineHeight, alignment: .top)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.line.opacity(0.68), lineWidth: 1))
         .clipped()
         .animation(toolSlotAnimation, value: "\(latestToolItem?.id ?? "waiting")-\(modelProgress.text)")
     }
@@ -21780,9 +21755,9 @@ struct OnboardingLearningToolTimeline: View {
         return "\(title) · \(detail)"
     }
 
-    private var liveContentHeight: CGFloat { 118 }
+    private var liveContentHeight: CGFloat { 120 }
 
-    private var timelineHeight: CGFloat { 174 }
+    private var timelineHeight: CGFloat { 156 }
 
     private var activityScrollKey: String {
         "\(modelProgress.text)|\(latestToolItem?.id ?? "")|\(job?.progressStage ?? "")|\(job?.progressDetail ?? "")"
@@ -22056,10 +22031,8 @@ struct OnboardingLearningToolTimelineEmpty: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, minHeight: 76, maxHeight: 76, alignment: .leading)
-        .background(ElephantTheme.canvas.opacity(0.48), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.line.opacity(0.42), lineWidth: 1))
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
     }
 }
 
@@ -22101,10 +22074,8 @@ struct OnboardingLearningModelLiveSlot: View {
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: progress.text)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
-        .background(ElephantTheme.canvas.opacity(0.52), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.accent.opacity(0.18), lineWidth: 1))
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
         .onAppear {
             guard !reduceMotion else { return }
             pulse = true
@@ -22158,9 +22129,7 @@ struct OnboardingLearningToolLiveSlot: View {
                 .background(item.tint.opacity(0.10), in: Capsule())
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 76, maxHeight: 76, alignment: .center)
-        .background(item.tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(item.tint.opacity(0.16), lineWidth: 1))
+        .frame(maxWidth: .infinity, minHeight: 62, alignment: .center)
     }
 
     private var slotEyebrow: String {
@@ -22196,32 +22165,73 @@ struct OnboardingLearningAnimation: View {
             Canvas { context, size in
                 let seconds = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let radius = min(size.width, size.height) * 0.34
+                let horizontalRadius = size.width * 0.38
+                let verticalRadius = size.height * 0.36
                 let palette = [ElephantTheme.accent, ElephantTheme.green, ElephantTheme.ember]
 
-                for index in 0..<3 {
-                    let inset = CGFloat(index) * 18
-                    let rect = CGRect(x: center.x - radius + inset / 2, y: center.y - radius + inset / 2, width: (radius * 2) - inset, height: (radius * 2) - inset)
+                let glowRect = CGRect(
+                    x: center.x - horizontalRadius * 1.18,
+                    y: center.y - verticalRadius * 1.18,
+                    width: horizontalRadius * 2.36,
+                    height: verticalRadius * 2.36
+                )
+                context.fill(
+                    Path(ellipseIn: glowRect),
+                    with: .color(ElephantTheme.accent.opacity(0.055))
+                )
+
+                var nodes: [CGPoint] = []
+                for index in 0..<9 {
+                    let lane = CGFloat(index % 3)
+                    let nodeRadius = 0.62 + lane * 0.18
+                    let angle = seconds * (0.26 + Double(index % 4) * 0.035) + Double(index) * .pi * 2 / 9
+                    let point = CGPoint(
+                        x: center.x + CGFloat(cos(angle)) * horizontalRadius * nodeRadius,
+                        y: center.y + CGFloat(sin(angle)) * verticalRadius * nodeRadius
+                    )
+                    nodes.append(point)
+                }
+
+                for index in nodes.indices {
+                    let next = nodes[(index + 3) % nodes.count]
+                    var path = Path()
+                    path.move(to: nodes[index])
+                    path.addLine(to: next)
                     context.stroke(
-                        Path(ellipseIn: rect),
-                        with: .color(palette[index].opacity(0.26)),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [22, 16], dashPhase: CGFloat(seconds * 18 + Double(index) * 12))
+                        path,
+                        with: .color(ElephantTheme.accent.opacity(0.08)),
+                        style: StrokeStyle(lineWidth: 1.2, lineCap: .round)
                     )
                 }
 
-                for index in 0..<6 {
-                    let angle = seconds * 0.42 + Double(index) * .pi / 3
-                    let point = CGPoint(
-                        x: center.x + CGFloat(cos(angle)) * (radius + 8),
-                        y: center.y + CGFloat(sin(angle)) * (radius + 8)
+                for index in 0..<4 {
+                    let inset = CGFloat(index) * 20
+                    let rect = CGRect(
+                        x: center.x - horizontalRadius + inset / 2,
+                        y: center.y - verticalRadius + inset / 3,
+                        width: (horizontalRadius * 2) - inset,
+                        height: (verticalRadius * 2) - inset * 0.66
                     )
-                    let rect = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(palette[index % palette.count].opacity(0.18)),
+                        style: StrokeStyle(lineWidth: 1.8, lineCap: .round, dash: [24, 18], dashPhase: CGFloat(seconds * 16 + Double(index) * 12))
+                    )
+                }
+
+                for index in nodes.indices {
+                    let pulse = 0.74 + 0.18 * sin(seconds * 1.25 + Double(index))
+                    let size = CGFloat(6.5 + Double(index % 3) * 1.2) * CGFloat(pulse)
+                    let rect = CGRect(x: nodes[index].x - size / 2, y: nodes[index].y - size / 2, width: size, height: size)
                     context.fill(Path(ellipseIn: rect), with: .color(palette[index % palette.count].opacity(0.78)))
                 }
 
-                let core = CGRect(x: center.x - 8, y: center.y - 8, width: 16, height: 16)
+                let corePulse = CGFloat(1.0 + 0.06 * sin(seconds * 1.5))
+                let coreSize = CGFloat(24) * corePulse
+                let core = CGRect(x: center.x - coreSize / 2, y: center.y - coreSize / 2, width: coreSize, height: coreSize)
+                context.fill(Path(ellipseIn: core.insetBy(dx: -12, dy: -12)), with: .color(ElephantTheme.accent.opacity(0.08)))
                 context.fill(Path(ellipseIn: core), with: .color(ElephantTheme.accent.opacity(0.22)))
-                context.fill(Path(ellipseIn: core.insetBy(dx: 4, dy: 4)), with: .color(ElephantTheme.accent.opacity(0.62)))
+                context.fill(Path(ellipseIn: core.insetBy(dx: 7, dy: 7)), with: .color(ElephantTheme.accent.opacity(0.62)))
             }
         }
     }
