@@ -451,9 +451,9 @@ enum AppText {
         case .workSubtitle:
             return pick(language, en: "Give Elephant enough context to meet you where life is happening now.", zh: "给 Elephant 一点当前语境，让它知道最近该从哪里接住你。", fr: "Donnez à Elephant assez de contexte pour vous rejoindre là où votre vie se passe maintenant.", de: "Gib Elephant genug Kontext, um dort anzusetzen, wo gerade etwas passiert.")
         case .currentWork:
-            return pick(language, en: "Profession", zh: "职业", fr: "Profession", de: "Beruf")
+            return pick(language, en: "Current roles", zh: "你现在承担的角色", fr: "Rôles actuels", de: "Aktuelle Rollen")
         case .currentWorkPlaceholder:
-            return pick(language, en: "Choose the closest role", zh: "选择最接近你的职业", fr: "Choisissez le rôle le plus proche", de: "Wähle die passendste Rolle")
+            return pick(language, en: "Choose one or more", zh: "可以多选", fr: "Choisissez-en un ou plusieurs", de: "Eine oder mehrere wählen")
         case .school:
             return pick(language, en: "School or organization", zh: "学校/组织", fr: "École ou organisation", de: "Schule oder Organisation")
         case .optional:
