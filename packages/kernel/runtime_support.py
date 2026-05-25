@@ -120,7 +120,16 @@ class KernelStoragePort(Protocol):
     def load_episode(self, episode_id: str) -> Episode | None:
         """Load an Episode."""
 
-    def list_episodes(self, *, state_id: str | None = None) -> tuple[Episode, ...]:
+    def list_episodes(
+        self,
+        *,
+        state_id: str | None = None,
+        personal_model_id: str | None = None,
+        elephant_id: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
+        newest_first: bool = False,
+    ) -> tuple[Episode, ...]:
         """List Episodes."""
 
     def record_episode_transition(
@@ -136,7 +145,17 @@ class KernelStoragePort(Protocol):
     def upsert_loop(self, loop: Loop) -> None:
         """Persist a Loop."""
 
-    def list_loops(self, *, episode_id: str | None = None) -> tuple[Loop, ...]:
+    def list_loops(
+        self,
+        *,
+        episode_id: str | None = None,
+        state_id: str | None = None,
+        personal_model_id: str | None = None,
+        trigger_type: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
+        newest_first: bool = False,
+    ) -> tuple[Loop, ...]:
         """List Loops."""
 
     def enqueue_learning_job(
@@ -159,7 +178,18 @@ class KernelStoragePort(Protocol):
     def upsert_step(self, step: Step) -> None:
         """Persist a Step."""
 
-    def list_steps(self, *, loop_id: str | None = None) -> tuple[Step, ...]:
+    def list_steps(
+        self,
+        *,
+        loop_id: str | None = None,
+        episode_id: str | None = None,
+        state_id: str | None = None,
+        personal_model_id: str | None = None,
+        created_at_start: datetime | None = None,
+        created_at_end: datetime | None = None,
+        limit: int | None = None,
+        newest_first: bool = False,
+    ) -> tuple[Step, ...]:
         """List Steps."""
 
 

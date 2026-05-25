@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
+import logging
 from typing import Mapping
 
 from packages.contracts.layers import Episode, Loop, PersonalModel, State, Step
@@ -12,10 +13,28 @@ from packages.contracts.runtime import ContextBundle, ExecutionResult, PromptMes
 from .runtime_support import KernelSourceRequest, KernelStoragePort
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass(frozen=True, slots=True)
 class KernelRuntimeIdentity:
     personal_model: PersonalModel
     state: State
+
+
+def _preserve_current_state_binding(request: KernelSourceRequest) -> bool:
+    owner_scope = str(request.owner_scope or "").strip().lower()
+    surface = str(request.surface or "").strip().lower()
+    event_type = str(request.source_event_type or "").strip().lower()
+    source_payload = dict(request.source_payload or {})
+    context_mode = str(source_payload.get("context_mode") or "").strip().lower()
+    return (
+        owner_scope in {"background", "internal", "sub_agent", "learning_agent"}
+        or surface.startswith("learning.")
+        or ":sub_agent" in surface
+        or event_type == "turn.internal"
+        or context_mode == "learning_agent"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,8 +94,13 @@ class KernelStepRecorder:
         if callable(index_step):
             try:
                 index_step(step)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "step indexing failed for %s: %s",
+                    step.step_id,
+                    exc,
+                    exc_info=True,
+                )
         self._steps.append(step)
         return step
 
@@ -123,7 +147,8 @@ def resolve_runtime_identity(
                 f"not {request.personal_model_id}"
             )
         personal_model = storage.ensure_default_personal_model(personal_model_id=state.personal_model_id)
-        storage.switch_state(state.state_id, selected_at=current)
+        if not _preserve_current_state_binding(request):
+            storage.switch_state(state.state_id, selected_at=current)
         return KernelRuntimeIdentity(personal_model=personal_model, state=state)
 
     personal_model = storage.ensure_default_personal_model(
@@ -140,7 +165,8 @@ def resolve_runtime_identity(
             surface_bindings=(request.surface,),
             metadata={"source": "kernel.default_state"},
         )
-        storage.switch_state(state.state_id, selected_at=current)
+        if not _preserve_current_state_binding(request):
+            storage.switch_state(state.state_id, selected_at=current)
     return KernelRuntimeIdentity(personal_model=personal_model, state=state)
 
 
@@ -256,7 +282,15 @@ def open_episode_lifecycle(
 
     idle_closed: list[Episode] = []
     if policy == "gateway_idle_reuse":
-        for episode in reversed(storage.list_episodes(state_id=identity.state.state_id)):
+        try:
+            candidate_episodes = storage.list_episodes(
+                state_id=identity.state.state_id,
+                status="open",
+                newest_first=True,
+            )
+        except TypeError:
+            candidate_episodes = tuple(reversed(storage.list_episodes(state_id=identity.state.state_id)))
+        for episode in candidate_episodes:
             if episode.status != "open" or episode.metadata.get("policy") != policy:
                 continue
             if episode.metadata.get("route_id") != request.route_id or episode.entry_surface != request.surface:
@@ -371,6 +405,11 @@ def close_episode_lifecycle(
         if callable(index_exit):
             try:
                 index_exit(closed)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "episode lifecycle exit indexing failed for %s: %s",
+                    closed.episode_id,
+                    exc,
+                    exc_info=True,
+                )
     return closed

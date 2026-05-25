@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 from pathlib import Path
 import sys
 import unittest
@@ -11,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from packages.context import projection as projection_module
 from packages.context import (
     CheapToolResultPruner,
     EmbeddingProjectionRelevanceScorer,
@@ -99,6 +101,31 @@ class _FakeProjectionEmbeddingService:
         raise AssertionError("projection precompute must not synchronously embed query text")
 
 
+class _FailingProjectionEmbeddingService(_FakeProjectionEmbeddingService):
+    def cached_vector(self, **kwargs):
+        del kwargs
+        raise RuntimeError("cache lookup failed")
+
+    def pending_vector(self, **kwargs) -> bool:
+        del kwargs
+        raise RuntimeError("pending lookup failed")
+
+    def queue_backfill(self, **kwargs):
+        del kwargs
+        raise RuntimeError("queue failed")
+
+
+class _QueueFailingProjectionEmbeddingService(_FakeProjectionEmbeddingService):
+    def queue_backfill(self, **kwargs):
+        del kwargs
+        raise RuntimeError("queue failed")
+
+
+class _HealthFailingProjectionEmbeddingService(_FakeProjectionEmbeddingService):
+    def health(self) -> EmbeddingHealth:
+        raise RuntimeError("health failed")
+
+
 def _unit_vector(dimensions: int, *, index: int, source_text: str, text_index: int = 0) -> EmbeddingVector:
     return EmbeddingVector(
         text_index=text_index,
@@ -118,6 +145,79 @@ def _queued_entry(service: _FakeProjectionEmbeddingService, *, kind: str, contai
 
 
 class SessionProjectionCompactorTest(unittest.TestCase):
+    def test_projection_token_estimation_logs_tiktoken_failure(self) -> None:
+        class BrokenEncoding:
+            def encode(self, _text: str) -> list[int]:
+                raise RuntimeError("tokenizer failed")
+
+        previous_encoding = projection_module._TIKTOKEN_ENCODING
+        previous_use_tiktoken = projection_module._USE_TIKTOKEN
+        projection_module._TIKTOKEN_ENCODING = BrokenEncoding()
+        projection_module._USE_TIKTOKEN = True
+        try:
+            with self.assertLogs("packages.context.projection", level="DEBUG") as captured:
+                estimate = projection_module.estimate_projection_tokens("hello world")
+        finally:
+            projection_module._TIKTOKEN_ENCODING = previous_encoding
+            projection_module._USE_TIKTOKEN = previous_use_tiktoken
+
+        self.assertGreater(estimate, 0)
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Tiktoken encode failed", rendered_logs)
+        self.assertIn("tokenizer failed", rendered_logs)
+
+    def test_embedding_projection_scorer_logs_cache_lookup_failures(self) -> None:
+        service = _FailingProjectionEmbeddingService(loaded=True, auto_cache=False)
+        scorer = EmbeddingProjectionRelevanceScorer(service)
+
+        with self.assertLogs("packages.context.projection", level="DEBUG") as captured:
+            result = scorer.rank(
+                query="database migration decision",
+                candidates=("database migration decision",),
+                limit=1,
+            )
+
+        self.assertEqual(result, ())
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Projection query cached-vector lookup failed", rendered_logs)
+        self.assertIn("Projection query pending-vector lookup failed", rendered_logs)
+        self.assertIn("Projection candidate cached-vector lookup failed", rendered_logs)
+
+    def test_projection_history_backfill_logs_queue_failure(self) -> None:
+        service = _QueueFailingProjectionEmbeddingService(loaded=True, auto_cache=False)
+        messages = (
+            PromptMessage(role="user", content="database migration decision"),
+            PromptMessage(role="assistant", content="use a bounded WAL retry"),
+        )
+
+        with self.assertLogs("packages.context.projection", level="DEBUG") as captured:
+            state = queue_projection_history_embedding_backfill(
+                service,
+                messages=messages,
+                thread_focus="database migration",
+            )
+
+        self.assertIsNone(state)
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Projection history embedding backfill queue failed", rendered_logs)
+        self.assertIn("queue failed", rendered_logs)
+
+    def test_projection_history_backfill_logs_health_failure(self) -> None:
+        service = _HealthFailingProjectionEmbeddingService(loaded=True, auto_cache=False)
+        messages = (PromptMessage(role="user", content="database migration decision"),)
+
+        with self.assertLogs("packages.context.projection", level="DEBUG") as captured:
+            state = queue_projection_history_embedding_backfill(
+                service,
+                messages=messages,
+                thread_focus="database migration",
+            )
+
+        self.assertIsNone(state)
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Projection embedding health check failed", rendered_logs)
+        self.assertIn("health failed", rendered_logs)
+
     def test_default_projection_policy_compacts_at_sixty_percent(self) -> None:
         policy = ProjectionCompactionPolicy()
 
@@ -632,6 +732,42 @@ class SessionProjectionCompactorTest(unittest.TestCase):
         self.assertEqual(streamed, [])
         self.assertIs(provider._stream_observer, original_observer)
         self.assertIn("Compact quietly", summary)
+
+    def test_provider_summary_hook_logs_provider_failure_before_fallback(self) -> None:
+        class _Provider:
+            def generate(self, **kwargs):
+                del kwargs
+                raise RuntimeError("provider unavailable")
+
+        now = datetime.now(timezone.utc)
+        hook = ProviderProjectionSummaryHook(
+            provider=_Provider(),
+            profile=PersonalModelRuntimeState(profile_id="profile-test", display_name="Elephant Agent", mode="companion"),
+            session=Episode(
+                episode_id="session-test",
+                state_id="state:test",
+                personal_model_id="profile-test",
+                entry_surface="test",
+                elephant_id="elephant-test",
+                status="open",
+                started_at=now,
+                updated_at=now,
+            ),
+        )
+
+        with self.assertLogs("packages.context.projection", level="DEBUG") as captured:
+            summary = hook.summarize(
+                thread_focus="Compact with fallback",
+                previous_summary="",
+                compacted_lines=("user: old request",),
+                protected_tail=("assistant: done",),
+                token_budget=128,
+            )
+
+        self.assertIn("Compact with fallback", summary)
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Provider projection summary failed", rendered_logs)
+        self.assertIn("provider unavailable", rendered_logs)
 
 
 if __name__ == "__main__":

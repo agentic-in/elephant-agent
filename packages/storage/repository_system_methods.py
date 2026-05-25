@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 from typing import Mapping, Sequence
 from uuid import uuid4
 
 from packages.contracts import Episode, Loop, PersonalModel, State, Step
 from packages.contracts.runtime import (
-    LearningJob,
-    LoopState,
-    LoopStep,
-    PendingToolCall,
-    PersonalModelGrowthState,
     PersonalModelRuntimeState,
-    RetryState,
-    WaitCondition,
 )
 
 from .repository_support import (
@@ -303,6 +296,8 @@ def list_states(
     self,
     *,
     personal_model_id: str | None = None,
+    elephant_id: str | None = None,
+    state_anchor: str | None = None,
     status: str | None = None,
 ) -> tuple[State, ...]:
     clauses: list[str] = []
@@ -310,6 +305,12 @@ def list_states(
     if personal_model_id is not None:
         clauses.append("personal_model_id = ?")
         parameters.append(canonical_personal_model_id(personal_model_id))
+    if elephant_id is not None:
+        clauses.append("elephant_id = ?")
+        parameters.append(elephant_id)
+    if state_anchor is not None:
+        clauses.append("state_anchor = ?")
+        parameters.append(state_anchor)
     if status is not None:
         clauses.append("status = ?")
         parameters.append(status)
@@ -426,15 +427,40 @@ def load_episode(self, episode_id: str) -> Episode | None:
     return None if row is None else _episode_from_row(row)
 
 
-def list_episodes(self, *, state_id: str | None = None) -> tuple[Episode, ...]:
+def list_episodes(
+    self,
+    *,
+    state_id: str | None = None,
+    personal_model_id: str | None = None,
+    elephant_id: str | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    newest_first: bool = False,
+) -> tuple[Episode, ...]:
     sql = "SELECT * FROM episodes"
-    parameters: tuple[str, ...] = ()
+    clauses: list[str] = []
+    parameters: list[str | int] = []
     if state_id is not None:
-        sql += " WHERE state_id = ?"
-        parameters = (state_id,)
-    sql += " ORDER BY started_at ASC, episode_id ASC"
+        clauses.append("state_id = ?")
+        parameters.append(state_id)
+    if personal_model_id is not None:
+        clauses.append("personal_model_id = ?")
+        parameters.append(canonical_personal_model_id(personal_model_id))
+    if elephant_id is not None:
+        clauses.append("elephant_id = ?")
+        parameters.append(elephant_id)
+    if status is not None:
+        clauses.append("status = ?")
+        parameters.append(status)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sort_direction = "DESC" if newest_first else "ASC"
+    sql += f" ORDER BY started_at {sort_direction}, episode_id {sort_direction}"
+    if limit is not None:
+        sql += " LIMIT ?"
+        parameters.append(max(0, int(limit)))
     with self.connection() as connection:
-        rows = connection.execute(sql, parameters).fetchall()
+        rows = connection.execute(sql, tuple(parameters)).fetchall()
     return tuple(_episode_from_row(row) for row in rows)
 
 
@@ -482,15 +508,44 @@ def load_loop(self, loop_id: str) -> Loop | None:
     return None if row is None else _loop_from_row(row)
 
 
-def list_loops(self, *, episode_id: str | None = None) -> tuple[Loop, ...]:
+def list_loops(
+    self,
+    *,
+    episode_id: str | None = None,
+    state_id: str | None = None,
+    personal_model_id: str | None = None,
+    trigger_type: str | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    newest_first: bool = False,
+) -> tuple[Loop, ...]:
     sql = "SELECT * FROM loops"
-    parameters: tuple[str, ...] = ()
+    clauses: list[str] = []
+    parameters: list[str | int] = []
     if episode_id is not None:
-        sql += " WHERE episode_id = ?"
-        parameters = (episode_id,)
-    sql += " ORDER BY started_at ASC, loop_id ASC"
+        clauses.append("episode_id = ?")
+        parameters.append(episode_id)
+    if state_id is not None:
+        clauses.append("state_id = ?")
+        parameters.append(state_id)
+    if personal_model_id is not None:
+        clauses.append("personal_model_id = ?")
+        parameters.append(canonical_personal_model_id(personal_model_id))
+    if trigger_type is not None:
+        clauses.append("trigger_type = ?")
+        parameters.append(trigger_type)
+    if status is not None:
+        clauses.append("status = ?")
+        parameters.append(status)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sort_direction = "DESC" if newest_first else "ASC"
+    sql += f" ORDER BY started_at {sort_direction}, loop_id {sort_direction}"
+    if limit is not None:
+        sql += " LIMIT ?"
+        parameters.append(max(0, int(limit)))
     with self.connection() as connection:
-        rows = connection.execute(sql, parameters).fetchall()
+        rows = connection.execute(sql, tuple(parameters)).fetchall()
     return tuple(_loop_from_row(row) for row in rows)
 
 
@@ -545,15 +600,50 @@ def load_step(self, step_id: str) -> Step | None:
     return None if row is None else _step_from_row(row)
 
 
-def list_steps(self, *, loop_id: str | None = None) -> tuple[Step, ...]:
+def list_steps(
+    self,
+    *,
+    loop_id: str | None = None,
+    episode_id: str | None = None,
+    state_id: str | None = None,
+    personal_model_id: str | None = None,
+    created_at_start: datetime | None = None,
+    created_at_end: datetime | None = None,
+    limit: int | None = None,
+    newest_first: bool = False,
+) -> tuple[Step, ...]:
     sql = "SELECT * FROM steps"
-    parameters: tuple[str, ...] = ()
+    clauses: list[str] = []
+    parameters: list[str | int] = []
     if loop_id is not None:
-        sql += " WHERE loop_id = ?"
-        parameters = (loop_id,)
-    sql += " ORDER BY sequence ASC, created_at ASC"
+        clauses.append("loop_id = ?")
+        parameters.append(loop_id)
+    if episode_id is not None:
+        clauses.append("episode_id = ?")
+        parameters.append(episode_id)
+    if state_id is not None:
+        clauses.append("state_id = ?")
+        parameters.append(state_id)
+    if personal_model_id is not None:
+        clauses.append("personal_model_id = ?")
+        parameters.append(canonical_personal_model_id(personal_model_id))
+    if created_at_start is not None:
+        clauses.append("created_at >= ?")
+        parameters.append(_iso(created_at_start))
+    if created_at_end is not None:
+        clauses.append("created_at <= ?")
+        parameters.append(_iso(created_at_end))
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    if newest_first:
+        sql += " ORDER BY created_at DESC, step_id DESC"
+    else:
+        sql += " ORDER BY sequence ASC, created_at ASC"
+    if limit is not None:
+        sql += " LIMIT ?"
+        parameters.append(max(0, int(limit)))
     with self.connection() as connection:
-        rows = connection.execute(sql, parameters).fetchall()
+        rows = connection.execute(sql, tuple(parameters)).fetchall()
     return tuple(_step_from_row(row) for row in rows)
 
 
@@ -815,906 +905,3 @@ def delete_orphaned_profiles(
         connection.commit()
     return deleted
 
-
-def upsert_personal_model_growth(
-    self,
-    state: PersonalModelGrowthState,
-) -> None:
-    canonical_id = canonical_personal_model_id(state.profile_id)
-    now = datetime.now(timezone.utc)
-    with self.connection() as connection:
-        connection.execute(
-            """INSERT INTO personal_model_growth (
-                profile_id, growth_score, total_dialogues, total_tokens,
-                total_experiences, promoted_experiences, active_days, streak_days,
-                first_dialogue_at, last_dialogue_at, last_active_day,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(profile_id) DO UPDATE SET
-                growth_score = excluded.growth_score,
-                total_dialogues = excluded.total_dialogues,
-                total_tokens = excluded.total_tokens,
-                total_experiences = excluded.total_experiences,
-                promoted_experiences = excluded.promoted_experiences,
-                active_days = excluded.active_days,
-                streak_days = excluded.streak_days,
-                first_dialogue_at = excluded.first_dialogue_at,
-                last_dialogue_at = excluded.last_dialogue_at,
-                last_active_day = excluded.last_active_day,
-                updated_at = excluded.updated_at
-            """,
-            (
-                canonical_id,
-                state.growth_score,
-                state.total_dialogues,
-                state.total_tokens,
-                state.total_experiences,
-                state.promoted_experiences,
-                state.active_days,
-                state.streak_days,
-                _iso_optional_datetime(state.first_dialogue_at),
-                _iso_optional_datetime(state.last_dialogue_at),
-                state.last_active_day,
-                _iso_optional_datetime(state.created_at) or _iso(now),
-                _iso_optional_datetime(state.updated_at) or _iso(now),
-            ),
-        )
-        connection.commit()
-
-
-def load_personal_model_growth(
-    self,
-    profile_id: str,
-) -> PersonalModelGrowthState | None:
-    canonical_id = canonical_personal_model_id(profile_id)
-    with self.connection() as connection:
-        row = connection.execute(
-            "SELECT * FROM personal_model_growth WHERE profile_id = ?",
-            (canonical_id,),
-        ).fetchone()
-    if row is None:
-        return None
-    return PersonalModelGrowthState(
-        profile_id=str(row[0]),
-        growth_score=int(row[1]),
-        total_dialogues=int(row[2]),
-        total_tokens=int(row[3]),
-        total_experiences=int(row[4]),
-        promoted_experiences=int(row[5]),
-        active_days=int(row[6]),
-        streak_days=int(row[7]),
-        first_dialogue_at=_parse_optional_datetime(row[8]),
-        last_dialogue_at=_parse_optional_datetime(row[9]),
-        last_active_day=row[10] if row[10] is not None else None,
-        created_at=_parse_optional_datetime(row[11]),
-        updated_at=_parse_optional_datetime(row[12]),
-    )
-
-
-def enqueue_learning_job(
-    self,
-    *,
-    job_type: str,
-    trigger: str,
-    personal_model_id: str,
-    state_id: str,
-    episode_id: str,
-    loop_id: str | None = None,
-    summary: str = "",
-    metadata: Mapping[str, str] | None = None,
-    available_at: datetime | None = None,
-    max_attempts: int = 3,
-    force_new: bool = False,
-) -> LearningJob:
-    canonical_id = canonical_personal_model_id(personal_model_id)
-    existing = None if force_new else load_learning_job_for_episode(self, job_type=job_type, episode_id=episode_id)
-    if existing is not None and existing.status in {"queued", "running", "completed"}:
-        return existing
-    created_at = datetime.now(timezone.utc)
-    job_id = existing.job_id if existing is not None else f"learning-job:{uuid4().hex}"
-    queued = LearningJob(
-        job_id=job_id,
-        job_type=job_type,
-        trigger=trigger,
-        status="queued",
-        personal_model_id=canonical_id,
-        state_id=state_id,
-        episode_id=episode_id,
-        loop_id=loop_id,
-        summary=summary,
-        progress_stage="queued",
-        progress_detail="queued for background learning",
-        attempt_count=existing.attempt_count if existing is not None else 0,
-        max_attempts=max(1, max_attempts),
-        available_at=available_at or created_at,
-        created_at=existing.created_at if existing is not None else created_at,
-        started_at=None,
-        finished_at=None,
-        worker_id=None,
-        last_error="",
-        metadata=dict(metadata or (existing.metadata if existing is not None else {})),
-        result_json=dict(existing.result_json) if existing is not None else {},
-    )
-    with self.connection() as connection:
-        connection.execute(
-            """
-            INSERT OR REPLACE INTO learning_jobs (
-                job_id,
-                job_type,
-                trigger,
-                status,
-                personal_model_id,
-                state_id,
-                episode_id,
-                loop_id,
-                summary,
-                progress_stage,
-                progress_detail,
-                attempt_count,
-                max_attempts,
-                available_at,
-                created_at,
-                started_at,
-                finished_at,
-                worker_id,
-                last_error,
-                metadata_json,
-                result_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                queued.job_id,
-                queued.job_type,
-                queued.trigger,
-                queued.status,
-                queued.personal_model_id,
-                queued.state_id,
-                queued.episode_id,
-                queued.loop_id or "",
-                queued.summary,
-                queued.progress_stage,
-                queued.progress_detail,
-                queued.attempt_count,
-                queued.max_attempts,
-                _iso(queued.available_at),
-                _iso(queued.created_at),
-                _iso_optional_datetime(queued.started_at),
-                _iso_optional_datetime(queued.finished_at),
-                queued.worker_id or "",
-                queued.last_error,
-                _json_mapping(dict(queued.metadata)),
-                _json_dict_text(dict(queued.result_json)),
-            ),
-        )
-        connection.commit()
-    loaded = self.load_learning_job(queued.job_id)
-    if loaded is None:
-        raise RuntimeError("learning job was not persisted")
-    return loaded
-
-
-def load_learning_job(self, job_id: str) -> LearningJob | None:
-    with self.connection() as connection:
-        row = connection.execute(
-            "SELECT * FROM learning_jobs WHERE job_id = ?",
-            (job_id,),
-        ).fetchone()
-    if row is None:
-        return None
-    return _learning_job_from_row(row)
-
-
-
-def load_learning_job_for_episode(self, *, job_type: str, episode_id: str) -> LearningJob | None:
-    with self.connection() as connection:
-        row = connection.execute(
-            """
-            SELECT *
-            FROM learning_jobs
-            WHERE job_type = ? AND episode_id = ?
-            ORDER BY created_at DESC, job_id DESC
-            LIMIT 1
-            """,
-            (job_type, episode_id),
-        ).fetchone()
-    if row is None:
-        return None
-    return _learning_job_from_row(row)
-
-
-
-def list_learning_jobs(
-    self,
-    *,
-    statuses: tuple[str, ...] = (),
-    state_id: str | None = None,
-    personal_model_id: str | None = None,
-    episode_id: str | None = None,
-    limit: int | None = None,
-) -> tuple[LearningJob, ...]:
-    clauses: list[str] = []
-    parameters: list[object] = []
-    if statuses:
-        placeholders = ", ".join("?" for _ in statuses)
-        clauses.append(f"status IN ({placeholders})")
-        parameters.extend(statuses)
-    if state_id is not None:
-        clauses.append("state_id = ?")
-        parameters.append(state_id)
-    if personal_model_id is not None:
-        clauses.append("personal_model_id = ?")
-        parameters.append(canonical_personal_model_id(personal_model_id))
-    if episode_id is not None:
-        clauses.append("episode_id = ?")
-        parameters.append(episode_id)
-    where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
-    limit_sql = ""
-    if limit is not None and limit > 0:
-        limit_sql = " LIMIT ?"
-        parameters.append(limit)
-    with self.connection() as connection:
-        rows: Sequence[object] = connection.execute(
-            "SELECT * FROM learning_jobs"
-            + (" " + where_sql if where_sql else "")
-            + " ORDER BY created_at DESC, job_id DESC" + limit_sql,
-            tuple(parameters),
-        ).fetchall()
-    return tuple(_learning_job_from_row(row) for row in rows)
-
-
-
-def claim_learning_job(self, *, worker_id: str, now: datetime | None = None) -> LearningJob | None:
-    claimed_at = now or datetime.now(timezone.utc)
-    with self.connection() as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        row = connection.execute(
-            """
-            SELECT *
-            FROM learning_jobs
-            WHERE status = 'queued'
-              AND available_at <= ?
-            ORDER BY available_at ASC, created_at ASC, job_id ASC
-            LIMIT 1
-            """,
-            (_iso(claimed_at),),
-        ).fetchone()
-        if row is None:
-            connection.commit()
-            return None
-        connection.execute(
-            """
-            UPDATE learning_jobs
-            SET status = 'running',
-                progress_stage = 'starting',
-                progress_detail = 'worker claimed job',
-                attempt_count = attempt_count + 1,
-                started_at = ?,
-                finished_at = NULL,
-                worker_id = ?,
-                last_error = ''
-            WHERE job_id = ?
-            """,
-            (_iso(claimed_at), worker_id, str(row["job_id"])),
-        )
-        connection.commit()
-    return self.load_learning_job(str(row["job_id"]))
-
-
-
-def update_learning_job_progress(
-    self,
-    job_id: str,
-    *,
-    worker_id: str,
-    progress_stage: str,
-    progress_detail: str = "",
-) -> LearningJob:
-    with self.connection() as connection:
-        connection.execute(
-            """
-            UPDATE learning_jobs
-            SET progress_stage = ?,
-                progress_detail = ?,
-                worker_id = ?
-            WHERE job_id = ?
-            """,
-            (progress_stage, progress_detail, worker_id, job_id),
-        )
-        connection.commit()
-    loaded = self.load_learning_job(job_id)
-    if loaded is None:
-        raise KeyError(job_id)
-    return loaded
-
-
-
-def write_learning_job_result(
-    self,
-    job_id: str,
-    result: Mapping[str, object],
-    *,
-    worker_id: str = "learning-result",
-    progress_detail: str = "learning result written",
-    overwrite: bool = False,
-) -> LearningJob:
-    existing = self.load_learning_job(job_id)
-    if existing is None:
-        raise KeyError(job_id)
-    if existing.result_json and not overwrite:
-        raise ValueError(f"learning result already written for job: {job_id}")
-    payload = dict(result)
-    with self.connection() as connection:
-        connection.execute(
-            """
-            UPDATE learning_jobs
-            SET result_json = ?,
-                progress_stage = 'result_written',
-                progress_detail = ?,
-                worker_id = ?
-            WHERE job_id = ?
-            """,
-            (_json_dict_text(payload), progress_detail, worker_id, job_id),
-        )
-        connection.commit()
-    loaded = self.load_learning_job(job_id)
-    if loaded is None:
-        raise KeyError(job_id)
-    return loaded
-
-
-
-def complete_learning_job(
-    self,
-    job_id: str,
-    *,
-    worker_id: str,
-    finished_at: datetime | None = None,
-    progress_detail: str = "background learning completed",
-) -> LearningJob:
-    completed_at = finished_at or datetime.now(timezone.utc)
-    with self.connection() as connection:
-        connection.execute(
-            """
-            UPDATE learning_jobs
-            SET status = 'completed',
-                progress_stage = 'completed',
-                progress_detail = ?,
-                finished_at = ?,
-                worker_id = ?
-            WHERE job_id = ?
-            """,
-            (progress_detail, _iso(completed_at), worker_id, job_id),
-        )
-        connection.commit()
-    loaded = self.load_learning_job(job_id)
-    if loaded is None:
-        raise KeyError(job_id)
-    return loaded
-
-
-
-def fail_learning_job(
-    self,
-    job_id: str,
-    *,
-    worker_id: str,
-    error: str,
-    finished_at: datetime | None = None,
-    retry_delay_seconds: int = 0,
-) -> LearningJob:
-    failed_at = finished_at or datetime.now(timezone.utc)
-    existing = self.load_learning_job(job_id)
-    if existing is None:
-        raise KeyError(job_id)
-    will_retry = existing.attempt_count < existing.max_attempts
-    next_status = "queued" if will_retry else "failed"
-    next_stage = "retrying" if will_retry else "failed"
-    next_detail = "retry scheduled" if will_retry else "background learning failed"
-    available_at = failed_at if retry_delay_seconds <= 0 else failed_at.replace(microsecond=0) + timedelta(seconds=retry_delay_seconds)
-    with self.connection() as connection:
-        connection.execute(
-            """
-            UPDATE learning_jobs
-            SET status = ?,
-                progress_stage = ?,
-                progress_detail = ?,
-                available_at = ?,
-                finished_at = ?,
-                worker_id = ?,
-                last_error = ?
-            WHERE job_id = ?
-            """,
-            (
-                next_status,
-                next_stage,
-                next_detail,
-                _iso(available_at),
-                _iso(failed_at) if not will_retry else None,
-                worker_id,
-                error.strip(),
-                job_id,
-            ),
-        )
-        connection.commit()
-    loaded = self.load_learning_job(job_id)
-    if loaded is None:
-        raise KeyError(job_id)
-    return loaded
-
-
-
-_LOOP_STATE_SCHEMA_VERSION = 2
-
-
-def _wait_condition_to_mapping(condition: WaitCondition | None) -> Mapping[str, object] | None:
-    if condition is None:
-        return None
-    payload = dict(condition.payload or {})
-    event_match = dict(condition.event_match or {}) if condition.event_match is not None else None
-    return {
-        "kind": condition.kind,
-        "payload": payload,
-        "wake_at": _iso_optional_datetime(condition.wake_at),
-        "event_topic": condition.event_topic,
-        "event_match": event_match,
-        "tool_handle_id": condition.tool_handle_id,
-        "created_at": _iso_optional_datetime(condition.created_at),
-        "auto_wake": condition.auto_wake,
-    }
-
-
-def _wait_condition_from_mapping(value: object) -> WaitCondition | None:
-    if value is None:
-        return None
-    parsed = _maybe_json_mapping(value)
-    if parsed is None:
-        return None
-    kind = str(parsed.get("kind") or "").strip()
-    if not kind:
-        return None
-    payload_raw = parsed.get("payload") or {}
-    payload = {str(k): str(v) for k, v in dict(payload_raw).items()} if isinstance(payload_raw, Mapping) else {}
-    event_match_raw = parsed.get("event_match")
-    event_match: Mapping[str, str] | None
-    if isinstance(event_match_raw, Mapping):
-        event_match = {str(k): str(v) for k, v in event_match_raw.items()}
-    else:
-        event_match = None
-    return WaitCondition(
-        kind=kind,
-        payload=payload,
-        wake_at=_parse_optional_datetime(parsed.get("wake_at")),
-        event_topic=(str(parsed.get("event_topic")) if parsed.get("event_topic") else None),
-        event_match=event_match,
-        tool_handle_id=(str(parsed.get("tool_handle_id")) if parsed.get("tool_handle_id") else None),
-        created_at=_parse_optional_datetime(parsed.get("created_at")),
-        auto_wake=bool(parsed.get("auto_wake", True)),
-    )
-
-
-def _retry_state_to_mapping(state: RetryState | None) -> Mapping[str, object] | None:
-    if state is None:
-        return None
-    return {
-        "attempt": int(state.attempt),
-        "last_error_kind": state.last_error_kind,
-        "last_error_detail": state.last_error_detail,
-        "next_retry_at": _iso_optional_datetime(state.next_retry_at),
-        "idempotency_key": state.idempotency_key,
-    }
-
-
-def _retry_state_from_mapping(value: object) -> RetryState | None:
-    if value is None:
-        return None
-    parsed = _maybe_json_mapping(value)
-    if parsed is None:
-        return None
-    return RetryState(
-        attempt=int(parsed.get("attempt") or 0),
-        last_error_kind=str(parsed.get("last_error_kind") or ""),
-        last_error_detail=str(parsed.get("last_error_detail") or ""),
-        next_retry_at=_parse_optional_datetime(parsed.get("next_retry_at")),
-        idempotency_key=(str(parsed.get("idempotency_key")) if parsed.get("idempotency_key") else None),
-    )
-
-
-def _pending_tool_call_to_mapping(call: PendingToolCall) -> Mapping[str, object]:
-    arguments = dict(call.arguments or {})
-    return {
-        "call_id": call.call_id,
-        "tool_name": call.tool_name,
-        "arguments": arguments,
-        "started_at": _iso_optional_datetime(call.started_at),
-        "step_id": call.step_id,
-        "handle_id": call.handle_id,
-        "status": call.status,
-        "idempotency_key": call.idempotency_key,
-    }
-
-
-def _pending_tool_calls_to_list(calls: tuple[PendingToolCall, ...]) -> list[Mapping[str, object]]:
-    return [_pending_tool_call_to_mapping(call) for call in calls]
-
-
-def _pending_tool_calls_from_value(value: object) -> tuple[PendingToolCall, ...]:
-    if value is None:
-        return ()
-    parsed: object
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-        except (TypeError, ValueError):
-            return ()
-    else:
-        parsed = value
-    if not isinstance(parsed, list):
-        return ()
-    calls: list[PendingToolCall] = []
-    for item in parsed:
-        if not isinstance(item, Mapping):
-            continue
-        started_at = _parse_optional_datetime(item.get("started_at")) or datetime.now(timezone.utc)
-        arguments_raw = item.get("arguments") or {}
-        arguments = dict(arguments_raw) if isinstance(arguments_raw, Mapping) else {}
-        calls.append(
-            PendingToolCall(
-                call_id=str(item.get("call_id") or ""),
-                tool_name=str(item.get("tool_name") or ""),
-                arguments=arguments,
-                started_at=started_at,
-                step_id=str(item.get("step_id") or ""),
-                handle_id=(str(item.get("handle_id")) if item.get("handle_id") else None),
-                status=str(item.get("status") or "dispatched"),
-                idempotency_key=(
-                    str(item.get("idempotency_key"))
-                    if item.get("idempotency_key") is not None and str(item.get("idempotency_key")).strip()
-                    else None
-                ),
-            )
-        )
-    return tuple(calls)
-
-
-def _maybe_json_mapping(value: object) -> Mapping[str, object] | None:
-    """Decode a JSON-encoded mapping stored in Loop.metadata.
-
-    ``_json_metadata`` persists dict/list values as JSON strings so the
-    sqlite text columns stay text. Reading them back therefore needs a
-    JSON decode step. Any value that cannot be parsed into a mapping
-    returns None so callers can fall back to defaults.
-    """
-    if isinstance(value, Mapping):
-        return {str(k): v for k, v in value.items()}
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            return None
-        try:
-            parsed = json.loads(stripped)
-        except (TypeError, ValueError):
-            return None
-        if isinstance(parsed, Mapping):
-            return {str(k): v for k, v in parsed.items()}
-    return None
-
-
-def _active_evidence_refs_from_value(value: object) -> tuple[str, ...]:
-    if value is None:
-        return ()
-    if isinstance(value, (tuple, list)):
-        return tuple(str(item) for item in value if str(item).strip())
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            return ()
-        try:
-            parsed = json.loads(stripped)
-        except (TypeError, ValueError):
-            return ()
-        if isinstance(parsed, list):
-            return tuple(str(item) for item in parsed if str(item).strip())
-    return ()
-
-
-def migrate_loop_state_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
-    """Normalize Loop.metadata into schema v2 shape.
-
-    v1 rows (pre-harness) only carried the legacy budget reason in
-    ``waiting_reason``. v2 writers always emit ``schema_version=2`` and the
-    new keys (``wait_condition``, ``pending_tool_calls``, ``retry_state``,
-    ``partial_assistant``, ``context_bundle_id``, ``active_evidence_refs``,
-    ``heartbeat_at``, ``crash_marker``). The return value is a plain
-    dictionary suitable for ``LoopState`` construction (not for
-    re-serialization).
-    """
-    data = dict(metadata)
-    schema_version = int(data.get("schema_version") or 0)
-    if schema_version >= _LOOP_STATE_SCHEMA_VERSION:
-        return data
-    legacy_reason = (str(data.get("waiting_reason") or "").strip()) or None
-    if legacy_reason and "wait_condition" not in data:
-        data["wait_condition"] = {
-            "kind": "budget_exhausted",
-            "payload": {"legacy_reason": legacy_reason},
-            "auto_wake": False,
-        }
-    data.setdefault("pending_tool_calls", [])
-    data.setdefault("partial_assistant", None)
-    data.setdefault("context_bundle_id", None)
-    data.setdefault("active_evidence_refs", [])
-    data.setdefault("retry_state", None)
-    data.setdefault("heartbeat_at", None)
-    data.setdefault("crash_marker", None)
-    data["schema_version"] = _LOOP_STATE_SCHEMA_VERSION
-    return data
-
-
-def _loop_metadata(run: LoopState) -> dict[str, str]:
-    return _json_metadata(
-        {
-            "kind": "loop_checkpoint",
-            "schema_version": _LOOP_STATE_SCHEMA_VERSION,
-            "source_event_id": run.source_event_id,
-            "prompt": run.prompt,
-            "phase": run.phase,
-            "step_count": run.step_count,
-            "model_turn_count": run.model_turn_count,
-            "tool_call_count": run.tool_call_count,
-            "max_model_turns": run.max_model_turns,
-            "max_wall_time_seconds": run.max_wall_time_seconds,
-            "waiting_reason": run.waiting_reason,
-            "continuation_prompt": run.continuation_prompt,
-            "last_summary": run.last_summary,
-            "wait_condition": _wait_condition_to_mapping(run.wait_condition),
-            "pending_tool_calls": _pending_tool_calls_to_list(run.pending_tool_calls),
-            "partial_assistant": run.partial_assistant,
-            "context_bundle_id": run.context_bundle_id,
-            "active_evidence_refs": list(run.active_evidence_refs),
-            "retry_state": _retry_state_to_mapping(run.retry_state),
-            "heartbeat_at": _iso_optional_datetime(run.heartbeat_at),
-            "crash_marker": run.crash_marker,
-        }
-    )
-
-
-def _loop_state_from_loop(loop: Loop) -> LoopState:
-    metadata = migrate_loop_state_metadata(dict(loop.metadata))
-    return LoopState(
-        run_id=loop.loop_id,
-        episode_id=loop.episode_id,
-        source_event_id=str(metadata.get("source_event_id") or ""),
-        prompt=str(metadata.get("prompt") or ""),
-        status=loop.status,
-        phase=str(metadata.get("phase") or "model"),
-        step_count=int(metadata.get("step_count") or 0),
-        model_turn_count=int(metadata.get("model_turn_count") or 0),
-        tool_call_count=int(metadata.get("tool_call_count") or 0),
-        max_model_turns=int(metadata.get("max_model_turns") or 0),
-        max_wall_time_seconds=int(metadata.get("max_wall_time_seconds") or 0),
-        created_at=loop.started_at,
-        updated_at=loop.ended_at or loop.started_at,
-        waiting_reason=(str(metadata.get("waiting_reason")) if metadata.get("waiting_reason") else None),
-        continuation_prompt=(
-            str(metadata.get("continuation_prompt")) if metadata.get("continuation_prompt") else None
-        ),
-        last_summary=(str(metadata.get("last_summary")) if metadata.get("last_summary") else None),
-        schema_version=int(metadata.get("schema_version") or _LOOP_STATE_SCHEMA_VERSION),
-        wait_condition=_wait_condition_from_mapping(metadata.get("wait_condition")),
-        pending_tool_calls=_pending_tool_calls_from_value(metadata.get("pending_tool_calls")),
-        partial_assistant=(
-            str(metadata.get("partial_assistant")) if metadata.get("partial_assistant") else None
-        ),
-        context_bundle_id=(
-            str(metadata.get("context_bundle_id")) if metadata.get("context_bundle_id") else None
-        ),
-        active_evidence_refs=_active_evidence_refs_from_value(metadata.get("active_evidence_refs")),
-        retry_state=_retry_state_from_mapping(metadata.get("retry_state")),
-        heartbeat_at=_parse_optional_datetime(metadata.get("heartbeat_at")),
-        crash_marker=(str(metadata.get("crash_marker")) if metadata.get("crash_marker") else None),
-    )
-
-
-def upsert_loop_checkpoint(self, run: LoopState, *, verify: bool = True) -> None:
-    episode = self.load_episode(run.episode_id)
-    if episode is None:
-        episode_state = self.load_episode_state(run.episode_id)
-        if episode_state is None:
-            raise KeyError(run.episode_id)
-        self.upsert_episode_state(episode_state)
-        episode = self.load_episode(run.episode_id)
-    if episode is None:
-        raise KeyError(run.episode_id)
-    state = self.load_state(episode.state_id)
-    if state is None:
-        raise KeyError(episode.state_id)
-    existing = self.load_loop(run.run_id)
-    loop = Loop(
-        loop_id=run.run_id,
-        episode_id=episode.episode_id,
-        state_id=state.state_id,
-        personal_model_id=episode.personal_model_id,
-        trigger_type="model_tool_checkpoint",
-        status=run.status,
-        started_at=run.created_at,
-        ended_at=run.updated_at if run.status in {"completed", "failed"} else None,
-        summary=run.last_summary or (existing.summary if existing is not None else ""),
-        outcome=run.waiting_reason or (existing.outcome if existing is not None else ""),
-        metadata=_loop_metadata(run),
-    )
-    self.upsert_loop(loop)
-    if verify:
-        reloaded = _verify_loop_checkpoint_roundtrip(self, run)
-        if reloaded is None:
-            raise RuntimeError(
-                f"loop checkpoint verify failed: run {run.run_id} did not round-trip"
-            )
-
-
-def _verify_loop_checkpoint_roundtrip(self, run: LoopState) -> LoopState | None:
-    """Load the checkpoint back and confirm the key fields survive.
-
-    We do not compare every field for equality — timestamps may be
-    normalized, optional values may collapse — but we do require that:
-      * the run reloads,
-      * status / phase / step counters match what we just wrote,
-      * the v2 envelope (schema_version=2) was persisted,
-      * any wait_condition kind the caller chose round-tripped.
-
-    Returning None signals the caller that the write did not land
-    correctly; the caller raises so the runtime can treat park as
-    refused rather than assume durable persistence.
-    """
-    loop = self.load_loop(run.run_id)
-    if loop is None:
-        return None
-    reloaded = _loop_state_from_loop(loop)
-    if reloaded.schema_version < _LOOP_STATE_SCHEMA_VERSION:
-        return None
-    if reloaded.status != run.status:
-        return None
-    if reloaded.phase != run.phase:
-        return None
-    if reloaded.step_count != run.step_count:
-        return None
-    if reloaded.model_turn_count != run.model_turn_count:
-        return None
-    if reloaded.tool_call_count != run.tool_call_count:
-        return None
-    if (run.wait_condition is None) != (reloaded.wait_condition is None):
-        return None
-    if run.wait_condition is not None and reloaded.wait_condition is not None:
-        if run.wait_condition.kind != reloaded.wait_condition.kind:
-            return None
-    return reloaded
-
-
-def list_loop_checkpoints(
-    self,
-    *,
-    statuses: tuple[str, ...] = ("active", "pending"),
-    heartbeat_before: datetime | None = None,
-    personal_model_id: str | None = None,
-    state_id: str | None = None,
-    limit: int | None = None,
-) -> tuple[LoopState, ...]:
-    """Return loop checkpoints, filtered for supervisor use.
-
-    The supervisor scans for loops whose heartbeat is older than a
-    staleness TTL to reclaim crashed runs. The resume path also needs
-    to locate parked loops by state or personal model. This helper
-    walks ``list_loops`` (which already reads every Loop row) and
-    filters client-side — Loop counts per episode stay bounded so the
-    linear scan is fine for Phase 1.
-    """
-    kept: list[LoopState] = []
-    active_status_filter = set(str(status) for status in statuses if str(status).strip())
-    for loop in self.list_loops():
-        if loop.metadata.get("kind") != "loop_checkpoint":
-            continue
-        if active_status_filter and loop.status not in active_status_filter:
-            continue
-        if state_id is not None and loop.state_id != state_id:
-            continue
-        if personal_model_id is not None:
-            if canonical_personal_model_id(loop.personal_model_id) != canonical_personal_model_id(
-                personal_model_id
-            ):
-                continue
-        run = _loop_state_from_loop(loop)
-        if heartbeat_before is not None:
-            hb = run.heartbeat_at
-            if hb is None:
-                # No heartbeat recorded yet; treat as stale so long-lived rows
-                # from an older writer still become supervisor candidates.
-                pass
-            elif hb > heartbeat_before:
-                continue
-        kept.append(run)
-    kept.sort(
-        key=lambda item: (
-            item.heartbeat_at or item.updated_at or item.created_at,
-            item.run_id,
-        )
-    )
-    if limit is not None and limit > 0:
-        kept = kept[:limit]
-    return tuple(kept)
-
-
-def load_latest_open_loop_checkpoint(
-    self,
-    episode_id: str,
-) -> LoopState | None:
-    candidates = [
-        loop
-        for loop in self.list_loops(episode_id=episode_id)
-        if loop.metadata.get("kind") == "loop_checkpoint" and loop.status in {"active", "pending"}
-    ]
-    if not candidates:
-        return None
-    latest = sorted(
-        candidates,
-        key=lambda loop: ((loop.ended_at or loop.started_at).isoformat(), loop.started_at.isoformat(), loop.loop_id),
-        reverse=True,
-    )[0]
-    return _loop_state_from_loop(latest)
-
-
-def append_loop_checkpoint_step(self, step: LoopStep) -> None:
-    loop = self.load_loop(step.run_id)
-    if loop is None:
-        raise KeyError(step.run_id)
-    phase = "acting" if step.kind == "tool" else "reasoning"
-    self.upsert_step(
-        Step(
-            step_id=step.step_id,
-            loop_id=loop.loop_id,
-            episode_id=loop.episode_id,
-            state_id=loop.state_id,
-            personal_model_id=loop.personal_model_id,
-            phase=phase,
-            action=step.kind,
-            status="completed",
-            sequence=step.step_index,
-            summary=step.title,
-            outcome=step.outcome or "",
-            payload_refs=(),
-            metadata=_json_metadata(
-                {
-                    "checkpoint_kind": step.kind,
-                    "content": step.content,
-                    "tool_name": step.tool_name,
-                }
-            ),
-            created_at=step.created_at,
-        )
-    )
-
-
-def _step_to_loop_step(step: Step) -> LoopStep:
-    metadata = dict(step.metadata)
-    return LoopStep(
-        step_id=step.step_id,
-        run_id=step.loop_id,
-        episode_id=step.episode_id,
-        step_index=step.sequence,
-        kind=metadata.get("checkpoint_kind", step.action),
-        title=step.summary,
-        content=metadata.get("content", step.summary),
-        created_at=step.created_at,
-        outcome=step.outcome or None,
-        tool_name=metadata.get("tool_name") or None,
-    )
-
-
-def list_loop_checkpoint_steps(
-    self,
-    run_id: str,
-    *,
-    limit: int | None = None,
-) -> tuple[LoopStep, ...]:
-    steps = tuple(reversed(self.list_steps(loop_id=run_id)))
-    if limit is not None:
-        steps = steps[:limit]
-    return tuple(_step_to_loop_step(step) for step in steps)

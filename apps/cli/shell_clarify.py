@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from queue import Empty, Queue
 import threading
 from typing import TYPE_CHECKING, Callable
@@ -12,6 +13,8 @@ from packages.contracts.runtime import ExecutionResult
 from packages.tools.surfaces import ClarifySurface
 
 from .shell_stack import Condition, ConditionalContainer, FormattedText, FormattedTextControl, Window
+
+LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .shell import ProductizedShell
@@ -93,6 +96,7 @@ def route_clarify_answer(shell: ProductizedShell, raw_answer: str) -> bool:
     try:
         state.response_queue.put_nowait(answer)
     except Exception:
+        LOGGER.warning("failed to enqueue shell clarify answer", exc_info=True)
         return True
     _invalidate_clarify(shell)
     return True
@@ -149,4 +153,5 @@ def _invalidate_clarify(shell: ProductizedShell) -> None:
     try:
         invalidator()
     except Exception:
+        LOGGER.warning("failed to invalidate shell clarify UI", exc_info=True)
         return

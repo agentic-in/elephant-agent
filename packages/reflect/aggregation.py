@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from hashlib import sha1
+import logging
 from typing import Any
 
 from .lifecycle import load_candidates, should_suppress_candidate
 from .types import SkillOptimizationCandidate, ToolTrajectorySignal
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _metadata_map(raw: object) -> Mapping[str, str]:
@@ -32,6 +35,11 @@ def _load_active_affinity_map(repository: Any, *, personal_model_id: str) -> dic
     try:
         facts = tuple(list_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
+        LOGGER.warning(
+            "failed to load active affinity facts for reflect aggregation",
+            extra={"personal_model_id": personal_model_id},
+            exc_info=True,
+        )
         return {}
     affinity_map: dict[str, tuple[str, str]] = {}
     for fact in facts:

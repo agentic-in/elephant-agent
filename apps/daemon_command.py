@@ -216,7 +216,7 @@ def command_main(
     *,
     default_state_dir: Path | None = None,
 ) -> int:
-    from apps.cli.typer_support import run_typer_app
+    from packages.operator.typer_support import run_typer_app
 
     resolved_argv = list(argv) if argv is not None else None
     if resolved_argv == []:

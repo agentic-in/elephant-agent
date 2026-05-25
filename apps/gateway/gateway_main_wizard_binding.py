@@ -3,11 +3,10 @@
 from __future__ import annotations
 import asyncio
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import getpass
-import apps.cli.wizard as cli_wizard
 import importlib.util
 import json
 import os
@@ -18,22 +17,17 @@ import signal
 import subprocess
 import sys
 import time
+from typing import Protocol
 from wsgiref.simple_server import make_server
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
+import packages.operator.wizard as cli_wizard
+from packages.operator.shell_stack import Align, Console, Group, Panel, RICH_AVAILABLE, Table, Text
+from packages.operator.shell_ui import (
     BRAND_ACCENT,
     BRAND_ACCENT_STRONG,
     BRAND_LIGHT,
     BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
+    resolve_elephant_version as _resolve_elephant_version,
     render_elephant_mark,
 )
 from apps.provider_runtime import load_runtime_local_secret_env
@@ -91,23 +85,41 @@ except ModuleNotFoundError:  # pragma: no cover - optional wizard polish
 
 from .gateway_main_wizard_ui import *  # noqa: F401,F403
 
+
+class GatewayControlRuntimeLike(Protocol):
+    def list_herd(self, *, limit: int = 12) -> tuple[object, ...]:
+        ...
+
+    def session_ids_for_elephant(self, elephant_id: str) -> tuple[str, ...]:
+        ...
+
+    def inspect_session(self, session_id: str) -> object:
+        ...
+
+
+GatewayControlRuntimeFactory = Callable[[Path], GatewayControlRuntimeLike]
+
+
 def _load_gateway_control_runtime(
     *,
     profile_dir: Path | None,
     state_dir: Path | None,
-) -> CliRuntime | None:
+    runtime_factory: GatewayControlRuntimeFactory | None = None,
+) -> GatewayControlRuntimeLike | None:
     if profile_dir is None or state_dir is None:
         return None
     database_path = state_dir / "elephant.sqlite3"
     if not profile_dir.exists() or not state_dir.exists() or not database_path.exists():
         return None
+    if runtime_factory is None:
+        return None
     try:
-        return CliRuntime.create(state_dir=state_dir)
+        return runtime_factory(state_dir)
     except (OSError, RuntimeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
         return None
 
 def _gateway_elephant_choices(
-    runtime: CliRuntime,
+    runtime: GatewayControlRuntimeLike,
     *,
     current_elephant_id: str,
 ) -> tuple[GatewayWizardChoice, ...]:
@@ -160,7 +172,7 @@ def _gateway_elephant_choices(
     return tuple(choices)
 
 def _gateway_session_choices(
-    runtime: CliRuntime,
+    runtime: GatewayControlRuntimeLike,
     *,
     elephant_id: str,
     current_session_id: str,
@@ -212,7 +224,7 @@ def _gateway_session_choices(
 
 def _prompt_gateway_control_binding(
     *,
-    runtime: CliRuntime | None,
+    runtime: GatewayControlRuntimeLike | None,
     current_elephant_id: str,
     current_session_id: str,
     allow_back: bool = False,

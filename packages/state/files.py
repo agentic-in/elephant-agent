@@ -9,11 +9,13 @@ sanitized snapshot for the Episode.
 from __future__ import annotations
 
 from dataclasses import replace
+import logging
 from pathlib import Path
 import re
 from urllib.parse import unquote
 
 ELEPHANT_IDENTITY_FILENAME = "ELEPHANT.md"
+LOGGER = logging.getLogger(__name__)
 
 
 def elephant_identity_file_path(elephant_root: Path) -> Path:
@@ -91,6 +93,10 @@ def _display_name_from_authored_identity(profile, authored_text: str, *, elephan
 
         parsed = parse_elephant_identity_display_name(authored_text)
     except Exception:
+        LOGGER.debug(
+            "Failed to parse authored elephant identity display name; using elephant folder fallback.",
+            exc_info=True,
+        )
         parsed = None
     if parsed:
         return parsed
@@ -138,6 +144,10 @@ def _refreshed_default_identity_text(profile, *, display_name: str) -> str:
 
         return render_default_elephant_identity(display_name=display_name)
     except Exception:
+        LOGGER.debug(
+            "Failed to render refreshed default elephant identity; using deterministic fallback text.",
+            exc_info=True,
+        )
         return "\n".join(
             (
                 f"You are {display_name}, this person's companion.",

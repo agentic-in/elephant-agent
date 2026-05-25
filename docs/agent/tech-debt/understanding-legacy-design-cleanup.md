@@ -1,5 +1,10 @@
 # Understanding Legacy Design Cleanup
 
+Status: closed. This entry is retained as the historical closeout record for
+the system-layer reset. New drift found after this cleanup should be filed as a
+new tech-debt entry or linked from the active scorecard roadmap rather than
+reopening this completed checklist.
+
 ## Current State
 
 The product source of truth is the Personal-Model-first Understanding System:

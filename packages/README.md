@@ -2,27 +2,34 @@
 
 Shared runtime modules and capability contracts live here.
 
-Current planned modules:
+Current modules:
 
-- `contracts/`
-- `capabilities/`
-- `kernel/`
-- `profile/`
-- `session/`
-- `memory/`
-- `evidence/`
-- `embeddings/`
-- `learning/`
-- `context/`
-- `models/`
 - `auth/`
-- `tools/`
-- `skills/`
+- `capabilities/`
+- `context/`
+- `continuity/`
+- `contracts/`
+- `cron/`
+- `curiosity/`
+- `embeddings/`
+- `evidence/`
+- `experience/`
 - `gateway_core/`
-- `voice/`
+- `growth/`
+- `harness/`
+- `kernel/`
+- `models/`
+- `observability/`
+- `operator/`
+- `reflect/`
 - `security/`
+- `semantic_index/`
+- `skills/`
+- `state/`
 - `storage/`
 - `telemetry/`
+- `tools/`
+- `understanding/`
 
 Working rules:
 

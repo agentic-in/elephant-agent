@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from difflib import unified_diff
+import logging
 import os
 from pathlib import Path
 import re
@@ -171,6 +172,9 @@ __all__ = [
 from .shell_support_runtime import *  # noqa: F401,F403
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def _first_language_from_runtime(runtime, profile) -> str:
     try:
         from packages.runtime_config import global_config_path_for_state_dir, load_global_config
@@ -181,6 +185,7 @@ def _first_language_from_runtime(runtime, profile) -> str:
         if value:
             return str(value).strip() or "en"
     except Exception:
+        LOGGER.warning("failed to load first language for shell UI", exc_info=True)
         pass
     state = getattr(profile, "state", None)
     for preference in tuple(getattr(state, "preferences", ()) or ()):
@@ -494,6 +499,7 @@ def _status_bar_elephant_label(self) -> str:
             name = elephant_id
         label = _compact_line(name or "Elephant Agent", limit=18)
     except Exception:
+        LOGGER.warning("failed to refresh shell status elephant label", exc_info=True)
         label = "Elephant Agent"
     self._status_bar_elephant_cache = (now, label)
     return label
@@ -511,10 +517,12 @@ def _status_refresher_prime(self) -> None:
     try:
         _status_bar_growth(self)
     except Exception:
+        LOGGER.warning("failed to prime shell status growth cache", exc_info=True)
         pass
     try:
         _status_bar_elephant_label(self)
     except Exception:
+        LOGGER.warning("failed to prime shell status elephant label cache", exc_info=True)
         pass
 
 

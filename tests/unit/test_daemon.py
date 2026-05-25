@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import os
 import signal
 import sys
@@ -485,6 +486,108 @@ class TestDaemonTaskGuard:
 
 class TestServiceDaemonStartup:
     """Tests for daemon service startup wiring."""
+
+    def test_gateway_service_key_discovery_logs_registry_failures(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from apps.daemon import ServiceDaemon
+
+        class BrokenRegistry:
+            def service_keys(self) -> tuple[str, ...]:
+                raise RuntimeError("registry unavailable")
+
+        daemon = ServiceDaemon(state_dir=tmp_path, cli_state_dir=tmp_path)
+        daemon._gateway_app = SimpleNamespace(plugin_registry=BrokenRegistry())
+        daemon._daemon_services["feishu"] = object()
+
+        with caplog.at_level(logging.DEBUG, logger="elephant.daemon"):
+            service_keys = daemon._gateway_service_keys()
+
+        assert service_keys == ("feishu",)
+        assert "service_keys() failed" in caplog.text
+        assert "registry unavailable" in caplog.text
+
+    def test_get_status_logs_service_describe_failures(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from apps.daemon import ServiceDaemon, DaemonServiceStatus
+
+        class BrokenService:
+            def describe(self) -> dict[str, object]:
+                raise RuntimeError("describe unavailable")
+
+        daemon = ServiceDaemon(state_dir=tmp_path, cli_state_dir=tmp_path)
+        daemon._daemon_services["feishu"] = BrokenService()
+        daemon._service_statuses["feishu"] = DaemonServiceStatus(name="feishu", status="running")
+
+        with caplog.at_level(logging.DEBUG, logger="elephant.daemon"):
+            status = daemon.get_status()
+
+        assert status["services"]["feishu"]["status"] == "running"
+        assert "details" not in status["services"]["feishu"]
+        assert "feishu describe() failed" in caplog.text
+        assert "describe unavailable" in caplog.text
+
+    def test_run_cron_job_now_uses_root_cli_runtime_bridge(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from apps.daemon import ServiceDaemon
+
+        captured: dict[str, object] = {}
+
+        def fake_create_runtime(*, state_dir: Path, warm_embedding: bool = True) -> object:
+            captured["state_dir"] = state_dir
+            captured["warm_embedding"] = warm_embedding
+            return SimpleNamespace(run_cron_job_now=lambda job_id: {"job_id": job_id})
+
+        monkeypatch.setattr(
+            "apps.cli_runtime_bridge.create_cli_runtime_for_app_support",
+            fake_create_runtime,
+        )
+
+        daemon = ServiceDaemon(state_dir=tmp_path, cli_state_dir=tmp_path)
+        result = daemon.run_cron_job_now(cli_state_dir=tmp_path / "cli", job_id="job-1")
+
+        assert result == {"job_id": "job-1"}
+        assert captured == {
+            "state_dir": tmp_path / "cli",
+            "warm_embedding": True,
+        }
+
+    def test_reflect_context_runtime_uses_root_cli_runtime_bridge(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from apps.daemon import ServiceDaemon
+
+        runtime = object()
+        captured: dict[str, object] = {}
+
+        def fake_create_runtime(*, state_dir: Path, warm_embedding: bool = True) -> object:
+            captured["state_dir"] = state_dir
+            captured["warm_embedding"] = warm_embedding
+            return runtime
+
+        monkeypatch.setattr(
+            "apps.cli_runtime_bridge.create_cli_runtime_for_app_support",
+            fake_create_runtime,
+        )
+
+        daemon = ServiceDaemon(state_dir=tmp_path, cli_state_dir=tmp_path)
+        result = daemon.reflect_context_runtime(state_dir=tmp_path / "state")
+
+        assert result is runtime
+        assert captured == {
+            "state_dir": tmp_path / "state",
+            "warm_embedding": False,
+        }
 
     def test_gateway_app_start_disables_standalone_learning_worker(
         self,

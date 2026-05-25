@@ -1,0 +1,36 @@
+"""Declared HTTP route families for the API runtime app."""
+
+from __future__ import annotations
+
+
+API_HEALTH_ROUTE = "/healthz"
+
+API_ROUTE_PROVIDERS = "providers"
+API_ROUTE_INTERNAL = "internal"
+API_ROUTE_OPERATOR = "operator"
+API_ROUTE_HERD = "herd"
+API_ROUTE_EPISODES = "episodes"
+API_ROUTE_STATES = "states"
+
+API_V1_ROUTE_FAMILIES = (
+    API_ROUTE_PROVIDERS,
+    API_ROUTE_INTERNAL,
+    API_ROUTE_OPERATOR,
+    API_ROUTE_HERD,
+    API_ROUTE_EPISODES,
+    API_ROUTE_STATES,
+)
+
+API_V1_ROUTE_FAMILY_PATHS = tuple(f"/v1/{family}" for family in API_V1_ROUTE_FAMILIES)
+
+__all__ = [
+    "API_HEALTH_ROUTE",
+    "API_ROUTE_EPISODES",
+    "API_ROUTE_HERD",
+    "API_ROUTE_INTERNAL",
+    "API_ROUTE_OPERATOR",
+    "API_ROUTE_PROVIDERS",
+    "API_ROUTE_STATES",
+    "API_V1_ROUTE_FAMILIES",
+    "API_V1_ROUTE_FAMILY_PATHS",
+]

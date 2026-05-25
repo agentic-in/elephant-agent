@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import logging
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -40,6 +41,7 @@ from .policy import (
 )
 
 EXTENSIONS_MANIFEST_FILENAME = "profile.json"
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,6 +242,10 @@ def load_runtime_profile(
         try:
             persisted = load_persisted_canonical_state(repository, canonical_pm_id)
         except Exception:
+            LOGGER.debug(
+                "Failed to load persisted canonical state for stub runtime profile; using stub defaults.",
+                exc_info=True,
+            )
             persisted = None
         overlay_elephant_identity_text: str | None = stub.elephant_identity_text
         overlay_user_profile_text: str | None = stub.user_profile_text
@@ -367,17 +373,24 @@ def _resolve_state_row(
         loaded = repository.load_state(derived_id)
         if loaded is not None:
             return loaded
-        for candidate in repository.list_states():
+        try:
+            candidates = repository.list_states(elephant_id=explicit_elephant_id)
+        except TypeError:
+            candidates = repository.list_states()
+        for candidate in candidates:
             if candidate.elephant_id == explicit_elephant_id:
                 return candidate
     explicit_personal_model_id = str(personal_model_id or "").strip()
     if explicit_personal_model_id:
         canonical = canonical_personal_model_id(explicit_personal_model_id)
-        matching = tuple(
-            state
-            for state in repository.list_states(status="active")
-            if state.personal_model_id == canonical
-        )
+        try:
+            matching = repository.list_states(personal_model_id=canonical, status="active")
+        except TypeError:
+            matching = tuple(
+                state
+                for state in repository.list_states(status="active")
+                if state.personal_model_id == canonical
+            )
         if len(matching) == 1:
             return matching[0]
     return None

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,8 @@ from packages.skills import (
     load_skill_package_definition,
     public_skill_source_descriptor_from_metadata,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def source_descriptor_for_hub_entry(entry: SkillHubEntry) -> PublicSkillSourceDescriptor | None:
@@ -111,6 +114,11 @@ def installed_skill_record(path: Path) -> dict[str, Any] | None:
     try:
         definition = load_skill_package_definition(resolved)
     except Exception:
+        LOGGER.warning(
+            "failed to load installed skill source record",
+            extra={"path": str(resolved)},
+            exc_info=True,
+        )
         return None
     descriptor = public_skill_source_descriptor_from_metadata(definition.metadata)
     return {

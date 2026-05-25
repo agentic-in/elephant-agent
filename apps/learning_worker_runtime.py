@@ -285,6 +285,17 @@ def _enqueue_onboarding_letter_after_init(runtime: CliRuntime, job: LearningJob)
         return
 
 
+def run_background_learning_agent(runtime: CliRuntime, job: LearningJob):
+    """Run the current background learning agent implementation.
+
+    `apps.learning_agents` remains a compatibility import path, but the worker
+    runtime owns the callable used by learning jobs.
+    """
+    from packages.reflect.runner import run_reflect_agent
+
+    return run_reflect_agent(runtime, job)
+
+
 def run_learning_job(runtime: CliRuntime, job: LearningJob, *, worker_id: str) -> None:
     repository = runtime.repository
     episode = repository.load_episode(job.episode_id)
@@ -303,8 +314,6 @@ def run_learning_job(runtime: CliRuntime, job: LearningJob, *, worker_id: str) -
         progress_stage="agent_starting",
         progress_detail="starting background learning agent",
     )
-    from apps.learning_agents import run_background_learning_agent
-
     result = run_background_learning_agent(runtime, job)
     if result.child_episode_id:
         close_finished_learning_child_episode(runtime, job, child_episode_id=result.child_episode_id)

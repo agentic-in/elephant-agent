@@ -1,6 +1,6 @@
 """Gateway + CLI prompt parity for bound herd (regression test for IM identity bug).
 
-Earlier bug: in IM mode the ``### Who you are`` section rendered the default
+Earlier bug: in IM mode the ``### Your own voice`` section rendered the default
 "Elephant Agent" name while ``### Where things stand`` correctly rendered the elephant name
 (e.g., "Zoey"). The two disagreed because they read from different sources —
 the prompt contract read ``profile.json``, the dynamic system-layer read the
@@ -13,8 +13,8 @@ With the reset:
   State as the cache/fallback.
 - Gateway and CLI share the same DB, file layout, and ``load_runtime_profile``
   resolver plus authored-file overlay.
-- Both surfaces therefore produce a byte-identical ``### Who you are`` /
-  ``### Your own voice`` for the same ``(personal_model_id, elephant_id)`` pair.
+- Both surfaces therefore produce a byte-identical ``### Your own voice`` for
+  the same ``(personal_model_id, elephant_id)`` pair.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class GatewayCliPromptParityTest(unittest.TestCase):
         return repository
 
     def test_prompt_contract_reads_canonical_state_identity(self) -> None:
-        """The ``### Who you are`` name comes from ``State.elephant_name``."""
+        """The ``### Your own voice`` name comes from ``State.elephant_name``."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repository = self._repository(root)
@@ -70,10 +70,7 @@ class GatewayCliPromptParityTest(unittest.TestCase):
         self.assertEqual(loaded.state.display_name, "Zoey")
         contract = build_prompt_contract(loaded, prompt_mode="full")
         rendered = "\n".join(contract.stable_prefix_refs)
-        self.assertIn(
-            "- You are Zoey, the companion this person keeps coming back to.",
-            rendered,
-        )
+        self.assertNotIn("### Who you are", rendered)
         # Without an authored file overlay, "Your own voice" uses the State cache.
         self.assertIn("Hi — I'm Zoey.", rendered)
         # Legacy default must NOT leak in.
@@ -125,7 +122,7 @@ class GatewayCliPromptParityTest(unittest.TestCase):
         gateway_contract = build_prompt_contract(gateway_profile, prompt_mode="full")
         self.assertEqual(cli_contract.stable_prefix_refs, gateway_contract.stable_prefix_refs)
         rendered = "\n".join(cli_contract.stable_prefix_refs)
-        self.assertIn("You are Hazel,", rendered)
+        self.assertNotIn("### Who you are", rendered)
         self.assertIn("Hi, I'm Hazel from the authored file.", rendered)
         self.assertNotIn("Hi — I'm Hazel. Steady, exact, steady.", rendered)
 

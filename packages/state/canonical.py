@@ -127,13 +127,14 @@ def build_relationship_projection(
 ) -> RenderedRelationshipView:
     ids = canonical_profile_ids(profile.state.profile_id)
     companion = resolved_companion_settings(profile)
+    identity = build_companion_identity_state(profile)
     return RenderedRelationshipView(
         relationship_id=relationship_id or ids.relationship_id,
         profile_id=profile.state.profile_id,
         elephant_id=elephant_id or ids.elephant_id,
         user_profile_id=user_profile_id or ids.user_profile_id,
         interaction_preferences=_interaction_preferences(companion),
-        expectations=(),
+        expectations=_relationship_expectations(identity),
         continuity_notes=tuple(note.strip() for note in companion.notes if note.strip()),
     )
 
@@ -151,6 +152,15 @@ def _governance_flags(companion) -> tuple[str, ...]:
 
 def _interaction_preferences(companion) -> tuple[str, ...]:
     return _governance_flags(companion)
+
+
+def _relationship_expectations(identity) -> tuple[str, ...]:
+    values = (
+        f"initiative:{identity.initiative}",
+        f"relational_stance:{identity.relational_stance}",
+        f"personality_label:{identity.personality_label}",
+    )
+    return tuple(dict.fromkeys(value for value in values if value.split(":", 1)[1].strip()))
 
 
 def _split_profile_preferences(values: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:

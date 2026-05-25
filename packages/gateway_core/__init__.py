@@ -11,6 +11,7 @@ from .outbound_queue import (
     GatewayOutboundRow,
     default_outbound_queue_path,
 )
+from .cron_delivery import cron_execution_should_deliver
 from .runtime import (
     DEFAULT_GATEWAY_ACCOUNT_ID,
     FileGatewayIdentityStore,
@@ -42,6 +43,7 @@ from .pairing import (
     PairingApproval,
     PairingRequest,
 )
+from .proactive_ask import CONFIGURED_IM_ADAPTERS, ProactiveAskTickResult, run_proactive_ask_tick
 
 __all__ = [
     "GATEWAY_CORE_SURFACES",
@@ -77,8 +79,12 @@ __all__ = [
     "PAIRING_CODE_LENGTH",
     "PairingApproval",
     "PairingRequest",
+    "CONFIGURED_IM_ADAPTERS",
+    "ProactiveAskTickResult",
+    "cron_execution_should_deliver",
     "default_outbound_queue_path",
     "resolve_cron_identity_records",
     "run_outbound_drain_loop",
     "run_outbound_drain_thread",
+    "run_proactive_ask_tick",
 ]

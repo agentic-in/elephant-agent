@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import logging
 from typing import Any
 
 from .types import PersistedOptimizationCandidate, SkillOptimizationCandidate
+
+LOGGER = logging.getLogger(__name__)
 
 _OPTIMIZATION_TOPIC_PREFIX = "world.skills.optimization."
 _ALLOWED_REVIEW_TRANSITIONS: dict[str, set[str]] = {
@@ -21,14 +24,14 @@ def _text(value: object) -> str:
 def _safe_int(value: object, *, default: int = 0) -> int:
     try:
         return int(value)
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
 def _safe_float(value: object, *, default: float = 0.0) -> float:
     try:
         return float(value)
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
@@ -129,6 +132,11 @@ def load_candidates(
     try:
         facts = tuple(list_facts(personal_model_id=personal_model_id, status=fact_status))
     except Exception:
+        LOGGER.warning(
+            "failed to load skill optimization facts for reflect lifecycle",
+            extra={"personal_model_id": personal_model_id, "status": fact_status},
+            exc_info=True,
+        )
         return ()
     records = [record for fact in facts if (record := persisted_candidate_from_fact(fact)) is not None]
     records.sort(key=lambda item: (item.committed_at, item.ref), reverse=True)

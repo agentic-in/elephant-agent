@@ -8,6 +8,7 @@ resolved by scope.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,9 @@ from .provenance import (
     PERSISTED_INSTALL_PROVENANCE_FIELDS,
     PERSISTED_SOURCE_DESCRIPTOR_FIELDS,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,6 +340,11 @@ class SkillRuntime(SkillCapability):
             try:
                 root_path = Path(root).expanduser()
             except Exception:
+                LOGGER.warning(
+                    "failed to resolve skill scan root",
+                    extra={"root": str(root)},
+                    exc_info=True,
+                )
                 continue
             if not root_path.is_dir():
                 continue
@@ -345,6 +354,11 @@ class SkillRuntime(SkillCapability):
                     loaded += 1
                 except Exception:
                     # Keep scanning; a broken skill dir should not block others.
+                    LOGGER.warning(
+                        "failed to load skill package while scanning",
+                        extra={"path": str(skill_md.parent)},
+                        exc_info=True,
+                    )
                     continue
         return loaded
 

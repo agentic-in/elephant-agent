@@ -144,6 +144,18 @@ class ContractInventoryTest(unittest.TestCase):
         ):
             self.assertTrue(is_dataclass(contract_type), contract_type.__name__)
 
+    def test_episode_exposes_session_id_compatibility_alias(self) -> None:
+        episode = Episode(
+            episode_id="episode-compat",
+            state_id="state-compat",
+            personal_model_id="pm-compat",
+            entry_surface="cli",
+            status="open",
+            started_at=datetime(2026, 5, 24, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(episode.session_id, episode.episode_id)
+
     def test_capability_ports_expose_registry_and_health_contracts(self) -> None:
         descriptor = CapabilityDescriptor(
             capability_id="model.openai",

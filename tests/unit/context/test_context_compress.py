@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import sys
 import unittest
@@ -10,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from packages.context.compress import split_for_compress
+from packages.context.compress import compress_epoch, split_for_compress
+from packages.context.session_projection import SessionContextEpoch
 from packages.contracts.runtime import PromptMessage
 
 
@@ -97,6 +99,38 @@ class ContextCompressSplitTests(unittest.TestCase):
         self.assertIn(orphan, to_summarize)
         self.assertNotIn(orphan, tail)
         self.assert_provider_tool_pairs_valid(tail)
+
+    def test_compress_epoch_logs_reflect_failure_before_deterministic_fallback(self) -> None:
+        history = tuple(
+            PromptMessage(role="user" if index % 2 == 0 else "assistant", content=f"turn {index} " + ("payload " * 160))
+            for index in range(10)
+        )
+        epoch = SessionContextEpoch(
+            session_id="session:test",
+            frozen=True,
+            frozen_prefix="prefix",
+            history_messages=history,
+        )
+
+        def failing_reflect(*args, **kwargs) -> str:
+            del args, kwargs
+            raise RuntimeError("reflect unavailable")
+
+        with self.assertLogs("packages.context.compress", level="DEBUG") as captured:
+            result = compress_epoch(
+                epoch,
+                context_limit=1024,
+                usage_tokens=1000,
+                reflect_compressor=failing_reflect,
+            )
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        _updated, compression = result
+        self.assertEqual(compression.method, "deterministic")
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Reflect context compressor failed", rendered_logs)
+        self.assertIn("reflect unavailable", rendered_logs)
 
 
 if __name__ == "__main__":

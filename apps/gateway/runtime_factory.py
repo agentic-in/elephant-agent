@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 from pathlib import Path
 import re
 import sys
@@ -110,6 +111,10 @@ from .runtime_capabilities import (
     GatewayTelemetrySink,
 )
 from .runtime_support import *  # noqa: F401,F403
+
+
+LOGGER = logging.getLogger(__name__)
+
 
 def register_builtin_gateway_adapters(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
     for platform in BUILTIN_GATEWAY_PLATFORMS:
@@ -353,7 +358,11 @@ def build_gateway_app(
             state = runtime_repository.load_state(f"state:{resolved_elephant_id}")
             if state is not None:
                 return state
-            for candidate in runtime_repository.list_states():
+            try:
+                candidates = runtime_repository.list_states(elephant_id=resolved_elephant_id)
+            except TypeError:
+                candidates = runtime_repository.list_states()
+            for candidate in candidates:
                 if candidate.elephant_id == resolved_elephant_id or candidate.state_anchor in {
                     resolved_elephant_id,
                     f"elephant:{resolved_elephant_id}",
@@ -503,6 +512,11 @@ def build_gateway_app(
                 state_dir=resolved_state_dir,
             )
         except Exception:
+            LOGGER.warning(
+                "failed to start learning worker during gateway runtime factory setup",
+                extra={"state_dir": str(resolved_state_dir)},
+                exc_info=True,
+            )
             pass
     chat_adapter = registry.create_adapter("chat_bot", app)
     webhook_adapter = registry.create_adapter("webhook", app)

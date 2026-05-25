@@ -33,13 +33,23 @@ class InstallDistributionSmokeTest(unittest.TestCase):
             "--python",
             sys.executable,
         ]
-        return subprocess.run(
-            command,
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
+        try:
+            return subprocess.run(
+                command,
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            self.fail(
+                "install command timed out after 300s: "
+                + " ".join(command)
+                + f"\nstdout:\n{stdout}\nstderr:\n{stderr}"
+            )
 
     def _run_launcher(self, *args: str) -> subprocess.CompletedProcess[str]:
         command = [str(self.launcher), *args]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import logging
 import os
 import random
 import re
@@ -12,6 +13,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from packages.state import DEFAULT_ELEPHANT_IDENTITY_TEXT, render_default_elephant_identity
+
+
+LOGGER = logging.getLogger(__name__)
+
 
 from .runtime import CliRuntime
 from .turn_metrics import cache_hit_metric_line
@@ -106,6 +111,11 @@ def _current_elephant_session(runtime: CliRuntime):
     try:
         return runtime.inspect_session(session_id)
     except Exception:
+        LOGGER.warning(
+            "failed to inspect current elephant session from snapshot",
+            extra={"session_id": session_id},
+            exc_info=True,
+        )
         return None
 
 
@@ -123,6 +133,11 @@ def _select_elephant(runtime: CliRuntime, elephant_id: str):
                 metadata={"source": "cli.herd.use"},
             )
         except Exception:
+            LOGGER.warning(
+                "failed to schedule learning for previous elephant session during herd switch",
+                extra={"episode_id": previous_session.episode_id, "elephant_id": elephant_id},
+                exc_info=True,
+            )
             pass
     elephant_state = runtime.ensure_elephant_state(session)
     loaded_profile = runtime._load_profile(session.personal_model_id)
@@ -223,8 +238,11 @@ def _print_elephant_paused() -> None:
 
 def _print_herd(runtime: CliRuntime) -> None:
     herd = runtime.list_herd(limit=24)
-    current_session = _current_elephant_session(runtime)
-    current_elephant_id = runtime.elephant_id_for_session(current_session) if current_session is not None else None
+    current_state = runtime.current_elephant_state()
+    current_elephant_id = str(getattr(current_state, "elephant_id", "") or "").strip() or None
+    if current_elephant_id is None:
+        current_session = _current_elephant_session(runtime)
+        current_elephant_id = runtime.elephant_id_for_session(current_session) if current_session is not None else None
     if not herd:
         _print_cli_card(
             "Elephant Agent herd",
@@ -572,6 +590,11 @@ def _print_provider_turn_failed(
             lines.insert(0, f"state_id · {elephant_state.state_id}")
             lines.insert(1, f"personal_model_id · {elephant_state.personal_model_id}")
         except Exception:
+            LOGGER.warning(
+                "failed to inspect provider error recovery state",
+                extra={"session_id": session_id},
+                exc_info=True,
+            )
             lines.insert(0, f"route_id · {session_id}")
     _print_cli_card(
         title,

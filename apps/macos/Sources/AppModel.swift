@@ -1794,7 +1794,9 @@ final class ElephantAppModel: ObservableObject {
                 ? Self.localizedText(appLanguage, en: "Auto · local Chinese", zh: "自动 · 本地中文", fr: "Auto · chinois local", de: "Auto · lokales Chinesisch")
                 : Self.localizedText(appLanguage, en: "Auto · system dictation", zh: "自动 · 系统听写", fr: "Auto · dictée système", de: "Auto · Systemdiktat")
         case .funASRLocal:
-            return Self.localizedText(appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
+            return SpeechInputController.funASRInstalled
+                ? Self.localizedText(appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
+                : Self.localizedText(appLanguage, en: "Local Chinese · setup needed", zh: "本地中文 · 需启用", fr: "Chinois local · configuration requise", de: "Lokales Chinesisch · Einrichtung nötig")
         case .appleSpeech:
             return Self.localizedText(appLanguage, en: "System dictation", zh: "系统听写", fr: "Dictée système", de: "Systemdiktat")
         }
@@ -1802,9 +1804,9 @@ final class ElephantAppModel: ObservableObject {
 
     var chineseSpeechRecognitionStatus: String {
         if SpeechInputController.funASRInstalled {
-            return Self.localizedText(appLanguage, en: "Installed locally", zh: "已在本机安装", fr: "Installé localement", de: "Lokal installiert")
+            return Self.localizedText(appLanguage, en: "Ready on this Mac", zh: "本机已就绪", fr: "Prêt sur ce Mac", de: "Auf diesem Mac bereit")
         }
-        return Self.localizedText(appLanguage, en: "Not installed; Chinese currently uses system dictation", zh: "未安装；当前使用系统中文听写", fr: "Non installé ; le chinois utilise la dictée système", de: "Nicht installiert; Chinesisch nutzt Systemdiktat")
+        return Self.localizedText(appLanguage, en: "Setup required; Chinese currently uses system dictation", zh: "需要启用；当前使用系统中文听写", fr: "Configuration requise ; le chinois utilise la dictée système", de: "Einrichtung nötig; Chinesisch nutzt Systemdiktat")
     }
 
     func setVoiceRepliesEnabled(_ enabled: Bool) {
@@ -1859,8 +1861,8 @@ final class ElephantAppModel: ObservableObject {
         voiceRuntimeActionInFlight = true
         voiceRuntimeActionResult = Self.localizedText(appLanguage, en: "Installing local Chinese recognition...", zh: "正在安装本地中文识别...", fr: "Installation de la reconnaissance chinoise locale...", de: "Installiere lokale chinesische Erkennung...")
         do {
-            let result = try await SpeechInputController.installFunASRRuntime()
-            voiceRuntimeActionResult = result
+            _ = try await SpeechInputController.installFunASRRuntime()
+            voiceRuntimeActionResult = Self.localizedText(appLanguage, en: "Local Chinese recognition is ready.", zh: "本地中文识别已就绪。", fr: "La reconnaissance chinoise locale est prête.", de: "Lokale chinesische Erkennung ist bereit.")
         } catch {
             voiceRuntimeActionResult = error.localizedDescription
             lastError = error.localizedDescription

@@ -62,7 +62,6 @@ class PromptContractTest(unittest.TestCase):
         self.assertEqual(
             contract.section_names,
             (
-                "system-layer-contract",
                 "elephant-identity",
                 "understanding-tool-policy",
             ),
@@ -70,18 +69,19 @@ class PromptContractTest(unittest.TestCase):
         self.assertEqual(
             contract.stable_prefix_refs[:2],
             (
-                "### Who you are",
-                "- You are Aeon, the companion this person keeps coming back to.",
+                "### Your own voice",
+                "You are Aeon, this person's Elephant companion.",
             ),
         )
         rendered = "\n".join(contract.instruction_refs)
-        self.assertIn("You are Aeon, the companion this person keeps coming back to.", rendered)
+        self.assertNotIn("### Who you are", rendered)
+        self.assertIn("You are Aeon, this person's Elephant companion.", rendered)
         # Humanized prompt: the old framework-speak bullets must be gone.
         self.assertNotIn("active elephant identity for one durable elephant", rendered)
         self.assertNotIn("Canonical containment", rendered)
         self.assertNotIn("Personal Model -> Elephant -> Episode -> Loop -> Step", rendered)
-        self.assertIn("### Your own voice", rendered)
         self.assertIn("Protect the active elephant and stay exact.", rendered)
+        self.assertIn("Memory boundary: stay continuous across sessions", rendered)
         self.assertNotIn("### Carrying context forward", rendered)
         self.assertNotIn("### Tracking work in a session", rendered)
         self.assertIn("`tool.todo.manage`", rendered)
@@ -129,15 +129,14 @@ class PromptContractTest(unittest.TestCase):
         self.assertEqual(
             contract.section_names,
             (
-                "system-layer-contract",
                 "elephant-identity",
                 "understanding-tool-policy",
             ),
         )
         rendered = "\n".join(contract.instruction_refs)
-        self.assertIn("### Who you are", rendered)
-        self.assertIn("You are Aeon", rendered)
+        self.assertNotIn("### Who you are", rendered)
         self.assertIn("### Your own voice", rendered)
+        self.assertIn("You are Aeon, this person's Elephant companion.", rendered)
         self.assertIn("Protect the active elephant and stay exact.", rendered)
         # Minimal mode drops posture + continuity-reminder bullets.
         self.assertNotIn("Posture to carry:", rendered)
@@ -161,8 +160,8 @@ class PromptContractTest(unittest.TestCase):
         contract = build_prompt_contract(loaded, prompt_mode="full")
 
         rendered = "\n".join(contract.stable_prefix_refs)
-        self.assertIn("You are Leah, the companion this person keeps coming back to.", rendered)
-        self.assertNotIn("You are Aeon, the companion this person keeps coming back to.", rendered)
+        self.assertIn("You are Leah, a steady companion on one continuous line with this person.", rendered)
+        self.assertNotIn("You are Aeon, this person's Elephant companion.", rendered)
 
     def test_authored_elephant_file_overlays_state_identity_before_prompt(self) -> None:
         loaded = self._build_loaded_profile(
@@ -180,7 +179,8 @@ class PromptContractTest(unittest.TestCase):
         contract = build_prompt_contract(authored, prompt_mode="full")
 
         rendered = "\n".join(contract.stable_prefix_refs)
-        self.assertIn("You are Leah, the companion this person keeps coming back to.", rendered)
+        self.assertNotIn("### Who you are", rendered)
+        self.assertIn("You are Leah, this person's Elephant companion.", rendered)
         self.assertIn("File-authored Leah is playful, precise, and alive.", rendered)
         self.assertNotIn("State cache says stay quiet and stale.", rendered)
         self.assertNotIn("file metadata", rendered)
@@ -211,7 +211,8 @@ class PromptContractTest(unittest.TestCase):
 
         contract = build_prompt_contract(authored, prompt_mode="full")
         rendered = "\n".join(contract.stable_prefix_refs)
-        self.assertIn("You are Jasper, the companion this person keeps coming back to.", rendered)
+        self.assertNotIn("### Who you are", rendered)
+        self.assertIn("You are Jasper, this person's Elephant companion.", rendered)
         self.assertIn("Be concrete when the work needs precision", rendered)
         self.assertIn("Be concrete when the work needs precision", refreshed)
         self.assertNotIn("continuity-first without losing boundaries", rendered)
@@ -230,7 +231,8 @@ class PromptContractTest(unittest.TestCase):
         contract = build_prompt_contract(loaded, prompt_mode="full")
 
         rendered = "\n".join(contract.stable_prefix_refs)
-        self.assertIn("You are Aeon, the companion this person keeps coming back to.", rendered)
+        self.assertNotIn("You are Aeon, this person's Elephant companion.", rendered)
+        self.assertIn("You are Aeon, a steady companion on one continuous line with this person.", rendered)
         self.assertNotIn("Elephant-specific note:", rendered)
 
 

@@ -47,10 +47,10 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
         text = _read("Makefile")
 
         for target in (
-            "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads",
-            "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state",
-            "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence",
-            "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_default_provider_bad_request_hides_legacy_profile_field_names",
+            "tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads",
+            "tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state",
+            "tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence",
+            "tests.e2e.api.test_api_surface_providers.APISurfaceProviderE2ETest.test_default_provider_bad_request_hides_legacy_profile_field_names",
             "tests.e2e.gateway.test_gateway_adapter",
             "tests.integration.kernel.test_turn_lifecycle",
             "tests.integration.storage_system_layers.test_repository",
@@ -78,7 +78,9 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
     def test_loop_checkpoint_and_personal_model_growth_live_in_repository_methods_without_runtime_shims(self) -> None:
         checkpoint_text = _read("packages/kernel/loop_checkpoint_support.py")
         episode_runtime_text = _read("apps/episode_runtime.py")
-        repository_methods_text = _read("packages/storage/repository_system_methods.py")
+        repository_impl_text = _read("packages/storage/repository_impl.py")
+        checkpoint_methods_text = _read("packages/storage/repository_loop_checkpoint_methods.py")
+        learning_methods_text = _read("packages/storage/repository_learning_methods.py")
 
         self.assertIn("LoopCheckpointService", checkpoint_text)
         self.assertNotIn("AgentRunService", checkpoint_text)
@@ -93,15 +95,23 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
             "load_latest_open_loop_checkpoint",
             "append_loop_checkpoint_step",
             "list_loop_checkpoint_steps",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, checkpoint_methods_text)
+                self.assertIn(marker, repository_impl_text)
+
+        for marker in (
             "upsert_personal_model_growth",
             "load_personal_model_growth",
         ):
             with self.subTest(marker=marker):
-                self.assertIn(marker, repository_methods_text)
+                self.assertIn(marker, learning_methods_text)
+                self.assertIn(marker, repository_impl_text)
 
-        self.assertNotIn("upsert_agent_run", repository_methods_text)
-        self.assertNotIn("load_latest_open_agent_run", repository_methods_text)
-        self.assertNotIn("profile_growth", repository_methods_text)
+        for methods_text in (checkpoint_methods_text, learning_methods_text, repository_impl_text):
+            self.assertNotIn("upsert_agent_run", methods_text)
+            self.assertNotIn("load_latest_open_agent_run", methods_text)
+            self.assertNotIn("profile_growth", methods_text)
 
     def test_kernel_and_context_suites_pin_state_query_and_compaction_coverage(self) -> None:
         kernel_text = _read("tests/integration/kernel/test_turn_lifecycle.py")
@@ -125,8 +135,8 @@ class SystemLayerResetMatrixTests(unittest.TestCase):
                 self.assertIn(marker, context_text)
 
     def test_skill_dashboard_and_continuity_suites_pin_reset_acceptance_surfaces(self) -> None:
-        skills_text = _read("tests/integration/tools_skills/test_tools_and_skills_runtime.py")
-        api_text = _read("tests/e2e/api/test_api_surface.py")
+        skills_text = _read("tests/integration/tools_skills/test_skills_runtime.py")
+        api_text = _read("tests/e2e/api/test_api_surface_dashboard.py")
         continuity_text = _read("tests/scenarios/continuity/test_continuity_scenarios.py")
 
         for marker in (

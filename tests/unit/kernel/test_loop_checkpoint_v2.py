@@ -31,7 +31,7 @@ from packages.contracts.runtime import (
     WaitCondition,
 )
 from packages.kernel.loop_checkpoint_support import LoopCheckpointService
-from packages.storage.repository_system_methods import (
+from packages.storage.repository_loop_checkpoint_methods import (
     _loop_metadata,
     _loop_state_from_loop,
     migrate_loop_state_metadata,

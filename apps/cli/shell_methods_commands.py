@@ -6,6 +6,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import unified_diff
+import logging
 import os
 from pathlib import Path
 import re
@@ -172,6 +173,10 @@ __all__ = [
 
 from .shell_support_runtime import *  # noqa: F401,F403
 
+
+LOGGER = logging.getLogger(__name__)
+
+
 def _append_help(self) -> None:
     lines = [
         "Stay in the conversation. Slash commands exist only for orientation and control.",
@@ -214,6 +219,11 @@ def _append_personal_model(self, args: list[str]) -> None:
         try:
             facts = tuple(list_facts(personal_model_id=state.personal_model_id, status="active"))
         except Exception:
+            LOGGER.warning(
+                "failed to load personal model facts for shell command",
+                extra={"personal_model_id": state.personal_model_id},
+                exc_info=True,
+            )
             facts = ()
     else:
         facts = ()
@@ -222,6 +232,11 @@ def _append_personal_model(self, args: list[str]) -> None:
         try:
             open_questions = tuple(list_questions(personal_model_id=state.personal_model_id, status="open"))
         except Exception:
+            LOGGER.warning(
+                "failed to load open personal model questions for shell command",
+                extra={"personal_model_id": state.personal_model_id},
+                exc_info=True,
+            )
             open_questions = ()
     else:
         open_questions = ()
@@ -459,146 +474,6 @@ def _append_learn(self, args: list[str]) -> None:
     self._append_entry("notice", "Learning", detail)
 
 
-def _append_skills(self, args: list[str]) -> None:
-    command = args[0] if args else "list"
-    if command in {"list", "ls"}:
-        entries = self.runtime.list_skill_hub(limit=24)
-        lines = [
-            f"{_display_skill_reference(entry)} | {entry.display_name} | source={entry.source_id} | {entry.summary}"
-            for entry in entries
-        ] or ["<empty>"]
-        lines.extend(
-            [
-                "",
-                "active installed skills: /skills active",
-                "search external sources: /skills search <query>",
-                "view local or remote: /skills view <skill-id|reference>",
-                "enable: /skills enable <skill-id>",
-                "disable: /skills disable <skill-id>",
-                "install from source: /skills install <skill-id|reference>",
-                "install from path: /skills install </path/to/skill-or-skills.json>",
-            ]
-        )
-        self._append_entry("notice", "Skills", "\n".join(lines))
-        return
-    if command == "active":
-        skills = self.runtime.skill_catalog(session_id=self.session_id)
-        lines = [
-            f"{skill.skill_id} | enabled={skill.enabled} | {skill.display_name} | {skill.summary}"
-            for skill in skills
-            if skill.enabled
-        ] or ["<empty>"]
-        self._append_entry("notice", "Active skills", "\n".join(lines))
-        return
-    if command == "search":
-        if len(args) < 2:
-            self._append_entry("recovery", "Skills", "Usage: /skills search <query>")
-            return
-        query = " ".join(args[1:]).strip()
-        local_entries = self.runtime.search_skill_hub(query, limit=12)
-        external_entries = self.runtime.search_skill_sources(query, limit=12)
-        lines: list[str] = []
-        if local_entries:
-            lines.append("local shelves:")
-            lines.extend(
-                f"- {_display_skill_reference(entry)} | {entry.display_name} | source={entry.source_id} | {entry.summary}"
-                for entry in local_entries
-            )
-        if external_entries:
-            if lines:
-                lines.append("")
-            lines.append("external sources:")
-            lines.extend(
-                f"- {entry.reference} | {entry.display_name} | source={entry.source_id} | trust={entry.trust_level or '<unknown>'} | {entry.summary}"
-                for entry in external_entries
-            )
-        if not lines:
-            lines.append("<empty>")
-        lines.extend(
-            [
-                "",
-                "install one: /skills install <skill-id|reference>",
-                "view one: /skills view <skill-id|reference>",
-            ]
-        )
-        self._append_entry("notice", "Skill search", "\n".join(lines))
-        return
-    if command in {"inspect", "view"}:
-        if len(args) < 2:
-            self._append_entry("recovery", "Skills", "Usage: /skills view <skill-id|reference>")
-            return
-        try:
-            skill = self.runtime.inspect_skill(args[1], session_id=self.session_id)
-        except Exception as error:
-            self._append_entry("recovery", "Skills", str(error))
-            return
-        lines = [
-            f"skill_id: {skill.skill_id}",
-            f"display_name: {skill.display_name}",
-            f"enabled: {skill.enabled}",
-            f"version: {skill.version}",
-            f"summary: {skill.summary}",
-            f"provenance: {skill.provenance or 'built-in'}",
-        ]
-        installed = skill.metadata.get("installed")
-        if isinstance(installed, bool):
-            lines.append(f"installed: {installed}")
-        slash_command = str(skill.metadata.get("slash_command") or "").strip()
-        if slash_command:
-            lines.append(f"slash_command: /{slash_command}")
-        if skill.instruction_text.strip():
-            lines.extend(["", skill.instruction_text.strip()])
-        self._append_entry(
-            "status",
-            "Skill",
-            "\n".join(lines),
-        )
-        return
-    if command in {"enable", "disable"}:
-        if len(args) < 2:
-            self._append_entry("recovery", "Skills", f"Usage: /skills {command} <skill-id>")
-            return
-        try:
-            updated = self.runtime.set_skill_enabled(
-                args[1],
-                command == "enable",
-                session_id=self.session_id,
-            )
-        except Exception as error:
-            self._append_entry("recovery", "Skills", str(error))
-            return
-        self._append_entry("status", "Skill updated", f"{updated.skill_id}\nenabled: {updated.enabled}")
-        return
-    if command == "install":
-        if len(args) < 2:
-            self._append_entry("recovery", "Skills", "Usage: /skills install <skill-id|/path/to/skill|/path/to/skills.json>")
-            return
-        try:
-            result = self.runtime.install_skill_source(args[1], session_id=self.session_id)
-        except Exception as error:
-            self._append_entry("recovery", "Skills", str(error))
-            return
-        self._append_entry(
-            "status",
-            "Skill installed",
-            "\n".join(
-                [
-                    f"source_path: {result.source_path}",
-                    f"skill_ids: {', '.join(result.skill_ids) or '<empty>'}",
-                    f"status: {result.status}",
-                ]
-            ),
-        )
-        self._refresh_skill_slash_specs()
-        return
-    self._append_entry("recovery", "Skills", "Usage: /skills [list|active|search|view|enable|disable|install]")
-
-
-def _display_skill_reference(entry) -> str:
-    if getattr(entry, "source_id", "") == "builtin":
-        return str(getattr(entry, "skill_id", "")).strip() or str(getattr(entry, "reference", ""))
-    return str(getattr(entry, "reference", "")).strip()
-
 def _append_cron(self, args: list[str]) -> None:
     command = args[0] if args else "list"
     if command in {"list", "ls"}:
@@ -762,6 +637,7 @@ def _append_status(self) -> None:
     try:
         wake_outcome = self.runtime.inspect_wake_continuity(self.session_id)
     except Exception:
+        LOGGER.warning("failed to inspect wake continuity for status command", exc_info=True)
         wake_lines = [
             "loop_mode: foreground",
             f"loop_selection: {continuity.wake_action}",
@@ -821,6 +697,7 @@ def _append_status(self) -> None:
     try:
         learning_status = self.runtime.learning_runtime_status(session_id=self.session_id)
     except Exception:
+        LOGGER.warning("failed to inspect learning runtime status for status command", exc_info=True)
         learning_status = None
     jobs = tuple((learning_status or {}).get("jobs") or ())
     if jobs:
@@ -954,6 +831,7 @@ def _append_growth_update_message(self, update) -> None:
     try:
         self._wake_status_refresher()
     except Exception:
+        LOGGER.warning("failed to wake status refresher after growth update", exc_info=True)
         pass
 
 
@@ -961,6 +839,7 @@ def _append_latest_learning_result(self) -> None:
     try:
         status = self.runtime.learning_runtime_status(session_id=self.session_id, limit=8)
     except Exception:
+        LOGGER.warning("failed to inspect latest learning result", exc_info=True)
         return
     jobs = tuple(status.get("jobs") or ()) if isinstance(status, dict) else ()
     latest_result = next(

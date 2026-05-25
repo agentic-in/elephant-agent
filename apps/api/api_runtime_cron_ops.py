@@ -11,9 +11,7 @@ from .api_runtime_support import _now
 
 def run_proactive_ask_now(self) -> dict[str, Any]:
     """Run the built-in proactive ask scheduler once on demand."""
-    from apps.gateway.cron_service import CONFIGURED_IM_ADAPTERS
-    from apps.gateway.proactive_ask_job import ProactiveAskTickResult, run_proactive_ask_tick
-    from apps.gateway.runtime import build_gateway_app
+    from packages.gateway_core.proactive_ask import ProactiveAskTickResult
     from packages.runtime_config import (
         global_config_path_for_state_dir,
         load_global_config,
@@ -46,24 +44,11 @@ def run_proactive_ask_now(self) -> dict[str, Any]:
             }
         }
 
-    app, outbound_queue, _ = build_gateway_app(state_dir=str(state_dir))
-    aggregate = ProactiveAskTickResult()
-    for adapter_id in CONFIGURED_IM_ADAPTERS:
-        result = run_proactive_ask_tick(
-            app=app,
-            adapter_id=adapter_id,
-            outbound_queue=outbound_queue,
-            config=proactive_config,
-        )
-        aggregate = ProactiveAskTickResult(
-            scanned=aggregate.scanned + result.scanned,
-            eligible=aggregate.eligible + result.eligible,
-            enqueued=aggregate.enqueued + result.enqueued,
-            skipped_no_questions=aggregate.skipped_no_questions + result.skipped_no_questions,
-            skipped_pending=aggregate.skipped_pending + result.skipped_pending,
-            skipped_policy=aggregate.skipped_policy + result.skipped_policy,
-            skipped_unbound=aggregate.skipped_unbound + result.skipped_unbound,
-        )
+    aggregate, delivery_error = _run_proactive_ask_via_bridge(
+        self,
+        state_dir=state_dir,
+        proactive_config=proactive_config,
+    )
 
     summary = (
         f"scanned={aggregate.scanned} · eligible={aggregate.eligible} · "
@@ -71,18 +56,52 @@ def run_proactive_ask_now(self) -> dict[str, Any]:
         f"policy={aggregate.skipped_policy} · no-questions={aggregate.skipped_no_questions} · "
         f"unbound={aggregate.skipped_unbound}"
     )
+    outcome = "success" if aggregate.enqueued else "noop"
+    if delivery_error is not None:
+        outcome = "unavailable"
     return {
         "cron": {
             "job": job,
             "run": {
-                "outcome": "success" if aggregate.enqueued else "noop",
+                "outcome": outcome,
                 "summary": summary,
                 "delivered": bool(aggregate.enqueued),
-                "delivery_error": None,
+                "delivery_error": delivery_error,
                 "recorded_at": _now().isoformat(),
             },
         }
     }
+
+
+def _run_proactive_ask_via_bridge(
+    app: Any,
+    *,
+    state_dir: Path,
+    proactive_config: Mapping[str, Any],
+) -> tuple[Any, str | None]:
+    from packages.gateway_core.proactive_ask import ProactiveAskTickResult
+
+    bridge = getattr(app, "gateway_runtime_bridge", None)
+    run_once = getattr(bridge, "run_proactive_ask_once", None)
+    if not callable(run_once):
+        return ProactiveAskTickResult(), "gateway runtime bridge unavailable"
+    try:
+        result = run_once(state_dir=state_dir, config=proactive_config)
+    except Exception as exc:
+        return ProactiveAskTickResult(), f"{type(exc).__name__}: {exc}"
+    if isinstance(result, ProactiveAskTickResult):
+        return result, None
+    if isinstance(result, Mapping):
+        return ProactiveAskTickResult(
+            scanned=int(result.get("scanned") or 0),
+            eligible=int(result.get("eligible") or 0),
+            enqueued=int(result.get("enqueued") or 0),
+            skipped_no_questions=int(result.get("skipped_no_questions") or 0),
+            skipped_pending=int(result.get("skipped_pending") or 0),
+            skipped_policy=int(result.get("skipped_policy") or 0),
+            skipped_unbound=int(result.get("skipped_unbound") or 0),
+        ), None
+    return ProactiveAskTickResult(), "gateway runtime bridge returned invalid proactive ask result"
 
 
 def run_dream_now(self) -> dict[str, Any]:

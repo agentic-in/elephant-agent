@@ -8,7 +8,7 @@ import logging
 from typing import Any
 from uuid import uuid4
 
-from apps.reflect.context_compression import FALLBACK_NOTE, reflect_compress_summary
+from packages.reflect.context_compression import FALLBACK_NOTE, reflect_compress_summary
 from packages.context.compress import compress_epoch, should_compress_split, split_for_compress
 from packages.context.epoch_store import FileEpochStore
 from packages.kernel import KernelStageRecord
@@ -169,12 +169,13 @@ def _reflect_runtime(app: Any) -> Any:
     run_sub_agent = getattr(app, "run_sub_agent", None)
     if callable(run_sub_agent):
         return app
-    from apps.cli.runtime import CliRuntime
-
-    return CliRuntime.create(
-        state_dir=app.repository.database_path.parent,
-        warm_embedding=False,
-    )
+    bridge = getattr(app, "gateway_runtime_bridge", None)
+    reflect_context_runtime = getattr(bridge, "reflect_context_runtime", None)
+    if callable(reflect_context_runtime):
+        return reflect_context_runtime(
+            state_dir=app.repository.database_path.parent,
+        )
+    raise RuntimeError("reflect context runtime bridge unavailable")
 
 
 def _emit_context_compact_stage(
@@ -240,6 +241,11 @@ def _persist_context_compress_summary(app: Any, episode_id: str, summary: str) -
             )
             connection.commit()
     except Exception:
+        _LOG.warning(
+            "failed to persist API context compression summary",
+            extra={"episode_id": episode_id},
+            exc_info=True,
+        )
         return
 
 

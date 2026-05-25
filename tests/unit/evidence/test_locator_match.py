@@ -143,21 +143,43 @@ class _EmbeddingFallbackTest(unittest.TestCase):
         # provided. That's the resilience contract.
         self.assertIsNotNone(hit)
 
-    def test_embedding_failure_is_silent(self) -> None:
-        """A broken embedding service must not raise — the matcher just
-        reports no-match on the fuzzy tier and returns None."""
+    def test_embedding_failure_is_logged_without_raising(self) -> None:
+        """A broken embedding service must not raise — the matcher logs and
+        reports no-match on the fuzzy tier."""
 
         class _BrokenEmbedding:
             def embed_text(self, text: str):  # noqa: ARG002
                 raise RuntimeError("simulated backend failure")
 
         entries = (FakeEntry("alpha"),)
-        # No lexical match, broken embedding → None, not exception.
-        self.assertIsNone(
-            find_entry_by_locator(
-                entries, "completely different", embedding_service=_BrokenEmbedding()
+        with self.assertLogs("packages.evidence.locator_match", level="DEBUG") as captured:
+            self.assertIsNone(
+                find_entry_by_locator(
+                    entries, "completely different", embedding_service=_BrokenEmbedding()
+                )
             )
-        )
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Embedding service embed_text(...) failed", rendered_logs)
+        self.assertIn("simulated backend failure", rendered_logs)
+
+    def test_embedding_keyword_fallback_failure_is_logged_without_raising(self) -> None:
+        class _BrokenKeywordEmbedding:
+            def embed_text(self, *args, **kwargs):  # noqa: ANN002, ANN003
+                if args:
+                    raise TypeError("keyword required")
+                raise RuntimeError("keyword fallback failed")
+
+        with self.assertLogs("packages.evidence.locator_match", level="DEBUG") as captured:
+            self.assertIsNone(
+                find_entry_by_locator(
+                    (FakeEntry("alpha"),),
+                    "completely different",
+                    embedding_service=_BrokenKeywordEmbedding(),
+                )
+            )
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Embedding service embed_text(text=...) failed", rendered_logs)
+        self.assertIn("keyword fallback failed", rendered_logs)
 
 
 if __name__ == "__main__":

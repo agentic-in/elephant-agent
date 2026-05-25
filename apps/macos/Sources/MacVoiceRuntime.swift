@@ -83,7 +83,8 @@ enum MacVoiceRuntime {
     static let defaultEdgeRate = "+0%"
     static let funASRRequirements = [
         "funasr>=1.2,<2",
-        "modelscope>=1.10,<2"
+        "modelscope>=1.10,<2",
+        "setuptools>=69"
     ]
 
     static var voiceRuntimeRoot: URL {
@@ -101,17 +102,11 @@ enum MacVoiceRuntime {
     }
 
     static func isFunASRInstalled() -> Bool {
-        let userMarker = funASRSitePackages
-            .appendingPathComponent("funasr", isDirectory: true)
-            .appendingPathComponent("__init__.py")
-        if FileManager.default.fileExists(atPath: userMarker.path) {
+        if isFunASRReady(in: funASRSitePackages) {
             return true
         }
         if let bundledSitePackages = bundledSitePackages() {
-            let bundledMarker = bundledSitePackages
-                .appendingPathComponent("funasr", isDirectory: true)
-                .appendingPathComponent("__init__.py")
-            return FileManager.default.fileExists(atPath: bundledMarker.path)
+            return isFunASRReady(in: bundledSitePackages)
         }
         return false
     }
@@ -157,7 +152,11 @@ enum MacVoiceRuntime {
         )
     }
 
-    static func transcribeChineseAudio(inputURL: URL, hotwords: URL? = nil) async throws -> String {
+    static func transcribeChineseAudio(
+        inputURL: URL,
+        hotwords: URL? = nil,
+        timeout: TimeInterval = 60
+    ) async throws -> String {
         let output = temporaryURL(prefix: "elephant-funasr", extension: "json")
         var arguments = [
             "--input", inputURL.path,
@@ -167,7 +166,12 @@ enum MacVoiceRuntime {
         if let hotwords {
             arguments += ["--hotwords", hotwords.path]
         }
-        _ = try await runHelper(name: "funasr_transcribe.py", arguments: arguments, timeout: 240)
+        _ = try await runHelper(
+            name: "funasr_transcribe.py",
+            arguments: arguments,
+            timeout: timeout,
+            acceptedExitCodes: [0, 2, 3]
+        )
         let data = try Data(contentsOf: output)
         guard let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw MacVoiceRuntimeError.invalidOutput("Chinese recognition did not return a readable result.")
@@ -186,10 +190,12 @@ enum MacVoiceRuntime {
     static func installFunASRRuntime() async throws -> String {
         try await Task.detached(priority: .userInitiated) {
             let invocation = try pythonInvocation()
+            try? FileManager.default.removeItem(at: funASRReadyMarker(in: funASRSitePackages))
             try FileManager.default.createDirectory(at: funASRSitePackages, withIntermediateDirectories: true)
             let arguments = invocation.argumentsPrefix + [
                 "-m", "pip", "install",
                 "--upgrade",
+                "--force-reinstall",
                 "--target", funASRSitePackages.path
             ] + funASRRequirements
             _ = try runProcess(
@@ -200,15 +206,29 @@ enum MacVoiceRuntime {
                 timeout: 1_800,
                 timeoutLabel: "Installing Chinese recognition timed out."
             )
-            _ = try runProcess(
-                executableURL: invocation.executableURL,
-                arguments: invocation.argumentsPrefix + ["-c", "import funasr, modelscope; print('FunASR ready')"],
-                environment: invocation.environment,
-                currentDirectoryURL: invocation.currentDirectoryURL,
-                timeout: 60,
-                timeoutLabel: "Validating Chinese recognition timed out."
+            let healthOutput = temporaryURL(prefix: "elephant-funasr-health", extension: "json")
+            defer { try? FileManager.default.removeItem(at: healthOutput) }
+            _ = try await runHelper(
+                name: "funasr_transcribe.py",
+                arguments: [
+                    "--input", healthOutput.path,
+                    "--output-json", healthOutput.path,
+                    "--language", "zh",
+                    "--health-check"
+                ],
+                timeout: 1_800,
+                acceptedExitCodes: [0, 2, 3]
             )
-            return "Chinese recognition is ready."
+            let healthData = try Data(contentsOf: healthOutput)
+            guard let healthPayload = try JSONSerialization.jsonObject(with: healthData) as? [String: Any],
+                  healthPayload["ok"] as? Bool == true
+            else {
+                let payload = (try? JSONSerialization.jsonObject(with: healthData) as? [String: Any]) ?? [:]
+                let detail = (payload["error"] as? String) ?? "Chinese recognition health check failed."
+                throw MacVoiceRuntimeError.processFailed(userFacingRecognitionError(detail))
+            }
+            try "ready\n".write(to: funASRReadyMarker(in: funASRSitePackages), atomically: true, encoding: .utf8)
+            return "Local Chinese recognition is ready."
         }.value
     }
 
@@ -229,9 +249,10 @@ enum MacVoiceRuntime {
     private static func runHelper(
         name: String,
         arguments: [String],
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        acceptedExitCodes: Set<Int32> = [0]
     ) async throws -> MacVoiceProcessOutput {
-        try await Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .userInitiated) {
             let helper = try helperURL(name: name)
             let invocation = try pythonInvocation()
             return try runProcess(
@@ -240,9 +261,43 @@ enum MacVoiceRuntime {
                 environment: invocation.environment,
                 currentDirectoryURL: invocation.currentDirectoryURL,
                 timeout: timeout,
-                timeoutLabel: "\(name) timed out."
+                timeoutLabel: "\(name) timed out.",
+                acceptedExitCodes: acceptedExitCodes
             )
-        }.value
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private static func funASRReadyMarker(in sitePackages: URL) -> URL {
+        sitePackages.appendingPathComponent(".elephant-funasr-ready")
+    }
+
+    private static func isFunASRReady(in sitePackages: URL) -> Bool {
+        FileManager.default.fileExists(atPath: funASRReadyMarker(in: sitePackages).path)
+            && hasFunASRPackage(in: sitePackages)
+    }
+
+    private static func hasFunASRPackage(in preferredSitePackages: URL) -> Bool {
+        if hasFunASRPackageOnly(in: preferredSitePackages) {
+            return true
+        }
+        if let bundledSitePackages = bundledSitePackages() {
+            return hasFunASRPackageOnly(in: bundledSitePackages)
+        }
+        return false
+    }
+
+    private static func hasFunASRPackageOnly(in sitePackages: URL) -> Bool {
+        FileManager.default.fileExists(
+            atPath: sitePackages
+                .appendingPathComponent("funasr", isDirectory: true)
+                .appendingPathComponent("__init__.py")
+                .path
+        )
     }
 
     private static func helperURL(name: String) throws -> URL {
@@ -316,7 +371,8 @@ enum MacVoiceRuntime {
         environment: [String: String],
         currentDirectoryURL: URL,
         timeout: TimeInterval,
-        timeoutLabel: String
+        timeoutLabel: String,
+        acceptedExitCodes: Set<Int32> = [0]
     ) throws -> MacVoiceProcessOutput {
         let process = Process()
         process.executableURL = executableURL
@@ -346,6 +402,12 @@ enum MacVoiceRuntime {
 
         let deadline = Date().addingTimeInterval(timeout)
         while process.isRunning && Date() < deadline {
+            if Task.isCancelled {
+                process.terminate()
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                errorPipe.fileHandleForReading.readabilityHandler = nil
+                throw CancellationError()
+            }
             Thread.sleep(forTimeInterval: 0.05)
         }
         if process.isRunning {
@@ -361,7 +423,7 @@ enum MacVoiceRuntime {
         stderrBuffer.append(errorPipe.fileHandleForReading.readDataToEndOfFile())
         let stdout = stdoutBuffer.stringValue
         let stderr = stderrBuffer.stringValue
-        guard process.terminationStatus == 0 else {
+        guard acceptedExitCodes.contains(process.terminationStatus) else {
             let detail = [stderr, stdout]
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }

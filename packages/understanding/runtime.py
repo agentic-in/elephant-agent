@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
+import logging
 import unicodedata
 from typing import Any
 from packages.contracts import ALLOWED_LENSES, Fact
@@ -30,6 +31,7 @@ from .personal_model_governance import (
 _ALLOWED_ACTIONS = frozenset({"remember", "correct", "forget", "dispute", "restore"})
 _ALLOWED_SOURCES = frozenset({"user_said", "user_corrected", "learned"})
 _ALLOWED_SEARCH_STATUSES = frozenset({"active", "retired", "disputed", "all"})
+LOGGER = logging.getLogger(__name__)
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 def _clean(value: object) -> str:
@@ -86,16 +88,12 @@ def _topic_matches(fact: Fact, *, topic: str, ref: str = "") -> bool:
     if ref and fact.fact_id == ref:
         return True
     return _clean((fact.metadata or {}).get("topic")) == topic
-
-
 def _topic_matches_filter(fact: Fact, topic_filter: str) -> bool:
     """Match fact topic by exact match or prefix (for 2-segment topics like pulse.mood)."""
     fact_topic = _clean((fact.metadata or {}).get("topic"))
     if fact_topic == topic_filter:
         return True
     return fact_topic.startswith(f"{topic_filter}.")
-
-
 _QUERY_ALIASES: Mapping[str, tuple[str, ...]] = {}
 def _normalized_text(value: object) -> str:
     normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
@@ -234,6 +232,7 @@ class PersonalModelUnderstandingSurface:
             try:
                 index_claim(fact)
             except Exception:
+                LOGGER.debug("Failed to index Personal Model claim for semantic search.", exc_info=True)
                 return
     def _deactivate_claim_index(
         self,
@@ -252,6 +251,7 @@ class PersonalModelUnderstandingSurface:
                 owner_scope="personal_model",
             )
         except Exception:
+            LOGGER.debug("Failed to list semantic index entries for claim deactivation.", exc_info=True)
             return
         now = _utc_now()
         for entry in entries:
@@ -271,6 +271,7 @@ class PersonalModelUnderstandingSurface:
                     )
                 )
             except Exception:
+                LOGGER.debug("Failed to mark semantic index entry deleted for claim deactivation.", exc_info=True)
                 continue
     def _indexed_query_dimensions(
         self,
@@ -289,6 +290,7 @@ class PersonalModelUnderstandingSurface:
                 state_id=state_id or None,
             )
         except Exception:
+            LOGGER.debug("Failed to inspect Personal Model semantic index dimensions.", exc_info=True)
             return None
         counts: dict[int, int] = {}
         for entry in entries:
@@ -301,7 +303,6 @@ class PersonalModelUnderstandingSurface:
         if not counts:
             return None
         return max(counts, key=lambda item: (counts[item], item))
-
     def _query_vector(self, query: str, *, dimensions: int | None = None) -> tuple[tuple[float, ...], int | None]:
         service = self.embedding_service
         if service is None or not query.strip():
@@ -317,6 +318,7 @@ class PersonalModelUnderstandingSurface:
             values = tuple(getattr(vector, "values", ()) or ())
             dimensions = int(getattr(vector, "dimensions", 0) or 0) or None
         except Exception:
+            LOGGER.debug("Failed to embed Personal Model search query.", exc_info=True)
             return (), None
         if not values or dimensions is None:
             return (), None
@@ -392,7 +394,6 @@ class PersonalModelUnderstandingSurface:
             selected, match_status = self._hybrid_pm_search(
                 search_queries, pm_id=pm_id, facts=facts, topic=resolved_topic, limit=capped,
             )
-
         claims = []
         for fact in selected:
             claims.append(claim_payload(fact))
@@ -403,6 +404,7 @@ class PersonalModelUnderstandingSurface:
                 try:
                     touch(tuple(fact.fact_id for fact in selected))
                 except Exception:
+                    LOGGER.debug("Failed to touch Personal Model fact access metadata.", exc_info=True)
                     pass
         result: dict[str, Any] = {
             "personal_model_id": pm_id,
@@ -425,7 +427,6 @@ class PersonalModelUnderstandingSurface:
                 result["related_active_claims"] = related_claims
                 result["similar_topics"] = tuple({item["topic"] for item in related_claims})
         return result
-
     def _hybrid_pm_search(
         self,
         queries: tuple[str, ...],
@@ -467,7 +468,6 @@ class PersonalModelUnderstandingSurface:
                 limit=limit,
             )
             seen_refs: set[str] = {fact.fact_id for fact in ranked_facts}
-
             # Keyword fallback: also find facts matching query_variants via token overlap.
             # This catches multi-keyword queries (e.g. compound terms) that vector search misses.
             if len(ranked_facts) < limit:
@@ -476,23 +476,19 @@ class PersonalModelUnderstandingSurface:
                     if fact.fact_id not in seen_refs:
                         ranked_facts.append(fact)
                         seen_refs.add(fact.fact_id)
-
             # If topic specified, boost topic-matched results to front
             if topic and ranked_facts:
                 topic_hits = [f for f in ranked_facts if _topic_matches_filter(f, topic)]
                 non_topic = [f for f in ranked_facts if f not in topic_hits]
                 ranked_facts = topic_hits + non_topic
-
             # Apply freshness re-ranking (demote stale chapter/knowledge facts)
             if ranked_facts:
                 now = _utc_now()
                 ranked_facts = _rerank_by_freshness(ranked_facts, now=now)
                 selected = tuple(ranked_facts[:limit])
                 return selected, "strong_match" if len(selected) >= 1 else "no_match"
-
         # Fallback: token matching when no semantic searcher — uses all query variants
         return fallback_pm_search(queries, facts=facts, topic=topic, limit=limit)
-
     def search_conversation(
         self,
         session_id: str,
@@ -569,7 +565,6 @@ class PersonalModelUnderstandingSurface:
             "resolved_time_range": resolved_time_range.payload() if resolved_time_range is not None else {},
             "hits": rendered_hits[:capped],
         }
-
     def recall_personal_model(
         self,
         session_id: str,
@@ -587,7 +582,6 @@ class PersonalModelUnderstandingSurface:
             limit=limit,
             personal_model_id=personal_model_id,
         )
-
     def timeline_personal_model(
         self,
         session_id: str,

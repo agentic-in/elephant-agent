@@ -193,7 +193,7 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 child_episode_id=child.episode_id,
             )
 
-            with mock.patch("apps.learning_agents.run_background_learning_agent", return_value=agent_result):
+            with mock.patch("apps.learning_worker_runtime.run_background_learning_agent", return_value=agent_result):
                 run_learning_job(runtime, job, worker_id="worker:test")
 
             self.assertIsNotNone(runtime.repository.load_episode(child.episode_id))
@@ -256,7 +256,7 @@ class CliRuntimeLearningTest(unittest.TestCase):
                 child_episode_id="",
             )
 
-            with mock.patch("apps.learning_agents.run_background_learning_agent", return_value=agent_result):
+            with mock.patch("apps.learning_worker_runtime.run_background_learning_agent", return_value=agent_result):
                 run_learning_job(runtime, job, worker_id="worker:test")
 
             jobs = runtime.repository.list_learning_jobs(episode_id=session.episode_id, limit=10)

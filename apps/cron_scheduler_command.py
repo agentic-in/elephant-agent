@@ -22,7 +22,7 @@ from apps.runtime_layout import (
     default_gateway_state_dir,
 )
 
-from .cli.typer_support import run_typer_app
+from packages.operator.typer_support import run_typer_app
 
 
 def command_main(
@@ -113,9 +113,16 @@ def _build_service(args: Namespace):
         default_cli_state_dir=str(args.cli_state_dir),
         environ=environ,
         runtime_state_dir=args.state_dir,
+        runtime_factory=_cron_runtime_factory,
     )
     service.delivery_callback = _build_delivery_callback(args, environ=environ)
     return service
+
+
+def _cron_runtime_factory(state_dir: Path):
+    from apps.cli.runtime import CliRuntime
+
+    return CliRuntime.create(state_dir=state_dir)
 
 
 def _build_delivery_callback(args: Namespace, *, environ):

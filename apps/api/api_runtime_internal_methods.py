@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 import json
+import logging
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -21,6 +22,9 @@ from .api_runtime_console import (
 )
 from .api_runtime_console_usage import normalize_token_usage_row
 from .api_runtime_support import _jsonable, _now
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 _INTERNAL_DASHBOARD_QUERY_CONTRACT = (
@@ -329,16 +333,36 @@ def _learning_snapshot(
         worker = dict(load_learning_worker_record(state_dir) or {})
         worker.setdefault("running", learning_worker_is_running(state_dir))
     except Exception:
+        LOGGER.warning("failed to load learning worker record for internal dashboard", exc_info=True)
         worker = {"status": "unknown", "running": False}
     counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0, "cancelled": 0}
     for job in jobs:
         status = str(getattr(job, "status", "") or "").strip().lower()
         if status in counts:
             counts[status] += 1
+    episode_cache: dict[str, Any] = dict(episodes_by_id)
+    load_episode = getattr(self.repository, "load_episode", None)
+
+    def episode_for(job: Any) -> Any:
+        episode_id = str(getattr(job, "episode_id", "") or "")
+        if not episode_id:
+            return None
+        if episode_id not in episode_cache and callable(load_episode):
+            try:
+                episode_cache[episode_id] = load_episode(episode_id)
+            except Exception:
+                LOGGER.warning(
+                    "failed to load learning job episode for internal dashboard",
+                    extra={"episode_id": episode_id},
+                    exc_info=True,
+                )
+                episode_cache[episode_id] = None
+        return episode_cache.get(episode_id)
+
     rows = []
     for job in jobs:
         state = states_by_id.get(str(getattr(job, "state_id", "") or ""))
-        episode = episodes_by_id.get(str(getattr(job, "episode_id", "") or ""))
+        episode = episode_for(job)
         result_payload = getattr(job, "result_json", {})
         result_json = dict(result_payload) if isinstance(result_payload, Mapping) else {}
         metadata = dict(getattr(job, "metadata", {}) or {})
@@ -380,10 +404,15 @@ def _learning_snapshot(
 def _learning_job_runtime_contract(trigger: str, *, metadata: Mapping[str, Any]) -> tuple[tuple[str, ...], tuple[str, ...]]:
     explicit_features = _learning_explicit_features(metadata.get("features"))
     try:
-        from apps.reflect.features import resolve_features
+        from packages.reflect.features import resolve_features
 
         features = resolve_features(trigger.strip().lower(), explicit_features=explicit_features or None)
     except Exception:
+        LOGGER.warning(
+            "failed to resolve learning job feature contract for internal dashboard",
+            extra={"trigger": trigger},
+            exc_info=True,
+        )
         return (), ()
     feature_ids = tuple(feature.feature_id for feature in features)
     tools: list[str] = []
@@ -457,6 +486,11 @@ def _fact_lens_from_topic(fact: Any) -> str:
         try:
             metadata = dict(metadata or {})
         except Exception:
+            LOGGER.warning(
+                "failed to normalize personal model fact metadata for internal dashboard",
+                extra={"fact_id": str(getattr(fact, "fact_id", "") or "")},
+                exc_info=True,
+            )
             metadata = {}
     topic = str(metadata.get("topic") or "").strip()
     if topic:

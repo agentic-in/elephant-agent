@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
+import logging
 from pathlib import Path
 import re
 import tempfile
@@ -80,6 +81,9 @@ from packages.tools import ToolRuntime
 from .plugins import GatewayAdapterDescriptor, GatewayPluginRegistry
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def _episode_status_from_route(status: str) -> str:
     normalized = str(status or "").strip()
     if normalized in ("paused", "interrupted"):
@@ -122,6 +126,11 @@ def _ack_pending_gateway_proactive_questions(
             limit=128,
         )
     except Exception:
+        LOGGER.warning(
+            "failed to load asked questions for gateway response binding",
+            extra={"personal_model_id": personal_model_id},
+            exc_info=True,
+        )
         return
     for question in questions:
         asked_at = getattr(question, "last_asked_at", None)
@@ -400,6 +409,11 @@ class GatewayApp:
                 connection.execute("UPDATE episodes SET exit_summary = ? WHERE episode_id = ?", (compress_result.summary, session_id))
                 connection.commit()
         except Exception:
+            LOGGER.warning(
+                "failed to persist gateway context compression summary",
+                extra={"episode_id": session_id},
+                exc_info=True,
+            )
             pass
         self.telemetry.emit({
             "event_id": f"telemetry:{session_id}:context-compact:{uuid4().hex}",
@@ -485,6 +499,11 @@ class GatewayApp:
             result = adapter.execute(request)
             return (result.summary or "").strip()
         except Exception:
+            LOGGER.warning(
+                "failed to reflect-compress gateway context summary",
+                extra={"episode_id": session_id},
+                exc_info=True,
+            )
             return ""
 
     def _reconcile_turn(self, outcome: KernelOutcome) -> None:

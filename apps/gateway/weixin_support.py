@@ -487,7 +487,8 @@ def load_weixin_account(state_dir: str, account_id: str) -> Optional[dict[str, A
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        logger.warning("weixin: failed to load account file for %s: %s", _safe_id(account_id), exc)
         return None
 
 
@@ -577,7 +578,8 @@ def _load_sync_buf(state_dir: str, account_id: str) -> str:
         return ""
     try:
         return json.loads(path.read_text(encoding="utf-8")).get("get_updates_buf", "")
-    except Exception:
+    except Exception as exc:
+        logger.warning("weixin: failed to load sync buffer for %s: %s", _safe_id(account_id), exc)
         return ""
 
 
@@ -694,7 +696,8 @@ async def qr_login(
                         qr.add_data(qr_scan_data)
                         qr.make(fit=True)
                         _print_qr_centered(qr)
-                    except Exception:
+                    except Exception as exc:
+                        logger.warning("weixin: failed to render QR code in terminal: %s", exc)
                         pass
                 except Exception as exc:
                     logger.error("weixin: QR refresh failed: %s", exc)

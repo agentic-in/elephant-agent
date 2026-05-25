@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 import json
+import logging
 from typing import Any
 from urllib.parse import unquote
 
 from .api_runtime_http_dispatch_helpers import _cron_job_record, _read_wsgi_body
-from .api_runtime_support import APIResponse, _read_json_bytes
+from .api_runtime_support import APIResponse, _now, _read_json_bytes
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _persist_proactive_ask_config(state_dir, updates: dict) -> None:
@@ -30,6 +33,7 @@ def _persist_proactive_ask_config(state_dir, updates: dict) -> None:
         config["personal_model_questions"] = question_policy
         write_global_config(config_path, config)
     except Exception:  # pragma: no cover
+        LOGGER.debug("Failed to persist proactive ask config.", exc_info=True)
         return
 
 
@@ -37,25 +41,40 @@ def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
     """Fire one cron job on demand and return its execution result."""
     from pathlib import Path as _Path
 
-    from apps.cli.runtime import CliRuntime
-    from apps.gateway.cron_service import build_gateway_cron_delivery_callback, cron_execution_should_deliver
+    from packages.gateway_core.cron_delivery import cron_execution_should_deliver
 
     state_dir = _Path(str(self.repository.database_path.parent))
     cli_state_dir = state_dir
-    gateway_state_dir = state_dir
 
-    runtime = CliRuntime.create(state_dir=cli_state_dir)
-    execution = runtime.run_cron_job_now(job_id)
+    execution, execution_error = _run_cron_job_via_bridge(
+        self,
+        cli_state_dir=cli_state_dir,
+        job_id=job_id,
+    )
+    if execution is None:
+        job = self.cron_runtime.inspect_job(job_id)
+        return {
+            "cron": {
+                "job": _cron_job_record(job),
+                "run": {
+                    "outcome": "unavailable",
+                    "summary": execution_error or "cron runtime bridge unavailable",
+                    "delivered": False,
+                    "delivery_error": execution_error or "cron runtime bridge unavailable",
+                    "recorded_at": _now().isoformat(),
+                },
+            }
+        }
 
     delivered = False
     delivery_error: str | None = None
     should_deliver = execution.outcome == "success" and cron_execution_should_deliver(execution)
     if should_deliver:
         try:
-            callback = build_gateway_cron_delivery_callback(
-                state_dir=gateway_state_dir,
+            callback = _build_gateway_cron_delivery_callback(
+                self,
+                state_dir=state_dir,
                 cli_state_dir=cli_state_dir,
-                environ={},
             )
             if callback is not None:
                 callback(execution.job, execution)
@@ -75,6 +94,39 @@ def run_cron_job_now(self, job_id: str) -> dict[str, Any]:
             },
         }
     }
+
+
+def _run_cron_job_via_bridge(
+    app: Any,
+    *,
+    cli_state_dir,
+    job_id: str,
+) -> tuple[Any | None, str | None]:
+    bridge = getattr(app, "gateway_runtime_bridge", None)
+    run_now = getattr(bridge, "run_cron_job_now", None)
+    if not callable(run_now):
+        return None, "cron runtime bridge unavailable"
+    try:
+        return run_now(cli_state_dir=cli_state_dir, job_id=job_id), None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def _build_gateway_cron_delivery_callback(
+    app: Any,
+    *,
+    state_dir,
+    cli_state_dir,
+) -> Any | None:
+    bridge = getattr(app, "gateway_runtime_bridge", None)
+    build_callback = getattr(bridge, "build_cron_delivery_callback", None)
+    if not callable(build_callback):
+        return None
+    return build_callback(
+        state_dir=state_dir,
+        cli_state_dir=cli_state_dir,
+        environ={},
+    )
 
 
 def __call__(self, environ: Mapping[str, Any], start_response: Any) -> Iterator[bytes] | list[bytes]:

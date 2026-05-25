@@ -11,16 +11,23 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+from apps.api import api_runtime_http_io_methods
+from apps.api import api_runtime_impl
 from apps.api.api_runtime_http_io_methods import __call__ as wsgi_call
+from apps.api.api_runtime_http_io_methods import run_cron_job_now
 from apps.api.api_runtime_context_compression import (
     compact_context_after_usage,
+    _reflect_runtime,
 )
+from apps.api.api_runtime_cron_ops import run_proactive_ask_now
+from apps.api.api_runtime_episode_queries import repository_episodes
 from apps.api.api_runtime_http_methods import (
     _dispatch_elephants,
     _dispatch_internal,
     _dispatch_operator,
     stream_loop_events,
 )
+from apps.api.api_runtime_routes import API_HEALTH_ROUTE, API_V1_ROUTE_FAMILY_PATHS
 from apps.api.capabilities import APITelemetrySink
 from packages.context.epoch_store import FileEpochStore
 from packages.context.session_projection import SessionContextEpoch
@@ -69,6 +76,27 @@ def _dream_job() -> SimpleNamespace:
         last_run_at=None,
         run_count=0,
         last_summary="",
+    )
+
+
+def _prompt_job() -> SimpleNamespace:
+    now = datetime.now(timezone.utc)
+    return SimpleNamespace(
+        job_id="cron:prompt",
+        name="Prompt",
+        schedule_text="0 1 * * *",
+        schedule_kind="cron",
+        action_kind="prompt",
+        status="scheduled",
+        profile_id=None,
+        elephant_id=None,
+        payload={"prompt": "hello"},
+        created_at=now,
+        updated_at=now,
+        next_run_at=now,
+        last_run_at=now,
+        run_count=1,
+        last_summary="hello from cron",
     )
 
 
@@ -121,6 +149,100 @@ def _local_runtime(
         detected_at="2026-05-23T00:00:00+00:00",
         metadata={"adapter": "argv_prompt" if can_execute else ""},
     )
+
+
+class APIRouteInventoryTest(unittest.TestCase):
+    def test_declared_api_route_families_cover_dispatch_surface(self) -> None:
+        self.assertEqual(API_HEALTH_ROUTE, "/healthz")
+        self.assertEqual(
+            API_V1_ROUTE_FAMILY_PATHS,
+            (
+                "/v1/providers",
+                "/v1/internal",
+                "/v1/operator",
+                "/v1/herd",
+                "/v1/episodes",
+                "/v1/states",
+            ),
+        )
+
+
+class APIBestEffortObservabilityTest(unittest.TestCase):
+    def test_repository_episode_query_logs_direct_failure(self) -> None:
+        repository = SimpleNamespace(
+            list_episodes=mock.Mock(side_effect=RuntimeError("episode query failed")),
+        )
+
+        with self.assertLogs("apps.api.api_runtime_episode_queries", level="DEBUG") as captured:
+            episodes = repository_episodes(repository)
+
+        self.assertEqual(episodes, ())
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Repository episode query failed", rendered_logs)
+        self.assertIn("episode query failed", rendered_logs)
+
+    def test_repository_episode_query_logs_fallback_failure(self) -> None:
+        calls = {"count": 0}
+
+        def list_episodes(**_kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise TypeError("legacy signature")
+            raise RuntimeError("fallback failed")
+
+        repository = SimpleNamespace(list_episodes=list_episodes)
+
+        with self.assertLogs("apps.api.api_runtime_episode_queries", level="DEBUG") as captured:
+            episodes = repository_episodes(repository, state_id="state:1")
+
+        self.assertEqual(episodes, ())
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Fallback repository episode query failed", rendered_logs)
+        self.assertIn("fallback failed", rendered_logs)
+
+    def test_persist_proactive_ask_config_logs_failure(self) -> None:
+        with (
+            mock.patch(
+                "packages.runtime_config.global_config_path_for_state_dir",
+                side_effect=RuntimeError("config path unavailable"),
+            ),
+            self.assertLogs("apps.api.api_runtime_http_io_methods", level="DEBUG") as captured,
+        ):
+            api_runtime_http_io_methods._persist_proactive_ask_config(
+                Path("/tmp/elephant-state"),
+                {"enabled": True},
+            )
+
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Failed to persist proactive ask config", rendered_logs)
+        self.assertIn("config path unavailable", rendered_logs)
+
+    def test_steady_embedding_runtime_logs_failure(self) -> None:
+        embedding_service = SimpleNamespace(
+            steady_async=mock.Mock(side_effect=RuntimeError("steady failed")),
+        )
+
+        with self.assertLogs("apps.api.api_runtime_impl", level="DEBUG") as captured:
+            api_runtime_impl._steady_embedding_runtime(embedding_service)
+
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("steady_async() failed", rendered_logs)
+        self.assertIn("steady failed", rendered_logs)
+
+    def test_ensure_system_cron_jobs_logs_failure(self) -> None:
+        with (
+            mock.patch.object(
+                api_runtime_impl,
+                "ensure_nightly_learning_crons",
+                side_effect=RuntimeError("cron bootstrap failed"),
+            ),
+            self.assertLogs("apps.api.api_runtime_impl", level="WARNING") as captured,
+        ):
+            api_runtime_impl._ensure_system_cron_jobs(SimpleNamespace())
+
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Failed to ensure built-in system cron jobs", rendered_logs)
+        self.assertIn("cron bootstrap failed", rendered_logs)
 
 
 class HerdDiscoveryAPITest(unittest.TestCase):
@@ -245,8 +367,113 @@ class OperatorCronDispatchTest(unittest.TestCase):
         self.assertEqual(calls, ["run"])
         self.assertEqual(response.payload["cron"]["run"]["outcome"], "success")
 
+    def test_manual_run_uses_gateway_runtime_bridge_for_delivery(self) -> None:
+        job = _prompt_job()
+        execution = SimpleNamespace(
+            job=job,
+            outcome="success",
+            summary="hello from cron",
+            recorded_at=datetime.now(timezone.utc),
+        )
+        delivered: list[tuple[object, object]] = []
+        runs: list[str] = []
+
+        class _Bridge:
+            def run_cron_job_now(self, *, cli_state_dir: Path, job_id: str):
+                runs.append(job_id)
+                return execution
+
+            def build_cron_delivery_callback(self, **_kwargs):
+                return lambda delivered_job, delivered_execution: delivered.append(
+                    (delivered_job, delivered_execution)
+                )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = SimpleNamespace(
+                repository=SimpleNamespace(database_path=Path(tmpdir) / "elephant.sqlite3"),
+                gateway_runtime_bridge=_Bridge(),
+            )
+            payload = run_cron_job_now(app, "cron:prompt")
+
+        self.assertEqual(runs, ["cron:prompt"])
+        self.assertEqual(delivered, [(job, execution)])
+        self.assertTrue(payload["cron"]["run"]["delivered"])
+
+    def test_manual_run_reports_missing_cron_runtime_bridge(self) -> None:
+        cron_runtime = _CronRuntimeStub(job=_prompt_job())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = SimpleNamespace(
+                repository=SimpleNamespace(database_path=Path(tmpdir) / "elephant.sqlite3"),
+                cron_runtime=cron_runtime,
+                gateway_runtime_bridge=None,
+            )
+            payload = run_cron_job_now(app, "cron:prompt")
+
+        self.assertEqual(payload["cron"]["run"]["outcome"], "unavailable")
+        self.assertEqual(payload["cron"]["run"]["delivery_error"], "cron runtime bridge unavailable")
+
+    def test_proactive_ask_run_uses_gateway_runtime_bridge(self) -> None:
+        calls: list[dict[str, object]] = []
+
+        class _Bridge:
+            def run_proactive_ask_once(self, **kwargs):
+                calls.append(kwargs)
+                return {
+                    "scanned": 2,
+                    "eligible": 1,
+                    "enqueued": 1,
+                    "skipped_no_questions": 0,
+                    "skipped_pending": 0,
+                    "skipped_policy": 1,
+                    "skipped_unbound": 0,
+                }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = SimpleNamespace(
+                repository=SimpleNamespace(database_path=Path(tmpdir) / "elephant.sqlite3"),
+                gateway_runtime_bridge=_Bridge(),
+            )
+            payload = run_proactive_ask_now(app)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(payload["cron"]["run"]["outcome"], "success")
+        self.assertTrue(payload["cron"]["run"]["delivered"])
+        self.assertIn("enqueued=1", payload["cron"]["run"]["summary"])
+
+    def test_proactive_ask_run_reports_missing_gateway_runtime_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = SimpleNamespace(
+                repository=SimpleNamespace(database_path=Path(tmpdir) / "elephant.sqlite3"),
+                gateway_runtime_bridge=None,
+            )
+            payload = run_proactive_ask_now(app)
+
+        self.assertEqual(payload["cron"]["run"]["outcome"], "unavailable")
+        self.assertEqual(payload["cron"]["run"]["delivery_error"], "gateway runtime bridge unavailable")
+
 
 class APIContextCompressionTest(unittest.TestCase):
+    def test_reflect_runtime_uses_runtime_bridge_when_api_has_no_sub_agent_runner(self) -> None:
+        runtime = object()
+
+        class _Bridge:
+            def reflect_context_runtime(self, *, state_dir: Path):
+                self.state_dir = state_dir
+                return runtime
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            bridge = _Bridge()
+            app = SimpleNamespace(
+                repository=SimpleNamespace(database_path=state_dir / "elephant.sqlite3"),
+                gateway_runtime_bridge=bridge,
+            )
+
+            resolved = _reflect_runtime(app)
+
+        self.assertIs(resolved, runtime)
+        self.assertEqual(bridge.state_dir, state_dir)
+
     def test_after_turn_high_usage_compacts_epoch_like_chat_cli(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp)

@@ -24,6 +24,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+import logging
 import re
 from typing import Any, Mapping, Protocol
 
@@ -91,6 +92,9 @@ _NOISY_STEP_ACTIONS = frozenset(
 )
 _USER_TURN_ACTIONS = frozenset({"record_input"})
 _ASSISTANT_TURN_ACTIONS = frozenset({"emit_response", "reply"})
+_FALLBACK_STEP_MIN_CAP = 100
+_FALLBACK_STEP_MULTIPLIER = 10
+LOGGER = logging.getLogger(__name__)
 
 
 def conversation_scopes_for_view(view: object) -> tuple[str, ...]:
@@ -164,7 +168,18 @@ class UnifiedRecallRepository(Protocol):
     ) -> tuple[Any, ...]:
         ...
 
-    def list_steps(self, *, loop_id: str | None = None) -> tuple[Any, ...]:
+    def list_steps(
+        self,
+        *,
+        loop_id: str | None = None,
+        episode_id: str | None = None,
+        state_id: str | None = None,
+        personal_model_id: str | None = None,
+        created_at_start: datetime | None = None,
+        created_at_end: datetime | None = None,
+        limit: int | None = None,
+        newest_first: bool = False,
+    ) -> tuple[Any, ...]:
         ...
 
     def list_semantic_index_entries(
@@ -340,6 +355,10 @@ def _step_text(step: Any, metadata: Mapping[str, str]) -> str:
     return text
 
 
+def _fallback_step_cap(episodes_cap: int) -> int:
+    return max(_FALLBACK_STEP_MIN_CAP, int(episodes_cap) * _FALLBACK_STEP_MULTIPLIER)
+
+
 def _collect_recall_documents(
     *,
     repository: UnifiedRecallRepository,
@@ -360,8 +379,10 @@ def _collect_recall_documents(
                 try:
                     episodes = repository.list_episodes(state_id=state_id)
                 except Exception:
+                    LOGGER.debug("Failed to load episode recall documents using compatibility query.", exc_info=True)
                     episodes = ()
             except Exception:
+                LOGGER.debug("Failed to load episode recall documents using bounded query.", exc_info=True)
                 episodes = ()
             documents.extend(
                 document for document in documents_from_episodes(episodes or ())
@@ -369,12 +390,27 @@ def _collect_recall_documents(
             )
         elif scope == "steps":
             try:
-                steps = repository.list_steps()
+                steps = repository.list_steps(
+                    state_id=state_id,
+                    personal_model_id=personal_model_id,
+                    created_at_start=time_range.start_at if time_range is not None else None,
+                    created_at_end=time_range.end_at if time_range is not None else None,
+                    limit=_fallback_step_cap(episodes_cap),
+                    newest_first=True,
+                )
+            except TypeError:
+                try:
+                    steps = repository.list_steps()
+                except Exception:
+                    LOGGER.debug("Failed to load step recall documents using compatibility query.", exc_info=True)
+                    steps = ()
             except Exception:
+                LOGGER.debug("Failed to load step recall documents using bounded query.", exc_info=True)
                 steps = ()
             documents.extend(
                 document for document in documents_from_steps(steps or ())
                 if (not state_id or document.state_id in {None, "", state_id})
+                and (not personal_model_id or document.personal_model_id in {None, "", personal_model_id})
                 and not _is_excluded_episode(document.episode_id, excluded)
             )
         # Legacy scopes (personal_model, state, sources) are no longer supported.
@@ -439,6 +475,7 @@ def _indexed_query_dimensions(
             state_id=state_id,
         )
     except Exception:
+        LOGGER.debug("Failed to inspect indexed recall dimensions; falling back without vector dimensions.", exc_info=True)
         return None
     counts: dict[int, int] = {}
     for entry in entries:
@@ -758,6 +795,7 @@ def unified_recall(
             if status in {"failed", "unavailable", "disabled"} or not embedding_runtime_is_loaded(health):
                 embedding_available = False
         except Exception:
+            LOGGER.debug("Failed to inspect embedding runtime health for unified recall; using lexical signals.", exc_info=True)
             embedding_available = False
     elif embedding_available:
         embedding_available = False
@@ -781,6 +819,7 @@ def unified_recall(
             query_vector = tuple(getattr(vector, "values", ()) or ())
             query_dimensions = int(getattr(vector, "dimensions", 0) or 0) or None
         except Exception:
+            LOGGER.debug("Failed to embed unified recall query; using lexical semantic search signals.", exc_info=True)
             query_vector = ()
             query_dimensions = None
         resolved = (query_vector, query_dimensions)
@@ -822,6 +861,7 @@ def unified_recall(
         try:
             matches = searcher.search(search_query)
         except Exception:
+            LOGGER.debug("Hybrid semantic recall search failed for scope %s; using fallback candidates.", scope, exc_info=True)
             matches = ()
         for match in matches:
             if require_text_anchor and not _match_has_text_anchor(match):

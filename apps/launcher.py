@@ -10,8 +10,8 @@ import typer
 from apps.runtime_layout import default_cli_state_dir
 
 from .cli.shell import Align, BRAND_ACCENT, BRAND_LIGHT, BRAND_MUTED, Console, Group, Panel, RICH_AVAILABLE, Text, _resolve_elephant_version
-from .cli.typer_support import run_typer_app
 from .cli.cli_main_support import CLI_COMMAND_HELP, CLI_HELP_COMMANDS, CLI_HELP_NEXT_COMMANDS, CLI_HELP_TAGLINE, _print_cli_help, _render_cli_banner_mark
+from packages.operator.typer_support import run_typer_app
 
 LAUNCHER_COMMAND_HELP = {
     **CLI_COMMAND_HELP,

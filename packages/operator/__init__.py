@@ -29,6 +29,8 @@ from .runtime import (
     render_procedure_lines,
     render_profile_lines,
 )
+from .typer_support import run_typer_app
+from .cli_cards import CliCardSection
 
 __all__ = [
     "DashboardAlert",
@@ -55,7 +57,9 @@ __all__ = [
     "build_dashboard_surface",
     "build_procedure_operator_surface",
     "build_profile_operator_surface",
+    "CliCardSection",
     "dashboard_surface_record",
     "render_procedure_lines",
     "render_profile_lines",
+    "run_typer_app",
 ]

@@ -109,7 +109,7 @@ def command_main(
     resolved_argv = list(argv) if argv is not None else None
     if resolved_argv == []:
         resolved_argv = ["status"]
-    from apps.cli.typer_support import run_typer_app
+    from packages.operator.typer_support import run_typer_app
 
     return run_typer_app(app, resolved_argv, prog_name="elephant supervisor")
 

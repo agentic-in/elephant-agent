@@ -1,10 +1,10 @@
 .PHONY: help lint preview \
-	site-help site-install site-dev site-preview site-build site-typecheck \
+	site-help site-install site-dev site-preview site-build site-typecheck site-content-check \
 	dashboard-help dashboard-install dashboard-dev dashboard-build dashboard-typecheck \
-	pipeline-help web-install web-build web-typecheck \
+	pipeline-help web-install web-build web-typecheck web-content-check \
 	macos-help macos-build macos-build-all macos-release-latest \
-	test-e2e test-installed-user-journey test-release-e2e test-release-contracts test-release-scenarios test-integration-scenarios test-design-closure-reset-matrix test-install-surfaces test-live-installed-smoke test-live-provider-smoke \
-	package-build package-verify build-and-test e2e release design-closure
+	test-e2e test-gateway-e2e-smoke test-installed-user-journey test-release-e2e test-release-contracts test-release-scenarios test-integration-scenarios test-design-closure-reset-matrix test-install-surfaces test-live-installed-smoke test-live-provider-smoke \
+	package-build package-provenance package-verify build-and-test e2e release design-closure
 
 PYTHON ?= python3
 CHANGED_FILES ?=
@@ -27,10 +27,18 @@ MACOS_RUNTIME_PYTHON ?=
 MACOS_RELEASE_TAG ?= latest
 MACOS_RELEASE_TITLE ?= Elephant Agent latest
 RESET_API_E2E_TARGETS = \
-	tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads \
-	tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state \
-	tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence \
-	tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_default_provider_bad_request_hides_legacy_profile_field_names
+	tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads \
+	tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state \
+	tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence \
+	tests.e2e.api.test_api_surface_providers.APISurfaceProviderE2ETest.test_default_provider_bad_request_hides_legacy_profile_field_names
+GATEWAY_E2E_SMOKE_TARGETS = \
+	tests.e2e.gateway.test_gateway_adapter.GatewayAdapterE2ETests.test_gateway_state_dir_uses_shared_runtime_database \
+	tests.e2e.gateway.test_gateway_adapter.GatewayAdapterE2ETests.test_gateway_chat_runtime_exposes_model_tools_and_skills \
+	tests.e2e.gateway.test_gateway_adapter_discord_runtime.GatewayAdapterDiscordRuntimeE2ETests.test_discord_service_dispatch_event_delivers_dm_reply_with_mentions_suppressed \
+	tests.e2e.gateway.test_gateway_adapter_feishu_runtime.GatewayAdapterFeishuRuntimeE2ETests.test_feishu_gateway_service_uses_manifest_account_and_dispatches_reply \
+	tests.e2e.gateway.test_gateway_adapter_feishu_async_runtime.GatewayAdapterFeishuAsyncRuntimeE2ETests.test_feishu_async_long_connection_runs_different_conversations_in_parallel \
+	tests.e2e.gateway.test_gateway_adapter_feishu_control.GatewayAdapterFeishuControlE2ETests.test_feishu_control_bridge_binds_conversation_to_selected_elephant \
+	tests.e2e.gateway.test_gateway_adapter_telegram.GatewayAdapterTelegramE2ETests.test_telegram_private_update_reuses_identity_mapping_across_restart
 
 help: agent-help site-help dashboard-help pipeline-help
 
@@ -44,6 +52,7 @@ site-help:
 	@echo "  make preview [PORT=4180]"
 	@echo "  make site-build"
 	@echo "  make site-typecheck"
+	@echo "  make site-content-check"
 
 site-install:
 	@cd apps/site && npm ci
@@ -60,7 +69,10 @@ site-build:
 	@bash apps/site/build.sh
 
 site-typecheck:
-	@cd apps/site && npm run typecheck
+	@cd apps/site && npm run ci:check
+
+site-content-check:
+	@cd apps/site && npm run check:content
 
 dashboard-help:
 	@echo "Dashboard commands:"
@@ -86,15 +98,18 @@ pipeline-help:
 	@echo "  make web-install"
 	@echo "  make web-typecheck"
 	@echo "  make web-build"
+	@echo "  make web-content-check"
 	@echo "  make macos-build [MACOS_TARGET=aarch64-apple-darwin|x86_64-apple-darwin]"
 	@echo "  make macos-build-all"
 	@echo "  make macos-release-latest [MACOS_RELEASE_TAG=latest]"
 	@echo "  make build-and-test [AGENT_BASE_REF=<ref>]"
 	@echo "  make e2e"
+	@echo "  make test-gateway-e2e-smoke"
 	@echo "  make test-live-provider-smoke"
 	@echo "  make release [AGENT_BASE_REF=<ref>]"
 	@echo "  make design-closure [AGENT_BASE_REF=<ref>]"
 	@echo "  make package-build"
+	@echo "  make package-provenance"
 	@echo "  make package-verify"
 
 web-install: site-install dashboard-install
@@ -102,6 +117,8 @@ web-install: site-install dashboard-install
 web-typecheck: site-typecheck dashboard-typecheck
 
 web-build: site-build dashboard-build
+
+web-content-check: site-content-check
 
 macos-help:
 	@echo "macOS commands:"
@@ -159,14 +176,38 @@ macos-release-latest: macos-build-all
 test-e2e:
 	@"$(PYTHON)" -m unittest \
 		tests.e2e.api.test_api_surface \
+		tests.e2e.api.test_api_surface_dashboard \
+		tests.e2e.api.test_api_surface_dashboard_ops \
+		tests.e2e.api.test_api_surface_providers \
 		tests.e2e.cli.test_cli_surface \
+		tests.e2e.cli.test_cli_surface_facts \
+		tests.e2e.cli.test_cli_surface_herd \
+		tests.e2e.cli.test_cli_surface_provider \
+		tests.e2e.cli.test_cli_surface_skills \
 		tests.e2e.deploy.test_editable_install \
 		tests.e2e.deploy.test_installed_user_journey \
 		tests.e2e.deploy.test_installed_command_smoke \
 		tests.e2e.deploy.test_install_distribution \
 		tests.e2e.deploy.test_preview_deploy \
 		tests.e2e.deploy.test_runtime_topology \
-		tests.e2e.gateway.test_gateway_adapter
+		tests.e2e.gateway.test_gateway_adapter \
+		tests.e2e.gateway.test_gateway_adapter_chat_webhook \
+		tests.e2e.gateway.test_gateway_adapter_cli_surface \
+		tests.e2e.gateway.test_gateway_adapter_discord \
+		tests.e2e.gateway.test_gateway_adapter_discord_runtime \
+		tests.e2e.gateway.test_gateway_adapter_feishu_async_runtime \
+		tests.e2e.gateway.test_gateway_adapter_feishu_control \
+		tests.e2e.gateway.test_gateway_adapter_feishu_events \
+		tests.e2e.gateway.test_gateway_adapter_feishu_runtime \
+		tests.e2e.gateway.test_gateway_adapter_feishu_long_connection \
+		tests.e2e.gateway.test_gateway_adapter_feishu_setup \
+		tests.e2e.gateway.test_gateway_adapter_services \
+		tests.e2e.gateway.test_gateway_adapter_telegram \
+		tests.e2e.gateway.test_gateway_adapter_weixin_wecom
+
+test-gateway-e2e-smoke:
+	@"$(PYTHON)" -m unittest \
+		$(GATEWAY_E2E_SMOKE_TARGETS)
 
 test-installed-user-journey: dashboard-build
 	@"$(PYTHON)" -m unittest \
@@ -224,6 +265,9 @@ package-build:
 	@uv build
 	@ls -la dist/
 
+package-provenance:
+	@"$(PYTHON)" tools/release/provenance.py --dist-dir dist
+
 package-verify:
 	@if unzip -l dist/*.whl | grep -q "apps/site/node_modules"; then \
 		echo "::error::site node_modules leaked into the Python wheel"; \
@@ -241,7 +285,10 @@ package-verify:
 		echo "::error::dashboard frontend assets are missing from the wheel"; \
 		exit 1; \
 	fi
-	@uvx twine check dist/*
+	@uvx twine check dist/*.whl dist/*.tar.gz
+	@$(MAKE) package-provenance
+	@test -s dist/elephant-agent-provenance.json
+	@test -s dist/SHA256SUMS
 	@$(MAKE) test-install-surfaces
 
 build-and-test:

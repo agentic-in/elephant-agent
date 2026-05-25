@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 from .temporal_policy import should_auto_retire
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _utc_now() -> datetime:
@@ -44,6 +47,11 @@ def retire_stale_facts(repository: Any, *, now: datetime | None = None) -> int:
         try:
             facts = list_facts(personal_model_id=pm_id, status="active")
         except Exception:
+            LOGGER.warning(
+                "failed to load active facts for auto-retire scan",
+                extra={"personal_model_id": pm_id},
+                exc_info=True,
+            )
             continue
 
         for fact in facts:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from difflib import unified_diff
+import logging
 import os
 from pathlib import Path
 import re
@@ -133,6 +134,9 @@ from .shell_ui import (
     resolve_elephant_version as _resolve_elephant_version,
 )
 
+
+LOGGER = logging.getLogger(__name__)
+
 STARTUP_SEQUENCE_STEP_DELAY = 0.6
 STARTUP_SEQUENCE_FINAL_DELAY = 0.6
 
@@ -188,6 +192,11 @@ def _latest_completed_learning_result_key(runtime: CliRuntime, *, session_id: st
     try:
         status = runtime.learning_runtime_status(session_id=session_id, limit=8)
     except Exception:
+        LOGGER.warning(
+            "failed to inspect latest completed learning result key",
+            extra={"session_id": session_id},
+            exc_info=True,
+        )
         return ""
     jobs = tuple(status.get("jobs") or ()) if isinstance(status, dict) else ()
     for job in jobs:
@@ -379,6 +388,11 @@ def run(self) -> int:
                     self.runtime._ensure_learning_worker_if_needed()
                     learning_detail = f"episode closed · learning queued"
                 except Exception:
+                    LOGGER.warning(
+                        "failed to close episode during shell exit",
+                        extra={"episode_id": self.session_id},
+                        exc_info=True,
+                    )
                     pass
                 self._append_entry(
                     "notice",
@@ -393,6 +407,7 @@ def run(self) -> int:
         try:
             self._stop_status_refresher()
         except Exception:
+            LOGGER.warning("failed to stop shell status refresher", exc_info=True)
             pass
         if self._use_alternate_screen:
             # Exit alternate screen buffer, restoring terminal content from before TUI entry.

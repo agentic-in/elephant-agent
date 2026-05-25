@@ -118,22 +118,46 @@ def build_system_layer_contract_section(
     *,
     prompt_mode: PromptMode = "full",
 ) -> tuple[str, ...]:
-    """Who the companion is and how it should show up.
+    """Legacy compatibility shim.
 
-    Kept deliberately short because the "### Your own voice" section
-    below already carries the personality paragraph from ELEPHANT.md. Two
-    sections covering the same ground was the #1 complaint about the
-    previous prompt.
+    The companion identity contract now lives inside ``### Your own voice``.
+    Keeping a separate ``### Who you are`` section duplicated the authored
+    Elephant voice and made the prompt read like two competing personas.
     """
-    display_name = companion_display_name(profile)
-    lines = [
-        "### Who you are",
-        f"- You are {display_name}, the companion this person keeps coming back to.",
-        "- Stay one continuous person across sessions: remember what you promised, what you learned, and what's still open.",
-        "- Be steady when the moment invites warmth and exact when the work needs exactness.",
-        "- Do not invent recall, abilities, or certainty you don't have. If you don't know, say so and offer the next concrete step.",
-    ]
-    return tuple(lines)
+    del profile, prompt_mode
+    return ()
+
+
+def _voice_body_has_identity(body: str, display_name: str) -> bool:
+    text = " ".join(str(body or "").split()).casefold()
+    name = str(display_name or "").strip().casefold()
+    if name:
+        escaped = re.escape(name)
+        if any(
+            re.search(pattern, text)
+            for pattern in (
+                rf"\byou are\s+{escaped}\b",
+                rf"\bi am\s+{escaped}\b",
+                rf"\bi'm\s+{escaped}\b",
+            )
+        ):
+            return True
+    return any(
+        marker in text
+        for marker in (
+            "this person's elephant",
+            "this person's companion",
+            "这个人的 elephant",
+            "这个人的 companion",
+        )
+    )
+
+
+def _voice_body_has_memory_boundary(body: str) -> bool:
+    text = " ".join(str(body or "").split()).casefold()
+    has_memory = any(marker in text for marker in ("remember", "memory", "continuous", "记得", "记忆", "连续"))
+    has_boundary = any(marker in text for marker in ("uncertain", "don't know", "do not know", "invent", "不确定", "不知道", "编造"))
+    return has_memory and has_boundary
 
 
 def build_elephant_identity_section(profile: LoadedProfile) -> tuple[str, ...]:
@@ -147,14 +171,24 @@ def build_elephant_identity_section(profile: LoadedProfile) -> tuple[str, ...]:
     framework scaffolding reaches the model. Only the human paragraph
     gets through.
     """
+    display_name = companion_display_name(profile)
     body = _strip_framework_meta_from_identity_text(elephant_identity_text(profile))
     lines: list[str] = ["### Your own voice"]
     if body:
+        if not _voice_body_has_identity(body, display_name):
+            lines.append(f"You are {display_name}, this person's Elephant companion.")
         lines.extend(body.splitlines())
+        if not _voice_body_has_memory_boundary(body):
+            lines.append(
+                "Memory boundary: stay continuous across sessions; keep promises, learned details, and open questions consistent, but never invent recall, abilities, or certainty."
+            )
     else:
         # Defensive fallback — should never trigger in practice because
         # governance.elephant_identity_text always has a template default.
-        lines.append(f"Stay recognisable as {companion_display_name(profile)} across sessions.")
+        lines.append(f"You are {display_name}, this person's Elephant companion.")
+        lines.append(
+            "Memory boundary: stay continuous across sessions; keep promises, learned details, and open questions consistent, but never invent recall, abilities, or certainty."
+        )
     return tuple(lines)
 
 
@@ -180,7 +214,8 @@ def build_personality_section(
     *,
     prompt_mode: PromptMode = "full",
 ) -> tuple[str, ...]:
-    return build_system_layer_contract_section(profile, prompt_mode=prompt_mode)
+    del prompt_mode
+    return build_elephant_identity_section(profile)
 
 
 def build_prompt_contract(
@@ -189,7 +224,6 @@ def build_prompt_contract(
     prompt_mode: PromptMode = "full",
 ) -> PromptContract:
     stable_sections: list[tuple[str, tuple[str, ...]]] = [
-        ("system-layer-contract", build_system_layer_contract_section(profile, prompt_mode=prompt_mode)),
         ("elephant-identity", build_elephant_identity_section(profile)),
         ("understanding-tool-policy", build_understanding_tool_policy_section(profile)),
     ]

@@ -26,6 +26,7 @@ struct LocalSpeechVoiceOption: Identifiable, Equatable {
 @MainActor
 final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     @Published private(set) var activeMessageID: UUID?
+    @Published private(set) var isPreparing = false
     @Published private(set) var isSpeaking = false
     @Published private(set) var activeVoiceName = ""
     @Published private(set) var activeVoiceLanguage = ""
@@ -66,7 +67,8 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
                 messageID: messageID,
                 text: trimmed,
                 language: language,
-                edgeVoiceIdentifier: edgeVoiceIdentifier
+                edgeVoiceIdentifier: edgeVoiceIdentifier,
+                systemVoiceIdentifier: systemVoiceIdentifier
             )
         case .systemAVSpeech:
             speakWithSystem(
@@ -91,6 +93,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         audioPlayer = nil
         cleanupActiveAudio()
         activeMessageID = nil
+        isPreparing = false
         isSpeaking = false
     }
 
@@ -102,7 +105,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         systemVoiceIdentifier: String = "",
         edgeVoiceIdentifier: String = ""
     ) {
-        if activeMessageID == messageID, isSpeaking {
+        if activeMessageID == messageID, isSpeaking || isPreparing {
             stop()
             return
         }
@@ -190,6 +193,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
+            self?.isPreparing = false
             self?.isSpeaking = true
         }
     }
@@ -197,6 +201,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
             self?.activeMessageID = nil
+            self?.isPreparing = false
             self?.isSpeaking = false
         }
     }
@@ -204,6 +209,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
             self?.activeMessageID = nil
+            self?.isPreparing = false
             self?.isSpeaking = false
         }
     }
@@ -211,6 +217,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor [weak self] in
             self?.activeMessageID = nil
+            self?.isPreparing = false
             self?.isSpeaking = false
             self?.audioPlayer = nil
             self?.cleanupActiveAudio()
@@ -223,6 +230,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
             self?.lastError = error?.localizedDescription ?? "Could not play the generated voice reply."
             self?.lastFailedMessageID = failedMessageID
             self?.activeMessageID = nil
+            self?.isPreparing = false
             self?.isSpeaking = false
             self?.audioPlayer = nil
             self?.cleanupActiveAudio()
@@ -233,7 +241,8 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         messageID: UUID?,
         text: String,
         language: AppLanguage,
-        edgeVoiceIdentifier: String
+        edgeVoiceIdentifier: String,
+        systemVoiceIdentifier: String
     ) {
         let voice = edgeVoiceIdentifier.isEmpty
             ? Self.defaultEdgeVoiceIdentifier(for: language)
@@ -241,7 +250,8 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         let id = UUID()
         generationID = id
         activeMessageID = messageID
-        isSpeaking = true
+        isPreparing = true
+        isSpeaking = false
         lastPlaybackMessageID = messageID
         lastFailedMessageID = nil
         activeVoiceName = Self.edgeVoiceDisplayName(identifier: voice, language: language)
@@ -269,7 +279,10 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
                     }
                     self.playRenderedAudio(
                         audioFile,
-                        messageID: messageID
+                        messageID: messageID,
+                        fallbackText: text,
+                        language: language,
+                        systemVoiceIdentifier: systemVoiceIdentifier
                     )
                 }
             } catch {
@@ -277,7 +290,13 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
                 try? FileManager.default.removeItem(at: audioFile)
                 await MainActor.run {
                     guard let self, self.generationID == id else { return }
-                    self.finishEdgeFailure(messageID: messageID, language: language, error: error)
+                    self.finishEdgeFailure(
+                        messageID: messageID,
+                        language: language,
+                        error: error,
+                        fallbackText: text,
+                        systemVoiceIdentifier: systemVoiceIdentifier
+                    )
                 }
             }
         }
@@ -285,7 +304,10 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     private func playRenderedAudio(
         _ url: URL,
-        messageID: UUID?
+        messageID: UUID?,
+        fallbackText: String,
+        language: AppLanguage,
+        systemVoiceIdentifier: String
     ) {
         do {
             cleanupActiveAudio()
@@ -295,22 +317,36 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
             audioPlayer = player
             activeAudioURL = url
             activeMessageID = messageID
-            isSpeaking = true
             lastFailedMessageID = nil
             guard player.play() else {
                 throw MacVoiceRuntimeError.processFailed("Could not start audio playback.")
             }
+            isPreparing = false
+            isSpeaking = true
         } catch {
             try? FileManager.default.removeItem(at: url)
-            finishEdgeFailure(messageID: messageID, language: activeVoiceLanguage == "zh-CN" ? .zh : .en, error: error)
+            finishEdgeFailure(
+                messageID: messageID,
+                language: language,
+                error: error,
+                fallbackText: fallbackText,
+                systemVoiceIdentifier: systemVoiceIdentifier
+            )
         }
     }
 
-    private func finishEdgeFailure(messageID: UUID?, language: AppLanguage, error: Error) {
+    private func finishEdgeFailure(
+        messageID: UUID?,
+        language: AppLanguage,
+        error: Error,
+        fallbackText: String,
+        systemVoiceIdentifier: String
+    ) {
         speechTask?.cancel()
         speechTask = nil
         generationID = nil
         activeMessageID = nil
+        isPreparing = false
         isSpeaking = false
         audioPlayer = nil
         cleanupActiveAudio()
@@ -319,9 +355,16 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         activeVoiceName = ""
         activeVoiceLanguage = ""
         let base = language == .zh
-            ? "自然语音暂时不可用，请检查网络后重试。"
-            : "Natural voice is unavailable. Check the network connection and try again."
+            ? "自然语音暂时不可用，已改用本机声音。"
+            : "Natural voice is unavailable, so Elephant used the local Mac voice."
         lastError = "\(base) \(error.localizedDescription)"
+        speakWithSystem(
+            messageID: messageID,
+            text: fallbackText,
+            language: language,
+            preferredVoiceIdentifier: systemVoiceIdentifier,
+            preserveError: true
+        )
     }
 
     private func speakWithSystem(
@@ -348,6 +391,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         utterance.pitchMultiplier = 1.0
 
         activeMessageID = messageID
+        isPreparing = false
         isSpeaking = true
         lastPlaybackMessageID = messageID
         lastFailedMessageID = nil

@@ -2,6 +2,7 @@
 
 import argparse
 from dataclasses import dataclass
+import logging
 import random
 import re
 import sys
@@ -44,9 +45,12 @@ from .wizard import (
     _wizard_text_prompt,
 )
 
+LOGGER = logging.getLogger(__name__)
+
 try:
     from .shell_ui import BRAND_ACCENT_STRONG
 except Exception:
+    LOGGER.warning("failed to import strong brand accent color", exc_info=True)
     BRAND_ACCENT_STRONG = BRAND_ACCENT
 
 DEFAULT_PROVIDER_ID = "openai-compatible"

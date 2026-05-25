@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 import base64
 import io
+import logging
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -44,6 +45,9 @@ from .search_support import (
     _slugify,
     _trust_rank,
 )
+
+LOGGER = logging.getLogger(__name__)
+
 
 class SkillSearchHub:
     """Aggregate public skill search sources and materialize bundles on demand."""
@@ -87,6 +91,7 @@ class SkillSearchHub:
                 try:
                     results.extend(future.result())
                 except Exception:
+                    LOGGER.warning("skill search source failed", exc_info=True)
                     continue
         deduped = _dedupe_search_entries(results)
         return tuple(deduped[:limit])

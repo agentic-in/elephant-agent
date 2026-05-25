@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Protocol, runtime_checkable
 from urllib import error, request
 from urllib.parse import quote
@@ -16,6 +17,7 @@ from .provider_catalog import default_provider_definitions, provider_definition
 from .provider_runtime import ProviderRuntimeResolver, provider_auth_headers
 
 RequestJsonCallable = Callable[..., dict[str, Any]]
+LOGGER = logging.getLogger(__name__)
 
 _MODEL_CONTEXT_KEYS = (
     "context_length",
@@ -325,6 +327,7 @@ def _hinted_models(provider_id: str, *, runtime_resolver: ProviderRuntimeResolve
                 base_url=definition.default_base_url,
             ).reasoning_efforts
         except Exception:
+            LOGGER.debug("Failed to resolve reasoning efforts for hinted provider model.", exc_info=True)
             reasoning_efforts = ()
         models.append(
             DiscoveredProviderModel(
@@ -680,6 +683,7 @@ class ProviderMetadataDiscoveryService:
                     default_model_id=model_id,
                 )
             except Exception:
+                LOGGER.debug("Failed to discover provider models while resolving reasoning efforts.", exc_info=True)
                 models = ()
             for item in models:
                 if item.model_id != model_id:
@@ -712,6 +716,7 @@ class ProviderMetadataDiscoveryService:
                 )
             )
         except Exception:
+            LOGGER.debug("Failed to probe local provider reachability.", exc_info=True)
             return False
 
     def _default_model_for(self, provider_id: str) -> str | None:
@@ -775,6 +780,7 @@ class ProviderStateEvaluator:
             reasoning_efforts = resolution.reasoning_efforts
             transport_id = resolution.transport_id
         except Exception:
+            LOGGER.debug("Failed to resolve provider runtime state transport metadata.", exc_info=True)
             transport_display_name = definition.transport_id
             reasoning_efforts = ()
             transport_id = definition.transport_id

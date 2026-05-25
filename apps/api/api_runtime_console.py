@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,9 @@ from .api_runtime_console_ops import (
     update_operator_mcp_tool,
 )
 from .api_runtime_http_dispatch_helpers import _cron_job_record
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _skills(
@@ -83,6 +87,11 @@ def _skills(
         try:
             definition = load_skill_package_definition(Path(entry.entry_path))
         except Exception:
+            LOGGER.warning(
+                "failed to load skill package definition for console catalog",
+                extra={"skill_id": entry.skill_id, "entry_path": entry.entry_path},
+                exc_info=True,
+            )
             definition = None
         if definition is not None:
             instruction_text = definition.instruction_text
@@ -206,6 +215,7 @@ def _dream_system_job(app: Any) -> dict[str, Any] | None:
             "canDelete": False,
         }
     except Exception:
+        LOGGER.warning("failed to build dream system job row for console", exc_info=True)
         return None
 
 
@@ -256,6 +266,7 @@ def _proactive_ask_system_job(app: Any) -> dict[str, Any] | None:
             "canDelete": False,
         }
     except Exception:
+        LOGGER.warning("failed to build proactive ask system job row for console", exc_info=True)
         return None
 
 

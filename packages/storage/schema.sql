@@ -43,6 +43,8 @@ CREATE UNIQUE INDEX idx_states_elephant_id
     WHERE elephant_id != '';
 CREATE INDEX idx_states_personal_model
     ON states(personal_model_id, status);
+CREATE INDEX idx_states_anchor_status
+    ON states(state_anchor, status);
 
 CREATE TABLE local_agent_runtimes (
     runtime_id TEXT PRIMARY KEY,
@@ -94,6 +96,12 @@ CREATE TABLE episodes (
 
 CREATE INDEX idx_episodes_state_started
     ON episodes(state_id, started_at);
+CREATE INDEX idx_episodes_state_status_started
+    ON episodes(state_id, status, started_at);
+CREATE INDEX idx_episodes_personal_model_status_started
+    ON episodes(personal_model_id, status, started_at);
+CREATE INDEX idx_episodes_elephant_started
+    ON episodes(elephant_id, started_at);
 
 CREATE TABLE loops (
     loop_id TEXT PRIMARY KEY,
@@ -115,6 +123,8 @@ CREATE TABLE loops (
 
 CREATE INDEX idx_loops_episode_started
     ON loops(episode_id, started_at);
+CREATE INDEX idx_loops_checkpoint_scan
+    ON loops(trigger_type, status, state_id, personal_model_id, started_at);
 
 CREATE TABLE steps (
     step_id TEXT PRIMARY KEY,
@@ -141,6 +151,8 @@ CREATE TABLE steps (
 
 CREATE INDEX idx_steps_episode_sequence
     ON steps(episode_id, sequence);
+CREATE INDEX idx_steps_state_pm_created
+    ON steps(state_id, personal_model_id, created_at);
 
 CREATE TABLE semantic_index_entries (
     semantic_index_entry_id TEXT PRIMARY KEY,

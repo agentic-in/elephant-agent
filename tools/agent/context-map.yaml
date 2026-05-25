@@ -141,6 +141,7 @@
     "release_ops": [
       ".github/workflows/**",
       "install.sh",
+      "tools/release/**",
       ".github/*.md",
       ".python-version",
       "uv.lock"
@@ -214,6 +215,7 @@
       "apps/macos/**"
     ],
     "learning_agents": [
+      "apps/learning_worker_runtime.py",
       "apps/reflect/**",
       "apps/learning_agents/**"
     ],
@@ -225,6 +227,8 @@
     ],
     "app_scaffold": [
       "pyproject.toml",
+      "packages/README.md",
+      "apps/README.md",
       "scripts/**",
       "netlify.toml",
       "apps/*.py"

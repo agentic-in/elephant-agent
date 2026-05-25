@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, is_dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 import json
+import logging
 from threading import Lock
 from typing import Any, Mapping
 from uuid import uuid4
@@ -90,6 +91,8 @@ from . import api_runtime_console as _console_methods
 from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _enabled_overrides(state_dir: Path, section: str) -> dict[str, bool]:
     """Load skill/extension override settings from config.yaml."""
@@ -120,6 +123,7 @@ def _steady_embedding_runtime(embedding_service: Any) -> None:
     try:
         steady_async()
     except Exception:
+        LOGGER.debug("Embedding runtime steady_async() failed during API startup.", exc_info=True)
         return
 
 
@@ -144,6 +148,7 @@ def _ensure_system_cron_jobs(cron_runtime: CronRuntime) -> None:
     try:
         ensure_nightly_learning_crons(cron_runtime)
     except Exception:
+        LOGGER.warning("Failed to ensure built-in system cron jobs during API startup.", exc_info=True)
         return
 
 
@@ -253,7 +258,11 @@ class ElephantAPIApp:
                 state = self.repository.load_state(f"state:{resolved_elephant_id}")
                 if state is not None:
                     return state
-                for candidate in self.repository.list_states():
+                try:
+                    candidates = self.repository.list_states(elephant_id=resolved_elephant_id)
+                except TypeError:
+                    candidates = self.repository.list_states()
+                for candidate in candidates:
                     if candidate.elephant_id == resolved_elephant_id:
                         return candidate
             return self.repository.current_state()

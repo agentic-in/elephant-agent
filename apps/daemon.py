@@ -8,7 +8,7 @@ import signal
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from apps.logging_setup import setup_logging
 from apps.runtime_layout import default_cli_state_dir, default_gateway_state_dir
@@ -545,7 +545,10 @@ class ServiceDaemon:
             try:
                 return tuple(str(key) for key in registry.service_keys())
             except Exception:
-                pass
+                logger.debug(
+                    "Gateway plugin registry service_keys() failed; falling back to inferred services.",
+                    exc_info=True,
+                )
         internal_keys = {"gateway_app", "dashboard_api", "http", "cron", "supervisor", "learning_worker"}
         inferred = set(self._daemon_services) | set(self._http_services)
         inferred.update(key for key in self._service_statuses if key not in internal_keys)
@@ -584,6 +587,87 @@ class ServiceDaemon:
             "services": services,
         }
 
+    def build_cron_delivery_callback(
+        self,
+        *,
+        state_dir: Path,
+        cli_state_dir: Path,
+        environ: dict[str, str] | None = None,
+    ) -> Any | None:
+        from apps.gateway.cron_service import build_gateway_cron_delivery_callback
+
+        return build_gateway_cron_delivery_callback(
+            state_dir=state_dir,
+            cli_state_dir=cli_state_dir,
+            environ=environ or {},
+        )
+
+    def run_cron_job_now(
+        self,
+        *,
+        cli_state_dir: Path,
+        job_id: str,
+    ) -> Any:
+        from apps.cli_runtime_bridge import create_cli_runtime_for_app_support
+
+        return create_cli_runtime_for_app_support(state_dir=cli_state_dir).run_cron_job_now(job_id)
+
+    def run_proactive_ask_once(
+        self,
+        *,
+        state_dir: Path,
+        config: Mapping[str, Any],
+    ) -> dict[str, int]:
+        from apps.gateway.runtime import build_gateway_app
+        from packages.gateway_core.proactive_ask import (
+            CONFIGURED_IM_ADAPTERS,
+            ProactiveAskTickResult,
+            run_proactive_ask_tick,
+        )
+
+        app, outbound_queue, _ = build_gateway_app(
+            state_dir=str(state_dir),
+            start_learning_worker=False,
+        )
+        aggregate = ProactiveAskTickResult()
+        for adapter_id in CONFIGURED_IM_ADAPTERS:
+            result = run_proactive_ask_tick(
+                app=app,
+                adapter_id=adapter_id,
+                outbound_queue=outbound_queue,
+                config=config,
+            )
+            aggregate = ProactiveAskTickResult(
+                scanned=aggregate.scanned + result.scanned,
+                eligible=aggregate.eligible + result.eligible,
+                enqueued=aggregate.enqueued + result.enqueued,
+                skipped_no_questions=aggregate.skipped_no_questions + result.skipped_no_questions,
+                skipped_pending=aggregate.skipped_pending + result.skipped_pending,
+                skipped_policy=aggregate.skipped_policy + result.skipped_policy,
+                skipped_unbound=aggregate.skipped_unbound + result.skipped_unbound,
+            )
+        return {
+            "scanned": aggregate.scanned,
+            "eligible": aggregate.eligible,
+            "enqueued": aggregate.enqueued,
+            "skipped_no_questions": aggregate.skipped_no_questions,
+            "skipped_pending": aggregate.skipped_pending,
+            "skipped_policy": aggregate.skipped_policy,
+            "skipped_unbound": aggregate.skipped_unbound,
+        }
+
+    def reflect_context_runtime(
+        self,
+        *,
+        state_dir: Path,
+    ) -> Any:
+        from apps.cli_runtime_bridge import create_cli_runtime_for_app_support
+
+        return create_cli_runtime_for_app_support(
+            state_dir=state_dir,
+            warm_embedding=False,
+        )
+
     # ── Status ─────────────────────────────────────────────────
 
     def get_status(self) -> dict[str, Any]:
@@ -614,7 +698,11 @@ class ServiceDaemon:
                     if isinstance(desc, dict):
                         result["services"].setdefault(key, {}).setdefault("details", desc)
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Daemon service %s describe() failed while building status.",
+                        key,
+                        exc_info=True,
+                    )
 
         return result
 

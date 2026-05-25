@@ -216,7 +216,7 @@ class ContextRuntimeTest(unittest.TestCase):
         # ## RequestAttachments → ## Turn attachments
         # ## EpisodeReplay      → ## Recent turns
         # stable_prefix layer heading is suppressed because its content
-        # carries its own `### Who you are` / `### Your own voice`
+        # carries its own `### Your own voice`
         # subheadings.
         self.assertNotIn("# Conversation context", detailed.rendered_prompt)
         self.assertNotIn("- rationale:", detailed.rendered_prompt)

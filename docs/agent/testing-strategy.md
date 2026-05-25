@@ -9,7 +9,7 @@ Run the smallest gate that proves the current change:
 2. `make agent-context-audit CHANGED_FILES="..."`
    - context-map drift prompt for changed files
 3. `make agent-lint`
-   - structure checks plus Python compile smoke for harness scripts and tests, with targeted frontend typecheck for touched `apps/dashboard/**` and `apps/site/**` surfaces
+   - structure checks plus Python compile smoke for harness scripts and tests, with targeted frontend checks for touched `apps/dashboard/**` and `apps/site/**` surfaces
 4. `make agent-test`
    - harness regression tests
 5. `make agent-fast-gate`
@@ -46,6 +46,7 @@ The repo currently validates both the harness and the product-facing runtime sur
 - manifest coherence
 - CI and hook wiring
 - public docs/site build
+- generated site content drift checks for installer and SkillHub projections
 - operator dashboard build
 - deterministic e2e and release certification contracts
 - installed user-journey e2e: creates a fresh venv, runs `pip install -e .`,

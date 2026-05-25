@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import logging
 
 from .shell_ui import compact_line, strip_markdown_bold
 
+
+LOGGER = logging.getLogger(__name__)
 
 _PERSONAL_MODEL_LENSES = ("identity", "world", "pulse", "journey")
 
@@ -192,6 +195,11 @@ def _personal_model_facts(runtime, personal_model_id: str, *, status) -> tuple[o
     try:
         return tuple(list_facts(personal_model_id=personal_model_id, status=status))
     except Exception:
+        LOGGER.warning(
+            "failed to load personal model facts for shell banner",
+            extra={"personal_model_id": personal_model_id, "status": status},
+            exc_info=True,
+        )
         return ()
 
 
@@ -226,7 +234,7 @@ def _skill_affinity_model_ids(runtime, personal_model_id: str) -> tuple[str, ...
                 if candidate and candidate not in candidates:
                     candidates.append(candidate)
         except Exception:
-            pass
+            LOGGER.warning("failed to list personal models for shell banner affinity", exc_info=True)
     return tuple(candidates)
 
 
@@ -237,6 +245,11 @@ def _learning_job_execution_summary(runtime, personal_model_id: str) -> str:
     try:
         jobs = tuple(list_jobs(personal_model_id=personal_model_id)) if personal_model_id else tuple(list_jobs())
     except Exception:
+        LOGGER.warning(
+            "failed to load learning jobs for shell banner",
+            extra={"personal_model_id": personal_model_id},
+            exc_info=True,
+        )
         return "0 runs"
     executed = tuple(
         job
@@ -264,6 +277,11 @@ def _personal_model_questions(runtime, personal_model_id: str, *, status, limit:
     try:
         return tuple(list_questions(personal_model_id=personal_model_id, status=status, limit=limit))
     except Exception:
+        LOGGER.warning(
+            "failed to load personal model questions for shell banner",
+            extra={"personal_model_id": personal_model_id, "status": status},
+            exc_info=True,
+        )
         return ()
 
 
@@ -274,6 +292,7 @@ def _skill_catalog(runtime, *, session_id: str | None) -> tuple[object, ...]:
     try:
         return tuple(skill_catalog(session_id=session_id)) if session_id else tuple(skill_catalog())
     except Exception:
+        LOGGER.warning("failed to load skill catalog for shell banner", exc_info=True)
         return ()
 
 
@@ -284,6 +303,7 @@ def _skill_hub_entries(runtime) -> tuple[object, ...]:
     try:
         return tuple(list_skill_hub())
     except Exception:
+        LOGGER.warning("failed to load skill hub entries for shell banner", exc_info=True)
         return ()
 
 

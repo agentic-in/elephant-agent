@@ -108,6 +108,42 @@ class CronServiceDeliveryTest(unittest.TestCase):
 
         self.assertEqual(calls, [(prompt.job, prompt)])
 
+    def test_built_gateway_callback_logs_adapter_failure_and_continues(self) -> None:
+        calls: list[tuple[CronJob, CronJobExecution]] = []
+
+        def failing_callback(_job: CronJob, _execution: CronJobExecution) -> None:
+            raise RuntimeError("adapter delivery failed")
+
+        def succeeding_callback(job: CronJob, execution: CronJobExecution) -> None:
+            calls.append((job, execution))
+
+        with (
+            mock.patch.object(cron_service, "_try_feishu_cron_callback", return_value=failing_callback),
+            mock.patch.object(cron_service, "_try_discord_cron_callback", return_value=succeeding_callback),
+            mock.patch.object(cron_service, "_try_weixin_cron_callback", return_value=None),
+        ):
+            built = cron_service.build_gateway_cron_delivery_callback(
+                state_dir="/tmp/elephant",
+                cli_state_dir="/tmp/elephant",
+                environ={},
+            )
+
+        assert built is not None
+        prompt = CronJobExecution(
+            job=_job(action_kind="prompt"),
+            outcome="success",
+            summary="hello from cron",
+            recorded_at=datetime.now(timezone.utc),
+        )
+
+        with self.assertLogs("apps.gateway.cron_service", level="WARNING") as captured:
+            built(prompt.job, prompt)
+
+        self.assertEqual(calls, [(prompt.job, prompt)])
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("failing_callback", rendered_logs)
+        self.assertIn("adapter delivery failed", rendered_logs)
+
 
 if __name__ == "__main__":
     unittest.main()

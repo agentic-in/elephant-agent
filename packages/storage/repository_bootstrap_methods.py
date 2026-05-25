@@ -39,6 +39,7 @@ def bootstrap(self) -> StorageBootstrapState:
             _drop_legacy_storage_tables(connection)
             _require_empty_database(connection)
             _install_clean_schema(connection)
+            _ensure_runtime_indexes(connection)
             _validate_clean_schema(connection)
             connection.commit()
         elif version == SCHEMA_VERSION:
@@ -48,6 +49,7 @@ def bootstrap(self) -> StorageBootstrapState:
             except RuntimeError:
                 _reset_storage_schema(connection)
                 _validate_clean_schema(connection)
+            _ensure_runtime_indexes(connection)
             connection.commit()
         else:
             raise RuntimeError(
@@ -88,6 +90,34 @@ def _reset_storage_schema(connection: sqlite3.Connection) -> None:
         connection.execute(f'DROP TABLE IF EXISTS "{table_name}"')
     connection.execute("PRAGMA foreign_keys = ON")
     _install_clean_schema(connection)
+
+
+def _ensure_runtime_indexes(connection: sqlite3.Connection) -> None:
+    """Idempotently backfill performance indexes for existing v1 databases."""
+
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS idx_states_anchor_status ON states(state_anchor, status)",
+        "CREATE INDEX IF NOT EXISTS idx_episodes_state_started ON episodes(state_id, started_at)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_episodes_state_status_started "
+            "ON episodes(state_id, status, started_at)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_episodes_personal_model_status_started "
+            "ON episodes(personal_model_id, status, started_at)"
+        ),
+        "CREATE INDEX IF NOT EXISTS idx_episodes_elephant_started ON episodes(elephant_id, started_at)",
+        "CREATE INDEX IF NOT EXISTS idx_loops_episode_started ON loops(episode_id, started_at)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_loops_checkpoint_scan "
+            "ON loops(trigger_type, status, state_id, personal_model_id, started_at)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_steps_state_pm_created "
+            "ON steps(state_id, personal_model_id, created_at)"
+        ),
+    ):
+        connection.execute(statement)
 
 
 def _validate_clean_schema(connection: sqlite3.Connection) -> None:

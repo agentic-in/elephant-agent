@@ -33,6 +33,15 @@ from .api_runtime_support import (
     _read_json_bytes,
     _split_path,
 )
+from .api_runtime_routes import (
+    API_HEALTH_ROUTE,
+    API_ROUTE_EPISODES,
+    API_ROUTE_HERD,
+    API_ROUTE_INTERNAL,
+    API_ROUTE_OPERATOR,
+    API_ROUTE_PROVIDERS,
+    API_ROUTE_STATES,
+)
 from .api_runtime_http_dispatch_helpers import (
     _cron_job_system_kind,
     _elephant_id_from_name,
@@ -285,24 +294,25 @@ def stream_loop_events(
         yield event  # type: ignore[misc]
 
 def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResponse:
-    if method.upper() == "GET" and path == "/healthz":
+    if method.upper() == "GET" and path == API_HEALTH_ROUTE:
         return APIResponse(200, {"status": "ok", "service": "elephant-api"})
 
     try:
         parts = _split_path(path)
         if not parts:
             return APIResponse(404, {"error": "not_found"})
-        if parts[0] == "providers":
+        route_family = parts[0]
+        if route_family == API_ROUTE_PROVIDERS:
             return self._dispatch_providers(method, parts[1:], body)
-        if parts[0] == "internal":
+        if route_family == API_ROUTE_INTERNAL:
             return self._dispatch_internal(method, parts[1:], body)
-        if parts[0] == "operator":
+        if route_family == API_ROUTE_OPERATOR:
             return self._dispatch_operator(method, parts[1:], body)
-        if parts[0] == "herd":
+        if route_family == API_ROUTE_HERD:
             return _dispatch_elephants(self, method, parts[1:], body)
-        if parts[0] == "episodes":
+        if route_family == API_ROUTE_EPISODES:
             return self._dispatch_episodes(method, parts[1:], body)
-        if parts[0] == "states":
+        if route_family == API_ROUTE_STATES:
             return self._dispatch_states(method, parts[1:], body)
         return APIResponse(404, {"error": "not_found"})
     except KeyError as error:
@@ -328,7 +338,11 @@ def _elephant_state_for_id(self, elephant_id: str):
     direct = self.repository.load_state(f"state:{target}")
     if direct is not None:
         return direct
-    return next((state for state in self.repository.list_states() if state.elephant_id == target), None)
+    try:
+        states = self.repository.list_states(elephant_id=target)
+    except TypeError:
+        states = self.repository.list_states()
+    return next((state for state in states if state.elephant_id == target), None)
 def _default_elephant_identity_text(*, elephant_id: str, display_name: str) -> str:
     """Seed identity text when none is supplied via the API.
 

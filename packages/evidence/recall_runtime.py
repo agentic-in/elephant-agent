@@ -72,9 +72,12 @@ class StepEvidenceStore:
         list_steps = getattr(repository, "list_steps", None)
         if not callable(list_steps):
             return ()
-        steps = tuple(list_steps())
         if episode_id is None:
-            return steps
+            return tuple(list_steps())
+        try:
+            return tuple(list_steps(episode_id=episode_id))
+        except TypeError:
+            steps = tuple(list_steps())
         return tuple(step for step in steps if getattr(step, "episode_id", None) == episode_id)
 
     def get_by_evidence_id(self, evidence_id: str) -> RecallEvidence | None:

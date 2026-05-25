@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime
 import hashlib
+import logging
 import re
 import time
 from typing import Any
@@ -47,6 +48,7 @@ _CHARS_PER_TOKEN = 4
 PROJECTION_EMBEDDING_TARGET = "projection-history"
 _PROJECTION_EMBEDDING_TEXT_LIMIT = 1200
 _PROJECTION_EMBEDDING_MAX_BACKFILL_ENTRIES = 32
+LOGGER = logging.getLogger(__name__)
 
 # Tiktoken encoding for more accurate token estimation (lazy-loaded)
 _TIKTOKEN_ENCODING = None
@@ -64,6 +66,7 @@ def _get_tiktoken_encoding():
         _USE_TIKTOKEN = True
         return _TIKTOKEN_ENCODING
     except (ImportError, Exception):
+        LOGGER.debug("Tiktoken encoding unavailable; using projection token fallback.", exc_info=True)
         _USE_TIKTOKEN = False
         return None
 
@@ -80,8 +83,7 @@ def estimate_projection_tokens(text: str) -> int:
         try:
             return len(encoding.encode(normalized))
         except Exception:
-            # Fallback to character-based estimation
-            pass
+            LOGGER.debug("Tiktoken encode failed; using projection token fallback.", exc_info=True)
     
     # Fallback to character-based estimation
     return max(1, len(normalized) // _CHARS_PER_TOKEN)
@@ -259,6 +261,7 @@ class EmbeddingProjectionRelevanceScorer:
             )
             query_cached = query_vector is not None
         except Exception:
+            LOGGER.debug("Projection query cached-vector lookup failed.", exc_info=True)
             query_vector = None
         if query_vector is None and callable(pending_vector):
             try:
@@ -270,6 +273,7 @@ class EmbeddingProjectionRelevanceScorer:
                     )
                 )
             except Exception:
+                LOGGER.debug("Projection query pending-vector lookup failed.", exc_info=True)
                 query_pending = False
 
         candidate_vectors: dict[int, Any] = {}
@@ -289,6 +293,7 @@ class EmbeddingProjectionRelevanceScorer:
                     dimensions=self.dimensions,
                 )
             except Exception:
+                LOGGER.debug("Projection candidate cached-vector lookup failed.", exc_info=True)
                 vector = None
             if vector is not None:
                 candidate_vectors[index] = vector
@@ -304,6 +309,7 @@ class EmbeddingProjectionRelevanceScorer:
                         )
                     )
                 except Exception:
+                    LOGGER.debug("Projection candidate pending-vector lookup failed.", exc_info=True)
                     is_pending = False
             if is_pending:
                 pending_count += 1
@@ -352,6 +358,7 @@ class EmbeddingProjectionRelevanceScorer:
                 ) is not None:
                     continue
             except Exception:
+                LOGGER.debug("Projection backfill cached-vector lookup failed.", exc_info=True)
                 continue
             pending_vector = getattr(self.embedding_service, "pending_vector", None)
             if callable(pending_vector):
@@ -360,9 +367,10 @@ class EmbeddingProjectionRelevanceScorer:
                         target=PROJECTION_EMBEDDING_TARGET,
                         cache_key=key,
                         dimensions=self.dimensions,
-                    ):
-                        continue
+                        ):
+                            continue
                 except Exception:
+                    LOGGER.debug("Projection backfill pending-vector lookup failed.", exc_info=True)
                     continue
             entries[key] = EmbeddingPreloadEntry(
                 cache_key=key,
@@ -385,6 +393,7 @@ class EmbeddingProjectionRelevanceScorer:
                 latency_mode=self.latency_mode,
             )
         except Exception:
+            LOGGER.debug("Projection missing-vector backfill queue failed.", exc_info=True)
             return
 
 
@@ -407,6 +416,7 @@ def queue_projection_history_embedding_backfill(
             if not embedding_runtime_is_loaded(health()):
                 return None
         except Exception:
+            LOGGER.debug("Projection embedding health check failed; skipping backfill.", exc_info=True)
             return None
     queue_backfill = getattr(embedding_service, "queue_backfill", None)
     if not callable(queue_backfill):
@@ -434,6 +444,7 @@ def queue_projection_history_embedding_backfill(
             latency_mode=latency_mode,
         )
     except Exception:
+        LOGGER.debug("Projection history embedding backfill queue failed.", exc_info=True)
         return None
 
 
@@ -521,6 +532,7 @@ class ProviderProjectionSummaryHook:
         try:
             result = self._generate_without_streaming(context=context, prompt=prompt)
         except Exception:
+            LOGGER.debug("Provider projection summary failed; using deterministic fallback.", exc_info=True)
             return self.fallback.summarize(
                 thread_focus=thread_focus,
                 previous_summary=previous_summary,
@@ -943,6 +955,7 @@ class SessionProjectionCompactor:
                     selected_group_count=len(ranked_groups),
                 )
         except Exception:
+            LOGGER.debug("Projection semantic anchor ranking failed.", exc_info=True)
             return (), middle, ProjectionSemanticAnchorStats(candidate_count=len(candidates)), (), query
         if not ranked_groups:
             return (), middle, stats, (), query

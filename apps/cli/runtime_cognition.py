@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -56,6 +57,9 @@ from .runtime_snapshot import (
 )
 from packages.skills import SkillPromptContextBuilder
 from .runtime_support import _restore_datetime, _utc_now
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _recall_query_seed(repository: RuntimeStorageRepository) -> str:
@@ -127,9 +131,18 @@ def _list_scope_recall_evidence(
     if not scope_set:
         return ()
     records: list[RecallEvidence] = []
-    for step in repository.list_steps():
-        if step.episode_id not in scope_set:
-            continue
+    try:
+        scoped_steps = tuple(
+            step
+            for episode_id in scope_session_ids
+            for step in repository.list_steps(episode_id=episode_id)
+        )
+    except TypeError:
+        scoped_steps = tuple(
+            step for step in repository.list_steps()
+            if step.episode_id in scope_set
+        )
+    for step in scoped_steps:
         content = "\n".join(part for part in (step.summary.strip(), step.outcome.strip()) if part) or step.action
         records.append(
             RecallEvidence(
@@ -563,7 +576,8 @@ class _CliContextCapability:
         return tuple(artifacts)
 
     def _mother_herd_artifact(self, session: Episode) -> str:
-        state = self.repository.load_state(session.state_id) if session.state_id else None
+        load_state = getattr(self.repository, "load_state", None)
+        state = load_state(session.state_id) if callable(load_state) and session.state_id else None
         if state is None:
             return ""
         metadata = dict(getattr(state, "metadata", {}) or {})
@@ -589,6 +603,11 @@ class _CliContextCapability:
                         provider_id = provider_id or runtime.provider_id
                         can_execute = "yes" if runtime.can_execute else "no"
                 except Exception:
+                    LOGGER.warning(
+                        "failed to load local agent runtime for herd summary",
+                        extra={"runtime_id": runtime_id},
+                        exc_info=True,
+                    )
                     pass
             babies.append(
                 f"- baby_id={candidate.elephant_id}; role={role_title or '<unset>'}; "
@@ -643,6 +662,11 @@ class _CliContextCapability:
         try:
             facts = tuple(list_facts(personal_model_id=state.personal_model_id, status="active"))
         except Exception:
+            LOGGER.warning(
+                "failed to load personal model facts for CLI cognition status",
+                extra={"personal_model_id": state.personal_model_id},
+                exc_info=True,
+            )
             facts = ()
         return (state, facts)
 
@@ -665,6 +689,7 @@ class _CliContextCapability:
                 if effect and effect not in recent: recent.append(_compact_runtime_text(effect, limit=120))
             return tuple(recent[:4])
         except Exception:
+            LOGGER.warning("failed to derive recently learned facts for CLI cognition status", exc_info=True)
             return ()
 
     def _pending_proposal_count_from_facts(self, facts: tuple[Any, ...]) -> int:

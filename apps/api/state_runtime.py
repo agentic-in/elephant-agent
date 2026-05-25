@@ -61,6 +61,26 @@ class _CanonicalStateRecords:
     relationship: RenderedRelationshipView
 
 
+def _latest_episode_state_for_state(repository: Any, state_id: str) -> tuple[str | None, Episode | None]:
+    try:
+        episodes = repository.list_episodes(
+            state_id=state_id,
+            limit=1,
+            newest_first=True,
+        )
+    except TypeError:
+        episodes = repository.list_episodes(state_id=state_id)
+        episode = episodes[-1] if episodes else None
+    else:
+        episode = episodes[0] if episodes else None
+    if episode is None:
+        return None, None
+    episode_id = str(getattr(episode, "episode_id", "") or "").strip()
+    if not episode_id:
+        return None, None
+    return episode_id, repository.load_episode_state(episode_id)
+
+
 @dataclass(frozen=True, slots=True)
 class APIStateService:
     repository: RuntimeStorageRepository
@@ -377,12 +397,11 @@ class APIStateService:
 
     def inspect_continuity(self, state_id: str) -> APIContinuityInspection:
         state = self._state(state_id)
-        episodes = self.repository.list_episodes(state_id=state_id)
-        if not episodes:
+        latest_episode_id, latest_episode = _latest_episode_state_for_state(self.repository, state_id)
+        if latest_episode_id is None:
             raise KeyError(state_id)
-        latest_episode = self.repository.load_episode_state(episodes[-1].episode_id)
         if latest_episode is None:
-            raise KeyError(episodes[-1].episode_id)
+            raise KeyError(latest_episode_id)
         personal_model = self._personal_model(state.personal_model_id)
         records = self.ensure_personal_model_state(
             personal_model,

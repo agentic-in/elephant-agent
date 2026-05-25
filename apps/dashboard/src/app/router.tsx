@@ -1,56 +1,59 @@
+import type { ComponentType } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
-import {
-  CronPage,
-  QuestionsPage,
-  GatewayPage,
-  ModelsPage,
-  PersonalModelsPage,
-  ProvidersPage,
-  ReflectPage,
-  RuntimePage,
-  SettingsPage,
-  SkillsPage,
-  StatesPage,
-  SystemPage,
-  ToolsPage,
-  LogsPage,
-  UsagePage,
-  UsageLogsPage,
-} from "../routes/console/ConsolePages";
-import { PersonalModelMapPage } from "../routes/console/PersonalModelMapPage";
-import { ChatPage } from "../routes/chat/ChatPage";
 import { DashboardShell } from "../shell/DashboardShell";
+
+type RouteComponent = ComponentType<Record<string, never>>;
+type LazyRoute = () => Promise<{ Component: RouteComponent }>;
+type ConsolePagesModule = typeof import("../routes/console/ConsolePages");
+type ConsolePageName = keyof ConsolePagesModule;
+
+function lazyConsolePage(name: ConsolePageName): LazyRoute {
+  return async () => {
+    const module = await import("../routes/console/ConsolePages");
+    return { Component: module[name] as RouteComponent };
+  };
+}
+
+const lazyPersonalModelMapPage: LazyRoute = async () => {
+  const module = await import("../routes/console/PersonalModelMapPage");
+  return { Component: module.PersonalModelMapPage };
+};
+
+const lazyChatPage: LazyRoute = async () => {
+  const module = await import("../routes/chat/ChatPage");
+  return { Component: module.ChatPage };
+};
 
 export const router = createBrowserRouter(
   [
     {
       path: "/",
-    element: <DashboardShell />,
-    children: [
-      { index: true, element: <PersonalModelMapPage /> },
-      { path: "palace", element: <PersonalModelMapPage /> },
-      { path: "you", element: <PersonalModelsPage /> },
-      { path: "diary", element: <PersonalModelsPage /> },
-      { path: "personal-models", element: <PersonalModelsPage /> },
-      { path: "herd", element: <StatesPage /> },
-      { path: "states", element: <StatesPage /> },
-      { path: "runtime", element: <RuntimePage /> },
-      { path: "chat", element: <ChatPage /> },
-      { path: "questions", element: <QuestionsPage /> },
-      { path: "providers", element: <ProvidersPage /> },
-      { path: "models", element: <ModelsPage /> },
-      { path: "skills", element: <SkillsPage /> },
-      { path: "tools", element: <ToolsPage /> },
-      { path: "gateway", element: <GatewayPage /> },
-      { path: "cron", element: <CronPage /> },
-      { path: "reflect", element: <ReflectPage /> },
-      { path: "usage", element: <UsagePage /> },
-      { path: "logs", element: <LogsPage /> },
-      { path: "settings", element: <SettingsPage /> },
-      { path: "usage-logs", element: <UsageLogsPage /> },
-    ],
-  },
+      element: <DashboardShell />,
+      children: [
+        { index: true, lazy: lazyPersonalModelMapPage },
+        { path: "palace", lazy: lazyPersonalModelMapPage },
+        { path: "you", lazy: lazyConsolePage("PersonalModelsPage") },
+        { path: "diary", lazy: lazyConsolePage("PersonalModelsPage") },
+        { path: "personal-models", lazy: lazyConsolePage("PersonalModelsPage") },
+        { path: "herd", lazy: lazyConsolePage("StatesPage") },
+        { path: "states", lazy: lazyConsolePage("StatesPage") },
+        { path: "runtime", lazy: lazyConsolePage("RuntimePage") },
+        { path: "chat", lazy: lazyChatPage },
+        { path: "questions", lazy: lazyConsolePage("QuestionsPage") },
+        { path: "providers", lazy: lazyConsolePage("ProvidersPage") },
+        { path: "models", lazy: lazyConsolePage("ModelsPage") },
+        { path: "skills", lazy: lazyConsolePage("SkillsPage") },
+        { path: "tools", lazy: lazyConsolePage("ToolsPage") },
+        { path: "gateway", lazy: lazyConsolePage("GatewayPage") },
+        { path: "cron", lazy: lazyConsolePage("CronPage") },
+        { path: "reflect", lazy: lazyConsolePage("ReflectPage") },
+        { path: "usage", lazy: lazyConsolePage("UsagePage") },
+        { path: "logs", lazy: lazyConsolePage("LogsPage") },
+        { path: "settings", lazy: lazyConsolePage("SettingsPage") },
+        { path: "usage-logs", lazy: lazyConsolePage("UsageLogsPage") },
+      ],
+    },
   ],
   { basename: "/dashboard" },
 );

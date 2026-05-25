@@ -20,7 +20,9 @@ This surface owns the public website and release-facing web content.
 - `docs/`, `sidebars.ts`
   - native Docusaurus docs surface and sidebar contract
 - `scripts/sync-install-script.mjs`
-  - sync step that copies the public root installer into static site output
+  - sync/check step that mirrors the public root installer into static site output
+- `scripts/sync-skillhub-content.mjs`
+  - sync/check step that projects the canonical packaged skill catalog into generated docs and pages
 - `scripts/patch-docusaurus-bundler.mjs`
   - local install/build patch for the upstream webpack progress-plugin incompatibility in this Docusaurus stack
 - `static/assets/brand/`
@@ -39,6 +41,9 @@ This surface owns the public website and release-facing web content.
 - keep the Docusaurus app static-first; do not turn it into a runtime-driven app
 - keep repo root `install.sh` as the public website installer source and treat
   `apps/site/static/install.sh` as generated build input
+- keep SkillHub docs and route pages generated from `packages.skills.site_projection`;
+  use `npm run sync:content` to update them and `npm run check:content` to
+  verify drift
 - keep public docs focused on the supported operator path, not internal design archives
 - keep links and copy aligned with repo-native README positioning and design docs
 

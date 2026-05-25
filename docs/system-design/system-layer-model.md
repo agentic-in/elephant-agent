@@ -167,14 +167,19 @@ The tool returns a `match_status`:
 - `weak_match` — a relevant candidate exists but should not be over-stated.
 - `no_match` — Elephant Agent should not pretend the Personal Model supports the query.
 
-Search modes keep retrieval behavior explicit:
+Public search modes keep the model-facing contract small:
 
-- `auto` combines field, lexical, fuzzy, and semantic signals.
-- `exact` disables semantic drift and accepts only strict topic / phrase / all-token / high-overlap matches.
-- `semantic` favors conceptual and cross-language recall, especially with `query_variants`.
-- `verify` uses stricter thresholds so weak similarity is not treated as belief.
+- `auto` combines field, lexical, fuzzy, and semantic signals for claim lookup.
+- `inventory` returns the lens/topic map and claim counts without claim content.
 
-`query_variants` is the preferred way for the model to pass translated or paraphrased forms. Global hard-coded alias tables are not part of the design north star. Future work may generate claim-local search aliases or English pivot text at claim write time, but active prompt truth remains the claim itself.
+Strict lookup is expressed through `ref`, `topic`, `status`, and
+`include_diagnostics`, not through extra public modes. Semantic ranking remains
+an internal signal inside `auto`, and `query_variants` is the preferred way for
+the model to pass translated or paraphrased forms.
+
+Global hard-coded alias tables are not part of the design north star. Future
+work may generate claim-local search aliases or English pivot text at claim
+write time, but active prompt truth remains the claim itself.
 
 Diagnostics may expose scores and signals for debugging. Diagnostics are not stable prompt truth and should not be injected by default.
 

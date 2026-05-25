@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,8 @@ from packages.tools import (
     ToolRequester,
     build_secured_tool_runtime,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +45,7 @@ class _PreviewTelemetrySink:
             try:
                 self.observer(dict(event))
             except Exception:
+                LOGGER.warning("CLI telemetry observer failed", exc_info=True)
                 pass
         existing = load_snapshot_payload(self.snapshot_path) or {}
         telemetry = list(existing.get("telemetry", ()))
@@ -222,7 +226,11 @@ def _resolve_elephant_state(repository: RuntimeStorageRepository, elephant_id: s
         state = repository.load_state(f"state:{resolved_elephant_id}")
         if state is not None:
             return state
-        for candidate in repository.list_states():
+        try:
+            candidates = repository.list_states(elephant_id=resolved_elephant_id)
+        except TypeError:
+            candidates = repository.list_states()
+        for candidate in candidates:
             if candidate.elephant_id == resolved_elephant_id or candidate.state_anchor in {resolved_elephant_id, f"elephant:{resolved_elephant_id}"}:
                 return candidate
     return repository.current_state()

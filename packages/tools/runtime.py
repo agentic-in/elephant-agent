@@ -8,6 +8,7 @@ backend, and the capability adapter that kernel code can call.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,8 @@ from packages.capabilities.runtime import CapabilityDescriptor, ToolCapability
 from packages.contracts.runtime import ExecutionResult
 from packages.security import ApprovalClass, PolicyDecision, SecurityPolicy, SecurityRequest, evaluate_with_telemetry
 from .local_roots import default_local_allowed_roots
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -752,6 +755,7 @@ class ToolRuntime(ToolCapability):
             try:
                 observer(event)
             except Exception:
+                LOGGER.warning("tool lifecycle observer failed", exc_info=True)
                 continue
 
 

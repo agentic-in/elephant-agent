@@ -18,17 +18,21 @@ from .lifecycle import (
     write_optimization_candidate,
 )
 from .trajectory_signals import (
+    detect_outdated_patterns,
     detect_error_recoveries,
     detect_recurring_sequences,
+    detect_skill_gaps,
     detect_tool_combinations,
     extract_tool_sequences,
     extract_trajectory_signals,
     load_recent_closed_episodes,
 )
+from .runner import ReflectResult, run_reflect_agent
 from .types import PersistedOptimizationCandidate, SkillOptimizationCandidate, ToolTrajectorySignal
 
 __all__ = [
     "PersistedOptimizationCandidate",
+    "ReflectResult",
     "SkillOptimizationCandidate",
     "ToolTrajectorySignal",
     "aggregate_signals",
@@ -54,6 +58,7 @@ __all__ = [
     "optimization_candidate_topic",
     "persisted_candidate_from_fact",
     "persist_optimization_candidate",
+    "run_reflect_agent",
     "should_suppress_candidate",
     "write_optimization_candidate",
 ]

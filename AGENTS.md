@@ -1,6 +1,6 @@
 # Elephant Agent Entry
 
-This is the short entrypoint for coding agents. The detailed human-readable system of record lives in [docs/agent/README.md](docs/agent/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/context-map.yaml](tools/agent/context-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
+This is the short entrypoint for coding agents. The detailed human-readable system of record lives in [docs/agent/README.md](docs/agent/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/context-map.yaml](tools/agent/context-map.yaml), [tools/agent/public-contracts.yaml](tools/agent/public-contracts.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
 
 ## Product North Star
 
@@ -58,4 +58,4 @@ Elephant Agent is a Personal-Model-first (PM-first) evolving personal AI agent. 
 - testing and done criteria: [docs/agent/testing-strategy.md](docs/agent/testing-strategy.md), [docs/agent/feature-complete-checklist.md](docs/agent/feature-complete-checklist.md)
 - parallel execution: [docs/agent/worktree-parallelism.md](docs/agent/worktree-parallelism.md)
 - release model: [docs/agent/release-model.md](docs/agent/release-model.md)
-- executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
+- executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/context-map.yaml](tools/agent/context-map.yaml), [tools/agent/public-contracts.yaml](tools/agent/public-contracts.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)

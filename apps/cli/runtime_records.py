@@ -115,7 +115,7 @@ class CliRuntimeRecordsMixin:
         if not target:
             return None
         candidates: list[Episode] = []
-        for session in self._list_sessions():
+        for session in self._list_sessions_for_elephant(target):
             if not _user_visible_episode(session):
                 continue
             if self.elephant_id_for_session(session) == target:
@@ -128,7 +128,7 @@ class CliRuntimeRecordsMixin:
             return ()
         return tuple(
             session.episode_id
-            for session in self._list_sessions()
+            for session in self._list_sessions_for_elephant(target)
             if _user_visible_episode(session) and self.elephant_id_for_session(session) == target
         )
 
@@ -275,8 +275,97 @@ class CliRuntimeRecordsMixin:
         return f"elephant-{origin[:8]}"
 
     def _list_sessions(self, *, limit: int | None = None) -> tuple[Episode, ...]:
+        try:
+            episodes = tuple(
+                self.repository.list_episodes(
+                    limit=limit,
+                    newest_first=True,
+                )
+            )
+        except TypeError:
+            episodes = tuple(self.repository.list_episodes())
         episodes = sorted(
-            self.repository.list_episodes(),
+            episodes,
+            key=lambda episode: (
+                _episode_opened_key(episode)[0].isoformat(),
+                episode.episode_id,
+            ),
+            reverse=True,
+        )
+        if limit is not None and len(episodes) > limit:
+            episodes = episodes[:limit]
+        sessions: list[Episode] = []
+        for episode in episodes:
+            session = self.repository.load_episode_state(episode.episode_id)
+            if session is not None:
+                sessions.append(session)
+        return tuple(sessions)
+
+    def _list_sessions_for_elephant(
+        self,
+        elephant_id: str,
+        *,
+        limit: int | None = None,
+    ) -> tuple[Episode, ...]:
+        target = str(elephant_id or "").strip()
+        if not target:
+            return ()
+        seen_episode_ids: set[str] = set()
+        episodes: list[Episode] = []
+        candidate_state_ids: set[str] = {_elephant_state_id(target)}
+
+        def add_episodes(rows: tuple[Episode, ...]) -> None:
+            for episode in rows:
+                if episode.elephant_id:
+                    if episode.elephant_id != target:
+                        continue
+                elif episode.state_id not in candidate_state_ids:
+                    continue
+                if episode.episode_id in seen_episode_ids:
+                    continue
+                seen_episode_ids.add(episode.episode_id)
+                episodes.append(episode)
+
+        def list_episodes(**kwargs: object) -> tuple[Episode, ...]:
+            try:
+                return tuple(self.repository.list_episodes(**kwargs))
+            except TypeError:
+                return tuple(self.repository.list_episodes())
+
+        query_limit = None if limit is None else max(limit, 1)
+        direct_state = self.repository.load_state(_elephant_state_id(target))
+        candidate_states = [direct_state] if direct_state is not None else []
+        try:
+            scoped_states = self.repository.list_states(elephant_id=target)
+        except TypeError:
+            scoped_states = tuple(
+                state
+                for state in self.repository.list_states()
+                if state.elephant_id == target or state.state_anchor in {target, f"elephant:{target}"}
+            )
+        candidate_states.extend(scoped_states)
+        candidate_state_ids.update(
+            state.state_id
+            for state in candidate_states
+            if state is not None and (state.elephant_id == target or state.state_anchor in {target, f"elephant:{target}"})
+        )
+        add_episodes(
+            list_episodes(
+                elephant_id=target,
+                limit=query_limit,
+                newest_first=True,
+            )
+        )
+        for state in tuple({state.state_id: state for state in candidate_states if state is not None}.values()):
+            add_episodes(
+                list_episodes(
+                    state_id=state.state_id,
+                    limit=query_limit,
+                    newest_first=True,
+                )
+            )
+        ordered = sorted(
+            episodes,
             key=lambda episode: (
                 _episode_opened_key(episode)[0].isoformat(),
                 episode.episode_id,
@@ -284,9 +373,9 @@ class CliRuntimeRecordsMixin:
             reverse=True,
         )
         if limit is not None:
-            episodes = episodes[:limit]
+            ordered = ordered[:limit]
         sessions: list[Episode] = []
-        for episode in episodes:
+        for episode in ordered:
             session = self.repository.load_episode_state(episode.episode_id)
             if session is not None:
                 sessions.append(session)

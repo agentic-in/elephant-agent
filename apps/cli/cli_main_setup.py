@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import logging
 import os
 import random
 import re
 import select
+import subprocess
 import sys
 import time
 from collections.abc import Iterable
@@ -50,6 +52,8 @@ from .wizard import (
     _wizard_text_prompt,
 )
 from .shell_stack import Live
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER_ID = "openai-compatible"
 DEFAULT_ELEPHANT_NAME_SUGGESTIONS = (
@@ -371,6 +375,7 @@ def _intro_console_size() -> tuple[int, int]:
     try:
         size = Console(highlight=False, soft_wrap=True).size
     except Exception:
+        LOGGER.warning("failed to detect setup terminal size", exc_info=True)
         return (0, 0)
     return (getattr(size, "width", 0), getattr(size, "height", 0))
 
@@ -491,14 +496,23 @@ def _gateway_birth_lines(elephant_name: str) -> tuple[str, ...]:
     )
 
 def _prompt_im_onboarding(runtime: CliRuntime, *, elephant_name: str) -> None:
-    from apps.gateway.__main__ import run_im_setup
-
-    run_im_setup(
-        default_state_dir=runtime.paths.state_dir,
-        default_control_state_dir=runtime.paths.state_dir,
-        prompt_title="💬 IM Setup",
-        prompt_text="💬 Which IM should Elephant Agent wire before wake opens?",
-        allow_skip=True,
+    subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "apps.gateway",
+            "setup",
+            "--state-dir",
+            str(runtime.paths.state_dir),
+            "--cli-state-dir",
+            str(runtime.paths.state_dir),
+            "--allow-skip",
+            "--prompt-title",
+            "💬 IM Setup",
+            "--prompt-text",
+            "💬 Which IM should Elephant Agent wire before wake opens?",
+        ),
+        check=False,
     )
 
 def _print_overview(runtime: CliRuntime) -> None:

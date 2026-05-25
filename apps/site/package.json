@@ -5,6 +5,8 @@
   "scripts": {
     "postinstall": "node ./scripts/patch-docusaurus-bundler.mjs",
     "sync:content": "node ./scripts/sync-install-script.mjs && node ./scripts/sync-skillhub-content.mjs",
+    "check:content": "node ./scripts/sync-install-script.mjs --check && node ./scripts/sync-skillhub-content.mjs --check",
+    "ci:check": "npm run check:content && npm run typecheck",
     "start": "npm run sync:content && docusaurus start --host 127.0.0.1",
     "build": "npm run sync:content && docusaurus build",
     "serve": "docusaurus serve",

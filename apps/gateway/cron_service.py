@@ -4,33 +4,37 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+import logging
 import os
 from pathlib import Path
 import sys
 import time
-from typing import Any
+from typing import Any, Protocol
 
-from apps.cli.runtime import CliRuntime
 from apps.runtime_layout import default_cli_state_dir
 from packages.cron import CronJob, CronJobExecution
+from packages.gateway_core.cron_delivery import cron_execution_should_deliver
+from packages.gateway_core.proactive_ask import CONFIGURED_IM_ADAPTERS, run_proactive_ask_tick
 from packages.runtime_layout import infer_install_root_from_state_dir
 
 from .plugins import GatewayManagedRuntime, GatewayPluginRegistry, default_gateway_runtime_path
 
 
+LOGGER = logging.getLogger(__name__)
+
 CRON_SCHEDULER_TARGET = "scheduler"
 
 CronDeliveryCallback = Callable[[CronJob, CronJobExecution], None]
 
-# Configured IM adapters for proactive ask job execution
-CONFIGURED_IM_ADAPTERS = (
-    "messaging.weixin",
-    "messaging.feishu",
-    "messaging.dingding",
-    "messaging.discord",
-    "messaging.wecom",
-    "messaging.telegram",
-)
+
+class CronRuntimeLike(Protocol):
+    cron_runtime: Any
+
+    def run_due_cron_jobs_for_scheduler(self) -> tuple[CronJobExecution, ...]:
+        ...
+
+
+CronRuntimeFactory = Callable[[Path], CronRuntimeLike]
 
 
 @dataclass(slots=True)
@@ -41,6 +45,7 @@ class CronSchedulerService:
     runtime_state_dir: Path | None = None
     service_key: str = "cron"
     delivery_callback: CronDeliveryCallback | None = None
+    runtime_factory: CronRuntimeFactory | None = None
 
     def describe(self) -> Mapping[str, object]:
         payload: dict[str, object] = {
@@ -127,12 +132,13 @@ class CronSchedulerService:
             interval_seconds=interval_seconds,
             once=once,
             delivery_callback=self.delivery_callback,
+            runtime_factory=self.runtime_factory,
         )
 
-    def _cli_runtime(self) -> CliRuntime:
-        return CliRuntime.create(
-            state_dir=self._cli_state_dir(),
-        )
+    def _cli_runtime(self) -> CronRuntimeLike:
+        if self.runtime_factory is None:
+            raise RuntimeError("cron runtime factory is unavailable")
+        return self.runtime_factory(self._cli_state_dir())
 
     def _cli_state_dir(self) -> Path:
         if self.default_cli_state_dir:
@@ -149,10 +155,13 @@ def run_cron_scheduler_loop(
     interval_seconds: float = 60.0,
     once: bool = False,
     delivery_callback: CronDeliveryCallback | None = None,
+    runtime_factory: CronRuntimeFactory | None = None,
 ) -> int:
     if interval_seconds <= 0:
         raise ValueError("interval_seconds must be greater than zero")
-    runtime = CliRuntime.create(state_dir=cli_state_dir)
+    if runtime_factory is None:
+        raise RuntimeError("cron runtime factory is unavailable")
+    runtime = runtime_factory(cli_state_dir)
     print(
         f"Elephant Agent cron scheduler started (interval={interval_seconds:g}s, elephant={cli_state_dir})",
         flush=True,
@@ -210,7 +219,6 @@ def _run_proactive_ask_all_adapters(
     if not isinstance(proactive_config, dict) or proactive_config.get("enabled") is False:
         return
 
-    from apps.gateway.proactive_ask_job import run_proactive_ask_tick
     from apps.gateway.runtime import build_gateway_app
 
     app, outbound_queue, _ = build_gateway_app(state_dir=str(cli_state_dir))
@@ -245,14 +253,6 @@ def _try_deliver_cron_result(
             f"cron delivery failed: {execution.job.job_id} {execution.job.name} - {error}",
             flush=True,
         )
-
-
-def cron_execution_should_deliver(execution: CronJobExecution) -> bool:
-    """Return whether a cron execution result should be sent to IM adapters."""
-    if execution.job.action_kind == "learning":
-        return False
-    summary = execution.summary.strip()
-    return bool(summary) and summary != "[SILENT]"
 
 
 def build_gateway_cron_delivery_callback(
@@ -291,9 +291,15 @@ def build_gateway_cron_delivery_callback(
         for callback in callbacks:
             try:
                 callback(job, execution)
-            except Exception:
-                # Each adapter logs its own failure; one misconfigured adapter must not block
-                # the others.
+            except Exception as error:
+                # One misconfigured adapter must not block the others.
+                LOGGER.warning(
+                    "Cron delivery callback %s failed for job %s: %s",
+                    _callback_label(callback),
+                    getattr(job, "job_id", "<unknown>"),
+                    error,
+                    exc_info=True,
+                )
                 continue
 
     raw_callback = callbacks[0] if len(callbacks) == 1 else _fanout
@@ -323,6 +329,7 @@ def _try_feishu_cron_callback(
             return None
         return feishu_service.deliver_cron_result
     except Exception:
+        LOGGER.debug("Feishu cron delivery callback is unavailable.", exc_info=True)
         return None
 
 
@@ -342,6 +349,7 @@ def _try_discord_cron_callback(
             return None
         return service.deliver_cron_result
     except Exception:
+        LOGGER.debug("Discord cron delivery callback is unavailable.", exc_info=True)
         return None
 
 
@@ -361,7 +369,16 @@ def _try_weixin_cron_callback(
             return None
         return service.deliver_cron_result
     except Exception:
+        LOGGER.debug("Weixin cron delivery callback is unavailable.", exc_info=True)
         return None
+
+
+def _callback_label(callback: CronDeliveryCallback) -> str:
+    return str(
+        getattr(callback, "__qualname__", None)
+        or getattr(callback, "__name__", None)
+        or repr(callback)
+    )
 
 
 def register_cron_scheduler_service(registry: GatewayPluginRegistry) -> GatewayPluginRegistry:
@@ -375,6 +392,7 @@ def build_cron_scheduler_service(
     default_cli_state_dir: str | None = None,
     environ: Mapping[str, str] | None = None,
     runtime_state_dir: Path | None = None,
+    runtime_factory: CronRuntimeFactory | None = None,
     **_: object,
 ) -> CronSchedulerService:
     return CronSchedulerService(
@@ -382,6 +400,7 @@ def build_cron_scheduler_service(
         default_cli_state_dir=default_cli_state_dir,
         environ=dict(environ or os.environ),
         runtime_state_dir=runtime_state_dir,
+        runtime_factory=runtime_factory,
     )
 
 
@@ -397,6 +416,8 @@ __all__ = [
     "CRON_SCHEDULER_TARGET",
     "CronDeliveryCallback",
     "CronSchedulerService",
+    "CronRuntimeFactory",
+    "CronRuntimeLike",
     "build_cron_scheduler_service",
     "build_gateway_cron_delivery_callback",
     "cron_execution_should_deliver",

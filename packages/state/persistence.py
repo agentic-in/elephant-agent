@@ -113,7 +113,7 @@ def _render_relationship_from_facts(
     ids = canonical_profile_ids(profile_id)
     elephant_id = str(getattr(identity, "elephant_id", "") or ids.elephant_id)
     interaction_preferences = _tuple_unique(str(item) for item in getattr(identity, "governance_flags", ()) or ())
-    expectations: tuple[str, ...] = ()
+    expectations = _identity_relationship_expectations(identity)
     trust_markers: list[str] = []
     repair_history: list[str] = []
     local_corrections: list[str] = []
@@ -190,6 +190,17 @@ def _tuple_unique(*groups) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _identity_relationship_expectations(identity: object | None) -> tuple[str, ...]:
+    if identity is None:
+        return ()
+    values = (
+        f"initiative:{getattr(identity, 'initiative', '')}",
+        f"relational_stance:{getattr(identity, 'relational_stance', '')}",
+        f"personality_label:{getattr(identity, 'personality_preset', '')}",
+    )
+    return _tuple_unique(value for value in values if value.split(":", 1)[1].strip())
+
+
 def resolve_runtime_state(
     repository: RuntimeStorageRepository,
     *,
@@ -218,9 +229,13 @@ def resolve_runtime_state(
     resolved_profile_id = str(personal_model_id or "").strip() or None
     resolved_elephant_id = str(elephant_id or "").strip() or None
     resolved_anchor = str(state_anchor or "").strip() or None
-    states = repository.list_states(status=status) if status is not None else repository.list_states()
-    if resolved_profile_id is not None:
-        states = tuple(state for state in states if state.personal_model_id == resolved_profile_id)
+    states = _list_runtime_states(
+        repository,
+        personal_model_id=resolved_profile_id,
+        elephant_id=resolved_elephant_id,
+        state_anchor=resolved_anchor,
+        status=status,
+    )
     if resolved_anchor is not None:
         for state in states:
             if state.state_anchor == resolved_anchor:
@@ -256,6 +271,51 @@ def resolve_runtime_state(
         ) or "runtime-state"
         raise KeyError(f"runtime state not found for {targets}")
     return None
+
+
+def _list_runtime_states(
+    repository: RuntimeStorageRepository,
+    *,
+    personal_model_id: str | None,
+    elephant_id: str | None = None,
+    state_anchor: str | None = None,
+    status: str | None,
+) -> tuple:
+    kwargs: dict[str, object] = {}
+    if personal_model_id is not None:
+        kwargs["personal_model_id"] = personal_model_id
+    if elephant_id is not None:
+        kwargs["elephant_id"] = elephant_id
+    if state_anchor is not None:
+        kwargs["state_anchor"] = state_anchor
+    if status is not None:
+        kwargs["status"] = status
+    try:
+        states = tuple(repository.list_states(**kwargs))
+    except TypeError:
+        fallback_kwargs: dict[str, object] = {}
+        if personal_model_id is not None:
+            fallback_kwargs["personal_model_id"] = personal_model_id
+        if status is not None:
+            fallback_kwargs["status"] = status
+        try:
+            states = tuple(repository.list_states(**fallback_kwargs))
+        except TypeError:
+            states = tuple(repository.list_states())
+    if personal_model_id is not None:
+        states = tuple(state for state in states if state.personal_model_id == personal_model_id)
+    if elephant_id is not None:
+        elephant_anchors = {elephant_id, f"elephant:{elephant_id}"}
+        states = tuple(
+            state
+            for state in states
+            if state.elephant_id == elephant_id or state.state_anchor in elephant_anchors
+        )
+    if state_anchor is not None:
+        states = tuple(state for state in states if state.state_anchor == state_anchor)
+    if status is not None:
+        states = tuple(state for state in states if state.status == status)
+    return states
 
 
 def sync_canonical_profile_state(
@@ -563,7 +623,13 @@ def _sync_elephant_identity(
                 updated_at=synced_at,
             )
             return explicit_state.state_id
-    for state in repository.list_states():
+    states = _list_runtime_states(
+        repository,
+        personal_model_id=identity.profile_id,
+        elephant_id=identity.elephant_id,
+        status=None,
+    )
+    for state in states:
         if state.elephant_id != identity.elephant_id:
             continue
         repository.upsert_state(

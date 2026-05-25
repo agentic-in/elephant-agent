@@ -11,6 +11,7 @@ completed context into a reference summary.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import logging
 from typing import Protocol
 
 from packages.contracts.runtime import PromptMessage
@@ -26,6 +27,7 @@ from .session_projection import (
 _SHORT_HISTORY_MESSAGE_THRESHOLD = 4
 _SHORT_HISTORY_MIN_COMPRESSIBLE_TOKENS = 512
 _SHORT_HISTORY_MIN_CONTEXT_RATIO = 0.10
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,7 @@ def compress_epoch(
             if summary.strip():
                 method = "reflect"
         except Exception:
+            LOGGER.debug("Reflect context compressor failed; using deterministic fallback.", exc_info=True)
             summary = ""
 
     # Deterministic fallback

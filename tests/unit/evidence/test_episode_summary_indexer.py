@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 from packages.contracts import Episode, Fact
@@ -138,7 +139,7 @@ def test_indexer_writes_document_for_committed_personal_model_claim() -> None:
     assert doc.source_id == "fact:pm:1"
 
 
-def test_indexer_swallows_embedding_exception() -> None:
+def test_indexer_swallows_embedding_exception(caplog) -> None:
     emb = _StubEmbeddingService(raise_on_embed=True)
     idx = _StubSemanticIndex()
     indexer = SemanticSummaryIndexer(
@@ -147,11 +148,14 @@ def test_indexer_swallows_embedding_exception() -> None:
         provider_id="stub-provider",
         model_id="stub-model",
     )
-    assert indexer.index_episode_exit(_episode()) is None
+    with caplog.at_level(logging.DEBUG, logger="packages.evidence.episode_summary_indexer"):
+        assert indexer.index_episode_exit(_episode()) is None
     assert idx.documents == []
+    assert "Semantic summary embedding failed" in caplog.text
+    assert "embedding down" in caplog.text
 
 
-def test_indexer_swallows_semantic_index_exception() -> None:
+def test_indexer_swallows_semantic_index_exception(caplog) -> None:
     emb = _StubEmbeddingService()
     idx = _StubSemanticIndex(raise_on_index=True)
     indexer = SemanticSummaryIndexer(
@@ -160,7 +164,10 @@ def test_indexer_swallows_semantic_index_exception() -> None:
         provider_id="stub-provider",
         model_id="stub-model",
     )
-    assert indexer.index_personal_model_claim(_fact()) is None
+    with caplog.at_level(logging.DEBUG, logger="packages.evidence.episode_summary_indexer"):
+        assert indexer.index_personal_model_claim(_fact()) is None
+    assert "Semantic summary indexing failed" in caplog.text
+    assert "index down" in caplog.text
 
 
 def test_indexer_skips_when_text_is_empty() -> None:

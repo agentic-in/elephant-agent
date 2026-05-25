@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from packages.state import ELEPHANT_IDENTITY_FILENAME
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
 from packages.understanding.personal_model_governance import is_skill_affinity_topic, skill_affinity_index_id
 
+from .api_runtime_episode_queries import repository_episodes
+from .api_runtime_trace_queries import loops_for_episodes, steps_by_loop_for_episodes
 from .api_runtime_console import (
     _cron_jobs,
     _gateway,
@@ -50,6 +53,11 @@ _COUNT_TABLES = {
     "steps",
     "semantic_index_entries",
 }
+_DASHBOARD_CHAT_EPISODE_LIMIT = 30
+_DASHBOARD_RUNTIME_EPISODE_LIMIT = 200
+_DASHBOARD_TRACE_EPISODE_LIMIT = 10
+LOGGER = logging.getLogger(__name__)
+
 
 def _count_rows(database_path: Path, table: str) -> int:
     if table not in _COUNT_TABLES:
@@ -206,6 +214,7 @@ def _state_projection_rows(
         try:
             runtime_by_id = {runtime.runtime_id: runtime for runtime in repository.list_local_agent_runtimes()}
         except Exception:
+            LOGGER.debug("Failed to load local agent runtimes for dashboard state projection.", exc_info=True)
             runtime_by_id = {}
     elephant_rows: list[dict[str, Any]] = []
     state_rows: list[dict[str, Any]] = []
@@ -301,6 +310,7 @@ def _personal_model_facts(repository: Any, personal_model_id: str, status: str |
     try:
         return tuple(list_facts(personal_model_id=personal_model_id, status=status))
     except Exception:
+        LOGGER.debug("Failed to load Personal Model facts for dashboard projection.", exc_info=True)
         return ()
 
 
@@ -350,29 +360,6 @@ def _personal_model_rows(
 
 def _basic_personal_model_rows(personal_models: tuple[Any, ...], *, repository: Any) -> tuple[dict[str, Any], ...]:
     return tuple(_personal_model_dashboard_row(model, repository) for model in personal_models)
-
-
-def _runtime_collections(self) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]:
-    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")
-    loops = _sort_items(self.repository.list_loops(), id_field="loop_id", time_field="started_at")
-    steps = _sort_items(self.repository.list_steps(), id_field="step_id", time_field="created_at")
-    return episodes, loops, steps
-
-
-def _runtime_maps(
-    *,
-    states: tuple[Any, ...],
-    episodes: tuple[Any, ...],
-    loops: tuple[Any, ...],
-    steps: tuple[Any, ...],
-) -> tuple[dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]], dict[str, tuple[Any, ...]]]:
-    episodes_by_state = {state.state_id: tuple(episode for episode in episodes if episode.state_id == state.state_id) for state in states}
-    loops_by_episode = {
-        episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id)
-        for episode in episodes
-    }
-    steps_by_loop = {loop.loop_id: tuple(step for step in steps if step.loop_id == loop.loop_id) for loop in loops}
-    return episodes_by_state, loops_by_episode, steps_by_loop
 
 
 def _episode_rows(episodes: tuple[Any, ...], loops_by_episode: Mapping[str, tuple[Any, ...]], steps_by_loop: Mapping[str, tuple[Any, ...]]) -> list[dict[str, Any]]:
@@ -426,6 +413,7 @@ def _provider_catalog_rows(self, active_provider: Mapping[str, Any]) -> tuple[di
                 row["status"] = discovered_state.get("status")
                 row["source"] = discovered_state.get("source")
             except Exception:
+                LOGGER.debug("Failed to load discovered provider state for dashboard models section.", exc_info=True)
                 pass
         rows.append(row)
     return tuple(rows)
@@ -460,6 +448,7 @@ def _fill_states(dashboard: dict[str, Any], self) -> tuple[tuple[Any, ...], Any]
                 if hasattr(runtime, "as_payload")
             )
         except Exception:
+            LOGGER.debug("Failed to load local agent runtimes for dashboard overview section.", exc_info=True)
             dashboard["local_agent_runtimes"] = ()
     return states, current_state
 
@@ -501,13 +490,12 @@ def _latest_episode_row(self, *, limit: int = 20) -> tuple[dict[str, Any], ...]:
     newest-first; returning the full recent tail lets them render a
     real timeline.
     """
-    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")
+    episodes = repository_episodes(self.repository, limit=max(1, int(limit)), newest_first=True)
     if not episodes:
         return ()
-    recent = episodes[:max(1, int(limit))]
     return tuple(
         {**_serialize(episode), "loop_count": 0, "step_count": 0, "loops": (), "timeline": ()}
-        for episode in recent
+        for episode in episodes
     )
 
 
@@ -573,19 +561,20 @@ def _fill_personal_models(dashboard: dict[str, Any], self) -> None:
 def _fill_runtime(dashboard: dict[str, Any], self) -> None:
     """History page: recent episode traces (capped at 10 episodes for traces)."""
     states, current_state = _state_collections(self)
-    all_episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")
+    all_episodes = repository_episodes(
+        self.repository,
+        limit=_DASHBOARD_RUNTIME_EPISODE_LIMIT,
+        newest_first=True,
+    )
     # Full trace only for 10 most recent episodes
-    recent_episodes = all_episodes[:10]
-    recent_loops: list[Any] = []
-    for ep in recent_episodes:
-        recent_loops.extend(self.repository.list_loops(episode_id=ep.episode_id))
-    recent_loops_tuple = tuple(recent_loops)
-    recent_steps: list[Any] = []
-    for loop in recent_loops_tuple:
-        recent_steps.extend(self.repository.list_steps(loop_id=loop.loop_id))
-    recent_steps_tuple = tuple(recent_steps)
+    recent_episodes = all_episodes[:_DASHBOARD_TRACE_EPISODE_LIMIT]
+    recent_loops_tuple = loops_for_episodes(self.repository, recent_episodes)
     loops_by_episode = {ep.episode_id: tuple(loop for loop in recent_loops_tuple if loop.episode_id == ep.episode_id) for ep in recent_episodes}
-    steps_by_loop = {loop.loop_id: tuple(step for step in recent_steps_tuple if step.loop_id == loop.loop_id) for loop in recent_loops_tuple}
+    steps_by_loop = steps_by_loop_for_episodes(
+        self.repository,
+        episodes=recent_episodes,
+        loops=recent_loops_tuple,
+    )
     elephant_rows, state_rows = _state_projection_rows(
         states,
         current_state=current_state,
@@ -603,13 +592,12 @@ def _fill_runtime(dashboard: dict[str, Any], self) -> None:
 
 def _fill_reflect(dashboard: dict[str, Any], self) -> None:
     """Lightweight reflect section: only learning jobs + worker state."""
-    states, current_state = _state_collections(self)
-    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")
+    states, _current_state = _state_collections(self)
     learning = _learning_snapshot(
         self,
         state_dir=self.repository.database_path.parent,
         states_by_id={state.state_id: state for state in states},
-        episodes_by_id={episode.episode_id: episode for episode in episodes},
+        episodes_by_id={},
     )
     dashboard["learning"] = learning
     dashboard["runtime"] = {"learning_jobs": learning["jobs"]}
@@ -617,13 +605,18 @@ def _fill_reflect(dashboard: dict[str, Any], self) -> None:
 
 def _fill_chat(dashboard: dict[str, Any], self) -> None:
     states, current_state = _state_collections(self)
-    episodes = _sort_items(self.repository.list_episodes(), id_field="episode_id", time_field="started_at")[:30]
-    loop_rows: list[Any] = []
-    for episode in episodes:
-        loop_rows.extend(self.repository.list_loops(episode_id=episode.episode_id))
-    loops = _sort_items(tuple(loop_rows), id_field="loop_id", time_field="started_at")
+    episodes = repository_episodes(
+        self.repository,
+        limit=_DASHBOARD_CHAT_EPISODE_LIMIT,
+        newest_first=True,
+    )
+    loops = _sort_items(loops_for_episodes(self.repository, episodes), id_field="loop_id", time_field="started_at")
     loops_by_episode = {episode.episode_id: tuple(loop for loop in loops if loop.episode_id == episode.episode_id) for episode in episodes}
-    steps_by_loop = {loop.loop_id: self.repository.list_steps(loop_id=loop.loop_id) for loop in loops}
+    steps_by_loop = steps_by_loop_for_episodes(
+        self.repository,
+        episodes=episodes,
+        loops=loops,
+    )
     elephant_rows, state_rows = _state_projection_rows(
         states,
         current_state=current_state,
@@ -667,6 +660,7 @@ def _fill_questions(dashboard: dict[str, Any], self) -> None:
         try:
             ensure_default(personal_model_id=personal_model_id)
         except Exception:
+            LOGGER.debug("Failed to ensure default Personal Model for dashboard questions section.", exc_info=True)
             pass
     facts: tuple = ()
     waiting_questions: tuple = ()
@@ -681,6 +675,7 @@ def _fill_questions(dashboard: dict[str, Any], self) -> None:
         try:
             facts = tuple(list_facts(personal_model_id=personal_model_id, status="active"))
         except Exception:
+            LOGGER.debug("Failed to load active facts for dashboard questions section.", exc_info=True)
             facts = ()
 
     list_questions = getattr(repository, "list_open_questions", None)
@@ -688,18 +683,22 @@ def _fill_questions(dashboard: dict[str, Any], self) -> None:
         try:
             waiting_questions = tuple(list_questions(personal_model_id=personal_model_id, status="open"))
         except Exception:
+            LOGGER.debug("Failed to load open questions for dashboard questions section.", exc_info=True)
             waiting_questions = ()
         try:
             asked_questions = tuple(list_questions(personal_model_id=personal_model_id, status="asked"))
         except Exception:
+            LOGGER.debug("Failed to load asked questions for dashboard questions section.", exc_info=True)
             asked_questions = ()
         try:
             answered_questions = tuple(list_questions(personal_model_id=personal_model_id, status="answered"))
         except Exception:
+            LOGGER.debug("Failed to load answered questions for dashboard questions section.", exc_info=True)
             answered_questions = ()
         try:
             dismissed_questions = tuple(list_questions(personal_model_id=personal_model_id, status="dismissed"))
         except Exception:
+            LOGGER.debug("Failed to load dismissed questions for dashboard questions section.", exc_info=True)
             dismissed_questions = ()
 
     question_config = _dashboard_question_config(repository)
@@ -766,6 +765,7 @@ def _dashboard_question_config(repository) -> dict[str, Any]:
         )
         return personal_model_question_config_from_global(config)
     except Exception:  # pragma: no cover
+        LOGGER.debug("Failed to load dashboard question config; using defaults.", exc_info=True)
         return {}
 
 
@@ -928,6 +928,7 @@ def _fill_diary(dashboard: dict[str, Any], self) -> None:
         pm = self.repository.ensure_default_personal_model()
         entries = self.repository.list_diary_entries(personal_model_id=pm.personal_model_id, limit=30)
     except Exception:
+        LOGGER.debug("Failed to load diary entries for dashboard section.", exc_info=True)
         entries = ()
     dashboard["diary"] = {
         "entries": tuple(

@@ -554,6 +554,7 @@ class WecomGatewayService:
                     try:
                         await self._ws.close()
                     except Exception:
+                        LOGGER.warning("failed to close broken WeCom websocket", exc_info=True)
                         pass
                 self._ws = None
 

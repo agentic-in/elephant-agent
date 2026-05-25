@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 import re
 import threading
@@ -82,6 +83,9 @@ from .shell_progress_support import (
     turn_title,
     turn_tool_progress_lines,
 )
+
+LOGGER = logging.getLogger(__name__)
+
 
 def render_turn_frame(
     shell: ProductizedShell,
@@ -680,6 +684,7 @@ def _tool_trace_preview(arguments, *, tool_id: str | None = None) -> str:
                     relative = _os.path.relpath(absolute, _os.getcwd())
                     display_path = relative if not relative.startswith(f"..{_os.sep}") and relative != ".." else text
                 except Exception:
+                    LOGGER.warning("failed to render compact path for shell progress trace", exc_info=True)
                     display_path = text
                 return compact_line(display_path, limit=56)
             return compact_line(text, limit=36)

@@ -33,6 +33,7 @@ _HEALTHY_ROOT_MARKERS = (
 )
 _LOCAL_EMBEDDING_LOG_FILTER_INSTALLED = False
 _LOCAL_EMBEDDING_WARNING_MODEL_ROOTS: set[str] = set()
+LOGGER = logging.getLogger(__name__)
 
 
 def _is_incorrect_regex_warning_for_local_embedding_root(message: str) -> bool:
@@ -807,6 +808,7 @@ class SentenceTransformerEmbeddingProvider:
         except Exception:
             # Health already describes why the provider is not ready. Later steady
             # attempts or real embedding requests can retry once the runtime recovers.
+            LOGGER.warning("local embedding steady worker failed to load model", exc_info=True)
             return
         finally:
             with self._steady_lock:

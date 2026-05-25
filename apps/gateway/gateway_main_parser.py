@@ -7,9 +7,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import getpass
-import apps.cli.wizard as cli_wizard
 import importlib.util
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -20,20 +20,14 @@ import sys
 import time
 from wsgiref.simple_server import make_server
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
+import packages.operator.wizard as cli_wizard
+from packages.operator.shell_stack import Align, Console, Group, Panel, RICH_AVAILABLE, Table, Text
+from packages.operator.shell_ui import (
     BRAND_ACCENT,
     BRAND_ACCENT_STRONG,
     BRAND_LIGHT,
     BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
+    resolve_elephant_version as _resolve_elephant_version,
     render_elephant_mark,
 )
 from apps.provider_runtime import load_provider_profile, load_runtime_local_secret_env
@@ -103,6 +97,8 @@ from .gateway_main_parser_providers import *  # noqa: F401,F403
 from .gateway_main_parser_providers import __all__ as _PROVIDER_ALL
 from .gateway_main_parser_doctor import *  # noqa: F401,F403
 from .gateway_main_parser_doctor import __all__ as _DOCTOR_ALL
+
+LOGGER = logging.getLogger(__name__)
 
 def _build_registry():
     return build_gateway_plugin_registry()
@@ -332,6 +328,7 @@ def _run_status_all(args: Namespace) -> int:
         else:
             print("daemon_status: stopped")
     except Exception:
+        LOGGER.warning("failed to inspect gateway daemon status for parser output", exc_info=True)
         pass
 
     if not services:

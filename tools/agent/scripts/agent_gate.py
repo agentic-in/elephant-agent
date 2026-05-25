@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import fnmatch
 import json
 import shlex
@@ -19,27 +20,44 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.agent.scripts.agent_public_contracts import (
+    PUBLIC_CONTRACT_REQUIRED_SECTIONS,
+    public_contract_docs_errors,
+    public_contract_inventory_errors,
+    render_public_contract_inventory_markdown,
+    write_public_contract_inventory_docs,
+)
+from tools.agent.scripts.agent_scorecard_scans import (
+    APP_IMPORT_BOUNDARY_ALLOWLIST,
+    app_import_boundary_records,
+    scan_app_import_boundaries,
+    scan_reset_banned_terms,
+    silent_broad_exception_records,
+)
+
 HARNESS_ROOT = ROOT / "tools" / "agent"
 MANIFEST_PATH = HARNESS_ROOT / "repo-manifest.yaml"
 MATRIX_PATH = HARNESS_ROOT / "task-matrix.yaml"
 SKILL_REGISTRY_PATH = HARNESS_ROOT / "skill-registry.yaml"
 STRUCTURE_RULES_PATH = HARNESS_ROOT / "structure-rules.yaml"
 CONTEXT_MAP_PATH = HARNESS_ROOT / "context-map.yaml"
+PUBLIC_CONTRACTS_PATH = HARNESS_ROOT / "public-contracts.yaml"
+PUBLIC_CONTRACTS_DOC_PATH = ROOT / "docs" / "agent" / "public-contracts.md"
 MAX_PYTHON_FILE_LINES = 1000
 PYTHON_LINE_LIMIT_SURFACES = ("apps", "packages")
 PYTHON_LINE_LIMIT_PATTERNS = tuple(f"{surface}/**/*.py" for surface in PYTHON_LINE_LIMIT_SURFACES)
-PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = (
-    "apps/api/api_runtime_console_ops.py",
-    "apps/cli/cli_main_impl.py",
-    "apps/cli/runtime_extensions_surface.py",
-    "apps/cli/shell_composer.py",
-    "apps/cli/shell_methods_commands.py",
-    "apps/gateway/gateway_main_impl.py",
-    "packages/evidence/runtime.py",
-    "packages/learning/personal_model_evolution.py",
-    "packages/models/providers/openai_compatible.py",
-    "packages/storage/repository_system_methods.py",
+PYTHON_LINE_LIMIT_DISCOVERY_SKIP_PARTS = (
+    ".build",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
 )
+PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = ()
 FRONTEND_TYPECHECKS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     (
         "dashboard",
@@ -49,67 +67,10 @@ FRONTEND_TYPECHECKS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = 
     (
         "site",
         ("apps/site/**",),
-        ("npm", "--prefix", "apps/site", "run", "typecheck"),
+        ("npm", "--prefix", "apps/site", "run", "ci:check"),
     ),
 )
-RESET_BANNED_TERM_ALLOWLIST_PATTERNS: tuple[str, ...] = (
-    "docs/system-design/system-layer-model.md",
-    "docs/agent/adr/**",
-    "docs/agent/plans/personal-model-analyst-agent.md",
-    "docs/agent/plans/system-layer-reset.md",
-    "docs/agent/task-cards/system-layer-reset-*.md",
-    "tests/e2e/api/test_api_surface.py",
-    "tests/e2e/release/test_release_certification.py",
-    "tests/e2e/release/test_design_closure_certification.py",
-    "tests/agent/test_system_layer_reset_matrix.py",
-    "tests/agent/test_agent_gate.py",
-    "tests/integration/storage_system_layers/test_schema.py",
-    "tests/integration/storage_system_layers/test_repository.py",
-    "tests/unit/cli/test_shell.py",
-    "tests/unit/test_builtin_tools_v2.py",
-    "apps/site/src/generated/skillhubCatalog.ts",
-    "apps/site/docs/skillhub/**",
-    "packages/skills/builtin_packages/**",
-    "tools/agent/scripts/agent_gate.py",
-)
-RESET_BANNED_TERMS: tuple[tuple[str, str], ...] = (
-    (" ".join(("voice", "mode")), "speech-mode contract is removed from reset surfaces"),
-    (" ".join(("voice", "prompt")), "speech prompt contract is removed from reset surfaces"),
-    (" ".join(("goal", "graph")), "current-work graph wording is removed from reset surfaces"),
-    (" ".join(("activity", "graph")), "activity-tree wording is removed from reset surfaces"),
-    ("packages.goals", "goal package is removed from reset surfaces"),
-    ("GoalNode", "goal-node contract is removed from reset surfaces"),
-    ("WorklineSnapshot", "workline snapshot contract is removed from reset surfaces"),
-    ("activity_graphs", "activity graph storage is removed from reset surfaces"),
-    ("activity_nodes", "activity node storage is removed from reset surfaces"),
-    ("activity_goals", "activity goal storage table is removed from reset surfaces"),
-    ("goal_nodes", "goal node storage table is removed from reset surfaces"),
-    ("active_goal_id", "active goal pointer is removed from reset surfaces"),
-    ("goal_query", "state_query replaces goal_query in reset surfaces"),
-    ("goal_update", "legacy goal update event type is removed from reset surfaces"),
-    ("goal_snapshot", "legacy goal snapshot event type is removed from reset surfaces"),
-    ("goal_refs", "work_item_refs replaces goal_refs in reset surfaces"),
-    ("goal_ids", "work_item_ids replaces goal_ids in reset surfaces"),
-    ("focus_activity_ids", "focus_work_item_ids replaces focus_activity_ids in reset surfaces"),
-    ("activity_candidates", "work_item_candidates replaces activity_candidates in reset surfaces"),
-    ("build_activity_routing_section", "work routing replaces activity routing in reset surfaces"),
-    ("tool.profile.manage", "memory.curate owns model-visible durable memory writes"),
-    ("tool.memory.upload", "upload cannot represent capture semantics"),
-    ("tool.procedure.inspect", "procedure inspection is not model-visible"),
-    ("tool.procedure.manage", "direct procedure management is not model-visible"),
-    ("DeterministicEpisodeObserver", "Personal Model learning must not use keyword observer fallback"),
-    ("PatternClusterer", "skill crystallization must not use ExperienceRecord-first clustering"),
-    ("DerivedProcedureCandidateStore", "skill crystallization candidates come from trajectory metrics"),
-    ("list_pattern_clusters", "ExperienceRecord-first learning cluster APIs are removed"),
-    ("list_procedure_candidates", "procedure candidates are no longer ExperienceRecord-derived"),
-    ("/goals", "session-era goal routes are removed from reset surfaces"),
-    ("/procedure", "session-era procedure routes are removed from reset surfaces"),
-    (" ".join(("intent", "layer")), "intent routing wording is removed from reset surfaces"),
-    (
-        "/".join(("strong", "weak")) + " " + "model selection",
-        "strong-or-weak routing wording is removed from reset surfaces",
-    ),
-)
+
 
 
 @dataclass
@@ -227,27 +188,39 @@ def collect_changed_files(base_ref: str, changed_files: str, changed_files_path:
         path = ROOT / changed_files_path
         return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
+    working_tree_files = _working_tree_changed_files()
     if base_ref:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
+        return list(
+            dict.fromkeys(
+                [
+                    *_git_output_lines(["git", "diff", "--name-only", f"{base_ref}...HEAD"]),
+                    *working_tree_files,
+                ]
+            )
         )
-        if result.returncode == 0:
-            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
+    return list(working_tree_files)
+
+
+def _git_output_lines(args: list[str], *, root: Path = ROOT) -> tuple[str, ...]:
     result = subprocess.run(
-        ["git", "diff", "--name-only"],
-        cwd=ROOT,
+        args,
+        cwd=root,
         text=True,
         capture_output=True,
         check=False,
     )
-    if result.returncode == 0:
-        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    return []
+    if result.returncode != 0:
+        return ()
+    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def _working_tree_changed_files(*, root: Path = ROOT) -> tuple[str, ...]:
+    tracked = _git_output_lines(["git", "diff", "--name-only", "HEAD"], root=root)
+    if not tracked:
+        tracked = _git_output_lines(["git", "diff", "--name-only"], root=root)
+    untracked = _git_output_lines(["git", "ls-files", "--others", "--exclude-standard"], root=root)
+    return tuple(dict.fromkeys([*tracked, *untracked]))
 
 
 def match_any(path: str, patterns: Iterable[str]) -> bool:
@@ -542,37 +515,25 @@ def validate_contract() -> tuple[list[str], list[str]]:
                     checks.append(f"skill surface valid: {skill_name} -> {srf}")
 
     errors.extend(scan_reset_banned_terms())
+    app_import_errors = scan_app_import_boundaries()
+    if app_import_errors:
+        errors.extend(app_import_errors)
+    else:
+        checks.append("app-to-app import boundary allowlist is current")
+
+    public_contract_errors = public_contract_inventory_errors()
+    if public_contract_errors:
+        errors.extend(public_contract_errors)
+    else:
+        checks.append("public contract inventory is current")
+
+        public_contract_doc_errors = public_contract_docs_errors()
+        if public_contract_doc_errors:
+            errors.extend(public_contract_doc_errors)
+        else:
+            checks.append("public contract docs are generated")
 
     return checks, errors
-
-
-def scan_reset_banned_terms(
-    *,
-    root: Path = ROOT,
-    surfaces: Iterable[str] | None = None,
-    banned_terms: Iterable[tuple[str, str]] = RESET_BANNED_TERMS,
-    allowlist_patterns: Iterable[str] = RESET_BANNED_TERM_ALLOWLIST_PATTERNS,
-) -> list[str]:
-    errors: list[str] = []
-    relative_paths = tuple(surfaces) if surfaces is not None else collect_tracked_files(root)
-    for relative_path in relative_paths:
-        if surfaces is None and match_any(relative_path, allowlist_patterns):
-            continue
-        path = root / relative_path
-        if not path.exists():
-            continue
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except UnicodeDecodeError:
-            continue
-        for line_number, line in enumerate(lines, start=1):
-            line_lower = line.lower()
-            for term, rationale in banned_terms:
-                if term.lower() in line_lower:
-                    errors.append(
-                        f"reset banned term in {relative_path}:{line_number}: {term} ({rationale})"
-                    )
-    return errors
 
 
 # ─── Rule matching ─────────────────────────────────────────────────────────────
@@ -766,6 +727,15 @@ def _python_files_for_line_limit(changed_files: list[str], *, root: Path = ROOT)
             )
         )
 
+    tracked = _tracked_python_files(root)
+    if tracked:
+        return tuple(
+            path
+            for path in tracked
+            if match_any(path, PYTHON_LINE_LIMIT_PATTERNS)
+            and not match_any(path, PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS)
+        )
+
     discovered: list[str] = []
     for surface in PYTHON_LINE_LIMIT_SURFACES:
         surface_root = root / surface
@@ -775,10 +745,28 @@ def _python_files_for_line_limit(changed_files: list[str], *, root: Path = ROOT)
             if not path.is_file():
                 continue
             relative_path = path.relative_to(root).as_posix()
+            if any(
+                part in PYTHON_LINE_LIMIT_DISCOVERY_SKIP_PARTS
+                for part in PurePosixPath(relative_path).parts
+            ):
+                continue
             if match_any(relative_path, PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS):
                 continue
             discovered.append(relative_path)
     return tuple(discovered)
+
+
+def _tracked_python_files(root: Path) -> tuple[str, ...]:
+    result = subprocess.run(
+        ["git", "ls-files", "*.py"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return ()
+    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
 
 
 def _line_count(path: Path) -> int:
@@ -833,6 +821,10 @@ def print_scorecard() -> None:
 
     context_map = load_manifest(CONTEXT_MAP_PATH) if CONTEXT_MAP_PATH.exists() else {}
     surface_count = len(context_map.get("surfaces", {}))
+    app_boundary_debt = len(APP_IMPORT_BOUNDARY_ALLOWLIST)
+    line_limit_debt = len(PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS)
+    silent_exception_debt = len(silent_broad_exception_records())
+    public_contract_debt = len(public_contract_inventory_errors())
 
     print("Elephant Agent Harness Scorecard")
     print(f"  Repo: {manifest['repo_name']}")
@@ -841,6 +833,10 @@ def print_scorecard() -> None:
     print(f"  Skills: {len(registry.get('skills', {}))}")
     print(f"  Task surfaces: {len(matrix.get('rules', []))}")
     print(f"  Context-map surfaces: {surface_count}")
+    print(f"  Python line-limit allowlist debt: {line_limit_debt}")
+    print(f"  App import boundary allowlist debt: {app_boundary_debt}")
+    print(f"  Silent broad exception debt: {silent_exception_debt}")
+    print(f"  Public contract inventory debt: {public_contract_debt}")
 
 
 def print_validate_result(checks: list[str], errors: list[str], *, detail: str = "compact") -> None:
@@ -865,6 +861,7 @@ def main() -> int:
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("--detail", choices=["compact", "full"], default="compact")
     subparsers.add_parser("scorecard")
+    subparsers.add_parser("public-contracts-docs")
 
     for name in ("report", "lint", "changed-files"):
         sub = subparsers.add_parser(name)
@@ -885,6 +882,10 @@ def main() -> int:
 
     if args.command == "scorecard":
         print_scorecard()
+        return 0
+
+    if args.command == "public-contracts-docs":
+        write_public_contract_inventory_docs()
         return 0
 
     changed_files = collect_changed_files(args.base_ref, args.changed_files, args.changed_files_path)
@@ -911,6 +912,7 @@ def main() -> int:
         for error in errors:
             print(error, file=sys.stderr)
         return 1
+    run_frontend_typechecks(changed_files)
     run_compileall()
     print("Elephant Agent Harness Lint")
     print("  Status: ok")

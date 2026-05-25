@@ -106,6 +106,38 @@ class GatewayRuntimeBridge(Protocol):
     def gateway_runtime_snapshot(self) -> Mapping[str, Any]:
         ...
 
+    def build_cron_delivery_callback(
+        self,
+        *,
+        state_dir: Path,
+        cli_state_dir: Path,
+        environ: Mapping[str, str] | None = None,
+    ) -> Any | None:
+        ...
+
+    def run_cron_job_now(
+        self,
+        *,
+        cli_state_dir: Path,
+        job_id: str,
+    ) -> Any:
+        ...
+
+    def run_proactive_ask_once(
+        self,
+        *,
+        state_dir: Path,
+        config: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        ...
+
+    def reflect_context_runtime(
+        self,
+        *,
+        state_dir: Path,
+    ) -> Any:
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class APIAppConfig:

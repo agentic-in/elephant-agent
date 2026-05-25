@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import logging
 from typing import Any
 
 from packages.contracts import Fact
 from packages.semantic_index import SemanticSearchQuery
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _clean(value: object) -> str:
@@ -54,6 +57,11 @@ def rank_facts_by_semantic_queries(
         try:
             matches = semantic_searcher.search(SemanticSearchQuery(**query_kwargs))
         except Exception:
+            LOGGER.warning(
+                "failed to run semantic search for personal model facts",
+                extra={"personal_model_id": pm_id, "query": query},
+                exc_info=True,
+            )
             matches = ()
         for match in matches:
             ref = claim_ref_from_match(match)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
+import logging
 import os
 from pathlib import Path
 import platform
@@ -12,6 +13,8 @@ import re
 import shutil
 import subprocess
 from typing import Mapping, Sequence
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +329,7 @@ done
             env={key: str(value) for key, value in env.items()},
         )
     except Exception:
+        LOGGER.warning("failed to discover local agent binaries", exc_info=True)
         return {}
     resolved: dict[str, str] = {}
     for line in completed.stdout.splitlines():

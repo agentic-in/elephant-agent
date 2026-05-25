@@ -6,14 +6,17 @@ from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 import json
+import logging
 from pathlib import Path
 import threading
 from typing import Any, Protocol
 
-from apps.cli.runtime import CliRuntime
+from apps.cli_runtime_bridge import create_cli_runtime_for_gateway_control
 from packages.contracts import Episode
 from packages.gateway_core import GatewayIdentityKey, GatewayInboundMessage
 from packages.runtime_layout import infer_install_root_from_state_dir
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _utc_now() -> datetime:
@@ -346,8 +349,7 @@ class GatewayCliControlService:
             )
         state_dir = Path(self.config.state_dir)
         if self.runtime_factory is None:
-            self._runtime = CliRuntime.create(state_dir=state_dir)
-            return self._runtime
+            self.runtime_factory = create_cli_runtime_for_gateway_control
         profile_dir = infer_install_root_from_state_dir(state_dir) / "profile"
         self._runtime = self.runtime_factory(profile_dir, state_dir)
         return self._runtime
@@ -570,6 +572,11 @@ class GatewayCliControlService:
                         metadata={"source": "gateway.cli_control"},
                     )
                 except Exception:
+                    LOGGER.warning(
+                        "failed to schedule learning for previous gateway-bound session",
+                        extra={"episode_id": current_session.episode_id, "elephant_id": state.elephant_id},
+                        exc_info=True,
+                    )
                     pass
             if self.app is None:
                 raise RuntimeError("gateway app is unavailable")
@@ -699,7 +706,11 @@ class GatewayCliControlService:
     def _elephant_display(self, elephant_id: str) -> str:
         normalized = elephant_id.strip()
         if self.app is not None:
-            for state in self.app.repository.list_states():
+            try:
+                states = self.app.repository.list_states(elephant_id=normalized)
+            except TypeError:
+                states = self.app.repository.list_states()
+            for state in states:
                 if str(getattr(state, "elephant_id", "")).strip() != normalized:
                     continue
                 elephant_name = str(getattr(state, "elephant_name", "")).strip()
@@ -794,7 +805,16 @@ class GatewayCliControlService:
         if not normalized:
             raise RuntimeError("missing elephant name. Try /elephant list first.")
         matches = []
+        if self.app is not None:
+            try:
+                matches = list(self.app.repository.list_states(elephant_id=normalized))
+            except TypeError:
+                matches = []
+        if len(matches) == 1:
+            return matches[0]
         for state in tuple(self.app.repository.list_states()) if self.app is not None else ():
+            if state in matches:
+                continue
             elephant_id = str(getattr(state, "elephant_id", "")).strip()
             elephant_name = str(getattr(state, "elephant_name", "")).strip()
             if normalized == elephant_id or normalized.lower() == elephant_name.lower():

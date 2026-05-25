@@ -55,6 +55,7 @@
     "tools/agent/skill-registry.yaml",
     "tools/agent/structure-rules.yaml",
     "tools/agent/context-map.yaml",
+    "tools/agent/public-contracts.yaml",
     "tools/agent/wave-registry.yaml",
     "tools/make/agent.mk",
     ".github/workflows/ci.yml",

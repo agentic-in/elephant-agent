@@ -7,7 +7,6 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import getpass
-import apps.cli.wizard as cli_wizard
 import importlib.util
 import json
 import os
@@ -20,20 +19,14 @@ import sys
 import time
 from wsgiref.simple_server import make_server
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
+import packages.operator.wizard as cli_wizard
+from packages.operator.shell_stack import Align, Console, Group, Panel, RICH_AVAILABLE, Table, Text
+from packages.operator.shell_ui import (
     BRAND_ACCENT,
     BRAND_ACCENT_STRONG,
     BRAND_LIGHT,
     BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
+    resolve_elephant_version as _resolve_elephant_version,
     render_elephant_mark,
 )
 from apps.provider_runtime import load_runtime_local_secret_env
@@ -326,8 +319,8 @@ def _start_discord_runtime_after_setup(args: Namespace, *, transport: str) -> in
     start_args.detach = True
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    from apps.gateway.gateway_main_impl import _start_via_daemon
-    return _start_via_daemon(start_args)
+    service = _build_discord_service(args)
+    return _run_restart(start_args, service=service)
 
 def _start_feishu_runtime_after_setup(args: Namespace, *, transport: str) -> int:
     start_args = Namespace(**vars(args))
@@ -339,8 +332,8 @@ def _start_feishu_runtime_after_setup(args: Namespace, *, transport: str) -> int
     start_args.port = int(getattr(start_args, "port", 8788) or 8788)
     start_args.timeout = float(getattr(start_args, "timeout", 10.0) or 10.0)
     start_args.force = bool(getattr(start_args, "force", False))
-    from apps.gateway.gateway_main_impl import _start_via_daemon
-    return _start_via_daemon(start_args)
+    service = _build_feishu_service(args)
+    return _run_restart(start_args, service=service)
 
 def _run_add_feishu(args: Namespace) -> int:
     _ensure_feishu_sdk_available(reason="Feishu setup")

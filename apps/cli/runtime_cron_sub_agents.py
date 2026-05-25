@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from threading import BoundedSemaphore, Lock
 import traceback
@@ -24,6 +25,9 @@ from apps.cli.runtime_cron_sub_agent_babies import (
     resolve_baby,
 )
 from apps.cli.runtime_cron_sub_agent_events import sub_agent_event_arguments
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -542,6 +546,11 @@ def _run_prepared_sub_agent_child(
             try:
                 close()
             except Exception:
+                LOGGER.warning(
+                    "failed to close child runtime after scheduled sub-agent turn",
+                    extra={"name": name},
+                    exc_info=True,
+                )
                 pass
     result = {
         "name": name,

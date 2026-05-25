@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import TYPE_CHECKING
 
 from .wizard import (
@@ -23,6 +24,7 @@ _MODEL_DISCOVERY_KEY_RETRY_EXCLUDED_PROVIDERS = frozenset({"openai-codex", "copi
 _PLACEHOLDER_MODELS_BY_PROVIDER = {
     "openai-compatible": {"model-id", "Any OpenAI-compatible chat model"},
 }
+LOGGER = logging.getLogger(__name__)
 
 
 def _pf_text(language: str, english: str, chinese: str) -> str:
@@ -122,6 +124,11 @@ def _choose_model(
             api_key=state.api_key,
         )
     except Exception:
+        LOGGER.warning(
+            "failed to discover provider models during provider setup",
+            extra={"provider_id": state.provider_id},
+            exc_info=True,
+        )
         models = ()
     if not models and _should_retry_provider_key_on_model_discovery_failure(state.provider_id, auth_type):
         refreshed_key = _wizard_text_prompt(
@@ -143,6 +150,11 @@ def _choose_model(
                     api_key=entered_key,
                 )
             except Exception:
+                LOGGER.warning(
+                    "failed to discover provider models after key refresh",
+                    extra={"provider_id": state.provider_id},
+                    exc_info=True,
+                )
                 models = ()
     if models:
         model_choices = tuple(

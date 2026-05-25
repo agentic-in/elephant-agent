@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from pathlib import Path
 import json
+import logging
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -81,6 +82,7 @@ from .api_runtime_support import (
 
 _EMBEDDING_API_KEY_ENV_VAR = OPENAI_COMPATIBLE_EMBED_DEFAULT_SECRET_ENV_VAR
 _EMBEDDING_API_KEY_REFERENCE_ID = OPENAI_COMPATIBLE_EMBED_SECRET_REFERENCE_ID
+LOGGER = logging.getLogger(__name__)
 
 
 def _persist_default_provider(self, provider_profile: Mapping[str, Any]) -> None:
@@ -104,6 +106,11 @@ def list_providers(self) -> dict[str, Any]:
             provider["status"] = discovered_state.get("status")
             provider["source"] = discovered_state.get("source")
         except Exception:
+            LOGGER.warning(
+                "failed to load discovered provider state for API provider list",
+                extra={"provider_id": record.provider_id},
+                exc_info=True,
+            )
             pass
         providers.append(provider)
     try:
@@ -205,6 +212,11 @@ def _provider_profile_with_auto_context(self, profile: AuthProfile) -> AuthProfi
             model_id=model_id,
         )
     except Exception:
+        LOGGER.warning(
+            "failed to detect provider context window",
+            extra={"provider_id": profile.provider_id, "model_id": model_id},
+            exc_info=True,
+        )
         detected = None
     metadata["context_window_tokens"] = str(detected or DEFAULT_CONTEXT_WINDOW_TOKENS)
     return replace(profile, metadata=metadata)
@@ -428,6 +440,7 @@ def _embedding_runtime_summary(self) -> dict[str, Any]:
             try:
                 health = health_fn()
             except Exception:
+                LOGGER.warning("failed to inspect embedding runtime health for API summary", exc_info=True)
                 health = None
     state = embedding_runtime_state(health)
     return {

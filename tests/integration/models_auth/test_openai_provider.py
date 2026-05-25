@@ -32,7 +32,7 @@ class OpenAIProviderAdapterTests(unittest.TestCase):
         self.assertEqual(manifest.transport_id, "openai_responses")
         self.assertEqual(resolution.transport_id, "openai_responses")
         self.assertEqual(resolution.request_family, "responses")
-        self.assertFalse(resolution.supports_streaming)
+        self.assertTrue(resolution.supports_streaming)
         self.assertTrue(resolution.supports_tools)
         self.assertFalse(resolution.supports_reasoning)
         self.assertEqual(resolution.capability_flags, ("chat",))

@@ -185,6 +185,7 @@ struct PageHeader: View {
     var subtitle: String
     var actionTitle: String? = nil
     var actionSymbol: String? = nil
+    var actionIconOnly = false
     var action: (() -> Void)? = nil
 
     var body: some View {
@@ -199,12 +200,27 @@ struct PageHeader: View {
             }
             Spacer(minLength: 16)
             if let actionTitle, let actionSymbol, let action {
-                Button(action: action) {
-                    Label(actionTitle, systemImage: actionSymbol)
+                if actionIconOnly {
+                    Button(action: action) {
+                        Image(systemName: actionSymbol)
+                            .font(.system(size: 16, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.white)
+                            .frame(width: 38, height: 38)
+                            .background(ElephantTheme.accent, in: Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.28), lineWidth: 1))
+                    }
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .help(actionTitle)
+                    .accessibilityLabel(actionTitle)
+                } else {
+                    Button(action: action) {
+                        Label(actionTitle, systemImage: actionSymbol)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(ElephantTheme.accent)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(ElephantTheme.accent)
             }
         }
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -52,6 +53,9 @@ if TYPE_CHECKING:
 
 from .runtime_growth_metrics import active_personal_model_facts_for_growth, personal_model_growth_metrics
 from .runtime_support import _resolved_session_skills
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def load_snapshot(runtime: CliRuntime) -> dict[str, Any] | None:
@@ -228,7 +232,14 @@ def _growth_state_predates_profile_sessions(
     growth_timestamp = state.updated_at or state.created_at or state.last_dialogue_at or state.first_dialogue_at
     if growth_timestamp is None:
         return False
-    episodes = runtime.repository.list_episodes()
+    try:
+        episodes = runtime.repository.list_episodes(
+            personal_model_id=profile_id,
+            limit=1,
+            newest_first=False,
+        )
+    except TypeError:
+        episodes = runtime.repository.list_episodes()
     started_at_values = [
         episode.started_at
         for episode in episodes
@@ -496,6 +507,11 @@ def _episode_open_frozen_context(
             continuity=None,
         )
     except Exception:
+        LOGGER.warning(
+            "failed to build fallback generation context for snapshot",
+            extra={"session_id": getattr(session, "episode_id", "")},
+            exc_info=True,
+        )
         return None
 
 
@@ -523,6 +539,7 @@ def _episode_open_runtime_path_lines(runtime: CliRuntime, *, session: Episode) -
             "(the directory where this session launched; use as working directory when the user asks to explore 'here' or 'current project')"
         )
     except Exception:
+        LOGGER.warning("failed to resolve startup cwd for system prompt snapshot", exc_info=True)
         pass
     workspaces_dir = getattr(getattr(runtime, "paths", None), "workspaces_dir", None)
     elephant_id = str(getattr(session, "elephant_id", "") or "").strip()
@@ -641,6 +658,11 @@ def _skill_affinity_rows(runtime: CliRuntime, *, personal_model_id: str) -> tupl
     try:
         facts = tuple(list_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
+        LOGGER.warning(
+            "failed to load personal model facts for snapshot skill affinity",
+            extra={"personal_model_id": personal_model_id},
+            exc_info=True,
+        )
         return ()
     rows: list[tuple[float, str, dict[str, str], str]] = []
     for fact in facts:

@@ -26,8 +26,67 @@ The repo now has staged release automation around the current runtime surface:
 - changelog and user-facing install paths remain understandable
 - any remaining gap is recorded in `docs/agent/tech-debt/`
 
+## Storage Upgrade Policy
+
+The current storage posture is a clean-schema reset model, not a general
+migration system:
+
+- `packages/storage/schema.sql` is the shipped schema source of truth.
+- `packages/storage/repository_support.py` owns the active `SCHEMA_VERSION`.
+- Bootstrap may drop legacy reset-era tables and may reset same-version schema
+  drift when the database advertises the current clean schema version but no
+  longer matches the clean schema contract.
+- Bootstrap must reject newer schema versions instead of guessing a downgrade.
+- `packages/storage/migrations/` must not ship in the wheel unless a future ADR
+  deliberately introduces a supported migration system.
+
+A real migration is required before changing release behavior when a release
+must preserve user data across an incompatible `schema.sql` or
+`SCHEMA_VERSION` change. That migration decision must land as an ADR or a
+tech-debt entry with compatibility tests before the schema change ships.
+
+## Release Notes And Changelog Policy
+
+Release candidates need a user-facing note when they change any of these public
+contracts:
+
+- CLI commands, flags, config paths, or installed `elephant` behavior.
+- HTTP `/v1` routes, payloads, status codes, or streaming behavior.
+- Tool schemas, capability protocols, package root exports, or storage schema.
+- Install, PyPI, macOS, daemon, gateway, dashboard, or site delivery paths.
+
+The note should state the affected surface, compatibility impact, validation
+run, and rollback or reset guidance when applicable. Breaking changes require a
+prior ADR or explicit tech-debt entry, plus compatibility or migration tests.
+
+## Artifact Integrity Policy
+
+Python package verification must keep proving:
+
+- generated web dependencies such as `node_modules` do not leak into wheels
+- `packages/storage/schema.sql` is present
+- legacy storage migrations do not leak into wheels
+- built dashboard assets are present when the wheel is produced
+- `twine check` and installed-surface verification pass
+- `dist/elephant-agent-provenance.json` and `dist/SHA256SUMS` are generated
+  for Python package artifacts
+- the PyPI publish workflow generates a GitHub artifact attestation with
+  `actions/attest@v4` using `dist/SHA256SUMS` as the subject checksum file
+
+macOS latest-release artifacts must state whether they are Developer ID
+notarized or ad-hoc signed. Ad-hoc signed artifacts are acceptable for CI or
+explicit workflow-dispatch testing, but not as the smooth general-user release
+path.
+
+Artifact signing and provenance for Python release assets is governed by
+[ADR-0002 Release Artifact Provenance](adr/adr-0002-release-artifact-provenance.md).
+Official release notes must record the commit SHA, workflow or command source,
+package version, validation output, checksum location, and GitHub attestation
+source for published Python artifacts.
+
 ## Future Extension Points
 
 - prerelease channels for unstable runtime surfaces
 - automated changelog or release-note generation
-- artifact signing or provenance once publish targets are fully locked
+- SBOM attestations or external transparency-log verification once publish
+  targets are fully locked

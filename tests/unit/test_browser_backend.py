@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import threading
 import unittest
 from unittest import mock
 
 from packages.tools import browser_backend as browser_backend_module
-from packages.tools.browser_backend import BrowserBackendConfig, PlaywrightBrowserBackend, _is_private_url
+from packages.tools.browser_backend import (
+    BrowserBackendConfig,
+    BrowserSession,
+    CamofoxBrowserBackend,
+    PlaywrightBrowserBackend,
+    _is_private_url,
+)
 from packages.tools.builtins import builtin_tool_definitions
 from packages.tools.handlers_network import run_browser_action
 from packages.tools.runtime import ToolInvocation
@@ -134,6 +141,11 @@ class _FakeBrowser:
 
     def close(self) -> None:
         self.closed = True
+
+
+class _FailingClose:
+    def close(self) -> None:
+        raise RuntimeError("close failed")
 
 
 class _FakeChromium:
@@ -404,6 +416,111 @@ class BrowserBackendTest(unittest.TestCase):
         self.assertEqual(result["outcome"], "success")
         self.assertEqual(backend.action, "vision")
         self.assertIs(backend.vision_analyzer, analyzer)
+
+    def test_playwright_cleanup_failures_are_logged(self) -> None:
+        class FailingPlaywright:
+            def stop(self) -> None:
+                raise RuntimeError("stop failed")
+
+        backend = PlaywrightBrowserBackend(sync_playwright=_FakeSyncPlaywright())
+        backend._local_browser = _FailingClose()
+        backend._playwright = FailingPlaywright()
+
+        with self.assertLogs("packages.tools.browser_backend", level="DEBUG") as logs:
+            backend._close_all_on_worker()
+
+        rendered_logs = "\n".join(logs.output)
+        self.assertIn("Failed to close local Playwright browser", rendered_logs)
+        self.assertIn("Failed to stop Playwright runtime", rendered_logs)
+
+    def test_page_observer_and_console_message_failures_are_logged(self) -> None:
+        class FailingObserverPage(_FakePage):
+            def on(self, event: str, handler) -> None:  # type: ignore[no-untyped-def]
+                del event, handler
+                raise RuntimeError("observer unavailable")
+
+        class BadMessage:
+            @property
+            def type(self) -> str:
+                raise RuntimeError("message type unavailable")
+
+            def __str__(self) -> str:
+                return "fallback message"
+
+        backend = PlaywrightBrowserBackend(sync_playwright=_FakeSyncPlaywright())
+        failing_session = BrowserSession(session_key="session", page=FailingObserverPage())
+        with self.assertLogs("packages.tools.browser_backend", level="DEBUG") as logs:
+            backend._attach_observers(failing_session)
+        self.assertIn("Failed to attach browser page observers", "\n".join(logs.output))
+
+        page = _FakePage()
+        session = BrowserSession(session_key="session", page=page)
+        backend._attach_observers(session)
+        with self.assertLogs("packages.tools.browser_backend", level="DEBUG") as logs:
+            page.handlers["console"](BadMessage())
+
+        self.assertEqual(session.console_messages[-1], "log: fallback message")
+        self.assertIn("Failed to read Playwright console message", "\n".join(logs.output))
+
+    def test_browser_best_effort_cleanup_failures_are_logged(self) -> None:
+        class Provider:
+            def close_session(self, session_id: str) -> None:
+                del session_id
+                raise RuntimeError("provider close failed")
+
+        backend = PlaywrightBrowserBackend(sync_playwright=_FakeSyncPlaywright())
+        session = BrowserSession(
+            session_key="session",
+            page=_FakePage(),
+            context=_FailingClose(),
+            browser=_FailingClose(),
+            provider=Provider(),  # type: ignore[arg-type]
+            provider_session=SimpleNamespace(session_id="cloud-session"),  # type: ignore[arg-type]
+            close_browser=True,
+        )
+
+        with self.assertLogs("packages.tools.browser_backend", level="DEBUG") as logs:
+            backend._close_session(session)
+
+        rendered_logs = "\n".join(logs.output)
+        self.assertIn("Failed to close cloud browser provider session", rendered_logs)
+        self.assertIn("Failed to close browser context", rendered_logs)
+        self.assertIn("Failed to close browser session browser", rendered_logs)
+
+    def test_page_identity_failures_are_logged(self) -> None:
+        class FailingIdentityPage:
+            @property
+            def url(self) -> str:
+                raise RuntimeError("url unavailable")
+
+            def title(self) -> str:
+                raise RuntimeError("title unavailable")
+
+        backend = PlaywrightBrowserBackend(sync_playwright=_FakeSyncPlaywright())
+        session = BrowserSession(session_key="session", page=FailingIdentityPage())
+
+        with self.assertLogs("packages.tools.browser_backend", level="DEBUG") as logs:
+            identity = backend._page_identity(session)
+
+        self.assertEqual(identity, {"title": "", "url": ""})
+        rendered_logs = "\n".join(logs.output)
+        self.assertIn("Failed to read browser page title", rendered_logs)
+        self.assertIn("Failed to read browser page URL", rendered_logs)
+
+    def test_camofox_session_delete_failure_is_logged(self) -> None:
+        class Backend(CamofoxBrowserBackend):
+            def _delete(self, path: str) -> dict[str, object]:
+                del path
+                raise RuntimeError("delete failed")
+
+        backend = Backend(config=BrowserBackendConfig(camofox_url="http://camofox.test"))
+        backend._sessions["session"] = {"user_id": "user-1"}
+
+        with self.assertLogs("packages.tools.browser_backend", level="DEBUG") as logs:
+            backend.close_all()
+
+        self.assertEqual(backend._sessions, {})
+        self.assertIn("Failed to delete Camofox browser session", "\n".join(logs.output))
 
 
 if __name__ == "__main__":

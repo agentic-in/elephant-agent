@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import logging
 import os
 from pathlib import Path
 import threading
@@ -89,6 +90,8 @@ from .runtime_turns import (
     start_episode as _start_runtime_session,
 )
 
+LOGGER = logging.getLogger(__name__)
+
 @dataclass(frozen=True, slots=True)
 class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExtensionsMixin, CliRuntimeRecordsMixin):
     paths: CliPaths
@@ -119,9 +122,11 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
         cls,
         *,
         state_dir: Path,
+        profile_dir: Path | None = None,
         warm_embedding: bool = True,
     ) -> "CliRuntime":
         home_dir = infer_install_root_from_state_dir(state_dir)
+        resolved_profile_dir = profile_dir or home_dir
         skills_dir = home_dir / "skills"
         paths = CliPaths(
             home_dir=home_dir,
@@ -138,7 +143,7 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
         repository = RuntimeStorageRepository(paths.database_path)
         repository.bootstrap()
         sync_builtin_skill_shelf(destination_root=paths.builtin_skills_dir)
-        profile_loader = ProfileLoader(home_dir)
+        profile_loader = ProfileLoader(resolved_profile_dir)
         global_config_path = global_config_path_for_state_dir(state_dir)
         # Ensure config.yaml is always written so the file is visible
         from packages.runtime_config import read_global_config_text
@@ -270,6 +275,7 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
                     steady_async()
                 except Exception:
                     # Best-effort: an unavailable runtime is not an error.
+                    LOGGER.warning("failed to start embedding runtime steady task during CLI runtime init", exc_info=True)
                     pass
         skill_runtime = build_skill_runtime(
             extension_manifest,

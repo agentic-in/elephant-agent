@@ -14,6 +14,7 @@ from typing import Any
 import unittest
 
 from packages.contracts.runtime import ContextBundle, PromptEnvelope
+from packages.kernel import generation_context
 from packages.kernel.generation_context import build_context_for_generation
 from packages.kernel.runtime_support import _apply_execution_guidance
 from packages.kernel.runtime_support import KernelSourceRequest
@@ -63,6 +64,12 @@ class _FakeStorage:
     def list_open_questions(self, *, personal_model_id: str, status: str = "open", limit: int = 6) -> tuple[Any, ...]:
         del personal_model_id, status, limit
         return self._questions
+
+
+class _FailingFactStorage(_FakeStorage):
+    def list_personal_model_facts(self, *, personal_model_id: str, status: str = "active") -> tuple[Any, ...]:
+        del status
+        raise RuntimeError(f"fact store unavailable: {personal_model_id}")
 
 
 class _FakeDependencies:
@@ -160,6 +167,38 @@ def _question(*, text: str = "When things get messy, what helps?", sub_lens: str
 
 
 class GenerationContextProjectionTest(unittest.TestCase):
+    def test_pm_fact_load_failure_is_observable_and_generation_continues(self) -> None:
+        context = _bundle()
+
+        with self.assertLogs("packages.kernel.generation_context", level="DEBUG") as captured:
+            result = build_context_for_generation(
+                dependencies=_FakeDependencies(_FailingFactStorage()),
+                request=_FakeRequest(personal_model_id="pm:broken"),
+                profile=None,
+                session=None,
+                state_focus=None,
+                work_items=(),
+                recall_items=(),
+                context=context,
+                decision=None,
+                plan=None,
+                continuity=None,
+            )
+
+        self.assertIs(result, context)
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Failed to list committed Personal Model facts", rendered_logs)
+        self.assertIn("fact store unavailable: pm:broken", rendered_logs)
+
+    def test_dynamic_pm_fact_load_failure_is_observable(self) -> None:
+        with self.assertLogs("packages.kernel.generation_context", level="DEBUG") as captured:
+            facts = generation_context._facts_for(_FailingFactStorage(), "pm:broken")
+
+        self.assertEqual(facts, ())
+        rendered_logs = "\n".join(captured.output)
+        self.assertIn("Failed to list Personal Model facts for dynamic generation context", rendered_logs)
+        self.assertIn("fact store unavailable: pm:broken", rendered_logs)
+
     def test_learning_agent_context_mode_gets_minimal_generation_context(self) -> None:
         context = ContextBundle(
             bundle_id="bundle:test",
@@ -535,6 +574,58 @@ class GenerationContextProjectionTest(unittest.TestCase):
         self.assertIn("面对悬而未决的选择", prompt)
         self.assertNotIn("Style summary: trait:", prompt)
 
+    def test_core_pm_projection_filters_profile_artifacts_and_legacy_facets(self) -> None:
+        storage = _FakeStorage(
+            facts=(
+                _fact(
+                    text="personal_logo: /Users/me/user-avatar.jpg",
+                    field="identity.anchor.logo.personal",
+                ),
+                _fact(
+                    text="节奏偏好：过快推进会让其不舒服，需要保有自己的节奏",
+                    field="identity.style.rhythm.pace",
+                ),
+                _fact(
+                    text="用户需要保有自己的节奏，过快推进会让其不舒服。",
+                    field="identity.boundary.pace",
+                ),
+                _fact(
+                    text="school: 电子科技大学",
+                    field="world.institutions.school",
+                ),
+                _fact(
+                    text="blog: liuxunzhuo.com",
+                    field="world.links.blog",
+                ),
+            ),
+            profile=_profile(preferences=("first_language=zh",)),
+        )
+
+        result = build_context_for_generation(
+            dependencies=_FakeDependencies(storage),
+            request=_FakeRequest(),
+            profile=None,
+            session=None,
+            state_focus=None,
+            work_items=(),
+            recall_items=(),
+            context=_bundle(),
+            decision=None,
+            plan=None,
+            continuity=None,
+        )
+
+        prompt = result.prompt_envelope.frozen_prefix
+        self.assertIn("节奏偏好", prompt)
+        self.assertNotIn("personal_logo", prompt)
+        self.assertNotIn("user-avatar", prompt)
+        self.assertNotIn("#### boundary", prompt)
+        self.assertNotIn("#### institutions", prompt)
+        self.assertNotIn("#### links", prompt)
+        self.assertNotIn("用户需要保有自己的节奏", prompt)
+        self.assertNotIn("school: 电子科技大学", prompt)
+        self.assertNotIn("blog: liuxunzhuo.com", prompt)
+
     def test_curiosity_hint_routes_question_selection_through_tool(self) -> None:
         storage = _FakeStorage(
             facts=(
@@ -616,8 +707,8 @@ class GenerationContextProjectionTest(unittest.TestCase):
         rendered = result.rendered_prompt or ""
         # The placeholder user name must not surface.
         self.assertNotIn("Person on the other side: Hazel", rendered)
-        # Companion name is carried by the canonical Who you are section, not
-        # repeated under Where things stand.
+        # Companion name is carried by the canonical voice section, not repeated
+        # under Where things stand.
         self.assertNotIn("You are showing up as Zoey in this session.", rendered)
 
     def test_reflexive_display_name_is_suppressed(self) -> None:

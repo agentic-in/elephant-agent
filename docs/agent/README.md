@@ -16,6 +16,14 @@ This directory is the human-readable system of record for the `elephant` harness
   - validation ladder and expected gates
 - [feature-complete-checklist.md](feature-complete-checklist.md)
   - done criteria for changes that should be considered complete
+- [runtime-resource-ownership.md](runtime-resource-ownership.md)
+  - ownership map for context, cache, compaction, tool budget, and checkpoint
+    resources
+- [public-contracts.md](public-contracts.md)
+  - generated index of public routes, commands, package exports, release
+    contracts, resource owners, and tool schemas
+- [compatibility-lifecycle.md](compatibility-lifecycle.md)
+  - policy for keeping, validating, and retiring compatibility shims and aliases
 
 ## Governance And Planning
 
@@ -42,6 +50,9 @@ This directory is the human-readable system of record for the `elephant` harness
 - [../../tools/agent/repo-manifest.yaml](../../tools/agent/repo-manifest.yaml)
 - [../../tools/agent/task-matrix.yaml](../../tools/agent/task-matrix.yaml)
 - [../../tools/agent/skill-registry.yaml](../../tools/agent/skill-registry.yaml)
+- [../../tools/agent/context-map.yaml](../../tools/agent/context-map.yaml)
+- [../../tools/agent/public-contracts.yaml](../../tools/agent/public-contracts.yaml)
+- [public-contracts.md](public-contracts.md)
 - [../../tools/agent/structure-rules.yaml](../../tools/agent/structure-rules.yaml)
 - [../../tools/agent/wave-registry.yaml](../../tools/agent/wave-registry.yaml)
 - [../../tools/make/agent.mk](../../tools/make/agent.mk)

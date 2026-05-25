@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
 from pathlib import Path
 import subprocess
 import sys
 import time
 from typing import Iterable
+
+LOGGER = logging.getLogger(__name__)
 
 _IMAGE_EXTENSIONS = frozenset(
     {
@@ -226,6 +229,7 @@ def _system_clipboard_probe(*, storage_dir: Path) -> _ClipboardProbe:
         try:
             return _probe_macos_clipboard(storage_dir=storage_dir)
         except Exception:
+            LOGGER.warning("failed to probe macOS clipboard", exc_info=True)
             pass
         text = _pbpaste_text()
         if text.strip():

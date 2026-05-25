@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 from pathlib import Path
 import re
 import tempfile
@@ -91,6 +92,10 @@ DISCORD_ADAPTER_ID = "messaging.discord"
 
 from .runtime_support import *  # noqa: F401,F403
 
+
+LOGGER = logging.getLogger(__name__)
+
+
 class GatewayTelemetrySink(TelemetrySinkCapability):
     def __init__(self) -> None:
         self.descriptor = CapabilityDescriptor(
@@ -143,8 +148,8 @@ class GatewayContextCapability(ContextCapability):
         self.total_tokens = total_tokens
         self._last_session_id: str | None = None
         # Prompt contract is rebuilt per-turn in `assemble` so that the session's
-        # bound identity (elephant/state) flows into sections like "Who you are" and
-        # "Your own voice". The default here is only a fallback for adapters
+        # bound identity (elephant/state) flows into sections like "Your own
+        # voice". The default here is only a fallback for adapters
         # that don't carry a session-level personal_model_id yet.
         self.prompt_contract = build_prompt_contract(profile, prompt_mode="full")
         self.descriptor = CapabilityDescriptor(
@@ -178,6 +183,11 @@ class GatewayContextCapability(ContextCapability):
             )
             return self._with_authored_identity(loaded, session)
         except Exception:
+            LOGGER.warning(
+                "failed to load gateway runtime profile for session",
+                extra={"personal_model_id": getattr(session, "personal_model_id", None)},
+                exc_info=True,
+            )
             return self._with_authored_identity(self.default_profile, session)
 
     def _with_authored_identity(self, loaded: LoadedProfile, session: Episode) -> LoadedProfile:

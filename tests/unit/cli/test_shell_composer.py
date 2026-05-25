@@ -200,6 +200,36 @@ class LastUserMessageTests(unittest.TestCase):
         shell = SimpleNamespace()
         self.assertEqual(shell_composer._last_user_message(shell), "")
 
+    def test_transcript_snapshot_failure_is_logged(self) -> None:
+        class BadTranscript:
+            def __iter__(self):
+                raise RuntimeError("transcript mutated")
+
+        shell = SimpleNamespace(transcript=BadTranscript())
+
+        with self.assertLogs("apps.cli.shell_composer", level="DEBUG") as logs:
+            self.assertEqual(shell_composer._last_user_message(shell), "")
+
+        self.assertIn("Failed to snapshot shell transcript", "\n".join(logs.output))
+
+    def test_bad_transcript_entry_is_logged_and_skipped(self) -> None:
+        class BadEntry:
+            kind = "user"
+
+            @property
+            def body(self) -> str:
+                raise RuntimeError("entry unavailable")
+
+        shell = self._shell_with_transcript([
+            self._entry("user", "fallback"),
+            BadEntry(),
+        ])
+
+        with self.assertLogs("apps.cli.shell_composer", level="DEBUG") as logs:
+            self.assertEqual(shell_composer._last_user_message(shell), "fallback")
+
+        self.assertIn("Failed to read shell transcript entry", "\n".join(logs.output))
+
 
 if __name__ == "__main__":
     unittest.main()

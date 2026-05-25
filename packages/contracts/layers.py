@@ -107,6 +107,11 @@ class Episode:
                 f"episode status must be one of {sorted(_EPISODE_STATUSES)}: {self.status}"
             )
 
+    @property
+    def session_id(self) -> str:
+        """Compatibility alias for older CLI/API surfaces."""
+        return self.episode_id
+
 
 @dataclass(frozen=True, slots=True)
 class Loop:

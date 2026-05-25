@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from difflib import unified_diff
+import logging
 import os
 from pathlib import Path
 import re
@@ -168,6 +169,10 @@ __all__ = [
 
 from .shell_support_runtime import *  # noqa: F401,F403
 
+
+LOGGER = logging.getLogger(__name__)
+
+
 def _safe_usage_token_count(value: object) -> int:
     try:
         return max(0, int(value or 0))
@@ -289,10 +294,12 @@ def _schedule_post_turn_background(self) -> None:
             growth_update = self._show_growth_celebration_if_needed()
             self._append_growth_update_message(growth_update)
         except Exception:
+            LOGGER.warning("failed to append post-turn growth update", exc_info=True)
             pass
         try:
             self._append_latest_learning_result()
         except Exception:
+            LOGGER.warning("failed to append post-turn latest learning result", exc_info=True)
             pass
 
     threading.Thread(
@@ -434,6 +441,11 @@ def _handle_slash_command(self, raw_command: str) -> bool:
             self.runtime._ensure_learning_worker_if_needed()
             learning_detail = "episode closed · learning queued"
         except Exception:
+            LOGGER.warning(
+                "failed to close episode during slash exit",
+                extra={"episode_id": self.session_id},
+                exc_info=True,
+            )
             pass
         self._append_entry(
             "notice",

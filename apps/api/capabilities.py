@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
+import logging
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable
@@ -50,6 +51,9 @@ from packages.skills import SkillPromptContextBuilder
 from packages.tools import ToolRuntime
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class APITelemetrySink(TelemetrySinkCapability):
     def __init__(self) -> None:
         self.descriptor = CapabilityDescriptor(
@@ -87,6 +91,7 @@ class APITelemetrySink(TelemetrySinkCapability):
             try:
                 observer(record)
             except Exception:
+                LOGGER.warning("API telemetry observer failed", exc_info=True)
                 continue
 
 
@@ -149,6 +154,7 @@ class APIContextCapability(ContextCapability):
                 total_tokens=self.runtime.total_tokens,
             )
         except Exception:
+            LOGGER.warning("failed to build API context capability runtime", exc_info=True)
             return self.runtime
 
     def assemble(

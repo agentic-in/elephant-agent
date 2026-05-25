@@ -117,6 +117,8 @@ class StorageSystemLayerRepositoryTest(unittest.TestCase):
                 elephant_id="elephant-beta",
                 elephant_name="Beta",
             )
+            alpha_lookup = repository.list_states(elephant_id="elephant-alpha")
+            alpha_anchor_lookup = repository.list_states(state_anchor=alpha.state_anchor)
             selected = repository.switch_state(alpha.state_id)
             repository.delete_state(alpha.state_id)
 
@@ -127,6 +129,8 @@ class StorageSystemLayerRepositoryTest(unittest.TestCase):
         self.assertEqual(selected.elephant_name, "Alpha")
         self.assertEqual(selected.capability_boundaries, ("shell",))
         self.assertEqual(selected.surface_bindings, ("cli",))
+        self.assertEqual(tuple(state.elephant_id for state in alpha_lookup), ("elephant-alpha",))
+        self.assertEqual(tuple(state.elephant_id for state in alpha_anchor_lookup), ("elephant-alpha",))
         self.assertEqual(tuple(state.elephant_id for state in remaining), ("elephant-beta",))
         self.assertEqual(beta.elephant_name, "Beta")
         self.assertIsNone(current)
@@ -184,6 +188,187 @@ class StorageSystemLayerRepositoryTest(unittest.TestCase):
         self.assertEqual(loaded_episode, episode)
         self.assertEqual(loaded_loop, loop)
         self.assertEqual(loaded_step, step)
+
+    def test_list_episodes_can_filter_and_limit_recent_history(self) -> None:
+        now = datetime(2026, 4, 23, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
+            repository.bootstrap()
+
+            alpha = repository.create_state(
+                personal_model_id="pm-alpha",
+                elephant_id="elephant-alpha",
+                elephant_name="Alpha",
+            )
+            beta = repository.create_state(
+                personal_model_id="pm-beta",
+                elephant_id="elephant-beta",
+                elephant_name="Beta",
+            )
+            for episode in (
+                Episode(
+                    episode_id="episode-alpha-old",
+                    state_id=alpha.state_id,
+                    personal_model_id=alpha.personal_model_id,
+                    elephant_id=alpha.elephant_id,
+                    entry_surface="cli",
+                    status="closed",
+                    started_at=now,
+                ),
+                Episode(
+                    episode_id="episode-alpha-open",
+                    state_id=alpha.state_id,
+                    personal_model_id=alpha.personal_model_id,
+                    elephant_id=alpha.elephant_id,
+                    entry_surface="cli",
+                    status="open",
+                    started_at=now.replace(day=24),
+                ),
+                Episode(
+                    episode_id="episode-alpha-new",
+                    state_id=alpha.state_id,
+                    personal_model_id=alpha.personal_model_id,
+                    elephant_id=alpha.elephant_id,
+                    entry_surface="cli",
+                    status="closed",
+                    started_at=now.replace(day=25),
+                ),
+                Episode(
+                    episode_id="episode-beta-new",
+                    state_id=beta.state_id,
+                    personal_model_id=beta.personal_model_id,
+                    elephant_id=beta.elephant_id,
+                    entry_surface="cli",
+                    status="closed",
+                    started_at=now.replace(day=26),
+                ),
+            ):
+                repository.upsert_episode(episode)
+
+            recent_alpha = repository.list_episodes(
+                personal_model_id=alpha.personal_model_id,
+                status="closed",
+                limit=1,
+                newest_first=True,
+            )
+            alpha_by_state = repository.list_episodes(state_id=alpha.state_id)
+            alpha_by_elephant = repository.list_episodes(elephant_id=alpha.elephant_id)
+
+        self.assertEqual(
+            tuple(episode.episode_id for episode in recent_alpha),
+            ("episode-alpha-new",),
+        )
+        self.assertEqual(
+            tuple(episode.episode_id for episode in alpha_by_state),
+            ("episode-alpha-old", "episode-alpha-open", "episode-alpha-new"),
+        )
+        self.assertEqual(
+            tuple(episode.episode_id for episode in alpha_by_elephant),
+            ("episode-alpha-old", "episode-alpha-open", "episode-alpha-new"),
+        )
+
+    def test_list_steps_can_filter_timebox_and_limit_recent_history(self) -> None:
+        now = datetime(2026, 4, 23, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
+            repository.bootstrap()
+
+            alpha = repository.create_state(
+                personal_model_id="pm-alpha",
+                elephant_id="elephant-alpha",
+                elephant_name="Alpha",
+            )
+            beta = repository.create_state(
+                personal_model_id="pm-beta",
+                elephant_id="elephant-beta",
+                elephant_name="Beta",
+            )
+            for state, episode_id, loop_id in (
+                (alpha, "episode-alpha", "loop-alpha"),
+                (beta, "episode-beta", "loop-beta"),
+            ):
+                repository.upsert_episode(
+                    Episode(
+                        episode_id=episode_id,
+                        state_id=state.state_id,
+                        personal_model_id=state.personal_model_id,
+                        entry_surface="cli",
+                        status="closed",
+                        started_at=now,
+                    )
+                )
+                repository.upsert_loop(
+                    Loop(
+                        loop_id=loop_id,
+                        episode_id=episode_id,
+                        state_id=state.state_id,
+                        personal_model_id=state.personal_model_id,
+                        trigger_type="turn",
+                        status="closed",
+                        started_at=now,
+                    )
+                )
+            for step in (
+                Step(
+                    step_id="step-alpha-old",
+                    loop_id="loop-alpha",
+                    episode_id="episode-alpha",
+                    state_id=alpha.state_id,
+                    personal_model_id=alpha.personal_model_id,
+                    phase="observation",
+                    action="record_input",
+                    status="completed",
+                    sequence=1,
+                    created_at=now,
+                    summary="alpha old",
+                ),
+                Step(
+                    step_id="step-alpha-new",
+                    loop_id="loop-alpha",
+                    episode_id="episode-alpha",
+                    state_id=alpha.state_id,
+                    personal_model_id=alpha.personal_model_id,
+                    phase="observation",
+                    action="record_input",
+                    status="completed",
+                    sequence=2,
+                    created_at=now.replace(day=25),
+                    summary="alpha new",
+                ),
+                Step(
+                    step_id="step-beta-new",
+                    loop_id="loop-beta",
+                    episode_id="episode-beta",
+                    state_id=beta.state_id,
+                    personal_model_id=beta.personal_model_id,
+                    phase="observation",
+                    action="record_input",
+                    status="completed",
+                    sequence=1,
+                    created_at=now.replace(day=26),
+                    summary="beta new",
+                ),
+            ):
+                repository.upsert_step(step)
+
+            recent_alpha = repository.list_steps(
+                state_id=alpha.state_id,
+                personal_model_id=alpha.personal_model_id,
+                created_at_start=now.replace(day=24),
+                limit=1,
+                newest_first=True,
+            )
+            alpha_loops = repository.list_loops(
+                state_id=alpha.state_id,
+                personal_model_id=alpha.personal_model_id,
+                trigger_type="turn",
+                status="closed",
+            )
+            alpha_by_loop = repository.list_steps(loop_id="loop-alpha")
+
+        self.assertEqual(tuple(step.step_id for step in recent_alpha), ("step-alpha-new",))
+        self.assertEqual(tuple(loop.loop_id for loop in alpha_loops), ("loop-alpha",))
+        self.assertEqual(tuple(step.step_id for step in alpha_by_loop), ("step-alpha-old", "step-alpha-new"))
 
     def test_legacy_storage_methods_are_removed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

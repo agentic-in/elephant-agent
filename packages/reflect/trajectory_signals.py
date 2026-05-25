@@ -6,12 +6,14 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha1
+import logging
 import re
 from typing import Any
 
 from .types import ToolTrajectorySignal
 
 _TOOL_NAME_RE = re.compile(r"tool\.[a-z0-9_.-]+", re.IGNORECASE)
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +53,7 @@ def _step_sort_key(step: Any) -> tuple[int, str]:
     try:
         sequence = int(getattr(step, "sequence", 0) or 0)
     except Exception:
+        LOGGER.debug("Failed to parse step sequence for trajectory ordering; using zero.", exc_info=True)
         sequence = 0
     return (sequence, _text(getattr(step, "created_at", "")))
 
@@ -67,6 +70,7 @@ def _load_active_affinity_map(repository: Any, *, personal_model_id: str) -> dic
     try:
         facts = tuple(list_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
+        LOGGER.debug("Failed to load active skill affinity facts for trajectory signals.", exc_info=True)
         return {}
     affinity_map: dict[str, tuple[str, str]] = {}
     for fact in facts:
@@ -108,17 +112,37 @@ def load_recent_closed_episodes(
 ) -> tuple[Any, ...]:
     """Load the latest closed episodes for a personal model.
 
-    Repository currently exposes list_episodes() without filters for
-    personal_model_id, status, or limit. This helper applies those filters in
-    memory and returns the newest episodes first.
+    RuntimeStorageRepository can filter and limit this query in SQLite. Older
+    repository-like test doubles may only expose list_episodes() with no
+    filters, so this helper keeps a bounded in-memory fallback.
     """
 
     list_episodes = getattr(repository, "list_episodes", None)
     if not callable(list_episodes):
         return ()
+    resolved_limit = max(0, lookback_episodes)
+    if resolved_limit == 0:
+        return ()
+    try:
+        episodes = tuple(
+            list_episodes(
+                personal_model_id=personal_model_id,
+                status="closed",
+                limit=resolved_limit,
+                newest_first=True,
+            )
+        )
+    except TypeError:
+        pass
+    except Exception:
+        LOGGER.debug("Failed to load recent closed episodes with bounded trajectory query.", exc_info=True)
+        return ()
+    else:
+        return episodes
     try:
         episodes = tuple(list_episodes())
     except Exception:
+        LOGGER.debug("Failed to load recent closed episodes with compatibility trajectory query.", exc_info=True)
         return ()
     filtered = [
         episode
@@ -127,7 +151,7 @@ def load_recent_closed_episodes(
         and _text(getattr(episode, "status", "")).lower() == "closed"
     ]
     filtered.sort(key=_started_at_key, reverse=True)
-    return tuple(filtered[: max(0, lookback_episodes)])
+    return tuple(filtered[:resolved_limit])
 
 
 def _tool_events_for_episode(repository: Any, *, episode_id: str) -> tuple[_ToolEvent, ...]:
@@ -138,14 +162,37 @@ def _tool_events_for_episode(repository: Any, *, episode_id: str) -> tuple[_Tool
     try:
         loops = tuple(list_loops(episode_id=episode_id))
     except Exception:
+        LOGGER.debug("Failed to load loops while extracting trajectory tool events.", exc_info=True)
         return ()
     if not loops:
         return ()
+    episode_steps_by_loop: dict[str, tuple[Any, ...]] | None = None
+    try:
+        episode_steps = tuple(list_steps(episode_id=episode_id))
+    except TypeError:
+        episode_steps_by_loop = None
+    except Exception:
+        LOGGER.debug("Failed to load episode-scoped steps while extracting trajectory tool events.", exc_info=True)
+        return ()
+    else:
+        grouped_steps: dict[str, list[Any]] = defaultdict(list)
+        for step in episode_steps:
+            grouped_steps[_text(getattr(step, "loop_id", ""))].append(step)
+        episode_steps_by_loop = {
+            loop_id: tuple(sorted(items, key=_step_sort_key))
+            for loop_id, items in grouped_steps.items()
+        }
     events: list[_ToolEvent] = []
     for loop in sorted(loops, key=_started_at_key):
+        loop_id = _text(getattr(loop, "loop_id", ""))
         try:
-            steps = tuple(list_steps(loop_id=_text(getattr(loop, "loop_id", ""))))
+            steps = (
+                episode_steps_by_loop.get(loop_id, ())
+                if episode_steps_by_loop is not None
+                else tuple(list_steps(loop_id=loop_id))
+            )
         except Exception:
+            LOGGER.debug("Failed to load loop-scoped steps while extracting trajectory tool events.", exc_info=True)
             continue
         for step in sorted(steps, key=_step_sort_key):
             if _text(getattr(step, "action", "")) != "call_tool":
@@ -157,6 +204,7 @@ def _tool_events_for_episode(repository: Any, *, episode_id: str) -> tuple[_Tool
             try:
                 sequence = int(getattr(step, "sequence", 0) or 0)
             except Exception:
+                LOGGER.debug("Failed to parse tool event sequence while extracting trajectory signals.", exc_info=True)
                 sequence = 0
             events.append(
                 _ToolEvent(

@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import TYPE_CHECKING, Any
+
+LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from apps.cli.runtime import CliRuntime
@@ -36,6 +39,11 @@ def active_personal_model_facts_for_growth(
     try:
         return tuple(list_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
+        LOGGER.warning(
+            "failed to load active personal model facts for growth metrics",
+            extra={"personal_model_id": personal_model_id},
+            exc_info=True,
+        )
         return ()
 
 

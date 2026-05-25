@@ -9,6 +9,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass, field
 import ipaddress
 import json
+import logging
 import os
 from pathlib import Path
 import queue
@@ -46,6 +47,7 @@ _MAX_IMAGES = 80
 _SECRET_RE = re.compile(
     r"(sk-[A-Za-z0-9_-]{10,}|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{10,}|AKIA[0-9A-Z]{16})"
 )
+LOGGER = logging.getLogger(__name__)
 
 
 def create_browser_backend(*, headless: bool = True) -> tuple[BrowserToolBackend | None, str | None]:
@@ -287,12 +289,14 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             try:
                 self._local_browser.close()
             except Exception:
+                LOGGER.debug("Failed to close local Playwright browser during browser backend shutdown.", exc_info=True)
                 pass
             self._local_browser = None
         if self._playwright is not None:
             try:
                 self._playwright.stop()
             except Exception:
+                LOGGER.debug("Failed to stop Playwright runtime during browser backend shutdown.", exc_info=True)
                 pass
             self._playwright = None
 
@@ -375,6 +379,7 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
                 message_type = str(getattr(message, "type", "log"))
                 text = str(getattr(message, "text", message))
             except Exception:
+                LOGGER.debug("Failed to read Playwright console message; using generic message fallback.", exc_info=True)
                 message_type = "log"
                 text = str(message)
             session.console_messages.append(f"{message_type}: {text}")
@@ -388,6 +393,7 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             session.page.on("console", _console)
             session.page.on("pageerror", _page_error)
         except Exception:
+            LOGGER.debug("Failed to attach browser page observers.", exc_info=True)
             pass
 
     def _navigate(self, session: BrowserSession, invocation: ToolInvocation) -> Mapping[str, Any]:
@@ -499,6 +505,7 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
                 try:
                     session.page.evaluate(CLEAR_ANNOTATIONS_JS)
                 except Exception:
+                    LOGGER.debug("Failed to clear browser screenshot annotations.", exc_info=True)
                     pass
         snapshot = self._snapshot_payload(session, full=False)
         page_identity = self._page_identity(session)
@@ -562,10 +569,12 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
         try:
             title = str(session.page.title() or "")
         except Exception:
+            LOGGER.debug("Failed to read browser page title.", exc_info=True)
             pass
         try:
             url = str(getattr(session.page, "url", "") or "")
         except Exception:
+            LOGGER.debug("Failed to read browser page URL.", exc_info=True)
             pass
         return {"title": title, "url": url}
 
@@ -589,16 +598,19 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             try:
                 session.provider.close_session(session.provider_session.session_id)
             except Exception:
+                LOGGER.debug("Failed to close cloud browser provider session.", exc_info=True)
                 pass
         if session.context is not None:
             try:
                 session.context.close()
             except Exception:
+                LOGGER.debug("Failed to close browser context.", exc_info=True)
                 pass
         if session.close_browser and session.browser is not None:
             try:
                 session.browser.close()
             except Exception:
+                LOGGER.debug("Failed to close browser session browser.", exc_info=True)
                 pass
 
 
@@ -680,6 +692,7 @@ class CamofoxBrowserBackend(BrowserToolBackend):
             try:
                 self._delete(f"/sessions/{session['user_id']}")
             except Exception:
+                LOGGER.debug("Failed to delete Camofox browser session during shutdown.", exc_info=True)
                 pass
 
     def _navigate(self, invocation: ToolInvocation) -> Mapping[str, Any]:

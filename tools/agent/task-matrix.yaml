@@ -82,6 +82,7 @@
       "paths": [
         ".github/workflows/**",
         "install.sh",
+        "tools/release/**",
         ".github/*.md",
         ".python-version",
         "uv.lock"
@@ -106,7 +107,9 @@
         "packages/kernel/**",
         "packages/state/**",
         "packages/evidence/**",
-        "packages/contracts/**"
+        "packages/contracts/**",
+        "apps/learning_worker_runtime.py",
+        "apps/learning_agents/**"
       ],
       "read_first": [
         "packages/kernel/AGENTS.md",
@@ -241,6 +244,7 @@
         "docs/agent/repo-map.md"
       ],
       "fast_tests": [
+        "make web-content-check",
         "make web-typecheck",
         "make web-build"
       ],
@@ -310,6 +314,8 @@
         "deploy/**",
         "tests/**",
         "pyproject.toml",
+        "packages/README.md",
+        "apps/README.md",
         "scripts/**",
         "netlify.toml",
         "apps/*.py",

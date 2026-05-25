@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 import re
 import threading
@@ -43,6 +44,10 @@ from .shell_ui import (
 )
 from .shell_clarify import build_clarify_window, route_clarify_answer, set_clarify_invalidator
 from .shell_composer import _compose_submission, run_prompt_toolkit_application
+
+
+LOGGER = logging.getLogger(__name__)
+
 
 if TYPE_CHECKING:
     from .shell import ProductizedShell
@@ -352,6 +357,7 @@ def run_turn_with_queued_input(
         try:
             application.invalidate()
         except Exception:
+            LOGGER.warning("failed to invalidate shell progress application", exc_info=True)
             return
 
     def raw_stream_observer(delta: str) -> None:
@@ -481,6 +487,7 @@ def run_turn_with_queued_input(
         try:
             application.exit(result=True)
         except Exception:  # pragma: no cover - defensive cross-thread exit
+            LOGGER.warning("failed to exit shell progress application", exc_info=True)
             return
 
     threading.Thread(target=exit_when_complete, daemon=True).start()
@@ -785,6 +792,7 @@ def tool_event_tracker(*extra_observers, stream_holder=None, stream_lock=None):
             try:
                 extra_observer(event)
             except Exception:
+                LOGGER.warning("shell tool event observer failed", exc_info=True)
                 continue
 
     return holder, lock, observer
@@ -850,6 +858,7 @@ def kernel_event_tracker(*extra_observers):
             try:
                 extra_observer(event)
             except Exception:
+                LOGGER.warning("shell kernel stage observer failed", exc_info=True)
                 continue
 
     return holder, lock, observer

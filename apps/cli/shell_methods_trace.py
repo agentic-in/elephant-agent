@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from difflib import unified_diff
+import logging
 import os
 from pathlib import Path
 import re
@@ -167,6 +168,10 @@ __all__ = [
 
 from .shell_support_runtime import *  # noqa: F401,F403
 
+
+LOGGER = logging.getLogger(__name__)
+
+
 def _identity_lines(self, profile_id: str) -> list[str]:
     profile = self.runtime.inspect_profile(profile_id)
     identity = self.runtime.inspect_identity(profile_id=profile_id)
@@ -253,6 +258,11 @@ def _capture_pending_file_review(self, tool_event: ToolLifecycleEvent) -> None:
     try:
         path = resolve_allowed_path(Path.cwd(), raw_path, must_exist=False)
     except Exception:
+        LOGGER.warning(
+            "failed to resolve pending file review path",
+            extra={"path": raw_path},
+            exc_info=True,
+        )
         return
     before_text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else None
     self._pending_file_reviews[tool_event.invocation.invocation_id] = _PendingFileReview(

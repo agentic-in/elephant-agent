@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import io
 import sys
@@ -109,6 +110,25 @@ class AgentGateTests(unittest.TestCase):
             ["tools/agent/context-map.yaml", ".github/workflows/agent-lint.yml"],
         )
 
+    def test_collect_changed_files_includes_dirty_tree_with_base_ref(self) -> None:
+        def fake_run(args, **_: object):
+            stdout_by_command = {
+                ("git", "diff", "--name-only", "origin/main...HEAD"): "packages/kernel/runtime.py\n",
+                ("git", "diff", "--name-only", "HEAD"): "packages/reflect/trajectory_signals.py\n",
+                ("git", "ls-files", "--others", "--exclude-standard"): "packages/reflect/AGENTS.md\n",
+            }
+            return mock.Mock(returncode=0, stdout=stdout_by_command.get(tuple(args), ""))
+
+        with mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(
+                MODULE.collect_changed_files("origin/main", "", ""),
+                [
+                    "packages/kernel/runtime.py",
+                    "packages/reflect/trajectory_signals.py",
+                    "packages/reflect/AGENTS.md",
+                ],
+            )
+
     def test_scan_reset_banned_terms_defaults_to_tracked_files_with_allowlist(self) -> None:
         removed_term = " ".join(("goal", "graph"))
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -133,6 +153,301 @@ class AgentGateTests(unittest.TestCase):
                 "(current-work wording is required)"
             ],
         )
+
+    def test_scan_app_import_boundaries_reports_new_cross_app_imports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "apps" / "alpha"
+            source_dir.mkdir(parents=True)
+            (source_dir / "feature.py").write_text(
+                "\n".join(
+                    [
+                        "from apps.beta import service",
+                        "from apps.alpha import local",
+                        "from apps.shared_support import helper",
+                        "import apps.gamma.worker as gamma_worker",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "apps" / "shared_support.py").write_text("helper = object()\n", encoding="utf-8")
+
+            errors = MODULE.scan_app_import_boundaries(
+                root=root,
+                surfaces=("apps/alpha/feature.py",),
+                allowlist=(),
+            )
+
+        self.assertEqual(
+            errors,
+            [
+                "app-to-app import in apps/alpha/feature.py:1: apps.beta "
+                "(move shared behavior to packages or register an explicit boundary debt)",
+                "app-to-app import in apps/alpha/feature.py:4: apps.gamma.worker "
+                "(move shared behavior to packages or register an explicit boundary debt)",
+            ],
+        )
+
+    def test_scan_app_import_boundaries_accepts_explicit_allowlist(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "apps" / "alpha"
+            source_dir.mkdir(parents=True)
+            (source_dir / "feature.py").write_text(
+                "from apps.beta import service\n",
+                encoding="utf-8",
+            )
+
+            errors = MODULE.scan_app_import_boundaries(
+                root=root,
+                surfaces=("apps/alpha/feature.py",),
+                allowlist=(("apps/alpha/feature.py", "apps.beta"),),
+            )
+
+        self.assertEqual(errors, [])
+
+    def test_scan_app_import_boundaries_ignores_documented_top_level_support_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "apps"
+            source_dir.mkdir(parents=True)
+            filenames = (
+                "cli_runtime_bridge.py",
+                "cron_scheduler_command.py",
+                "daemon.py",
+                "daemon_http.py",
+                "daemon_tasks.py",
+                "dashboard_static_server.py",
+                "launcher.py",
+                "learning_worker_runtime.py",
+            )
+            for filename in filenames:
+                (source_dir / filename).write_text(
+                    "from apps.cli import __main__ as cli_main\n"
+                    "from apps.gateway import __main__ as gateway_main\n",
+                    encoding="utf-8",
+                )
+
+            errors = []
+            for filename in filenames:
+                errors.extend(
+                    MODULE.scan_app_import_boundaries(
+                        root=root,
+                        surfaces=(f"apps/{filename}",),
+                        allowlist=(),
+                    )
+                )
+
+        self.assertEqual(errors, [])
+
+    def test_public_contract_inventory_accepts_paths_markers_and_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            api_dir = root / "apps" / "api"
+            package_dir = root / "packages" / "demo"
+            api_dir.mkdir(parents=True)
+            package_dir.mkdir(parents=True)
+            (api_dir / "routes.py").write_text(
+                'if parts[0] == "providers":\n    pass\n',
+                encoding="utf-8",
+            )
+            (package_dir / "__init__.py").write_text(
+                '__all__ = ["DemoService", "DemoResult"]\n',
+                encoding="utf-8",
+            )
+            inventory_path = root / "public-contracts.json"
+            inventory_path.write_text(
+                json.dumps(
+                    {
+                        "http_routes": [
+                            {
+                                "id": "api.v1.providers",
+                                "owner": "apps/api/routes.py",
+                                "contains": ['parts[0] == "providers"'],
+                            }
+                        ],
+                        "package_exports": [
+                            {
+                                "package": "packages.demo",
+                                "owner": "packages/demo/__init__.py",
+                                "exports": ["DemoService"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            errors = MODULE.public_contract_inventory_errors(
+                root=root,
+                path=inventory_path,
+                required_sections=("http_routes", "package_exports"),
+            )
+
+        self.assertEqual(errors, [])
+
+    def test_public_contract_inventory_reports_missing_paths_markers_and_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            api_dir = root / "apps" / "api"
+            package_dir = root / "packages" / "demo"
+            api_dir.mkdir(parents=True)
+            package_dir.mkdir(parents=True)
+            (api_dir / "routes.py").write_text("pass\n", encoding="utf-8")
+            (package_dir / "__init__.py").write_text('__all__ = ["DemoService"]\n', encoding="utf-8")
+            inventory_path = root / "public-contracts.json"
+            inventory_path.write_text(
+                json.dumps(
+                    {
+                        "http_routes": [
+                            {
+                                "id": "api.v1.providers",
+                                "owner": "apps/api/routes.py",
+                                "contains": ['parts[0] == "providers"'],
+                            },
+                            {
+                                "id": "api.v1.missing",
+                                "owner": "apps/api/missing.py",
+                            },
+                        ],
+                        "package_exports": [
+                            {
+                                "package": "packages.demo",
+                                "owner": "packages/demo/__init__.py",
+                                "exports": ["DemoResult"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            errors = MODULE.public_contract_inventory_errors(
+                root=root,
+                path=inventory_path,
+                required_sections=("http_routes", "package_exports"),
+            )
+
+        self.assertIn(
+            'public contract api.v1.providers missing owner marker in apps/api/routes.py: parts[0] == "providers"',
+            errors,
+        )
+        self.assertIn(
+            "public contract api.v1.missing references missing owner: apps/api/missing.py",
+            errors,
+        )
+        self.assertIn(
+            "public package export missing from packages/demo/__init__.py: DemoResult",
+            errors,
+        )
+
+    def test_public_contract_docs_render_key_sections(self) -> None:
+        markdown = MODULE.render_public_contract_inventory_markdown()
+
+        self.assertIn("# Public Contract Inventory", markdown)
+        self.assertIn("## HTTP Routes", markdown)
+        self.assertIn("api.healthz", markdown)
+        self.assertIn("## Package Exports", markdown)
+        self.assertIn("packages.kernel", markdown)
+        self.assertIn("## Compatibility Contracts", markdown)
+        self.assertIn("compat.cli.wizard", markdown)
+        self.assertIn("## Runtime Resource Contracts", markdown)
+
+    def test_public_contract_docs_errors_report_stale_generated_doc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            docs_dir = root / "docs" / "agent"
+            docs_dir.mkdir(parents=True)
+            inventory_path = root / "public-contracts.json"
+            doc_path = docs_dir / "public-contracts.md"
+            inventory_path.write_text(
+                json.dumps(
+                    {
+                        "http_routes": [
+                            {
+                                "id": "api.healthz",
+                                "method": "GET",
+                                "path": "/healthz",
+                                "owner": "apps/api/routes.py",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            expected = MODULE.render_public_contract_inventory_markdown(
+                root=root,
+                inventory_path=inventory_path,
+                required_sections=("http_routes",),
+            )
+            doc_path.write_text(expected, encoding="utf-8")
+
+            self.assertEqual(
+                MODULE.public_contract_docs_errors(
+                    root=root,
+                    inventory_path=inventory_path,
+                    doc_path=doc_path,
+                    required_sections=("http_routes",),
+                ),
+                [],
+            )
+
+            doc_path.write_text("stale\n", encoding="utf-8")
+            errors = MODULE.public_contract_docs_errors(
+                root=root,
+                inventory_path=inventory_path,
+                doc_path=doc_path,
+                required_sections=("http_routes",),
+            )
+
+        self.assertEqual(
+            errors,
+            [
+                "generated public contract docs are stale: docs/agent/public-contracts.md "
+                "(run make agent-public-contracts-docs)"
+            ],
+        )
+
+    def test_silent_broad_exception_records_report_unobservable_handlers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "packages" / "sample"
+            source_dir.mkdir(parents=True)
+            target = source_dir / "feature.py"
+            target.write_text(
+                "\n".join(
+                    [
+                        "def silent():",
+                        "    try:",
+                        "        work()",
+                        "    except Exception:",
+                        "        return None",
+                        "",
+                        "def logged():",
+                        "    try:",
+                        "        work()",
+                        "    except Exception:",
+                        "        logger.debug('failed', exc_info=True)",
+                        "        return None",
+                        "",
+                        "def payload():",
+                        "    try:",
+                        "        work()",
+                        "    except Exception as exc:",
+                        "        return {'error': str(exc)}",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            records = MODULE.silent_broad_exception_records(
+                root=root,
+                surfaces=("packages/sample/feature.py",),
+            )
+
+        self.assertEqual(records, (("packages/sample/feature.py", 4),))
 
     def test_resolve_rules_for_ci_workflow(self) -> None:
         matches = MODULE.resolve_rule_matches([".github/workflows/ci.yml"])
@@ -198,6 +513,17 @@ class AgentGateTests(unittest.TestCase):
         output = buffer.getvalue()
         self.assertIn("Checks: 1", output)
         self.assertNotIn("check detail", output)
+
+    def test_scorecard_reports_hotspot_and_boundary_debt_counts(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            MODULE.print_scorecard()
+
+        output = buffer.getvalue()
+        self.assertIn("Python line-limit allowlist debt:", output)
+        self.assertIn("App import boundary allowlist debt:", output)
+        self.assertIn("Silent broad exception debt:", output)
+        self.assertIn("Public contract inventory debt:", output)
 
     def test_context_map_covers_harness_and_release_paths(self) -> None:
         matches = MODULE.resolve_rule_matches(
@@ -272,7 +598,29 @@ class AgentGateTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(files, ("apps/cli/runtime_cognition.py",))
+        self.assertEqual(
+            files,
+            (
+                "apps/api/api_runtime_console_ops.py",
+                "packages/evidence/runtime.py",
+                "packages/storage/repository_system_methods.py",
+                "apps/cli/runtime_cognition.py",
+            ),
+        )
+
+    def test_python_line_limit_full_scan_ignores_generated_runtime_trees(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_dir = root / "apps" / "cli"
+            source_dir.mkdir(parents=True)
+            (source_dir / "small.py").write_text("print('ok')\n", encoding="utf-8")
+            generated_dir = root / "apps" / "macos" / ".build" / "vendor"
+            generated_dir.mkdir(parents=True)
+            (generated_dir / "bad.py").write_bytes(b"\xa4\x00not utf8")
+
+            errors = MODULE.lint_python_file_lengths([], root=root)
+
+        self.assertEqual(errors, [])
 
     def test_frontend_typecheck_commands_select_dashboard_and_site(self) -> None:
         commands = MODULE.frontend_typecheck_commands([
@@ -284,7 +632,7 @@ class AgentGateTests(unittest.TestCase):
             commands,
             (
                 ("dashboard", ("npm", "--prefix", "apps/dashboard", "run", "typecheck")),
-                ("site", ("npm", "--prefix", "apps/site", "run", "typecheck")),
+                ("site", ("npm", "--prefix", "apps/site", "run", "ci:check")),
             ),
         )
 
@@ -305,6 +653,23 @@ class AgentGateTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as context:
                 MODULE.run_frontend_typechecks(["apps/dashboard/src/main.tsx"])
         self.assertEqual(context.exception.code, 2)
+
+    def test_lint_command_runs_frontend_typechecks_for_changed_files(self) -> None:
+        changed_files = ["apps/site/src/pages/index.tsx"]
+        with (
+            mock.patch.object(sys, "argv", ["agent_gate.py", "lint"]),
+            mock.patch.object(MODULE, "collect_changed_files", return_value=changed_files),
+            mock.patch.object(MODULE, "validate_contract", return_value=([object()], [])),
+            mock.patch.object(MODULE, "lint_changed_files", return_value=[]),
+            mock.patch.object(MODULE, "lint_python_file_lengths", return_value=[]),
+            mock.patch.object(MODULE, "run_frontend_typechecks") as frontend_mock,
+            mock.patch.object(MODULE, "run_compileall") as compileall_mock,
+        ):
+            result = MODULE.main()
+
+        self.assertEqual(result, 0)
+        frontend_mock.assert_called_once_with(changed_files)
+        compileall_mock.assert_called_once_with()
 
     def test_agent_pr_gate_fails_fast_after_first_error(self) -> None:
         agent_mk_text = AGENT_MK_PATH.read_text(encoding="utf-8")

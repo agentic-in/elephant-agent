@@ -8,6 +8,7 @@ import unittest
 from unittest import mock
 
 import apps.gateway.__main__ as gateway_main
+import apps.gateway.cli_control as gateway_cli_control
 import apps.gateway.gateway_main_setup_impl as gateway_setup_impl
 import apps.gateway.gateway_main_wizard_binding as gateway_wizard_binding
 import apps.gateway.gateway_main_wizard_ui as gateway_wizard_ui
@@ -17,6 +18,25 @@ from packages.contracts.layers import Episode
 
 
 class GatewayWizardIntegrationTest(unittest.TestCase):
+    def test_cli_control_default_runtime_uses_root_app_bridge(self) -> None:
+        runtime = object()
+        service = gateway_cli_control.GatewayCliControlService(
+            config=gateway_cli_control.GatewayCliControlConfig(state_dir="/tmp/elephant-state"),
+        )
+
+        with mock.patch.object(
+            gateway_cli_control,
+            "create_cli_runtime_for_gateway_control",
+            return_value=runtime,
+        ) as factory:
+            resolved = service.runtime()
+
+        self.assertIs(resolved, runtime)
+        factory.assert_called_once()
+        profile_dir, state_dir = factory.call_args.args
+        self.assertEqual(profile_dir.name, "profile")
+        self.assertEqual(state_dir, Path("/tmp/elephant-state"))
+
     def test_gateway_text_prompt_uses_shared_wizard_dialogs(self) -> None:
         with (
             mock.patch.object(gateway_wizard_ui, "_gateway_wizard_dialogs_supported", return_value=True),
@@ -115,6 +135,32 @@ class GatewayWizardIntegrationTest(unittest.TestCase):
             ["discord", "setup", "--wizard"],
             default_state_dir=Path("/tmp/state"),
             default_control_state_dir=Path("/tmp/state"),
+        )
+
+    def test_setup_command_forwards_birth_prompt_options(self) -> None:
+        with mock.patch.object(gateway_main, "run_im_setup", return_value=0) as run_im_setup:
+            exit_code = gateway_main.command_main(
+                [
+                    "setup",
+                    "--state-dir",
+                    "/tmp/state",
+                    "--cli-state-dir",
+                    "/tmp/state",
+                    "--allow-skip",
+                    "--prompt-title",
+                    "Birth IM",
+                    "--prompt-text",
+                    "Wire IM now?",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        run_im_setup.assert_called_once_with(
+            default_state_dir=Path("/tmp/state"),
+            default_control_state_dir=Path("/tmp/state"),
+            prompt_title="Birth IM",
+            prompt_text="Wire IM now?",
+            allow_skip=True,
         )
 
     def test_gateway_discord_wizard_intro_prints_setup_card_without_extra_confirmation(self) -> None:

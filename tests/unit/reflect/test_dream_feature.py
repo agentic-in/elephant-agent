@@ -45,16 +45,22 @@ class DreamFeatureTest(unittest.TestCase):
     def test_init_profile_resolves_with_link_tools_and_uses_bootstrap_prompt_rules(self) -> None:
         features = resolve_features("init_profile")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills", "init_links"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("init_links", "pm", "questions", "skills"))
 
         prompt = _assemble_system_prompt(features, conservatism="low")
 
+        self.assertIn("## Init Profile Orchestration", prompt)
+        self.assertIn("Run order overrides feature listing", prompt)
+        self.assertIn("inspect each user-provided URL", prompt)
+        self.assertIn("before writing link-derived claims", prompt)
         self.assertIn("seed the first question bank more actively", prompt)
         self.assertIn("create 3-6 high-value questions", prompt)
         self.assertIn("explicit init answers and bootstrapped", prompt)
         self.assertIn("tool.web.extract", prompt)
         self.assertIn("tool.browser.navigate", prompt)
-        self.assertIn("If the init evidence contains public links", prompt)
+        self.assertIn("first-profile construction", prompt)
+        self.assertIn("PM search only checks existing claims", prompt)
+        self.assertIn("PM search cannot open URLs", prompt)
         self.assertNotIn("tool.diary.write", prompt)
 
     def test_onboarding_letter_prompt_writes_diary_metadata(self) -> None:
@@ -68,11 +74,19 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("别怕，我们一同进化", prompt)
         self.assertIn("metadata={\"kind\":\"onboarding_letter\"", prompt)
         self.assertIn("The diary metadata MUST include kind=onboarding_letter", prompt)
+        self.assertIn("Elephant is Elephant", prompt)
+        self.assertIn("Never say or imply \"I am not Elephant\"", prompt)
+        self.assertIn("## Onboarding Letter Stance", prompt)
+        self.assertIn("Write as Elephant, not as an assistant describing Elephant", prompt)
+        self.assertIn("not a profile report", prompt)
+        self.assertNotIn("CLAIM TEXT RULE", prompt)
+        self.assertNotIn("tool.personal_model.update call MUST", prompt)
+        self.assertNotIn("Never store system artifacts as PM facts", prompt)
 
     def test_init_profile_alias_from_macos_resolves_to_link_learning_bundle(self) -> None:
         features = resolve_features("init", explicit_features=("profile",))
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills", "init_links"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("init_links", "pm", "questions", "skills"))
         self.assertIn("tool.web.read", _compose_tools(features))
         self.assertIn("tool.browser.snapshot", _compose_tools(features))
 
@@ -110,6 +124,10 @@ class DreamFeatureTest(unittest.TestCase):
         evidence = build_evidence(runtime, job, resolve_features("init_profile"))
 
         self.assertIn("## Init profile answers", evidence)
+        self.assertIn("## Init learning objective", evidence)
+        self.assertIn("## Init Evidence Use", evidence)
+        self.assertIn("PM search is for inventory and deduplication only", evidence)
+        self.assertIn("User-provided links are present", evidence)
         self.assertIn("- learning_intensity: high", evidence)
         self.assertIn("## User-provided links", evidence)
         self.assertIn("- https://example.com/blog", evidence)
@@ -120,7 +138,7 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertNotIn("## Conversation turns", evidence)
         self.assertNotIn("## Diary context", evidence)
 
-    def test_onboarding_letter_evidence_uses_full_pm_portrait(self) -> None:
+    def test_init_profile_evidence_recovers_seed_answers_and_bare_links(self) -> None:
         class Repository:
             def load_episode(self, episode_id: str) -> SimpleNamespace:
                 return SimpleNamespace(exit_summary="")
@@ -129,13 +147,67 @@ class DreamFeatureTest(unittest.TestCase):
                 return (
                     SimpleNamespace(
                         lens="identity",
-                        text="用户正在做工程方向的 AI 产品。",
-                        metadata={"topic": "identity.profile.current_work"},
+                        text="训灼",
+                        metadata={"topic": "identity.anchor.name.preferred", "init_profile_field": "preferred_name"},
                     ),
                     SimpleNamespace(
-                        lens="pulse",
+                        lens="world",
+                        text="blog: liuxunzhuo.com",
+                        metadata={"topic": "world.links.blog", "init_profile_field": "blog"},
+                    ),
+                    SimpleNamespace(
+                        lens="identity",
+                        text="personal_logo: /tmp/user-avatar.jpg",
+                        metadata={"topic": "identity.anchor.logo.personal", "init_profile_field": "personal_logo"},
+                    ),
+                )
+
+        runtime = SimpleNamespace(repository=Repository())
+        job = LearningJob(
+            job_id="job-init",
+            job_type="episode_boundary_learning",
+            trigger="init_profile",
+            status="queued",
+            personal_model_id="pm",
+            state_id="state",
+            episode_id="episode",
+            metadata={},
+        )
+
+        evidence = build_evidence(runtime, job, resolve_features("init_profile"))
+
+        self.assertIn("- preferred_name: 训灼", evidence)
+        self.assertIn("- blog: liuxunzhuo.com", evidence)
+        self.assertIn("- https://liuxunzhuo.com", evidence)
+        self.assertNotIn("user-avatar.jpg", evidence)
+        self.assertIn("User-provided links are present", evidence)
+
+    def test_onboarding_letter_evidence_uses_full_pm_portrait(self) -> None:
+        class Repository:
+            def load_episode(self, episode_id: str) -> SimpleNamespace:
+                return SimpleNamespace(exit_summary="")
+
+            def list_personal_model_facts(self, **_: object) -> tuple[object, ...]:
+                return (
+                    SimpleNamespace(
+                        lens="world",
+                        text="用户正在做工程方向的 AI 产品。",
+                        metadata={"topic": "world.projects.ai_product.current"},
+                    ),
+                    SimpleNamespace(
+                        lens="identity",
                         text="用户压力大时需要先安静下来。",
-                        metadata={"topic": "pulse.pattern.recovery"},
+                        metadata={"topic": "identity.character.recovery.quiet"},
+                    ),
+                    SimpleNamespace(
+                        lens="identity",
+                        text="personal_logo: /tmp/user-avatar.jpg",
+                        metadata={"topic": "identity.anchor.logo.personal"},
+                    ),
+                    SimpleNamespace(
+                        lens="world",
+                        text="blog: liuxunzhuo.com",
+                        metadata={"topic": "world.links.blog"},
                     ),
                 )
 
@@ -159,8 +231,12 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("## Onboarding letter context", evidence)
         self.assertIn("target_date: 2026-05-23", evidence)
         self.assertIn("letter_kind: onboarding_letter", evidence)
-        self.assertIn("[identity] 用户正在做工程方向的 AI 产品。", evidence)
-        self.assertIn("[pulse] 用户压力大时需要先安静下来。", evidence)
+        self.assertIn("## Letter Evidence Use Guide", evidence)
+        self.assertIn("Treat the portrait below as grounding evidence", evidence)
+        self.assertIn("[world] 用户正在做工程方向的 AI 产品。", evidence)
+        self.assertIn("[identity] 用户压力大时需要先安静下来。", evidence)
+        self.assertNotIn("user-avatar.jpg", evidence)
+        self.assertNotIn("blog: liuxunzhuo.com", evidence)
         self.assertIn("别怕，我们一同进化", evidence)
 
     def test_dream_prompt_requires_pm_consolidation_and_concise_claims(self) -> None:

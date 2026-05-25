@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 from packages.understanding.personal_model_governance import ensure_valid_facet, is_protected_topic
@@ -12,6 +13,9 @@ from packages.understanding.personal_model_governance import ensure_valid_facet,
 from .handler_support import coerce_bool, coerce_int, optional_string, tool_summary
 from .runtime import ToolInvocation
 from .surfaces import PersonalModelUnderstandingSurface
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _string_list(value: Any) -> tuple[str, ...]:
@@ -65,6 +69,11 @@ def _learning_agent_invocation(invocation: ToolInvocation, surface: PersonalMode
         try:
             episode = loader(invocation.session_id)
         except Exception:
+            LOGGER.warning(
+                "failed to load episode while checking learning-agent scope",
+                extra={"session_id": invocation.session_id, "loader": loader_name},
+                exc_info=True,
+            )
             episode = None
         if episode is None:
             continue
@@ -129,6 +138,11 @@ def _check_topic_duplicate(
             )
         )
     except Exception:
+        LOGGER.warning(
+            "failed to load existing personal model fact topic",
+            extra={"personal_model_id": pm_id, "lens": lens, "topic": topic},
+            exc_info=True,
+        )
         return ""
     for fact in facts:
         metadata = dict(getattr(fact, "metadata", {}) or {})
@@ -295,6 +309,11 @@ def _run_inventory_search(
             )
         )
     except Exception:
+        LOGGER.warning(
+            "failed to list personal model facts for inventory",
+            extra={"personal_model_id": pm_id, "status": status_filter, "lens": lens_filter},
+            exc_info=True,
+        )
         facts = ()
     # Group by lens → topic with count
     from collections import defaultdict

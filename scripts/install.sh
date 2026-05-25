@@ -13,6 +13,10 @@ Options:
   --skip-run            Skip the automatic elephant launch after install or upgrade
   --skip-health         Deprecated alias for --skip-run
   --help                Show this help text
+
+Environment:
+  ELEPHANT_INSTALL_USE_UV=1  Use uv for editable installs. Defaults to pip for
+                             compatibility with smoke tests and offline hosts.
 EOF
 }
 
@@ -165,7 +169,11 @@ run_launcher() {
 ensure_runtime() {
   mkdir -p "${install_root}"
 
-  if has_uv; then
+  if [ "${ELEPHANT_INSTALL_USE_UV:-0}" = "1" ]; then
+    if ! has_uv; then
+      echo "ELEPHANT_INSTALL_USE_UV=1 requires uv to be installed." >&2
+      exit 1
+    fi
     if [ ! -x "${venv_python}" ]; then
       uv venv "${venv_dir}" --python "${python_bin}"
     fi

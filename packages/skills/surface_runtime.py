@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,8 @@ from .runtime import (
     load_skill_package_definition,
 )
 from .search import SkillSearchHub
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +198,11 @@ def _skill_affinity_index_ids(repository: RuntimeStorageRepository, *, personal_
     try:
         facts = tuple(repository.list_personal_model_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
+        LOGGER.warning(
+            "failed to load skill affinity facts for surface runtime",
+            extra={"personal_model_id": personal_model_id},
+            exc_info=True,
+        )
         return frozenset()
     out: set[str] = set()
     for fact in facts:

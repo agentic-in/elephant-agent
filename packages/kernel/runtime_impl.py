@@ -147,8 +147,15 @@ class KernelService:
         enqueue = getattr(self.dependencies.storage, "enqueue_learning_job", None)
         if not callable(enqueue):
             return None
-        loops = self.dependencies.storage.list_loops(episode_id=episode.episode_id)
-        loop = loops[-1] if loops else None
+        try:
+            loops = self.dependencies.storage.list_loops(
+                episode_id=episode.episode_id,
+                limit=1,
+                newest_first=True,
+            )
+        except TypeError:
+            loops = self.dependencies.storage.list_loops(episode_id=episode.episode_id)
+        loop = loops[0] if loops else None
         return enqueue(
             job_type="episode_boundary_learning",
             trigger=trigger,
@@ -556,18 +563,21 @@ class KernelService:
         # The new session object gets updated_at=current, but previous_updated_at
         # tells us when the user was last active before this turn.
         previous_updated_at = existing_session.updated_at if existing_session is not None else current
+        route_status = (
+            request.route_status
+            or str(request.source_payload.get("route_status", "")).strip()
+            or (existing_session.status if existing_session is not None else "")
+            or "open"
+        )
+        if route_status == "active":
+            route_status = "open"
         return Episode(
             episode_id=request.route_id,
             state_id=existing_session.state_id if existing_session is not None else (request.state_id or "state:default"),
             personal_model_id=profile.profile_id,
             entry_surface=existing_session.entry_surface if existing_session is not None else request.surface,
             elephant_id=(existing_session.elephant_id if existing_session is not None else "") or "",
-            status=(
-                request.route_status
-                or str(request.source_payload.get("route_status", "")).strip()
-                or (existing_session.status if existing_session is not None else "")
-                or "open"
-            ),
+            status=route_status,
             started_at=started_at,
             updated_at=current,
             ended_at=existing_session.ended_at if existing_session is not None else None,

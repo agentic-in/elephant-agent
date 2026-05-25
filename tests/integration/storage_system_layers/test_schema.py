@@ -54,6 +54,19 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
                     str(row[1])
                     for row in connection.execute("PRAGMA table_info(semantic_index_entries)").fetchall()
                 }
+                index_names = {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(states)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(episodes)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(loops)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(steps)").fetchall()
+                }
 
         self.assertTrue(
             {
@@ -80,6 +93,13 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
         self.assertIn("result_json", job_columns)
         self.assertIn("last_accessed_at", fact_columns)
         self.assertIn("source_id", semantic_columns)
+        self.assertIn("idx_states_anchor_status", index_names)
+        self.assertIn("idx_episodes_elephant_started", index_names)
+        self.assertIn("idx_episodes_personal_model_status_started", index_names)
+        self.assertIn("idx_episodes_state_status_started", index_names)
+        self.assertIn("idx_loops_episode_started", index_names)
+        self.assertIn("idx_loops_checkpoint_scan", index_names)
+        self.assertIn("idx_steps_state_pm_created", index_names)
         self.assertFalse(LEGACY_STORAGE_TABLES.intersection(table_names))
 
     def test_bootstrap_is_idempotent_for_clean_schema(self) -> None:
@@ -92,6 +112,55 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
 
         self.assertEqual(first.schema_version, SCHEMA_VERSION)
         self.assertEqual(second.schema_version, SCHEMA_VERSION)
+
+    def test_bootstrap_backfills_runtime_indexes_for_existing_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            database_path = Path(tmpdir) / "state" / "elephant.sqlite3"
+            repository = RuntimeStorageRepository(database_path)
+            repository.bootstrap()
+
+            with sqlite3.connect(database_path) as connection:
+                connection.execute("DROP INDEX idx_states_anchor_status")
+                connection.execute("DROP INDEX idx_episodes_state_status_started")
+                connection.execute("DROP INDEX idx_episodes_elephant_started")
+                connection.execute("DROP INDEX idx_loops_episode_started")
+                connection.execute("DROP INDEX idx_loops_checkpoint_scan")
+                connection.commit()
+
+            repository.bootstrap()
+
+            with sqlite3.connect(database_path) as connection:
+                index_names = {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(states)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(episodes)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(loops)").fetchall()
+                }
+
+        self.assertIn("idx_states_anchor_status", index_names)
+        self.assertIn("idx_episodes_state_status_started", index_names)
+        self.assertIn("idx_episodes_elephant_started", index_names)
+        self.assertIn("idx_loops_episode_started", index_names)
+        self.assertIn("idx_loops_checkpoint_scan", index_names)
+
+    def test_repository_connections_enable_wal_busy_timeout_and_foreign_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            database_path = Path(tmpdir) / "state" / "elephant.sqlite3"
+            repository = RuntimeStorageRepository(database_path)
+            repository.bootstrap()
+
+            with repository.connection() as connection:
+                foreign_keys = int(connection.execute("PRAGMA foreign_keys").fetchone()[0])
+                journal_mode = str(connection.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+                busy_timeout = int(connection.execute("PRAGMA busy_timeout").fetchone()[0])
+
+        self.assertEqual(foreign_keys, 1)
+        self.assertEqual(journal_mode, "wal")
+        self.assertGreaterEqual(busy_timeout, 5000)
 
     def test_schema_declares_reset_delete_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

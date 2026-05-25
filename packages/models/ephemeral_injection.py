@@ -62,6 +62,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
+import logging
 import re
 from typing import Any
 
@@ -71,6 +72,8 @@ from packages.contracts.runtime import (
     PersonalModelRuntimeState,
     PromptMessage,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 __all__ = [
@@ -200,6 +203,7 @@ def safe_call_block_builder(builder: Any, /, *args: Any, **kwargs: Any) -> str:
     try:
         value = builder(*args, **kwargs)
     except Exception:
+        LOGGER.warning("failed to build ephemeral injection section", exc_info=True)
         return ""
     return str(value or "")
 

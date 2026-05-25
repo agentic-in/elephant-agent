@@ -76,17 +76,18 @@ class ContinuityProjectionService:
             governance=governance,
             continuity=continuity,
             relationship_policy=relationship_policy,
-            initiative="",
+            initiative="gentle",
             reengagement_style=style,
             reengagement_prompt=prompt,
             user_governed=True,
             voice_identity_binding="voice remains subordinate to the same text-first identity path",
             summary=_continuity_summary(
-                continuity=continuity,
-                relationship_policy=relationship_policy,
-                onboarding_ready=governance.onboarding.ready,
-                reengagement_style=style,
-            ),
+            continuity=continuity,
+            relationship_policy=relationship_policy,
+            onboarding_ready=governance.onboarding.ready,
+            reengagement_style=style,
+            initiative="gentle",
+        ),
         )
 
 
@@ -97,11 +98,11 @@ def _reengagement_prompt(
     active_state_focus: str | None,
 ) -> tuple[str, str]:
     note_text = ", ".join(continuity_notes) if continuity_notes else "preserve the active elephant without overreaching"
-    focus_clause = f" keep active elephant focus visible: {active_state_focus}." if active_state_focus else ""
-    style = "steady-follow-through"
+    del active_state_focus
+    style = "gentle-presence"
     prompt = (
-        f"Preserve continuity explicitly and keep the next step legible; "
-        f"continuity cues: {note_text}.{focus_clause}"
+        "Preserve continuity explicitly, preserve the active elephant without overreaching, "
+        f"and keep the next step legible; continuity cues: {note_text}."
     )
     return prompt, style
 
@@ -112,9 +113,10 @@ def _continuity_summary(
     relationship_policy: RelationshipPolicy,
     onboarding_ready: bool,
     reengagement_style: str,
+    initiative: str,
 ) -> str:
     onboarding = "identity-ready" if onboarding_ready else "onboarding-pending"
     return (
         f"{continuity.summary}; reengagement={reengagement_style}; "
-        f"{onboarding}; relationship_policy={relationship_policy.summary()}"
+        f"initiative={initiative}; {onboarding}; relationship_policy={relationship_policy.summary()}"
     )

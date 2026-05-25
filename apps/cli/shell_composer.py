@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -15,7 +16,6 @@ from .shell_stack import (
     Condition,
     ConditionalContainer,
     Dimension,
-    FileHistory,
     FormattedText,
     FormattedTextControl,
     HSplit,
@@ -25,29 +25,30 @@ from .shell_stack import (
     PROMPT_TOOLKIT_AVAILABLE,
     PromptSession,
     ScrollablePane,
-    Style,
     Window,
     has_completions,
     prompt_toolkit_output_without_cpr,
 )
 from .shell_ui import (
-    BRAND_ACCENT,
-    BRAND_ACCENT_STRONG,
-    BRAND_DARK,
-    BRAND_LIGHT,
-    BRAND_MUTED,
     COMMAND_PALETTE_VISIBLE_ROWS,
-    LIVE_DIFF_ADD_FG,
-    LIVE_DIFF_CONTEXT_FG,
-    LIVE_DIFF_FILE_FG,
-    LIVE_DIFF_HUNK_FG,
-    LIVE_DIFF_REMOVE_FG,
-    USER_HISTORY_BG,
-    USER_HISTORY_FG,
+)
+from .shell_composer_support import (
+    history_search_active as _history_search_active,
+    history_search_current_match as _history_search_current_match,
+    history_search_enter as _history_search_enter,
+    history_search_exit as _history_search_exit,
+    history_search_fragments as _history_search_fragments,
+    history_search_refresh as _history_search_refresh,
+    prompt_style,
+    prompt_style_map,
+    shell_history,
 )
 
 if TYPE_CHECKING:
     from .shell import ProductizedShell
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def prompt_toolkit_loop_running() -> bool:
@@ -94,10 +95,6 @@ def prompt_toolkit_composer_available(shell: ProductizedShell) -> bool:
     )
 
 
-def shell_history(shell: ProductizedShell):
-    return FileHistory(str(shell.runtime.paths.state_dir / "shell-history.txt"))
-
-
 def build_prompt_buffer(shell: ProductizedShell):
     from .shell import ShellCompleter
 
@@ -108,6 +105,7 @@ def build_prompt_buffer(shell: ProductizedShell):
         from prompt_toolkit.completion import ThreadedCompleter
         completer = ThreadedCompleter(ShellCompleter(shell))
     except Exception:
+        LOGGER.debug("Failed to create threaded prompt completer; using direct shell completer.", exc_info=True)
         completer = ShellCompleter(shell)
 
     return Buffer(
@@ -220,6 +218,7 @@ def build_input_meta_window(shell: ProductizedShell, buffer):
         from prompt_toolkit.layout import WindowAlign
         align = WindowAlign.RIGHT
     except Exception:
+        LOGGER.debug("Failed to load prompt input meta alignment; using default alignment.", exc_info=True)
         align = None
     window_kwargs: dict[str, object] = {
         "content": FormattedTextControl(lambda: _composer_input_meta_fragments(shell, buffer)),
@@ -243,99 +242,6 @@ def build_ghost_hint_window(shell: ProductizedShell, buffer):
         ),
         filter=Condition(lambda: _ghost_hint_match(shell, buffer.text or "") is not None),
     )
-
-
-def _history_search_matches(shell: ProductizedShell, query: str) -> list[str]:
-    """Unique history entries containing `query` (case-insensitive), newest first."""
-    history_strings: list[str] = []
-    try:
-        history_strings = list(shell_history(shell).get_strings())
-    except Exception:
-        history_strings = []
-    needle = query.strip().lower()
-    seen: set[str] = set()
-    matches: list[str] = []
-    # Iterate newest-first. FileHistory preserves append order, so reverse.
-    for entry in reversed(history_strings):
-        if not entry or entry in seen:
-            continue
-        if needle and needle not in entry.lower():
-            continue
-        seen.add(entry)
-        matches.append(entry)
-    return matches
-
-
-def _history_search_active(shell: ProductizedShell) -> bool:
-    return bool(getattr(shell, "_history_search_active", False))
-
-
-def _history_search_refresh(shell: ProductizedShell) -> None:
-    query = getattr(shell, "_history_search_query", "") or ""
-    matches = _history_search_matches(shell, query)
-    shell._history_search_matches = matches
-    if not matches:
-        shell._history_search_index = 0
-        return
-    # Clamp index to the new result set.
-    index = int(getattr(shell, "_history_search_index", 0) or 0)
-    shell._history_search_index = max(0, min(index, len(matches) - 1))
-
-
-def _history_search_enter(shell: ProductizedShell, buffer) -> None:
-    """Enter reverse-search mode. Snapshot current buffer so Esc can restore."""
-    shell._history_search_active = True
-    shell._history_search_query = ""
-    shell._history_search_index = 0
-    shell._history_search_prior_text = buffer.text or ""
-    _history_search_refresh(shell)
-
-
-def _history_search_exit(shell: ProductizedShell, buffer, *, restore: bool) -> None:
-    if not _history_search_active(shell):
-        return
-    shell._history_search_active = False
-    if restore:
-        buffer.text = getattr(shell, "_history_search_prior_text", "") or ""
-    shell._history_search_query = ""
-    shell._history_search_matches = []
-    shell._history_search_index = 0
-
-
-def _history_search_current_match(shell: ProductizedShell) -> str:
-    matches = list(getattr(shell, "_history_search_matches", ()) or ())
-    if not matches:
-        return ""
-    index = max(0, min(int(getattr(shell, "_history_search_index", 0) or 0), len(matches) - 1))
-    return matches[index]
-
-
-def _history_search_fragments(shell: ProductizedShell):
-    if not _history_search_active(shell):
-        return FormattedText([])
-    query = str(getattr(shell, "_history_search_query", "") or "")
-    matches = list(getattr(shell, "_history_search_matches", ()) or ())
-    total = len(matches)
-    index = int(getattr(shell, "_history_search_index", 0) or 0)
-    # Compact preview — one-line match, truncated.
-    preview = _history_search_current_match(shell)
-    if len(preview) > 96:
-        preview = preview[:95] + "…"
-    fragments: list[tuple[str, str]] = [
-        ("class:history-search-prefix", "🔍 search "),
-        ("class:history-search-query", query or " "),
-    ]
-    if total:
-        fragments.append(("class:history-search-meta", f"  [{index + 1}/{total}]"))
-        fragments.append(("", "\n"))
-        fragments.append(("class:history-search-hit", f"  → {preview}"))
-    else:
-        fragments.append(("class:history-search-empty", "   no match"))
-    fragments.append(("", "\n"))
-    fragments.append(
-        ("class:history-search-hint", "   ↑/↓ cycle · Enter accept · Esc cancel"),
-    )
-    return FormattedText(fragments)
 
 
 def build_history_search_window(shell: ProductizedShell):
@@ -582,6 +488,7 @@ def read_command(shell: ProductizedShell) -> object:
                     try:
                         application.exit(result="__elephant.startup.prime__")
                     except Exception:
+                        LOGGER.debug("Failed to exit prompt application after startup prime.", exc_info=True)
                         pass
 
             threading.Thread(
@@ -594,6 +501,7 @@ def read_command(shell: ProductizedShell) -> object:
         try:
             application.exit(result=result)
         except Exception:
+            LOGGER.debug("Failed to exit prompt application for startup transition.", exc_info=True)
             return
 
     def maybe_exit_for_cron_tick() -> None:
@@ -610,12 +518,14 @@ def read_command(shell: ProductizedShell) -> object:
         try:
             has_due = shell.runtime.has_due_cron_jobs(session_id=shell.session_id)
         except Exception:
+            LOGGER.debug("Failed to check due cron jobs from prompt monitor.", exc_info=True)
             return
         if not has_due:
             return
         try:
             application.exit(result="__elephant.cron.tick__")
         except Exception:
+            LOGGER.debug("Failed to exit prompt application for due cron tick.", exc_info=True)
             return
 
     def submit(event) -> None:
@@ -697,93 +607,6 @@ def prompt_continuation():
     return FormattedText([("class:composer-prefix", "  ")])
 
 
-def prompt_style():
-    if not PROMPT_TOOLKIT_AVAILABLE:
-        return None
-    return Style.from_dict(prompt_style_map())
-
-
-def prompt_style_map() -> dict[str, str]:
-    return {
-        "": f"fg:{BRAND_LIGHT}",
-        "composer-divider": f"fg:{BRAND_ACCENT}",
-        "composer-prefix": f"fg:{BRAND_ACCENT_STRONG} bold",
-        "queue-user": f"{USER_HISTORY_FG} bg:{USER_HISTORY_BG}",
-        "clipboard-prefix": f"fg:{BRAND_MUTED}",
-        "clipboard-chip": f"fg:{BRAND_ACCENT_STRONG} bold",
-        "history-search-prefix": f"fg:{BRAND_ACCENT} bold",
-        "history-search-query": f"fg:{BRAND_ACCENT_STRONG} bold",
-        "history-search-meta": f"fg:{BRAND_MUTED}",
-        "history-search-hit": f"fg:{BRAND_LIGHT}",
-        "history-search-empty": f"fg:{BRAND_MUTED} italic",
-        "history-search-hint": f"fg:{BRAND_MUTED}",
-        "ghost-hint-prefix": f"fg:{BRAND_MUTED}",
-        "ghost-hint-tail": f"fg:{BRAND_ACCENT} bold",
-        "ghost-hint-desc": f"fg:{BRAND_MUTED} italic",
-        "ghost-hint-prefix": f"fg:{BRAND_MUTED}",
-        "ghost-hint-tail": f"fg:{BRAND_ACCENT} bold",
-        "ghost-hint-desc": f"fg:{BRAND_MUTED} italic",
-        "progress-title": f"fg:{BRAND_ACCENT} bold",
-        "progress-active": f"fg:{BRAND_LIGHT}",
-        "progress-active-marker": f"fg:{BRAND_MUTED} bold",
-        "progress-active-detail": f"fg:{BRAND_LIGHT}",
-        "progress-meta": f"fg:{BRAND_LIGHT}",
-        "progress-tool": f"fg:{BRAND_LIGHT} bold",
-        "progress-tool-rail": f"fg:{BRAND_DARK}",
-        "progress-tool-emoji": f"fg:{BRAND_ACCENT}",
-        "progress-tool-verb": f"fg:{BRAND_MUTED}",
-        "progress-tool-label": f"fg:{BRAND_ACCENT_STRONG} bold",
-        "progress-tool-gap": f"fg:{BRAND_LIGHT}",
-        "progress-tool-body": f"fg:{BRAND_LIGHT}",
-        "progress-tool-duration": f"fg:{BRAND_MUTED}",
-        "progress-state-focus": f"fg:{BRAND_ACCENT_STRONG} bold",
-        "progress-output-file": f"fg:{LIVE_DIFF_FILE_FG} bold",
-        "progress-output-hunk": f"fg:{LIVE_DIFF_HUNK_FG} bold",
-        "progress-output-add": f"fg:{LIVE_DIFF_ADD_FG} bold",
-        "progress-output-remove": f"fg:{LIVE_DIFF_REMOVE_FG} bold",
-        "progress-output-context": f"fg:{LIVE_DIFF_CONTEXT_FG}",
-        "progress-output-body": f"fg:{BRAND_LIGHT}",
-        "progress-queue": f"fg:{BRAND_LIGHT}",
-        "progress-hint": f"fg:{BRAND_LIGHT}",
-        "progress-stream": f"fg:{BRAND_ACCENT_STRONG}",
-        "state-focus-ready-title": f"fg:{BRAND_ACCENT} bold",
-        "state-focus-ready-body": f"fg:{BRAND_LIGHT}",
-        "stream-reasoning-body": f"fg:{BRAND_MUTED}",
-        "stream-response-body": f"fg:{BRAND_LIGHT}",
-        "stream-response-bold": f"fg:{BRAND_LIGHT} bold",
-        "stream-response-italic": f"fg:{BRAND_LIGHT} italic",
-        "stream-response-bold-italic": f"fg:{BRAND_LIGHT} bold italic",
-        "stream-response-code": f"fg:{BRAND_MUTED}",
-        "stream-response-heading": f"fg:{BRAND_ACCENT_STRONG} bold",
-        "stream-response-heading-minor": f"fg:{BRAND_LIGHT} bold",
-        "stream-response-accent": f"fg:{BRAND_ACCENT}",
-        "stream-response-muted": f"fg:{BRAND_MUTED}",
-        "clarify-title": f"fg:{BRAND_ACCENT} bold",
-        "clarify-question": f"fg:{BRAND_LIGHT} bold",
-        "clarify-choice": f"fg:{BRAND_LIGHT}",
-        "clarify-hint": f"fg:{BRAND_MUTED}",
-        "completion-menu": "bg:#173141",
-        "completion-menu.completion": f"bg:#173141 fg:{BRAND_LIGHT}",
-        "completion-menu.completion.current": f"bg:#21475c fg:{BRAND_ACCENT_STRONG} bold",
-        "completion-menu.meta.completion": f"bg:#173141 fg:{BRAND_MUTED}",
-        "completion-menu.meta.completion.current": f"bg:#21475c fg:{BRAND_LIGHT}",
-        "scrollbar.background": "bg:#173141",
-        "scrollbar.button": f"bg:{BRAND_ACCENT}",
-        "status-bar-edge": f"bg:#173141 fg:{BRAND_LIGHT}",
-        "status-bar-model": f"bg:#173141 fg:{BRAND_ACCENT_STRONG} bold",
-        "status-bar-sep": f"bg:#173141 fg:{BRAND_MUTED}",
-        "status-bar-muted": f"bg:#173141 fg:{BRAND_LIGHT}",
-        "status-bar-stream": f"bg:#173141 fg:{BRAND_ACCENT_STRONG} bold",
-        "status-bar-level": f"bg:#173141 fg:{BRAND_ACCENT} bold",
-        "status-bar-growth-bracket": f"bg:#173141 fg:{BRAND_ACCENT} bold",
-        "status-bar-growth-fill": f"bg:#173141 fg:{BRAND_ACCENT_STRONG} bold",
-        "status-bar-growth-empty": f"bg:#173141 fg:{BRAND_ACCENT}",
-        "status-bar-good": "bg:#173141 fg:#7da27f bold",
-        "status-bar-warn": f"bg:#173141 fg:{BRAND_ACCENT_STRONG} bold",
-        "status-bar-critical": "bg:#173141 fg:#b85d57 bold",
-    }
-
-
 def _last_user_message(shell: ProductizedShell) -> str:
     """Most recent user-typed prompt in the transcript, or empty string.
 
@@ -796,12 +619,14 @@ def _last_user_message(shell: ProductizedShell) -> str:
     try:
         snapshot = list(transcript)
     except Exception:
+        LOGGER.debug("Failed to snapshot shell transcript for prompt composer recall.", exc_info=True)
         return ""
     for entry in reversed(snapshot):
         try:
             kind = getattr(entry, "kind", "")
             body = entry.body or ""
         except Exception:
+            LOGGER.debug("Failed to read shell transcript entry for prompt composer recall.", exc_info=True)
             continue
         if kind == "user" and body.strip():
             return str(body)
@@ -1021,6 +846,7 @@ def build_key_bindings(shell: ProductizedShell | None = None, *, submit=None, al
             try:
                 menu_complete(event)
             except Exception:
+                LOGGER.debug("Prompt completion menu failed; inserting literal tab.", exc_info=True)
                 buffer.insert_text("\t")
             return
         tail, _description = match
@@ -1059,6 +885,7 @@ def build_key_bindings(shell: ProductizedShell | None = None, *, submit=None, al
             shell._render_pending_entries()
         except Exception:
             # Help is a nice-to-have; never let it break the shell.
+            LOGGER.debug("Failed to render prompt composer cheatsheet.", exc_info=True)
             pass
         event.app.invalidate()
 

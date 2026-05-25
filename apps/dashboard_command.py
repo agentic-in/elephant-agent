@@ -17,8 +17,8 @@ import webbrowser
 
 import typer
 
-from apps.cli.cli_main_support import CliCardSection, _print_cli_card
-from apps.cli.typer_support import run_typer_app
+from packages.operator.cli_cards import CliCardSection, _print_cli_card
+from packages.operator.typer_support import run_typer_app
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

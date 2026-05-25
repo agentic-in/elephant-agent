@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 import SwiftUI
 
 struct RootView: View {
@@ -116,17 +115,14 @@ struct OnboardingLetterToast: View {
         } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [ElephantTheme.ember.opacity(0.28), ElephantTheme.gold.opacity(0.18)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                    Image(systemName: "heart.text.square.fill")
-                        .font(.system(size: 21, weight: .semibold))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(ElephantTheme.gold.opacity(0.16))
+                    Image(systemName: "envelope.open.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(ElephantTheme.ember)
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(onboardingLetterTitle(model.appLanguage))
@@ -139,26 +135,24 @@ struct OnboardingLetterToast: View {
                 }
 
                 HStack(spacing: 5) {
-                    Image(systemName: "heart.fill")
+                    Image(systemName: "arrow.right")
                         .font(.caption2.weight(.bold))
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
                 }
                 .foregroundStyle(ElephantTheme.ember)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 9)
                 .padding(.vertical, 7)
                 .background(Color.white.opacity(0.52), in: Capsule())
                 .overlay(Capsule().stroke(ElephantTheme.ember.opacity(0.22), lineWidth: 1))
             }
-            .padding(15)
-            .frame(width: 398, alignment: .leading)
+            .padding(14)
+            .frame(width: 380, alignment: .leading)
             .background(letterToastBackground)
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(hovering ? ElephantTheme.ember.opacity(0.48) : ElephantTheme.gold.opacity(0.28), lineWidth: hovering ? 1.5 : 1)
             )
             .shadow(color: ElephantTheme.ember.opacity(hovering ? 0.20 : 0.12), radius: hovering ? 24 : 18, y: hovering ? 14 : 10)
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .scaleEffect(hovering ? 1.012 : 1)
         }
         .buttonStyle(PressablePlainButtonStyle())
@@ -182,7 +176,7 @@ struct OnboardingLetterToast: View {
     }
 
     private var letterToastBackground: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(Color(nsColor: .textBackgroundColor).opacity(0.96))
             .overlay(
                 LinearGradient(
@@ -194,7 +188,7 @@ struct OnboardingLetterToast: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             )
     }
 }
@@ -207,17 +201,17 @@ struct ElephantLetterEnvelopeOverlay: View {
 
     var body: some View {
         ZStack {
-            LetterVideoBackdrop(paused: reduceMotion)
+            LetterVideoBackdrop(paused: true)
                 .ignoresSafeArea()
 
             Rectangle()
-                .fill(Color.black.opacity(0.28))
+                .fill(Color.black.opacity(0.20))
                 .overlay(
                     LinearGradient(
                         colors: [
-                            ElephantTheme.gold.opacity(0.18),
-                            Color.black.opacity(0.18),
-                            ElephantTheme.accent.opacity(0.12)
+                            ElephantTheme.gold.opacity(0.16),
+                            Color.black.opacity(0.10),
+                            ElephantTheme.accent.opacity(0.10)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -243,15 +237,15 @@ struct ElephantLetterEnvelopeOverlay: View {
             .frame(width: 660)
             .background(letterPaper)
             .overlay(letterDecoration)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(ElephantTheme.gold.opacity(0.36), lineWidth: 2.2)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.56), lineWidth: 1)
-                    .padding(6)
+                    .stroke(ElephantTheme.gold.opacity(0.28), lineWidth: 1.2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.46), lineWidth: 1)
+                    .padding(7)
             )
             .shadow(color: Color.black.opacity(0.34), radius: 46, y: 28)
             .scaleEffect(opened ? 1 : 0.92)
@@ -303,35 +297,31 @@ struct ElephantLetterEnvelopeOverlay: View {
     }
 
     private var letterPaper: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(.ultraThinMaterial)
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(.regularMaterial)
             .overlay(
                 LinearGradient(
                     colors: [
-                        Color(nsColor: .textBackgroundColor).opacity(0.66),
-                        ElephantTheme.gold.opacity(0.22),
-                        Color(nsColor: .textBackgroundColor).opacity(0.50),
-                        ElephantTheme.ember.opacity(0.10)
+                        Color(nsColor: .textBackgroundColor).opacity(0.78),
+                        ElephantTheme.gold.opacity(0.14),
+                        Color(nsColor: .textBackgroundColor).opacity(0.68),
+                        ElephantTheme.ember.opacity(0.07)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             )
     }
 
     private var letterDecoration: some View {
         ZStack(alignment: .top) {
             LetterPaperTexture()
-                .opacity(0.28)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .allowsHitTesting(false)
-            LetterEnvelopeFoldLines()
-                .opacity(0.52)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .opacity(0.18)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .allowsHitTesting(false)
             LinearGradient(
-                colors: [ElephantTheme.gold.opacity(0.18), Color.clear],
+                colors: [ElephantTheme.gold.opacity(0.12), Color.clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -356,77 +346,11 @@ struct LetterVideoBackdrop: View {
     var paused: Bool
 
     var body: some View {
-        if let bundledURL = Bundle.main.url(forResource: "baby-el", withExtension: "mp4") {
-            LetterLoopingVideoBackground(url: bundledURL, paused: paused)
-                .saturation(1.08)
-                .brightness(-0.06)
-        } else {
-            AppBackground()
-        }
-    }
-}
-
-private struct LetterLoopingVideoBackground: NSViewRepresentable {
-    var url: URL
-    var paused: Bool
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> LetterVideoLayerView {
-        let view = LetterVideoLayerView()
-        let item = AVPlayerItem(url: url)
-        let player = AVQueuePlayer(playerItem: item)
-        let looper = AVPlayerLooper(player: player, templateItem: item)
-        player.isMuted = true
-        player.actionAtItemEnd = .none
-        player.play()
-        view.playerLayer.player = player
-        context.coordinator.player = player
-        context.coordinator.looper = looper
-        return view
-    }
-
-    func updateNSView(_ nsView: LetterVideoLayerView, context: Context) {
-        if paused {
-            context.coordinator.player?.pause()
-        } else {
-            context.coordinator.player?.play()
-        }
-    }
-
-    static func dismantleNSView(_ nsView: LetterVideoLayerView, coordinator: Coordinator) {
-        coordinator.player?.pause()
-        nsView.playerLayer.player = nil
-    }
-
-    final class Coordinator {
-        var player: AVQueuePlayer?
-        var looper: AVPlayerLooper?
-    }
-}
-
-private final class LetterVideoLayerView: NSView {
-    let playerLayer = AVPlayerLayer()
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        playerLayer.videoGravity = .resizeAspectFill
-        layer?.addSublayer(playerLayer)
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        wantsLayer = true
-        playerLayer.videoGravity = .resizeAspectFill
-        layer?.addSublayer(playerLayer)
-    }
-
-    override func layout() {
-        super.layout()
-        playerLayer.frame = bounds
+        AppBackground()
+            .blur(radius: 22)
+            .scaleEffect(1.04)
+            .overlay(MosaicMemoryField(paused: true).opacity(0.44).blur(radius: 10))
+            .overlay(Rectangle().fill(.ultraThinMaterial).opacity(0.34))
     }
 }
 
@@ -764,7 +688,8 @@ struct HomeView: View {
                 title: model.userDisplayName,
                 subtitle: homeSubtitle,
                 actionTitle: AppSection.wake.title(language: model.appLanguage),
-                actionSymbol: "bubble.left.and.bubble.right"
+                actionSymbol: "bubble.left.and.bubble.right",
+                actionIconOnly: true
             ) {
                 model.selectedSection = .wake
                 model.focusComposer()
@@ -866,12 +791,9 @@ struct HomeFirstLookPanel: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        SurfaceActionButton(
+                        HomeStartIconButton(
                             title: AppSection.wake.title(language: model.appLanguage),
-                            subtitle: model.text(.typeMessagePlaceholder),
-                            symbol: "bubble.left.and.bubble.right.fill",
-                            tint: ElephantTheme.accent,
-                            isProminent: true
+                            subtitle: model.text(.typeMessagePlaceholder)
                         ) {
                             model.selectedSection = .wake
                             model.focusComposer()
@@ -997,6 +919,35 @@ struct HomeIdentityStatusRow: View {
                 .labelStyle(.titleAndIcon)
                 .lineLimit(1)
         }
+    }
+}
+
+private struct HomeStartIconButton: View {
+    var title: String
+    var subtitle: String
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(hovering ? ElephantTheme.accent.opacity(0.94) : ElephantTheme.accent)
+                )
+                .overlay(Circle().stroke(Color.white.opacity(0.30), lineWidth: 1))
+                .shadow(color: ElephantTheme.accent.opacity(hovering ? 0.22 : 0.14), radius: hovering ? 16 : 10, y: hovering ? 8 : 5)
+                .contentShape(Circle())
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .help("\(title): \(subtitle)")
+        .accessibilityLabel(title)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.14), value: hovering)
     }
 }
 
@@ -1465,10 +1416,20 @@ private struct HomeContinuityQuestionRow: View {
 
             Spacer(minLength: 0)
 
-            Button(localizedYouText(model.appLanguage, en: "Review", zh: "回看", fr: "Revoir", de: "Prüfen")) {
+            Button {
                 model.selectedSection = .you
+            } label: {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 32, height: 32)
+                    .background(ElephantTheme.accent.opacity(0.10), in: Circle())
+                    .overlay(Circle().stroke(ElephantTheme.accent.opacity(0.20), lineWidth: 1))
             }
-            .controlSize(.small)
+            .buttonStyle(PressablePlainButtonStyle())
+            .help(localizedYouText(model.appLanguage, en: "Review question", zh: "回看问题", fr: "Revoir la question", de: "Frage prüfen"))
+            .accessibilityLabel(localizedYouText(model.appLanguage, en: "Review question", zh: "回看问题", fr: "Revoir la question", de: "Frage prüfen"))
         }
     }
 }
@@ -2923,7 +2884,7 @@ struct WakeComposerPanel: View {
     }
 
     private var canSendVoice: Bool {
-        !speech.isTranscribing && !speech.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !speech.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var currentVoiceDuration: TimeInterval {
@@ -3104,9 +3065,17 @@ struct VoiceListeningOverlay: View {
             return statusText
         }
         if isRecording {
+            let draft = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !draft.isEmpty {
+                return draft
+            }
             return formattedVoiceDuration(elapsed)
         }
         if isTranscribing {
+            let draft = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !draft.isEmpty {
+                return draft
+            }
             return statusText
         }
         if canSend {
@@ -4298,7 +4267,7 @@ struct AssistantVoiceReplyBubbleContent: View {
                         edgeVoiceIdentifier: model.effectiveEdgeVoiceIdentifier
                     )
                 } label: {
-                    Image(systemName: isActive ? "stop.fill" : "play.fill")
+                    Image(systemName: playbackSymbol)
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(playbackTint)
                         .frame(width: 26, height: 26)
@@ -4308,7 +4277,7 @@ struct AssistantVoiceReplyBubbleContent: View {
                 .help(playbackHelp)
                 .accessibilityLabel(playbackHelp)
 
-                VoiceMessageMiniWaveform(active: isActive)
+                VoiceMessageMiniWaveform(active: isPlaying)
                     .frame(width: 62, height: 18)
                     .accessibilityHidden(true)
 
@@ -4352,7 +4321,25 @@ struct AssistantVoiceReplyBubbleContent: View {
     }
 
     private var isActive: Bool {
+        speechOutput.activeMessageID == message.id && (speechOutput.isSpeaking || speechOutput.isPreparing)
+    }
+
+    private var isPreparing: Bool {
+        speechOutput.activeMessageID == message.id && speechOutput.isPreparing
+    }
+
+    private var isPlaying: Bool {
         speechOutput.activeMessageID == message.id && speechOutput.isSpeaking
+    }
+
+    private var playbackSymbol: String {
+        if isPlaying {
+            return "stop.fill"
+        }
+        if isPreparing {
+            return "hourglass"
+        }
+        return "play.fill"
     }
 
     private var hasPlaybackError: Bool {
@@ -4367,13 +4354,22 @@ struct AssistantVoiceReplyBubbleContent: View {
         if hasPlaybackError, !speechOutput.lastError.isEmpty {
             return speechOutput.lastError
         }
-        if isActive {
+        if isPlaying {
             return localizedYouText(
                 model.appLanguage,
                 en: "Stop voice reply",
                 zh: "停止语音回复",
                 fr: "Arrêter la réponse vocale",
                 de: "Sprachantwort stoppen"
+            )
+        }
+        if isPreparing {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Preparing voice reply",
+                zh: "正在准备语音回复",
+                fr: "Préparation de la réponse vocale",
+                de: "Sprachantwort wird vorbereitet"
             )
         }
         return localizedYouText(
@@ -12281,26 +12277,33 @@ struct ExpandableSettingsRow<Content: View>: View {
             .accessibilityLabel("\(title), \(subtitle)")
 
             if expanded {
-                HStack(alignment: .top, spacing: 0) {
+                HStack(alignment: .top, spacing: 14) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(ElephantTheme.accent.opacity(0.16))
+                        .fill(ElephantTheme.accent.opacity(0.18))
                         .frame(width: 3)
-                        .padding(.top, 13)
-                        .padding(.trailing, 47)
+                        .padding(.top, 12)
                     content
-                        .padding(.top, 14)
-                        .padding(.bottom, 18)
+                        .padding(14)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                    Spacer(minLength: 0)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.44))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(ElephantTheme.line.opacity(0.42), lineWidth: 1)
+                        )
                 }
-                .padding(.horizontal, 12)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .padding(.leading, 26)
+                .padding(.trailing, 12)
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .scale(scale: 0.992, anchor: .top)))
             }
 
             Divider()
                 .padding(.leading, 58)
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: expanded)
+        .animation(settingsDisclosureAnimation, value: expanded)
         .animation(.easeOut(duration: 0.14), value: hovering)
     }
 
@@ -12308,10 +12311,14 @@ struct ExpandableSettingsRow<Content: View>: View {
         if reduceMotion {
             expanded.toggle()
         } else {
-            withAnimation(.easeInOut(duration: 0.18)) {
+            withAnimation(settingsDisclosureAnimation) {
                 expanded.toggle()
             }
         }
+    }
+
+    private var settingsDisclosureAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.92, blendDuration: 0.02)
     }
 
     private var iconColor: Color {
@@ -12645,7 +12652,7 @@ struct VoiceRepliesSettingsContent: View {
                 Label(stopLabel, systemImage: "stop.fill")
             }
             .settingsActionButton()
-            .disabled(!model.speechOutput.isSpeaking)
+            .disabled(!model.speechOutput.isSpeaking && !model.speechOutput.isPreparing)
 
             Button {
                 model.previewVoiceReply()
@@ -17525,10 +17532,13 @@ struct OnboardingStepScrollContainer<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            content()
-                .padding(.trailing, 4)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+        GeometryReader { geometry in
+            ScrollView(.vertical, showsIndicators: true) {
+                content()
+                    .padding(.trailing, 4)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -17542,6 +17552,8 @@ struct OnboardingField: View {
     var secure = false
     var autoFocus = false
     var suggestions: [String] = []
+    var minHeight: CGFloat? = nil
+    var fillsAvailableHeight = false
     @FocusState private var focused: Bool
     @State private var hovering = false
 
@@ -17580,7 +17592,12 @@ struct OnboardingField: View {
             .foregroundStyle(ElephantTheme.ink)
             .padding(.horizontal, 12)
             .padding(.vertical, lines.upperBound > 1 ? 12 : 11)
-            .frame(maxWidth: .infinity, minHeight: fieldMinHeight, alignment: .topLeading)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: fieldMinHeight,
+                maxHeight: fillsAvailableHeight ? .infinity : nil,
+                alignment: .topLeading
+            )
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(fieldFill)
@@ -17606,7 +17623,7 @@ struct OnboardingField: View {
                 OnboardingSuggestionChips(suggestions: suggestions, selection: $text)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: fillsAvailableHeight ? .infinity : nil, alignment: .topLeading)
         .onAppear {
             guard autoFocus else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
@@ -17616,7 +17633,8 @@ struct OnboardingField: View {
     }
 
     private var fieldMinHeight: CGFloat {
-        lines.upperBound > 1 ? 92 : 46
+        if let minHeight { return minHeight }
+        return lines.upperBound > 1 ? 92 : 46
     }
 
     private var fieldFill: Color {
@@ -19191,7 +19209,7 @@ struct OnboardingHerdDiscoveryStep: View {
                 }
                 .padding(2)
             }
-            .frame(height: 440)
+            .frame(height: 352)
 
             Text(localizedYouText(model.appLanguage, en: "Only one baby is created during onboarding. You can add more later from Herd.", zh: "onboarding 里先只领养一只小象；之后可以在 Herd 里继续添加。", fr: "Un seul baby est créé pendant l'onboarding.", de: "Beim Onboarding wird nur ein Baby erstellt."))
                 .font(.caption)
@@ -19242,7 +19260,8 @@ private struct OnboardingHerdRuntimeCard: View {
                     Text(roleLine)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     HStack(spacing: 6) {
                         StatusDot(tint: runtime.canExecute ? ElephantTheme.green : ElephantTheme.orange)
                         Text(runtime.canExecute
@@ -19254,7 +19273,7 @@ private struct OnboardingHerdRuntimeCard: View {
                 }
             }
             .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: 136, maxHeight: 136, alignment: .top)
             .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -19422,7 +19441,7 @@ private struct OnboardingProviderBabyRuntimeCard: View {
     @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 ProviderLogoMark(option: option, size: 42)
                 VStack(alignment: .leading, spacing: 3) {
@@ -19442,7 +19461,7 @@ private struct OnboardingProviderBabyRuntimeCard: View {
                     .foregroundStyle(selected ? ElephantTheme.accent : ElephantTheme.faint)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Pill(text: localizedYouText(model.appLanguage, en: "provider-backed", zh: "模型服务小象", fr: "provider", de: "Provider"), symbol: "cpu", tint: ElephantTheme.accent)
                 if !motherModelID.isEmpty, resolvedBabyModelID != motherModelID {
                     Pill(text: localizedYouText(model.appLanguage, en: "different model", zh: "不同模型", fr: "modèle différent", de: "anderes Modell"), symbol: "arrow.triangle.branch", tint: ElephantTheme.green)
@@ -19482,7 +19501,7 @@ private struct OnboardingProviderBabyRuntimeCard: View {
             .help(localizedYouText(model.appLanguage, en: "Choose the model this baby uses", zh: "选择这只小象使用的模型", fr: "Choisir le modèle du baby", de: "Baby-Modell wählen"))
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 136, maxHeight: 136, alignment: .topLeading)
         .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(selected ? ElephantTheme.accent.opacity(0.62) : ElephantTheme.line.opacity(0.68), lineWidth: selected ? 1.4 : 1))
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -19806,8 +19825,17 @@ struct OnboardingInterestsStep: View {
                 selection: $model.onboardingHobbies,
                 language: model.appLanguage
             )
-            OnboardingField(title: model.text(.longTermDirection), placeholder: model.text(.longTermDirectionPlaceholder), text: $model.onboardingDream, lines: 3...4)
+            OnboardingField(
+                title: model.text(.longTermDirection),
+                placeholder: model.text(.longTermDirectionPlaceholder),
+                text: $model.onboardingDream,
+                lines: 6...8,
+                minHeight: 228,
+                fillsAvailableHeight: true
+            )
+                .frame(maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -21409,14 +21437,14 @@ struct OnboardingLearningLivePanel: View {
     var statusText: String
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 14) {
             OnboardingLearningAnimation()
-                .frame(width: 152, height: 152)
+                .frame(width: 88, height: 88)
                 .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text(model.text(.learningTitle))
-                    .font(.system(size: 25, weight: .semibold))
+                    .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(ElephantTheme.ink)
                     .multilineTextAlignment(.center)
                 Text(panelSubtitle)
@@ -21457,14 +21485,17 @@ struct OnboardingLearningLivePanel: View {
                 Spacer(minLength: 0)
                 Pill(text: statusLabel, tint: statusTint)
             }
-            .padding(16)
-            .frame(maxWidth: 540, minHeight: 88, alignment: .leading)
+            .padding(12)
+            .frame(maxWidth: 540, minHeight: 76, alignment: .leading)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.64), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(statusTint.opacity(0.20), lineWidth: 1))
+
+            OnboardingLearningToolTimeline(job: job, statusText: statusText)
+                .frame(maxWidth: 540)
         }
-        .padding(.horizontal, 34)
-        .padding(.vertical, 34)
-        .frame(maxWidth: .infinity, minHeight: 386, alignment: .center)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity, minHeight: 442, alignment: .center)
         .background(learningPanelBackground)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.white.opacity(0.50), lineWidth: 1))
         .shadow(color: ElephantTheme.accent.opacity(0.10), radius: 30, x: 0, y: 18)
@@ -21514,7 +21545,7 @@ struct OnboardingLearningLivePanel: View {
         if !modelProgress.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return localizedYouText(model.appLanguage, en: "Elephant is turning your answers into the first usable memory.", zh: "Elephant 正在把你的回答整理成第一版可用记忆。", fr: "Elephant transforme vos réponses en première mémoire.", de: "Elephant macht aus deinen Antworten die erste Erinnerung.")
         }
-        if let latestToolItem {
+        if latestToolItem != nil {
             return localizedYouText(model.appLanguage, en: "Following one live signal at a time.", zh: "正在跟随一个实时信号，不打断你的开始体验。", fr: "Suit un signal en direct.", de: "Folgt einem Live-Signal.")
         }
         return localizedYouText(model.appLanguage, en: "Keep this as one calm moment while setup finishes.", zh: "最后一步保持成一个安静的建立时刻。", fr: "Un moment calme pendant la fin de configuration.", de: "Ein ruhiger Moment, während die Einrichtung endet.")
@@ -21687,17 +21718,6 @@ struct OnboardingLearningToolTimeline: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(statusTint)
-                Text(localizedYouText(model.appLanguage, en: "Live learning activity", zh: "实时学习动态", fr: "Activité d'apprentissage", de: "Live-Lernaktivität"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.ink)
-                Spacer(minLength: 0)
-                Pill(text: statusLabel, tint: statusTint)
-            }
-
             HStack(alignment: .center, spacing: 9) {
                 Image(systemName: "waveform.path.ecg")
                     .font(.caption.weight(.bold))
@@ -21771,9 +21791,9 @@ struct OnboardingLearningToolTimeline: View {
         return "\(title) · \(detail)"
     }
 
-    private var liveContentHeight: CGFloat { 154 }
+    private var liveContentHeight: CGFloat { 88 }
 
-    private var timelineHeight: CGFloat { 248 }
+    private var timelineHeight: CGFloat { 144 }
 
     private var activityScrollKey: String {
         "\(modelProgress.text)|\(latestToolItem?.id ?? "")|\(job?.progressStage ?? "")|\(job?.progressDetail ?? "")"

@@ -29,6 +29,7 @@ VOICE_RUNTIME_REQUIREMENTS=(
   "edge-tts>=7.2,<8"
   "funasr>=1.2,<2"
   "modelscope>=1.10,<2"
+  "setuptools>=69"
   "torchaudio>=2.11,<3"
 )
 

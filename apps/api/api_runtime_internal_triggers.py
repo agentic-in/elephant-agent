@@ -2,22 +2,41 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _latest_default_episode_context(self) -> tuple[object, object, object] | tuple[None, None, None]:
+    pm = self.repository.ensure_default_personal_model()
+    states = self.repository.list_states(personal_model_id=pm.personal_model_id)
+    if not states:
+        return pm, None, None
+    state = states[0]
+    try:
+        episodes = self.repository.list_episodes(
+            state_id=state.state_id,
+            limit=1,
+            newest_first=True,
+        )
+        episode = episodes[0] if episodes else None
+    except TypeError:
+        episodes = self.repository.list_episodes(state_id=state.state_id)
+        episode = episodes[-1] if episodes else None
+    return pm, state, episode
 
 
 def trigger_diary_write(self, *, target_date: str) -> dict[str, Any]:
     """Enqueue a diary write job from the dashboard."""
     from apps.learning_worker_runtime import ensure_learning_worker_running
 
-    pm = self.repository.ensure_default_personal_model()
-    states = self.repository.list_states(personal_model_id=pm.personal_model_id)
-    if not states:
+    pm, state, episode = _latest_default_episode_context(self)
+    if state is None:
         return {"status": "error", "detail": "no states available"}
-    state = states[0]
-    episodes = self.repository.list_episodes(state_id=state.state_id)
-    if not episodes:
+    if episode is None:
         return {"status": "error", "detail": "no episodes available"}
-    episode = episodes[-1]
     metadata: dict[str, str] = {"source": "dashboard.diary"}
     try:
         # Attempt to enqueue journal job
@@ -40,6 +59,7 @@ def trigger_diary_write(self, *, target_date: str) -> dict[str, Any]:
     try:
         ensure_learning_worker_running(state_dir=self.repository.database_path.parent)
     except Exception:
+        LOGGER.warning("failed to start learning worker for diary trigger", exc_info=True)
         pass
     return {"status": "queued", "job_id": job.job_id, "target_date": target_date}
 
@@ -65,15 +85,11 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
     from apps.learning_worker_runtime import ensure_learning_worker_running
 
     resolved_trigger = trigger or "manual"
-    pm = self.repository.ensure_default_personal_model()
-    states = self.repository.list_states(personal_model_id=pm.personal_model_id)
-    if not states:
+    pm, state, episode = _latest_default_episode_context(self)
+    if state is None:
         return {"status": "error", "detail": "no states available"}
-    state = states[0]
-    episodes = self.repository.list_episodes(state_id=state.state_id)
-    if not episodes:
+    if episode is None:
         return {"status": "error", "detail": "no episodes available"}
-    episode = episodes[-1]
     metadata: dict[str, str] = {"source": "dashboard.reflect"}
     normalized_trigger = resolved_trigger.strip().lower()
     if features:
@@ -110,6 +126,7 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
     try:
         ensure_learning_worker_running(state_dir=self.repository.database_path.parent)
     except Exception:
+        LOGGER.warning("failed to start learning worker for reflect trigger", exc_info=True)
         pass
     return {"status": "queued", "job_id": job.job_id, "trigger": resolved_trigger, "features": summary_features}
 
@@ -117,10 +134,15 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
 def _resolved_feature_summary(trigger: str, *, features: str | None) -> str:
     explicit = tuple(item.strip() for item in (features or "").split(",") if item.strip())
     try:
-        from apps.reflect.features import resolve_features
+        from packages.reflect.features import resolve_features
 
         resolved = resolve_features(trigger.strip().lower(), explicit_features=explicit or None)
     except Exception:
+        LOGGER.warning(
+            "failed to resolve reflect feature summary for internal trigger",
+            extra={"trigger": trigger, "features": features},
+            exc_info=True,
+        )
         return features.strip() if features and features.strip() else "default"
     return ",".join(feature.feature_id for feature in resolved) or "default"
 

@@ -7,7 +7,6 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import getpass
-import apps.cli.wizard as cli_wizard
 import importlib.util
 import json
 import os
@@ -21,20 +20,14 @@ import time
 import warnings
 from wsgiref.simple_server import make_server
 
-from apps.cli.runtime import CliRuntime
-from apps.cli.shell import (
-    Align,
+import packages.operator.wizard as cli_wizard
+from packages.operator.shell_stack import Align, Console, Group, Panel, RICH_AVAILABLE, Table, Text
+from packages.operator.shell_ui import (
     BRAND_ACCENT,
     BRAND_ACCENT_STRONG,
     BRAND_LIGHT,
     BRAND_MUTED,
-    Console,
-    Group,
-    Panel,
-    RICH_AVAILABLE,
-    Table,
-    Text,
-    _resolve_elephant_version,
+    resolve_elephant_version as _resolve_elephant_version,
     render_elephant_mark,
 )
 from apps.provider_runtime import load_runtime_local_secret_env

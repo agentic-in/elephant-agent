@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
+import logging
 import os
 import re
 from pathlib import Path
@@ -54,6 +55,8 @@ from packages.tools import ToolDefinition, ToolRuntime, build_tool_fallback_prom
 
 from .ephemeral_injection import TurnScopedPrefixCache, ephemeral_blocks_as_user_suffix, recall_block_contents, strip_recall_blocks
 from .runtime import ModelRequest
+
+LOGGER = logging.getLogger(__name__)
 
 RequestJsonCallable = Callable[..., dict[str, Any]]
 
@@ -503,6 +506,11 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
                     base_url=definition.default_base_url,
                 ).reasoning_efforts
             except Exception:
+                LOGGER.warning(
+                    "failed to resolve discovered model reasoning efforts",
+                    extra={"provider_id": provider_id, "model_id": normalized},
+                    exc_info=True,
+                )
                 reasoning_efforts = ()
             models.append(
                 DiscoveredProviderModel(

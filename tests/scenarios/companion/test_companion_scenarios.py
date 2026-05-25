@@ -179,20 +179,20 @@ class CompanionScenarioFixturesTest(unittest.TestCase):
             runtime = CliRuntime.create(state_dir=root / "state")
             session = runtime.start()
             identity = runtime.update_identity_state(
-                session_id=session.session_id,
+                session_id=session.episode_id,
                 display_name="Samantha",
                 personality_preset="operator",
                 initiative="proactive",
                 elephant_identity_text="Stay steady, direct, and durable.",
             )
             runtime.update_user_state(
-                session_id=session.session_id,
+                session_id=session.episode_id,
                 text=render_user_profile_text(
                     preferred_name="Bit",
                     current_work="Building durable agent systems.",
                 ),
             )
-            user = runtime.inspect_user(session_id=session.session_id)
+            user = runtime.inspect_user(session_id=session.episode_id)
 
         self.assertEqual(identity.display_name, "Samantha")
         self.assertEqual(identity.initiative, "proactive")
@@ -209,15 +209,15 @@ class CompanionScenarioFixturesTest(unittest.TestCase):
             session = runtime.start()
 
             outcome = runtime.explain_next_step(
-                session_id=session.session_id,
+                session_id=session.episode_id,
                 prompt="Call me Bit. I'm building durable agent systems. Please keep replies concise and grounded for future turns.",
             )
             runtime.explain_next_step(
-                session_id=session.session_id,
+                session_id=session.episode_id,
                 prompt="What should we do next?",
             )
-            user = runtime.inspect_user(session_id=session.session_id)
-            relationship = runtime.inspect_relationship(session_id=session.session_id)
+            user = runtime.inspect_user(session_id=session.episode_id)
+            relationship = runtime.inspect_relationship(session_id=session.episode_id)
 
         self.assertIsNone(user.preferred_name)
         self.assertEqual(user.communication_preferences, ())

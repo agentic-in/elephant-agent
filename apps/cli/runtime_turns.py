@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -25,7 +26,7 @@ from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
 from packages.state import (
     ensure_elephant_identity_file,
 )
-from apps.reflect.context_compression import (
+from packages.reflect.context_compression import (
     reflect_compress_summary,
     render_messages_text,
 )
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
 
 _USAGE_AFTER_TURN_COMPACTION_RATIO = 0.85
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +324,7 @@ def run_turn(
             personal_model_id=route_state.personal_model_id if route_state is not None else session.personal_model_id,
             state_id=route_state.state_id if route_state is not None else None,
             episode_id=session.episode_id,
+            owner_scope="sub_agent" if getattr(runtime, "sub_agent_active", False) else None,
             state_query=state_query,
             tool_name=tool_name,
             tool_arguments=dict(tool_arguments or {}),
@@ -577,6 +580,11 @@ def _compact_snapshot_after_high_usage(runtime: CliRuntime, outcome: KernelOutco
             )
             connection.commit()
     except Exception:
+        LOGGER.warning(
+            "failed to persist context compaction summary for episode",
+            extra={"episode_id": outcome.route_session_id},
+            exc_info=True,
+        )
         pass
 
     detail = projection_compaction_detail(compaction_result)
@@ -607,6 +615,7 @@ def _context_limit_tokens(runtime: CliRuntime, outcome: KernelOutcome) -> int:
     try:
         return _safe_token_count(runtime.active_provider_context_window())
     except Exception:
+        LOGGER.warning("failed to inspect active provider context window", exc_info=True)
         return 0
 
 
@@ -637,6 +646,11 @@ def _emit_post_snapshot_kernel_stage(runtime: CliRuntime, outcome: KernelOutcome
             }
         )
     except Exception:
+        LOGGER.warning(
+            "failed to emit context compaction stage",
+            extra={"episode_id": getattr(outcome, "route_session_id", "")},
+            exc_info=True,
+        )
         return
 
 

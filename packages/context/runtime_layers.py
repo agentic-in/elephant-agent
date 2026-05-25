@@ -114,8 +114,8 @@ def build_prompt_envelope(frame: EpisodeFrame | None) -> PromptEnvelope:
 
     if frame is None:
         return PromptEnvelope()
-    # The stable prefix already contains fully-formed `### Who you are`,
-    # `### Your own voice`, etc. Wrapping it under another `## Session
+    # The stable prefix already contains fully-formed `### Your own voice`,
+    # `### Understanding tools`, etc. Wrapping it under another `## Session
     # brief` heading was pure nesting overhead that the model (and
     # Dashboard) simply printed as a lone literal line. Suppress it.
     frozen_prefix = _render_live_prompt_section(

@@ -7,6 +7,7 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make agent-bootstrap"
 	@echo "  make agent-validate"
 	@echo "  make agent-scorecard"
+	@echo "  make agent-public-contracts-docs"
 	@echo "  make agent-report CHANGED_FILES=\"...\""
 	@echo "  make agent-context-audit CHANGED_FILES=\"...\""
 	@echo "  make agent-lint"
@@ -34,6 +35,9 @@ agent-validate: ## Validate harness manifests and docs
 
 agent-scorecard: ## Show harness governance scorecard
 	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py scorecard
+
+agent-public-contracts-docs: ## Regenerate generated public contract docs
+	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py public-contracts-docs
 
 AGENT_CONTEXT_DETAIL ?= compact
 AGENT_REPORT_FORMAT ?= text

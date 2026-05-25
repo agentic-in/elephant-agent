@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-json", required=True)
     parser.add_argument("--language", default="zh")
     parser.add_argument("--hotwords")
+    parser.add_argument("--health-check", action="store_true")
     return parser.parse_args()
 
 
@@ -33,17 +35,47 @@ def joined_text(result: Any) -> str:
                 value = item.get("text") or item.get("sentence_info") or ""
                 if isinstance(value, str):
                     parts.append(value)
+                elif isinstance(value, list):
+                    parts.extend(
+                        sentence.get("text", "")
+                        for sentence in value
+                        if isinstance(sentence, dict)
+                    )
         return "".join(parts).strip()
     if isinstance(result, dict):
         return str(result.get("text") or "").strip()
     return ""
 
 
+def activate_distutils_compat() -> None:
+    # Python 3.12 removed stdlib distutils. FunASR still imports it in some
+    # model files, and target site-packages do not process setuptools .pth hooks.
+    try:
+        import setuptools  # noqa: F401
+    except Exception:
+        pass
+
+
+def model_kwargs() -> dict[str, Any]:
+    return {
+        "model": "paraformer-zh",
+        "vad_model": "fsmn-vad",
+        "punc_model": "ct-punc",
+        "device": "cpu",
+        "ncpu": max(1, min(os.cpu_count() or 2, 4)),
+        "disable_update": True,
+        "disable_pbar": True,
+    }
+
+
 def main() -> int:
     args = parse_args()
     output = Path(args.output_json)
     audio = Path(args.input)
-    if not audio.exists():
+    logging.basicConfig(level=logging.ERROR)
+    activate_distutils_compat()
+
+    if not args.health_check and not audio.exists():
         write_output(output, {"text": "", "error": f"Audio file does not exist: {audio}"})
         return 2
 
@@ -60,14 +92,20 @@ def main() -> int:
         )
         return 2
 
-    model_kwargs: dict[str, Any] = {
-        "model": "paraformer-zh",
-        "vad_model": "fsmn-vad",
-        "punc_model": "ct-punc",
-    }
-
     try:
-        model = AutoModel(**model_kwargs)
+        model = AutoModel(**model_kwargs())
+        if args.health_check:
+            write_output(
+                output,
+                {
+                    "ok": True,
+                    "model": "paraformer-zh",
+                    "vad_model": "fsmn-vad",
+                    "punc_model": "ct-punc",
+                },
+            )
+            return 0
+
         hotword_text = ""
         if args.hotwords:
             hotword_path = Path(args.hotwords)

@@ -33,7 +33,6 @@ async def cron_scheduler_loop(
     from apps.gateway.cron_service import (
         build_gateway_cron_delivery_callback,
         cron_execution_should_deliver,
-        run_cron_scheduler_loop,
     )
     from apps.cli.runtime import CliRuntime
 
@@ -100,7 +99,7 @@ async def cron_scheduler_loop(
 
 def _run_proactive_ask_tick(cli_state_dir: Path, delivery_callback) -> None:
     """Run proactive ask tick for every configured adapter."""
-    from apps.gateway.cron_service import CONFIGURED_IM_ADAPTERS
+    from packages.gateway_core.proactive_ask import CONFIGURED_IM_ADAPTERS, run_proactive_ask_tick
     from packages.runtime_config import (
         global_config_path_for_state_dir,
         load_global_config,
@@ -114,7 +113,6 @@ def _run_proactive_ask_tick(cli_state_dir: Path, delivery_callback) -> None:
     if not isinstance(proactive_config, dict) or proactive_config.get("enabled") is False:
         return
 
-    from apps.gateway.proactive_ask_job import run_proactive_ask_tick
     from apps.gateway.runtime import build_gateway_app
 
     app, outbound_queue, _ = build_gateway_app(state_dir=str(cli_state_dir), start_learning_worker=False)

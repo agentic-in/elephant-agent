@@ -16,6 +16,8 @@ DELETED_RELEASE_RUNBOOK_PATHS = (
 )
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release-certification.yml"
 MAKEFILE_PATH = ROOT / "Makefile"
+RELEASE_MODEL_PATH = ROOT / "docs" / "agent" / "release-model.md"
+PROVENANCE_ADR_PATH = ROOT / "docs" / "agent" / "adr" / "adr-0002-release-artifact-provenance.md"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
 DASHBOARD_PACKAGE_PATH = ROOT / "apps" / "dashboard" / "package.json"
 
@@ -146,6 +148,47 @@ class ReleaseCertificationContractsTest(unittest.TestCase):
         for target in INSTALL_SURFACE_MODULES:
             with self.subTest(target=target):
                 self.assertIn(target, text)
+
+    def test_release_model_documents_upgrade_and_artifact_policy(self) -> None:
+        text = RELEASE_MODEL_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("## Storage Upgrade Policy", text)
+        self.assertIn("clean-schema reset model", text)
+        self.assertIn("packages/storage/schema.sql", text)
+        self.assertIn("SCHEMA_VERSION", text)
+        self.assertIn("A real migration is required", text)
+        self.assertIn("## Release Notes And Changelog Policy", text)
+        self.assertIn("HTTP `/v1` routes", text)
+        self.assertIn("Breaking changes require", text)
+        self.assertIn("prior ADR", text)
+        self.assertIn("## Artifact Integrity Policy", text)
+        self.assertIn("node_modules", text)
+        self.assertIn("legacy storage migrations", text)
+        self.assertIn("Developer ID", text)
+        self.assertIn("notarized", text)
+        self.assertIn("Artifact signing and provenance", text)
+        self.assertIn("ADR-0002 Release Artifact Provenance", text)
+        self.assertIn("commit SHA", text)
+        self.assertIn("checksum location", text)
+        self.assertIn("dist/elephant-agent-provenance.json", text)
+        self.assertIn("dist/SHA256SUMS", text)
+        self.assertIn("actions/attest@v4", text)
+        self.assertIn("GitHub attestation", text)
+
+    def test_release_provenance_adr_sets_publish_boundary(self) -> None:
+        text = PROVENANCE_ADR_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("Status: Proposed", text)
+        self.assertIn("Official Python package artifacts", text)
+        self.assertIn("commit SHA", text)
+        self.assertIn("checksum generation", text)
+        self.assertIn("actions/attest@v4", text)
+        self.assertIn("subject-checksums: dist/SHA256SUMS", text)
+        self.assertIn("attestations", text)
+        self.assertIn("artifact-metadata", text)
+        self.assertIn("Developer ID", text)
+        self.assertIn("notarization", text)
+        self.assertIn("Future SBOM, external transparency-log, or repository-attestation", text)
 
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")

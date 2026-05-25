@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+import logging
 import os
 from pathlib import Path
 import re
@@ -17,6 +18,8 @@ from packages.runtime_layout import (
 )
 
 from .runtime import SkillDefinition, SkillDependency, SkillScope, load_skill_package_definition
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +152,11 @@ class SkillHub:
                 try:
                     catalog_entry = load_skill_catalog_entry(skill_md, source=source)
                 except Exception:
+                    LOGGER.warning(
+                        "failed to load skill hub catalog entry",
+                        extra={"path": str(skill_md), "source_id": source.source_id},
+                        exc_info=True,
+                    )
                     continue
                 if catalog_entry.skill_id in overrides:
                     catalog_entry = _replace_default_enabled(catalog_entry, overrides[catalog_entry.skill_id])

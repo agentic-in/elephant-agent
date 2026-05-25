@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import logging
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
 from .api_runtime_internal_methods import _serialize
 from .api_runtime_support import APIResponse, _now, _read_json_bytes
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _dispatch_personal_model(
@@ -293,4 +297,5 @@ def _persist_proactive_ask_config(state_dir: Path, updates: dict[str, Any]) -> N
         config["personal_model_questions"] = question_policy
         write_global_config(config_path, config)
     except Exception:  # pragma: no cover
+        LOGGER.warning("failed to persist proactive ask question policy", exc_info=True)
         return

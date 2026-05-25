@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
 from packages.contracts.layers import Episode
@@ -12,11 +13,23 @@ from packages.contracts.layers import Episode
 from .runtime_support import KernelStoragePort
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass(frozen=True, slots=True)
 class EpisodeTransition:
     parent_episode: Episode
     episode: Episode
     lineage: tuple[Episode, ...]
+
+
+def _latest_loop_for_episode(storage: KernelStoragePort, episode_id: str) -> object | None:
+    try:
+        loops = storage.list_loops(episode_id=episode_id, limit=1, newest_first=True)
+        return loops[0] if loops else None
+    except TypeError:
+        loops = storage.list_loops(episode_id=episode_id)
+        return loops[-1] if loops else None
 
 
 def close_episode(
@@ -71,14 +84,18 @@ def close_episode(
         if callable(index_exit):
             try:
                 index_exit(closed)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "episode exit summary indexing failed for %s: %s",
+                    closed.episode_id,
+                    exc,
+                    exc_info=True,
+                )
 
     # Side-effect 2: Enqueue learning job
     enqueue = getattr(storage, "enqueue_learning_job", None)
     if callable(enqueue):
-        loops = storage.list_loops(episode_id=episode_id)
-        loop = loops[-1] if loops else None
+        loop = _latest_loop_for_episode(storage, episode_id)
         try:
             enqueue(
                 job_type="episode_boundary_learning",
@@ -90,8 +107,13 @@ def close_episode(
                 summary=closed.exit_summary,
                 metadata={"closed_reason": reason, "source": "episode_state_machine"},
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "episode close learning enqueue failed for %s: %s",
+                closed.episode_id,
+                exc,
+                exc_info=True,
+            )
 
     return closed
 

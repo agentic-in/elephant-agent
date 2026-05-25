@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -101,16 +102,66 @@ class PublicInstallScriptSmokeTest(unittest.TestCase):
         self.assertIn("branches:", content)
         self.assertIn("- main", content)
         self.assertIn("environment: PYPI_API_TOKEN", content)
+        self.assertIn("attestations: write", content)
+        self.assertIn("artifact-metadata: write", content)
         self.assertIn("f'version = \"{target}\"'", content)
         self.assertIn("base = re.sub(r\"\\.dev\\d+$\", \"\", current)", content)
         self.assertIn("make package-build", content)
         self.assertIn("make package-verify", content)
+        self.assertIn("dist/*.whl dist/*.tar.gz", content)
+        self.assertIn("elephant-agent-provenance.json", content)
+        self.assertIn("SHA256SUMS", content)
+        self.assertIn("uses: actions/attest@v4", content)
+        self.assertIn("subject-checksums: dist/SHA256SUMS", content)
         self.assertIn("apps/site/node_modules", makefile_content)
-        self.assertIn("uvx twine check dist/*", makefile_content)
+        self.assertIn("uvx twine check dist/*.whl dist/*.tar.gz", makefile_content)
+        self.assertIn("tools/release/provenance.py --dist-dir dist", makefile_content)
         self.assertIn("uv build", makefile_content)
         self.assertIn("Missing PYPI_API_TOKEN for the publish job", content)
+        self.assertIn("uvx twine upload --skip-existing --verbose dist/*.whl dist/*.tar.gz", content)
         self.assertIn("curl -fsSL https://elephant.agentic-in.ai/install.sh | bash", content)
         self.assertIn("pip install elephant-agent==", content)
+
+    def test_release_provenance_script_writes_checksums_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dist_dir = Path(tmpdir) / "dist"
+            dist_dir.mkdir()
+            wheel = dist_dir / "elephant_agent-1.2.3-py3-none-any.whl"
+            sdist = dist_dir / "elephant_agent-1.2.3.tar.gz"
+            wheel.write_bytes(b"wheel")
+            sdist.write_bytes(b"sdist")
+            provenance_path = dist_dir / "provenance.json"
+            sha_path = dist_dir / "SHA256SUMS"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "tools" / "release" / "provenance.py"),
+                    "--dist-dir",
+                    str(dist_dir),
+                    "--output",
+                    str(provenance_path),
+                    "--sha256-output",
+                    str(sha_path),
+                    "--version",
+                    "1.2.3",
+                    "--commit-sha",
+                    "abc123",
+                ],
+                cwd=ROOT,
+                text=True,
+                check=True,
+            )
+
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            sha_text = sha_path.read_text(encoding="utf-8")
+
+        self.assertEqual(provenance["project"], "elephant-agent")
+        self.assertEqual(provenance["version"], "1.2.3")
+        self.assertEqual(provenance["commit_sha"], "abc123")
+        self.assertEqual(len(provenance["artifacts"]), 2)
+        self.assertIn("elephant_agent-1.2.3-py3-none-any.whl", sha_text)
+        self.assertIn("elephant_agent-1.2.3.tar.gz", sha_text)
 
     def test_pyproject_excludes_site_packages_from_python_distribution(self) -> None:
         content = (ROOT / "pyproject.toml").read_text(encoding="utf-8")

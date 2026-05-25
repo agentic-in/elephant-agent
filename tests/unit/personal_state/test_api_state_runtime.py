@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 
-from apps.api.state_runtime import APIStateService
+from apps.api.state_runtime import APIStateService, _latest_episode_state_for_state
 from packages.contracts import PersonalModel
 from packages.contracts.layers import Episode
 from packages.contracts.runtime import PersonalModelRuntimeState
@@ -13,7 +14,44 @@ from packages.evidence.recall_runtime import RecallRuntime
 from packages.storage import RuntimeStorageRepository
 
 
+class _LatestEpisodeRepository:
+    def __init__(self) -> None:
+        self.episode_calls: list[dict[str, object]] = []
+        self.loaded_episode_id = ""
+        self.latest = SimpleNamespace(episode_id="episode:latest")
+
+    def list_episodes(self, **kwargs: object) -> tuple[SimpleNamespace, ...]:
+        self.episode_calls.append(dict(kwargs))
+        if kwargs != {"state_id": "state:api", "limit": 1, "newest_first": True}:
+            raise AssertionError(f"unexpected broad episode query: {kwargs!r}")
+        return (self.latest,)
+
+    def load_episode_state(self, episode_id: str) -> Episode:
+        self.loaded_episode_id = episode_id
+        return Episode(
+            episode_id=episode_id,
+            state_id="state:api",
+            personal_model_id="you",
+            entry_surface="api",
+            status="open",
+            started_at=datetime(2026, 4, 27, 14, 0, tzinfo=timezone.utc),
+        )
+
+
 class APIStateServiceTest(unittest.TestCase):
+    def test_latest_episode_state_for_state_uses_bounded_newest_query(self) -> None:
+        repository = _LatestEpisodeRepository()
+
+        episode_id, episode = _latest_episode_state_for_state(repository, "state:api")
+
+        self.assertEqual(episode_id, "episode:latest")
+        self.assertIsNotNone(episode)
+        self.assertEqual(repository.loaded_episode_id, "episode:latest")
+        self.assertEqual(
+            repository.episode_calls,
+            [{"state_id": "state:api", "limit": 1, "newest_first": True}],
+        )
+
     def _build_runtime(self):
         tmpdir = tempfile.TemporaryDirectory()
         repository = RuntimeStorageRepository(Path(tmpdir.name) / "state" / "elephant.sqlite3")

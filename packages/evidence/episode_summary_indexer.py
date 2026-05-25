@@ -28,10 +28,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import Any
 from uuid import uuid4
 
 from packages.contracts import Episode, Fact, Step
+
+LOGGER = logging.getLogger(__name__)
 
 
 __all__ = [
@@ -174,10 +177,12 @@ class SemanticSummaryIndexer:
                 latency_mode="balanced",
             )
         except Exception:
+            LOGGER.debug("Semantic summary embedding failed.", exc_info=True)
             return None, 0
         try:
             return vec.values, int(vec.dimensions)
         except AttributeError:
+            LOGGER.debug("Semantic summary embedding returned an invalid vector.", exc_info=True)
             return None, 0
 
     def _index(
@@ -201,6 +206,7 @@ class SemanticSummaryIndexer:
         try:
             from packages.semantic_index import SemanticIndexDocument
         except Exception:
+            LOGGER.debug("Semantic index document contract is unavailable.", exc_info=True)
             return None
         provider_id = self.provider_id or (
             getattr(self.embedding_service, "registry", None)
@@ -228,10 +234,12 @@ class SemanticSummaryIndexer:
                 metadata={k: str(v) for k, v in dict(metadata or {}).items()},
             )
         except Exception:
+            LOGGER.debug("Failed to build semantic summary index document for %s.", source_id, exc_info=True)
             return None
         try:
             return service.index_document(document)
         except Exception:
+            LOGGER.debug("Semantic summary indexing failed for %s.", source_id, exc_info=True)
             return None
 
     def index_episode_exit(self, episode: Episode) -> object | None:

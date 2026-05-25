@@ -44,8 +44,11 @@ and only useful when the user's locator drifts far from stored text.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+import logging
 from typing import Any
 import unicodedata
+
+LOGGER = logging.getLogger(__name__)
 
 
 __all__ = [
@@ -169,6 +172,7 @@ def _embedding_best_match(
     try:
         locator_vec = _embed_one(embedding_service, locator)
     except Exception:
+        LOGGER.debug("Locator embedding failed for fuzzy evidence match.", exc_info=True)
         return None
     if locator_vec is None:
         return None
@@ -182,6 +186,7 @@ def _embedding_best_match(
         try:
             entry_vec = _embed_one(embedding_service, text)
         except Exception:
+            LOGGER.debug("Entry embedding failed for fuzzy evidence match.", exc_info=True)
             continue
         if entry_vec is None:
             continue
@@ -207,8 +212,10 @@ def _embed_one(embedding_service: Any, text: str) -> tuple[float, ...] | None:
             try:
                 result = func(text=text)
             except Exception:
+                LOGGER.debug("Embedding service %s(text=...) failed for fuzzy evidence match.", attr, exc_info=True)
                 continue
         except Exception:
+            LOGGER.debug("Embedding service %s(...) failed for fuzzy evidence match.", attr, exc_info=True)
             continue
         # Unpack common return shapes.
         values = getattr(result, "values", None)

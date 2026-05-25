@@ -14,10 +14,14 @@ summaries are not durable prompt truth.
 from __future__ import annotations
 
 import hashlib
+import logging
+import re
 from dataclasses import replace
 from typing import Any
 
 from packages.contracts.runtime import ContextBundle, PromptEnvelope
+
+LOGGER = logging.getLogger(__name__)
 
 _PREFIX_CACHE_MAX = 32
 _prefix_cache: dict[str, tuple[str, str]] = {}  # episode_id -> (hash, frozen_prefix)
@@ -182,6 +186,17 @@ _LENS_FACET_ORDER: dict[str, tuple[str, ...]] = {
 }
 
 _KNOWN_LENSES = frozenset({"identity", "world", "pulse", "journey"})
+_PROFILE_ARTIFACT_TOPIC_MARKERS = frozenset((".anchor.logo.",))
+
+
+def _profile_artifact_text(value: object, *, topic: str = "") -> bool:
+    text = " ".join(str(value or "").split()).strip().casefold()
+    topic_text = str(topic or "").casefold()
+    return (
+        "personal_logo:" in text
+        or "user-avatar." in text
+        or any(marker in topic_text for marker in _PROFILE_ARTIFACT_TOPIC_MARKERS)
+    )
 
 
 def _topic_lens(topic: str, fallback_lens: str) -> str:
@@ -295,6 +310,11 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
     try:
         facts = list_facts(personal_model_id=personal_model_id, status="active")
     except Exception:
+        LOGGER.debug(
+            "Failed to list committed Personal Model facts for generation context: %s",
+            personal_model_id,
+            exc_info=True,
+        )
         return ()
     if not facts:
         return ()
@@ -315,12 +335,18 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
         lens = _topic_lens(topic, getattr(fact, "lens", "") or "")
         if not lens:
             continue
-        # facet = second segment of topic (e.g. identity.anchor.name → "anchor")
+        # facet = second segment of topic (e.g. identity.anchor.name → "anchor").
+        # Non-canonical legacy facets are omitted from the live system prompt:
+        # they remain searchable in PM storage, but rendering them here creates a
+        # database-dump feel and often duplicates newer canonical claims.
         parts = topic.split(".")
         facet = parts[1] if len(parts) >= 2 else "_other"
+        if facet not in _LENS_FACET_ORDER.get(lens, ()):
+            continue
         by_lens_facet[lens].setdefault(facet, []).append(fact)
 
     lines: list[str] = []
+    seen_fact_keys: set[str] = set()
     for lens in ("identity", "world", "pulse", "journey"):
         facet_map = by_lens_facet[lens]
         if not facet_map:
@@ -336,7 +362,9 @@ def _frozen_committed_pm_lines(storage: Any, request: Any) -> tuple[str, ...]:
             lines.append(f"#### {facet}")
             for fact in facet_facts:
                 text = _fact_prompt_text(fact)
-                if text:
+                key = _fact_prompt_key(text)
+                if text and key not in seen_fact_keys:
+                    seen_fact_keys.add(key)
                     lines.append(f"- {text}")
     return tuple(lines)
 
@@ -352,11 +380,20 @@ def _fact_visible_in_core_prompt(fact: Any, metadata: dict[str, Any]) -> bool:
         return False
     if text.startswith("User explicitly shared ") and text.endswith(("?", "？")):
         return False
+    topic = str(metadata.get("topic") or "")
+    if _profile_artifact_text(text, topic=topic):
+        return False
     return True
 
 
 def _fact_prompt_text(fact: Any) -> str:
     return str(getattr(fact, "text", "") or "").strip()
+
+
+def _fact_prompt_key(text: str) -> str:
+    compact = " ".join(str(text or "").split()).casefold()
+    compact = compact.removeprefix("用户")
+    return re.sub(r"[\s，。,.：:；;、]+", "", compact)
 
 
 
@@ -368,6 +405,11 @@ def _facts_for(storage: Any, personal_model_id: str) -> tuple[Any, ...]:
     try:
         return tuple(list_facts(personal_model_id=personal_model_id, status="active"))
     except Exception:
+        LOGGER.debug(
+            "Failed to list Personal Model facts for dynamic generation context: %s",
+            personal_model_id,
+            exc_info=True,
+        )
         return ()
 
 

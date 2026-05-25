@@ -84,7 +84,8 @@
       ],
       "conditional_surfaces": [
         "storage",
-        "context_assembly"
+        "context_assembly",
+        "learning_agents"
       ],
       "read_first": [
         "packages/kernel/AGENTS.md",

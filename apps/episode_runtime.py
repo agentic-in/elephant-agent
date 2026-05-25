@@ -34,7 +34,7 @@ class EpisodeLifecycleService:
     def _resolve_state_id(self, personal_model_id: str, elephant_id: str | None) -> str:
         """Find or create a State row and return its state_id."""
         if elephant_id:
-            for state in self.repository.list_states(status="active"):
+            for state in self.repository.list_states(elephant_id=elephant_id, status="active"):
                 if state.elephant_id == elephant_id:
                     return state.state_id
             # Create a new state for this elephant

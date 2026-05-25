@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import logging
 import math
 import unicodedata
 from typing import Mapping, Protocol
@@ -21,6 +22,7 @@ FUSION_WEIGHTS = {
     "vector": 1.0,
     "ngram": 0.9,
 }
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,6 +188,7 @@ class HybridSemanticSearcher:
                 if match.semantic_index_entry_id in documents_by_entry_id
             )
         except Exception:
+            LOGGER.debug("Semantic vector backend search failed; using lexical semantic signals only.", exc_info=True)
             return ()
         return tuple(match.semantic_index_entry_id for match in vector_matches)
 
@@ -247,6 +250,7 @@ def _episode_record(
         try:
             episode = load_episode(episode_id)
         except Exception:
+            LOGGER.debug("Failed to load episode source document for semantic search; using metadata fallback.", exc_info=True)
             episode = None
     if episode is None:
         return _metadata_record(entry, metadata, schema_version="episode_summary/v1", layer_type="episode_summary")
@@ -287,6 +291,7 @@ def _step_record(
         try:
             step = load_step(step_id)
         except Exception:
+            LOGGER.debug("Failed to load step source document for semantic search; using metadata fallback.", exc_info=True)
             step = None
     if step is None:
         return _metadata_record(entry, metadata, schema_version="step/v1", layer_type="step")
@@ -375,6 +380,7 @@ def _load_fact(repository: SemanticSearchRepository, entry: SemanticIndexEntry, 
             status=("active", "retired", "disputed"),
         )
     except Exception:
+        LOGGER.debug("Failed to load Personal Model fact source document for semantic search.", exc_info=True)
         return None
     return next((fact for fact in facts if str(getattr(fact, "fact_id", "") or "") == fact_id), None)
 
