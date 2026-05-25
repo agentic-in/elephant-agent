@@ -188,6 +188,25 @@ write_sha256_file() {
   printf '%s  %s\n' "$(sha256_file "${file}")" "$(basename "${file}")" > "${file}.sha256"
 }
 
+codesign_with_retry() {
+  local max_attempts="${MACOS_CODESIGN_RETRIES:-5}"
+  local delay_seconds="${MACOS_CODESIGN_RETRY_DELAY:-8}"
+  local attempt=1
+  local status=0
+  while true; do
+    if "$@"; then
+      return 0
+    fi
+    status=$?
+    if (( attempt >= max_attempts )); then
+      return "${status}"
+    fi
+    echo "codesign failed, retrying in ${delay_seconds}s (attempt ${attempt}/${max_attempts})..." >&2
+    sleep "${delay_seconds}"
+    attempt=$((attempt + 1))
+  done
+}
+
 sign_path() {
   local path="$1"
   if signing_disabled; then
@@ -195,12 +214,12 @@ sign_path() {
   fi
   require_macos_tool codesign
   if ad_hoc_signing; then
-    codesign --force --sign - "${path}" >/dev/null
+    codesign_with_retry codesign --force --sign - "${path}" >/dev/null
   else
     if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
-      codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+      codesign_with_retry codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
     else
-      codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+      codesign_with_retry codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
     fi
   fi
 }
@@ -212,12 +231,12 @@ sign_macho_file() {
   fi
   require_macos_tool codesign
   if ad_hoc_signing; then
-    codesign --force --sign - "${path}" >/dev/null
+    codesign_with_retry codesign --force --sign - "${path}" >/dev/null
   else
     if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
-      codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+      codesign_with_retry codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
     else
-      codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
+      codesign_with_retry codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
     fi
   fi
 }
