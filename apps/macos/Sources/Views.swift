@@ -24,7 +24,7 @@ struct RootView: View {
             .blur(radius: model.showingOnboardingLetterEnvelope ? 8 : 0)
             .animation(.easeInOut(duration: 0.18), value: sidebarVisible)
 
-            if model.isSleepDisplayPresented {
+            if model.isSleepDisplayPresented && !model.showingOnboarding {
                 SleepDisplayView()
                     .environmentObject(model)
                     .transition(.opacity.combined(with: .scale(scale: 1.015)))
@@ -70,7 +70,12 @@ struct RootView: View {
         .animation(.spring(response: 0.42, dampingFraction: 0.88), value: model.showingOnboardingLetterPrompt)
         .animation(.spring(response: 0.46, dampingFraction: 0.86), value: model.showingOnboardingLetterEnvelope)
         .onChange(of: model.snapshot.hasElephant) { hasElephant in
-            if hasElephant {
+            if hasElephant && !model.snapshot.providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                onboardingComplete = true
+            }
+        }
+        .onChange(of: model.snapshot.providerID) { providerID in
+            if model.snapshot.hasElephant && !providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 onboardingComplete = true
             }
         }

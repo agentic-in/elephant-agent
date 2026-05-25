@@ -1263,8 +1263,14 @@ final class ElephantAppModel: ObservableObject {
         return UserDefaults.standard.bool(forKey: key)
     }
 
+    private static func hasCompletedOnboarding() -> Bool {
+        UserDefaults.standard.bool(forKey: onboardingCompleteKey)
+    }
+
     private static func shouldPresentLaunchLockScreen() -> Bool {
-        !onboardingPreviewMode && storedAppLockPasswordRecord() != nil
+        !onboardingPreviewMode
+            && hasCompletedOnboarding()
+            && storedAppLockPasswordRecord() != nil
     }
 
     private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String) -> String {
@@ -1360,10 +1366,15 @@ final class ElephantAppModel: ObservableObject {
             try await refreshDashboard()
             corePhase = .ready
             startReadinessPollingIfNeeded()
-            if Self.onboardingPreviewMode || !snapshot.hasElephant || snapshot.providerID.isEmpty {
+            let needsOnboarding = Self.onboardingPreviewMode || !snapshot.hasElephant || snapshot.providerID.isEmpty
+            if needsOnboarding {
+                if !Self.onboardingPreviewMode {
+                    UserDefaults.standard.set(false, forKey: Self.onboardingCompleteKey)
+                }
                 isSleepDisplayPresented = false
                 showingOnboarding = true
             } else if hasAppLockPassword {
+                UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
                 beginSleepDisplay(reason: "launch")
             }
             if UserDefaults.standard.bool(forKey: Self.onboardingLetterPendingKey) {
@@ -1887,7 +1898,7 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func beginSleepDisplay(reason: String = "manual") {
-        guard !showingOnboarding else { return }
+        guard Self.hasCompletedOnboarding(), !showingOnboarding else { return }
         speechOutput.stop()
         sleepDisplayReason = reason
         sleepUnlockPassword = ""
