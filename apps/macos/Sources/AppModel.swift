@@ -322,7 +322,7 @@ func onboardingBabyRoleTemplates(for occupation: String, language: AppLanguage) 
         )
     }
 
-    if containsAny(["engineer", "developer", "code", "coding", "technical", "systems", "程序", "工程", "技术", "研发", "代码", "système", "technique", "technik", "system"]) {
+    if containsAny(["engineer", "developer", "technology", "code", "coding", "technical", "systems", "程序", "工程", "技术", "研发", "代码", "système", "technique", "technik", "technologie", "system"]) {
         return [
             template("engineering-coding", "coding baby elephant", "编码小象", "Code changes and validation.", "写代码、改代码和验证。", "Use this baby elephant for implementation plans, code changes, terminal investigation, and validation-heavy engineering work.", "把实现方案、代码修改、终端排查和验证密集的工程任务交给这只小象。", "curlybraces.square"),
             template("engineering-research", "research baby elephant", "研究小象", "Context, APIs, and tradeoffs.", "查上下文、API 和技术取舍。", "Use this baby elephant for technical research, source reading, API comparison, and implementation options.", "把技术调研、资料阅读、API 对比和实现选型交给这只小象。", "doc.text.magnifyingglass"),
@@ -338,7 +338,7 @@ func onboardingBabyRoleTemplates(for occupation: String, language: AppLanguage) 
             template("product-copy", "copy baby elephant", "文案小象", "Interface language and tone.", "界面语言和语气。", "Use this baby elephant for interface copy, empty states, labels, onboarding text, and tone consistency.", "把界面文案、空状态、标签、onboarding 文案和语气一致性交给这只小象。", "text.quote")
         ]
     }
-    if containsAny(["research", "student", "learning", "teaching", "study", "研究", "学生", "学术", "学习", "教学", "apprentissage", "enseignement", "recherche", "lernen", "lehren", "forschung"]) {
+    if containsAny(["research", "student", "learning", "teaching", "study", "transition", "job search", "care", "education", "medical", "health", "研究", "学生", "学术", "学习", "教学", "转型", "求职", "换方向", "暂停", "照护", "教育", "医疗", "心理", "健康", "apprentissage", "enseignement", "recherche", "transition", "soin", "santé", "lernen", "lehren", "forschung", "fürsorge", "gesundheit"]) {
         return [
             template("research-synthesis", "research baby elephant", "研究小象", "Context, sources, and synthesis.", "上下文、资料和综合。", "Use this baby elephant for research, source comparison, reading notes, and synthesis before the primary Elephant answers.", "把研究、资料对比、阅读笔记和回答前综合交给这只小象。", "doc.text.magnifyingglass"),
             template("research-learning", "learning baby elephant", "学习小象", "Study paths and examples.", "学习路径和例子。", "Use this baby elephant for study plans, concept checks, examples, and learning follow-ups.", "把学习计划、概念检查、例子和后续学习提醒交给这只小象。", "graduationcap"),
@@ -346,7 +346,7 @@ func onboardingBabyRoleTemplates(for occupation: String, language: AppLanguage) 
             template("research-writing", "writing baby elephant", "写作小象", "Drafts, abstracts, and clarity.", "草稿、摘要和表达清晰度。", "Use this baby elephant for abstracts, paper drafts, study notes, and making complex material clear.", "把摘要、论文草稿、学习笔记和复杂材料的清晰表达交给这只小象。", "pencil.and.outline")
         ]
     }
-    if containsAny(["operations", "project", "process", "workflow", "运营", "项目", "推进", "流程", "projet", "processus", "opérations", "projekt", "prozesse", "abläufe"]) {
+    if containsAny(["operations", "project", "process", "workflow", "support", "admin", "customer service", "运营", "项目", "推进", "流程", "支持", "行政", "客服", "助理", "事务", "projet", "processus", "opérations", "support", "administratif", "projekt", "prozesse", "abläufe"]) {
         return [
             template("ops-project", "project baby elephant", "项目小象", "Milestones, owners, blockers.", "里程碑、责任人和阻塞。", "Use this baby elephant for project plans, owner mapping, blocker summaries, and execution rhythm.", "把项目计划、责任人梳理、阻塞摘要和推进节奏交给这只小象。", "checklist"),
             template("ops-process", "process baby elephant", "流程小象", "Systems, handoffs, repeatability.", "系统、交接和可复用流程。", "Use this baby elephant for process design, SOPs, handoffs, and repeatable operating systems.", "把流程设计、SOP、协作交接和可复用运营系统交给这只小象。", "arrow.triangle.2.circlepath"),
@@ -354,7 +354,7 @@ func onboardingBabyRoleTemplates(for occupation: String, language: AppLanguage) 
             template("ops-communication", "communication baby elephant", "沟通小象", "Updates, alignment, follow-up.", "同步、对齐和跟进。", "Use this baby elephant for updates, stakeholder notes, meeting follow-ups, and clear asks.", "把进展同步、相关方笔记、会议跟进和清晰请求交给这只小象。", "bubble.left.and.bubble.right")
         ]
     }
-    if containsAny(["founder", "business", "manager", "leadership", "team", "freelance", "创业", "经营", "管理", "团队", "自由职业", "entreprise", "indépendant", "équipe", "gründung", "geschäft", "team", "freiberuflich"]) {
+    if containsAny(["founder", "business", "manager", "leadership", "team", "freelance", "services", "consulting", "legal", "finance", "advisory", "创业", "经营", "管理", "团队", "自由职业", "服务", "咨询", "法律", "财务", "顾问", "entreprise", "indépendant", "équipe", "services", "conseil", "droit", "finance", "gründung", "geschäft", "team", "freiberuflich", "beratung"]) {
         return [
             template("business-strategy", "strategy baby elephant", "策略小象", "Clarify direction and leverage.", "澄清方向和杠杆点。", "Use this baby elephant for strategy memos, market reads, prioritization, and decision options.", "把策略 memo、市场判断、优先级和决策选项交给这只小象。", "chart.line.uptrend.xyaxis"),
             template("business-ops", "ops baby elephant", "运营小象", "Turn plans into operating rhythm.", "把计划落成节奏。", "Use this baby elephant for operating checklists, weekly reviews, process design, and follow-through.", "把运营清单、周复盘、流程设计和推进跟踪交给这只小象。", "checklist"),

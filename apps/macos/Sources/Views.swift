@@ -19661,7 +19661,7 @@ struct OnboardingWorkStep: View {
                 selection: $model.onboardingOccupation,
                 language: model.appLanguage,
                 symbol: "briefcase",
-                popoverTitle: localizedYouText(model.appLanguage, en: "Pick current roles", zh: "选择你现在承担的角色", fr: "Choisissez vos rôles actuels", de: "Wähle deine aktuellen Rollen")
+                popoverTitle: localizedYouText(model.appLanguage, en: "Pick work areas", zh: "选择职业领域", fr: "Choisissez vos domaines", de: "Arbeitsbereiche wählen")
             )
             HStack(alignment: .top, spacing: 12) {
                 OnboardingField(title: model.text(.school), placeholder: model.text(.optional), text: $model.onboardingSchool)
@@ -19685,67 +19685,71 @@ private func onboardingProfessionOptions(for language: AppLanguage) -> [Onboardi
     switch language {
     case .zh:
         return [
-            OnboardingHobbyOption(value: "写代码、做技术或系统", label: "写代码、做技术或系统", detail: "代码、系统、基础设施、数据或技术验证", symbol: "curlybraces.square"),
-            OnboardingHobbyOption(value: "做产品、设计或用户体验", label: "做产品、设计或用户体验", detail: "产品判断、交互、视觉、研究或文案", symbol: "sparkles.rectangle.stack"),
-            OnboardingHobbyOption(value: "做研究、学习或教学", label: "做研究、学习或教学", detail: "论文、课程、知识整理、教学或长期问题", symbol: "graduationcap"),
-            OnboardingHobbyOption(value: "写作、内容或创意表达", label: "写作、内容或创意表达", detail: "文章、脚本、视频、播客、创作或传播", symbol: "pencil.and.outline"),
-            OnboardingHobbyOption(value: "销售、市场或增长", label: "销售、市场或增长", detail: "客户、定位、渠道、转化、品牌或外联", symbol: "megaphone"),
-            OnboardingHobbyOption(value: "运营、项目或流程管理", label: "运营、项目或流程管理", detail: "流程、排期、协作、交付、复盘或支持", symbol: "checklist"),
-            OnboardingHobbyOption(value: "管理团队、带人或负责业务", label: "管理团队、带人或负责业务", detail: "团队、目标、资源、决策和结果责任", symbol: "person.2.badge.gearshape"),
-            OnboardingHobbyOption(value: "创办公司或做自由职业", label: "创办公司或做自由职业", detail: "从 0 到 1、接案、独立业务或多角色并行", symbol: "briefcase"),
-            OnboardingHobbyOption(value: "咨询、法律、财务或专业服务", label: "咨询、法律、财务或专业服务", detail: "专业判断、客户问题、风险和交付质量", symbol: "doc.text.magnifyingglass"),
-            OnboardingHobbyOption(value: "医疗、健康、教育或照护", label: "医疗、健康、教育或照护", detail: "照顾人、支持成长、健康安全或长期陪伴", symbol: "heart.text.square"),
-            OnboardingHobbyOption(value: "行政、支持或客户服务", label: "行政、支持或客户服务", detail: "协调、响应、服务体验和日常支持", symbol: "person.crop.circle.badge.checkmark"),
-            OnboardingHobbyOption(value: "正在转型、求职或暂停工作", label: "正在转型、求职或暂停工作", detail: "职业变化、找方向、重新开始或暂时休整", symbol: "arrow.triangle.2.circlepath"),
-            OnboardingHobbyOption(value: "不在这些里面，我自己写", label: "不在这些里面，我自己写", detail: "可以在下面的主线里补一句更准确的说法", symbol: "square.and.pencil")
+            OnboardingHobbyOption(value: "技术", label: "技术", detail: "代码、系统、数据、工程", symbol: "curlybraces.square"),
+            OnboardingHobbyOption(value: "产品", label: "产品", detail: "需求、体验、方向、取舍", symbol: "point.3.connected.trianglepath.dotted"),
+            OnboardingHobbyOption(value: "设计", label: "设计", detail: "UI、视觉、交互、品牌", symbol: "sparkles.rectangle.stack"),
+            OnboardingHobbyOption(value: "研究", label: "研究", detail: "学术、用户、行业、分析", symbol: "doc.text.magnifyingglass"),
+            OnboardingHobbyOption(value: "内容", label: "内容", detail: "写作、视频、播客、创作", symbol: "pencil.and.outline"),
+            OnboardingHobbyOption(value: "增长", label: "增长", detail: "市场、销售、渠道、品牌", symbol: "megaphone"),
+            OnboardingHobbyOption(value: "运营", label: "运营", detail: "项目、流程、交付、协作", symbol: "checklist"),
+            OnboardingHobbyOption(value: "管理", label: "管理", detail: "团队、目标、资源、结果", symbol: "person.2.badge.gearshape"),
+            OnboardingHobbyOption(value: "经营", label: "经营", detail: "创业、自由职业、独立业务", symbol: "briefcase"),
+            OnboardingHobbyOption(value: "服务", label: "服务", detail: "咨询、法律、财务、顾问", symbol: "doc.text"),
+            OnboardingHobbyOption(value: "照护", label: "照护", detail: "教育、医疗、心理、健康", symbol: "heart.text.square"),
+            OnboardingHobbyOption(value: "支持", label: "支持", detail: "行政、客服、助理、事务", symbol: "person.crop.circle.badge.checkmark"),
+            OnboardingHobbyOption(value: "转型", label: "转型", detail: "学习、求职、换方向、暂停", symbol: "arrow.triangle.2.circlepath"),
+            OnboardingHobbyOption(value: "其他", label: "其他", detail: "自己补充", symbol: "square.and.pencil")
         ]
     case .fr:
         return [
-            OnboardingHobbyOption(value: "technique, code ou systèmes", label: "Technique, code ou systèmes", detail: "Code, systèmes, infrastructure, données ou validation technique", symbol: "curlybraces.square"),
-            OnboardingHobbyOption(value: "produit, design ou expérience utilisateur", label: "Produit, design ou expérience utilisateur", detail: "Jugement produit, interaction, visuel, recherche ou texte", symbol: "sparkles.rectangle.stack"),
-            OnboardingHobbyOption(value: "recherche, apprentissage ou enseignement", label: "Recherche, apprentissage ou enseignement", detail: "Articles, cours, synthèse, enseignement ou questions longues", symbol: "graduationcap"),
-            OnboardingHobbyOption(value: "écriture, contenu ou expression créative", label: "Écriture, contenu ou expression créative", detail: "Articles, scripts, vidéo, podcast, création ou diffusion", symbol: "pencil.and.outline"),
-            OnboardingHobbyOption(value: "vente, marketing ou croissance", label: "Vente, marketing ou croissance", detail: "Clients, positionnement, canaux, conversion, marque ou prospection", symbol: "megaphone"),
-            OnboardingHobbyOption(value: "opérations, projet ou gestion de processus", label: "Opérations, projet ou processus", detail: "Processus, planning, coordination, livraison, revue ou support", symbol: "checklist"),
-            OnboardingHobbyOption(value: "management, équipe ou responsabilité business", label: "Management, équipe ou business", detail: "Équipe, objectifs, ressources, décisions et responsabilité des résultats", symbol: "person.2.badge.gearshape"),
-            OnboardingHobbyOption(value: "création d'entreprise ou freelance", label: "Création d'entreprise ou freelance", detail: "Départ de zéro, missions, activité indépendante ou rôles multiples", symbol: "briefcase"),
-            OnboardingHobbyOption(value: "conseil, droit, finance ou service professionnel", label: "Conseil, droit, finance ou service professionnel", detail: "Jugement expert, problèmes clients, risques et qualité de livraison", symbol: "doc.text.magnifyingglass"),
-            OnboardingHobbyOption(value: "santé, éducation ou soin", label: "Santé, éducation ou soin", detail: "Prendre soin, soutenir la croissance, sécurité ou accompagnement long", symbol: "heart.text.square"),
-            OnboardingHobbyOption(value: "administratif, support ou service client", label: "Administratif, support ou service client", detail: "Coordination, réponses, expérience de service et soutien quotidien", symbol: "person.crop.circle.badge.checkmark"),
-            OnboardingHobbyOption(value: "transition, recherche d'emploi ou pause", label: "Transition, recherche d'emploi ou pause", detail: "Changer de voie, chercher une direction, recommencer ou souffler", symbol: "arrow.triangle.2.circlepath"),
-            OnboardingHobbyOption(value: "autre, je le décrirai moi-même", label: "Autre, je le décrirai moi-même", detail: "Vous pouvez préciser dans la ligne principale ci-dessous", symbol: "square.and.pencil")
+            OnboardingHobbyOption(value: "Technique", label: "Technique", detail: "Code, systèmes, données, ingénierie", symbol: "curlybraces.square"),
+            OnboardingHobbyOption(value: "Produit", label: "Produit", detail: "Besoins, expérience, direction, arbitrages", symbol: "point.3.connected.trianglepath.dotted"),
+            OnboardingHobbyOption(value: "Design", label: "Design", detail: "UI, visuel, interaction, marque", symbol: "sparkles.rectangle.stack"),
+            OnboardingHobbyOption(value: "Recherche", label: "Recherche", detail: "Académique, utilisateurs, marché, analyse", symbol: "doc.text.magnifyingglass"),
+            OnboardingHobbyOption(value: "Contenu", label: "Contenu", detail: "Écriture, vidéo, podcast, création", symbol: "pencil.and.outline"),
+            OnboardingHobbyOption(value: "Croissance", label: "Croissance", detail: "Marketing, vente, canaux, marque", symbol: "megaphone"),
+            OnboardingHobbyOption(value: "Opérations", label: "Opérations", detail: "Projet, processus, livraison, coordination", symbol: "checklist"),
+            OnboardingHobbyOption(value: "Management", label: "Management", detail: "Équipe, objectifs, ressources, résultats", symbol: "person.2.badge.gearshape"),
+            OnboardingHobbyOption(value: "Business", label: "Business", detail: "Startup, freelance, activité indépendante", symbol: "briefcase"),
+            OnboardingHobbyOption(value: "Services", label: "Services", detail: "Conseil, droit, finance, expertise", symbol: "doc.text"),
+            OnboardingHobbyOption(value: "Soin", label: "Soin", detail: "Éducation, médecine, psychologie, santé", symbol: "heart.text.square"),
+            OnboardingHobbyOption(value: "Support", label: "Support", detail: "Admin, client, assistant, opérations courantes", symbol: "person.crop.circle.badge.checkmark"),
+            OnboardingHobbyOption(value: "Transition", label: "Transition", detail: "Apprendre, chercher, changer, faire une pause", symbol: "arrow.triangle.2.circlepath"),
+            OnboardingHobbyOption(value: "Autre", label: "Autre", detail: "Décrire soi-même", symbol: "square.and.pencil")
         ]
     case .de:
         return [
-            OnboardingHobbyOption(value: "Code, Technik oder Systeme", label: "Code, Technik oder Systeme", detail: "Code, Systeme, Infrastruktur, Daten oder technische Prüfung", symbol: "curlybraces.square"),
-            OnboardingHobbyOption(value: "Produkt, Design oder Nutzererlebnis", label: "Produkt, Design oder Nutzererlebnis", detail: "Produkturteil, Interaktion, Visual Design, Research oder Text", symbol: "sparkles.rectangle.stack"),
-            OnboardingHobbyOption(value: "Forschung, Lernen oder Lehren", label: "Forschung, Lernen oder Lehren", detail: "Papers, Kurse, Synthese, Unterricht oder langfristige Fragen", symbol: "graduationcap"),
-            OnboardingHobbyOption(value: "Schreiben, Content oder kreativer Ausdruck", label: "Schreiben, Content oder kreativer Ausdruck", detail: "Artikel, Skripte, Video, Podcast, Kreation oder Veröffentlichung", symbol: "pencil.and.outline"),
-            OnboardingHobbyOption(value: "Vertrieb, Marketing oder Wachstum", label: "Vertrieb, Marketing oder Wachstum", detail: "Kunden, Positionierung, Kanäle, Conversion, Marke oder Outreach", symbol: "megaphone"),
-            OnboardingHobbyOption(value: "Operations, Projekt oder Prozessmanagement", label: "Operations, Projekt oder Prozesse", detail: "Abläufe, Planung, Zusammenarbeit, Lieferung, Review oder Support", symbol: "checklist"),
-            OnboardingHobbyOption(value: "Teamführung, Management oder Geschäftsverantwortung", label: "Teamführung, Management oder Business", detail: "Team, Ziele, Ressourcen, Entscheidungen und Ergebnisverantwortung", symbol: "person.2.badge.gearshape"),
-            OnboardingHobbyOption(value: "Gründung oder freiberufliche Arbeit", label: "Gründung oder freiberufliche Arbeit", detail: "Von null starten, Projekte, unabhängiges Geschäft oder mehrere Rollen", symbol: "briefcase"),
-            OnboardingHobbyOption(value: "Beratung, Recht, Finanzen oder Professional Services", label: "Beratung, Recht, Finanzen oder Services", detail: "Fachurteil, Kundenprobleme, Risiken und Lieferqualität", symbol: "doc.text.magnifyingglass"),
-            OnboardingHobbyOption(value: "Medizin, Gesundheit, Bildung oder Fürsorge", label: "Medizin, Gesundheit, Bildung oder Fürsorge", detail: "Menschen begleiten, Wachstum unterstützen, Sicherheit oder Langzeitbetreuung", symbol: "heart.text.square"),
-            OnboardingHobbyOption(value: "Administration, Support oder Kundenservice", label: "Administration, Support oder Kundenservice", detail: "Koordination, Reaktion, Serviceerlebnis und tägliche Unterstützung", symbol: "person.crop.circle.badge.checkmark"),
-            OnboardingHobbyOption(value: "im Wechsel, auf Jobsuche oder pausierend", label: "Im Wechsel, auf Jobsuche oder pausierend", detail: "Berufliche Veränderung, Richtung suchen, neu anfangen oder ausruhen", symbol: "arrow.triangle.2.circlepath"),
-            OnboardingHobbyOption(value: "nicht dabei, ich schreibe es selbst", label: "Nicht dabei, ich schreibe es selbst", detail: "Du kannst es unten in der Hauptlinie genauer beschreiben", symbol: "square.and.pencil")
+            OnboardingHobbyOption(value: "Technik", label: "Technik", detail: "Code, Systeme, Daten, Engineering", symbol: "curlybraces.square"),
+            OnboardingHobbyOption(value: "Produkt", label: "Produkt", detail: "Anforderungen, Experience, Richtung, Abwägung", symbol: "point.3.connected.trianglepath.dotted"),
+            OnboardingHobbyOption(value: "Design", label: "Design", detail: "UI, Visuals, Interaktion, Marke", symbol: "sparkles.rectangle.stack"),
+            OnboardingHobbyOption(value: "Forschung", label: "Forschung", detail: "Akademisch, Nutzer, Markt, Analyse", symbol: "doc.text.magnifyingglass"),
+            OnboardingHobbyOption(value: "Content", label: "Content", detail: "Schreiben, Video, Podcast, Kreation", symbol: "pencil.and.outline"),
+            OnboardingHobbyOption(value: "Wachstum", label: "Wachstum", detail: "Marketing, Vertrieb, Kanäle, Marke", symbol: "megaphone"),
+            OnboardingHobbyOption(value: "Operations", label: "Operations", detail: "Projekt, Prozess, Lieferung, Koordination", symbol: "checklist"),
+            OnboardingHobbyOption(value: "Management", label: "Management", detail: "Team, Ziele, Ressourcen, Ergebnisse", symbol: "person.2.badge.gearshape"),
+            OnboardingHobbyOption(value: "Business", label: "Business", detail: "Gründung, Freelance, eigenes Geschäft", symbol: "briefcase"),
+            OnboardingHobbyOption(value: "Services", label: "Services", detail: "Beratung, Recht, Finanzen, Expertise", symbol: "doc.text"),
+            OnboardingHobbyOption(value: "Fürsorge", label: "Fürsorge", detail: "Bildung, Medizin, Psychologie, Gesundheit", symbol: "heart.text.square"),
+            OnboardingHobbyOption(value: "Support", label: "Support", detail: "Admin, Kundenservice, Assistenz, Alltag", symbol: "person.crop.circle.badge.checkmark"),
+            OnboardingHobbyOption(value: "Transition", label: "Transition", detail: "Lernen, Suchen, Wechseln, Pause", symbol: "arrow.triangle.2.circlepath"),
+            OnboardingHobbyOption(value: "Andere", label: "Andere", detail: "Selbst beschreiben", symbol: "square.and.pencil")
         ]
     case .en:
         return [
-            OnboardingHobbyOption(value: "code, technical work, or systems", label: "Code, technical work, or systems", detail: "Code, systems, infrastructure, data, or technical validation", symbol: "curlybraces.square"),
-            OnboardingHobbyOption(value: "product, design, or user experience", label: "Product, design, or user experience", detail: "Product judgment, interaction, visuals, research, or copy", symbol: "sparkles.rectangle.stack"),
-            OnboardingHobbyOption(value: "research, learning, or teaching", label: "Research, learning, or teaching", detail: "Papers, courses, synthesis, teaching, or long questions", symbol: "graduationcap"),
-            OnboardingHobbyOption(value: "writing, content, or creative expression", label: "Writing, content, or creative expression", detail: "Articles, scripts, video, podcasts, creation, or publishing", symbol: "pencil.and.outline"),
-            OnboardingHobbyOption(value: "sales, marketing, or growth", label: "Sales, marketing, or growth", detail: "Customers, positioning, channels, conversion, brand, or outreach", symbol: "megaphone"),
-            OnboardingHobbyOption(value: "operations, projects, or process management", label: "Operations, projects, or process management", detail: "Process, planning, coordination, delivery, review, or support", symbol: "checklist"),
-            OnboardingHobbyOption(value: "team management, leadership, or business ownership", label: "Team management, leadership, or business ownership", detail: "People, goals, resources, decisions, and outcome responsibility", symbol: "person.2.badge.gearshape"),
-            OnboardingHobbyOption(value: "founding a company or freelancing", label: "Founding a company or freelancing", detail: "Starting from zero, client work, independent business, or many roles", symbol: "briefcase"),
-            OnboardingHobbyOption(value: "consulting, legal, finance, or professional services", label: "Consulting, legal, finance, or professional services", detail: "Expert judgment, client problems, risk, and delivery quality", symbol: "doc.text.magnifyingglass"),
-            OnboardingHobbyOption(value: "medical, health, education, or care work", label: "Medical, health, education, or care work", detail: "Care, growth support, health, safety, or long-term accompaniment", symbol: "heart.text.square"),
-            OnboardingHobbyOption(value: "administration, support, or customer service", label: "Administration, support, or customer service", detail: "Coordination, response, service experience, and daily support", symbol: "person.crop.circle.badge.checkmark"),
-            OnboardingHobbyOption(value: "transitioning, job searching, or pausing work", label: "Transitioning, job searching, or pausing work", detail: "Changing paths, finding direction, restarting, or taking a pause", symbol: "arrow.triangle.2.circlepath"),
-            OnboardingHobbyOption(value: "not listed; I will write it myself", label: "Not listed; I will write it myself", detail: "Use the current main line below to describe it more accurately", symbol: "square.and.pencil")
+            OnboardingHobbyOption(value: "Technology", label: "Technology", detail: "Code, systems, data, engineering", symbol: "curlybraces.square"),
+            OnboardingHobbyOption(value: "Product", label: "Product", detail: "Needs, experience, direction, tradeoffs", symbol: "point.3.connected.trianglepath.dotted"),
+            OnboardingHobbyOption(value: "Design", label: "Design", detail: "UI, visuals, interaction, brand", symbol: "sparkles.rectangle.stack"),
+            OnboardingHobbyOption(value: "Research", label: "Research", detail: "Academic, user, market, analysis", symbol: "doc.text.magnifyingglass"),
+            OnboardingHobbyOption(value: "Content", label: "Content", detail: "Writing, video, podcast, creation", symbol: "pencil.and.outline"),
+            OnboardingHobbyOption(value: "Growth", label: "Growth", detail: "Marketing, sales, channels, brand", symbol: "megaphone"),
+            OnboardingHobbyOption(value: "Operations", label: "Operations", detail: "Projects, process, delivery, coordination", symbol: "checklist"),
+            OnboardingHobbyOption(value: "Management", label: "Management", detail: "Team, goals, resources, outcomes", symbol: "person.2.badge.gearshape"),
+            OnboardingHobbyOption(value: "Business", label: "Business", detail: "Startup, freelance, independent business", symbol: "briefcase"),
+            OnboardingHobbyOption(value: "Services", label: "Services", detail: "Consulting, legal, finance, advisory", symbol: "doc.text"),
+            OnboardingHobbyOption(value: "Care", label: "Care", detail: "Education, medical, psychology, health", symbol: "heart.text.square"),
+            OnboardingHobbyOption(value: "Support", label: "Support", detail: "Admin, customer service, assistant, tasks", symbol: "person.crop.circle.badge.checkmark"),
+            OnboardingHobbyOption(value: "Transition", label: "Transition", detail: "Learning, job search, changing, pausing", symbol: "arrow.triangle.2.circlepath"),
+            OnboardingHobbyOption(value: "Other", label: "Other", detail: "Describe it yourself", symbol: "square.and.pencil")
         ]
     }
 }
