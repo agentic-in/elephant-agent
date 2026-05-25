@@ -242,8 +242,7 @@ struct ElephantLetterEnvelopeOverlay: View {
                         .padding(7)
                 )
                 .shadow(color: Color.black.opacity(0.28), radius: 42, y: 24)
-                .scaleEffect(opened ? 1 : 0.94)
-                .rotation3DEffect(.degrees(opened ? 0 : -4), axis: (x: 1, y: 0, z: 0), perspective: 0.72)
+                .offset(y: opened ? 0 : 18)
                 .opacity(opened ? 1 : 0)
             }
         }
@@ -270,7 +269,8 @@ struct ElephantLetterEnvelopeOverlay: View {
                         font: .body,
                         color: ElephantTheme.ink,
                         blockSpacing: 7,
-                        lineSpacing: 3.2
+                        lineSpacing: 3.2,
+                        selectable: false
                     )
                     .background(
                         GeometryReader { contentProxy in
@@ -303,11 +303,11 @@ struct ElephantLetterEnvelopeOverlay: View {
     }
 
     private func letterLayout(for container: CGSize) -> (width: CGFloat, height: CGFloat, contentHeight: CGFloat) {
-        let width = min(max(container.width - 112, 660), 880)
-        let maxHeight = min(max(container.height - 96, 520), 820)
+        let width = min(max(container.width - 112, 660), 880).rounded(.down)
+        let maxHeight = min(max(container.height - 96, 520), 820).rounded(.down)
         let desiredHeight = headerHeight + measuredContentHeight + 78
-        let height = min(max(desiredHeight, minimumLetterHeight), maxHeight)
-        return (width, height, max(260, height - headerHeight))
+        let height = min(max(desiredHeight, minimumLetterHeight), maxHeight).rounded(.down)
+        return (width, height, max(260, height - headerHeight).rounded(.down))
     }
 
     private var headerHeight: CGFloat { 96 }
@@ -855,6 +855,7 @@ struct HomeFirstLookPanel: View {
                 let preferredLeftWidth = min(max(390, availableWidth * 0.42), 520)
                 let leftWidth = min(max(340, preferredLeftWidth), availableWidth)
                 let rightWidth = max(0, availableWidth - leftWidth)
+                let selectedDetailWidth = min(max(238, rightWidth * 0.32), 292)
 
                 HStack(alignment: .top, spacing: spacing) {
                     VStack(alignment: .leading, spacing: 17) {
@@ -921,21 +922,30 @@ struct HomeFirstLookPanel: View {
                             )
                         }
 
-                        ZStack(alignment: .bottom) {
-                            PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, language: model.appLanguage)
-                                .frame(height: 360)
+                        HStack(alignment: .top, spacing: 12) {
+                            ZStack(alignment: .bottomLeading) {
+                                PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, language: model.appLanguage)
+                                    .frame(height: 360)
 
-                            if let selectedNode {
-                                PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage, compact: true)
-                                    .padding(10)
-                                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                            } else {
                                 HStack {
                                     EmptyLine(symbol: "circle.hexagongrid", text: model.text(.mapClickHint))
                                     Spacer(minLength: 0)
                                 }
                                 .padding(10)
-                                .transition(.opacity)
+                                .opacity(selectedNode == nil ? 1 : 0)
+                                .allowsHitTesting(false)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if let selectedNode {
+                                PersonalGraphDetailStrip(
+                                    selection: selectedNode,
+                                    language: model.appLanguage,
+                                    compact: true,
+                                    onClose: { self.selectedNode = nil }
+                                )
+                                .frame(width: selectedDetailWidth)
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
                             }
                         }
                         .animation(.easeOut(duration: 0.18), value: selectedNode?.id)
@@ -2780,6 +2790,14 @@ struct WakeComposerPanel: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
+                    if let question = model.pendingQuestionReply {
+                        PendingQuestionReplyCard(
+                            language: model.appLanguage,
+                            question: question,
+                            onCancel: { model.cancelQuestionReplyDraft() }
+                        )
+                    }
+
                     if !model.wakeAttachments.isEmpty {
                         WakeAttachmentStrip(attachments: model.wakeAttachments, removable: true) { attachment in
                             model.removeWakeAttachment(attachment)
@@ -3500,6 +3518,45 @@ struct WakeQueuePanel: View {
     }
 }
 
+struct PendingQuestionReplyCard: View {
+    var language: AppLanguage
+    var question: PersonalModelQuestionItem
+    var onCancel: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "questionmark.bubble.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ElephantTheme.accent)
+                .frame(width: 28, height: 28)
+                .background(ElephantTheme.accent.opacity(0.10), in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localizedYouText(language, en: "Answer this question", zh: "回答这个问题", fr: "Répondre à cette question", de: "Diese Frage beantworten"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Text(question.text)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(action: onCancel) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .frame(width: 24, height: 24)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.82), in: Circle())
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .help(localizedYouText(language, en: "Cancel reply", zh: "取消回答", fr: "Annuler la réponse", de: "Antwort abbrechen"))
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(ElephantTheme.accent.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.accent.opacity(0.14), lineWidth: 1))
+    }
+}
+
 struct WakeQueueRow: View {
     @EnvironmentObject private var model: ElephantAppModel
     var item: WakeQueuedPrompt
@@ -3747,15 +3804,16 @@ struct MarkdownBody: View {
     var color: Color = ElephantTheme.ink
     var blockSpacing: CGFloat = 5
     var lineSpacing: CGFloat = 2.5
+    var selectable = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: blockSpacing) {
             ForEach(blocks) { block in
                 switch block.kind {
                 case .heading:
-                    InlineMarkdownText(text: block.text, font: .headline, color: color, lineSpacing: lineSpacing)
+                    InlineMarkdownText(text: block.text, font: .headline, color: color, selectable: selectable, lineSpacing: lineSpacing)
                 case .paragraph:
-                    InlineMarkdownText(text: block.text, font: font, color: color, lineSpacing: lineSpacing)
+                    InlineMarkdownText(text: block.text, font: font, color: color, selectable: selectable, lineSpacing: lineSpacing)
                 case .bulletList:
                     VStack(alignment: .leading, spacing: 5) {
                         ForEach(block.items, id: \.self) { item in
@@ -3763,7 +3821,7 @@ struct MarkdownBody: View {
                                 Text("•")
                                     .font(font)
                                     .foregroundStyle(color.opacity(0.72))
-                                InlineMarkdownText(text: item, font: font, color: color, lineSpacing: lineSpacing)
+                                InlineMarkdownText(text: item, font: font, color: color, selectable: selectable, lineSpacing: lineSpacing)
                             }
                         }
                     }
@@ -3774,7 +3832,7 @@ struct MarkdownBody: View {
                                 Text("\(index + 1).")
                                     .font(font)
                                     .foregroundStyle(color.opacity(0.72))
-                                InlineMarkdownText(text: item, font: font, color: color, lineSpacing: lineSpacing)
+                                InlineMarkdownText(text: item, font: font, color: color, selectable: selectable, lineSpacing: lineSpacing)
                             }
                         }
                     }
@@ -3786,12 +3844,12 @@ struct MarkdownBody: View {
                                     .font(.callout.weight(.semibold))
                                     .foregroundStyle(item.checked ? ElephantTheme.accent : color.opacity(0.56))
                                     .frame(width: 18)
-                                InlineMarkdownText(text: item.text, font: font, color: color, lineSpacing: lineSpacing)
+                                InlineMarkdownText(text: item.text, font: font, color: color, selectable: selectable, lineSpacing: lineSpacing)
                             }
                         }
                     }
                 case .quote:
-                    InlineMarkdownText(text: block.text, font: font, color: color.opacity(0.86), lineSpacing: lineSpacing)
+                    InlineMarkdownText(text: block.text, font: font, color: color.opacity(0.86), selectable: selectable, lineSpacing: lineSpacing)
                         .padding(.leading, 10)
                         .overlay(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -4180,11 +4238,21 @@ struct InlineMarkdownText: View {
     var color: Color
     var fixedHorizontal = false
     var lineLimit: Int?
+    var selectable = true
     var lineSpacing: CGFloat = 2
 
     var body: some View {
         if let attributed = try? AttributedString(markdown: text) {
-            Text(attributed)
+            styledText(Text(attributed))
+        } else {
+            styledText(Text(text))
+        }
+    }
+
+    @ViewBuilder
+    private func styledText(_ textView: Text) -> some View {
+        if selectable {
+            textView
                 .font(font)
                 .foregroundStyle(color)
                 .lineSpacing(lineSpacing)
@@ -4192,13 +4260,12 @@ struct InlineMarkdownText: View {
                 .fixedSize(horizontal: fixedHorizontal, vertical: true)
                 .textSelection(.enabled)
         } else {
-            Text(text)
+            textView
                 .font(font)
                 .foregroundStyle(color)
                 .lineSpacing(lineSpacing)
                 .lineLimit(lineLimit)
                 .fixedSize(horizontal: fixedHorizontal, vertical: true)
-                .textSelection(.enabled)
         }
     }
 }
@@ -5680,7 +5747,7 @@ struct PersonalModelMapPanel: View {
                 PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, animated: true, language: model.appLanguage)
                     .frame(height: 500)
                 if let selectedNode {
-                    PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
+                    PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage, onClose: { self.selectedNode = nil })
                 }
             }
         }
@@ -6034,7 +6101,7 @@ struct QuestionLedgerRow: View {
         guard !draft.isEmpty else { return }
         replyDraft = ""
         isReplying = false
-        Task { await model.sendQuestionReplyAsConversation(question, content: draft) }
+        Task { await model.answerQuestionFromReplySurface(question, content: draft) }
     }
 }
 
@@ -6058,7 +6125,7 @@ struct QuestionReplyPopover: View {
                     Text(localizedYouText(language, en: "Reply to this question", zh: "回复这个问题", fr: "Répondre à cette question", de: "Diese Frage beantworten"))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text(localizedYouText(language, en: "Your answer will be sent as a conversation, so Elephant can learn from it naturally.", zh: "你的回答会作为一次对话发送，让 Elephant 自然地学习这条信息。", fr: "Votre réponse sera envoyée comme une conversation.", de: "Deine Antwort wird als Gespräch gesendet."))
+                    Text(localizedYouText(language, en: "After sending, Elephant will update this question and refresh what is worth asking next.", zh: "发送后，Elephant 会更新这个问题，并继续整理接下来值得确认的内容。", fr: "Après l'envoi, Elephant mettra cette question à jour.", de: "Nach dem Senden aktualisiert Elephant diese Frage."))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -6076,25 +6143,10 @@ struct QuestionReplyPopover: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Pill(text: localizedQuestionStatus(question, language: language), symbol: "circle.fill", tint: tint)
-                    if question.priority > 0 {
-                        Pill(text: localizedYouText(language, en: "priority", zh: "优先级", fr: "priorité", de: "Priorität") + " \(String(format: "%.2f", question.priority))", symbol: "flag.fill", tint: ElephantTheme.orange)
-                    }
-                }
                 Text(question.text)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Pill(text: lensText, symbol: "circle.grid.cross", tint: tint)
-                    if !question.source.isEmpty {
-                        Pill(text: question.source, symbol: "link", tint: ElephantTheme.faint)
-                    }
-                    if !question.sensitivity.isEmpty {
-                        Pill(text: question.sensitivity, symbol: "lock", tint: ElephantTheme.faint)
-                    }
-                }
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -6267,16 +6319,18 @@ struct PersonalModelDotMapCanvas: View {
                         .onEnded { value in
                             if let selection = nearestSelection(to: value.location, in: layout) {
                                 selectedNode = selection
+                            } else {
+                                selectedNode = nil
                             }
                         }
                 )
                 .accessibilityLabel(mapAccessibilityLabel)
                 .help(localizedYouText(
                     language,
-                    en: "Click a dot to inspect memory.",
-                    zh: "点击一个点查看记忆。",
-                    fr: "Cliquez sur un point pour voir la mémoire.",
-                    de: "Klicke auf einen Punkt, um die Erinnerung zu prüfen."
+                    en: "Click a dot to inspect memory. Click empty space to clear.",
+                    zh: "点击一个点查看记忆，点击空白处取消选择。",
+                    fr: "Cliquez sur un point pour voir la mémoire. Cliquez dans le vide pour annuler.",
+                    de: "Klicke auf einen Punkt, um die Erinnerung zu prüfen. Klicke auf freien Raum zum Abwählen."
                 ))
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -6968,10 +7022,11 @@ struct PersonalGraphDetailStrip: View {
     var selection: PersonalGraphSelection
     var language: AppLanguage
     var compact = false
+    var onClose: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 8) {
-            HStack {
+            HStack(alignment: .center, spacing: 8) {
                 Text(selection.title)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
@@ -6982,6 +7037,25 @@ struct PersonalGraphDetailStrip: View {
                 Text(countLabel)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
+                if onClose != nil {
+                    Button {
+                        onClose?()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(ElephantTheme.muted)
+                            .frame(width: 22, height: 22)
+                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.8), in: Circle())
+                    }
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .help(localizedYouText(
+                        language,
+                        en: "Close memory detail",
+                        zh: "收起记忆详情",
+                        fr: "Fermer le détail",
+                        de: "Detail schließen"
+                    ))
+                }
             }
             if !detailText.isEmpty {
                 Text(detailText)

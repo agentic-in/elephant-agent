@@ -66,7 +66,14 @@ def _dispatch_personal_model(
             answer=content,
             reason="dashboard answer",
         )
-        return APIResponse(200, {"personal_model": result})
+        reflect_result: dict[str, Any] | None = None
+        trigger_reflect = getattr(self, "trigger_reflect_job", None)
+        if callable(trigger_reflect):
+            try:
+                reflect_result = trigger_reflect(trigger="question_answer", features="questions")
+            except Exception:
+                LOGGER.debug("failed to enqueue question refresh after answer", exc_info=True)
+        return APIResponse(200, {"personal_model": result, "reflect": reflect_result})
 
     if normalized == "POST" and len(parts) >= 3 and parts[0] == "claims":
         payload = _read_json_bytes(body) if body else {}

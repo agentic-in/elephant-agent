@@ -1109,6 +1109,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var wakeDraft = ""
     @Published var wakeAttachments: [WakeAttachment] = []
     @Published var wakeQueue: [WakeQueuedPrompt] = []
+    @Published var pendingQuestionReply: PersonalModelQuestionItem?
     @Published var onboardingName = "Elephant"
     @Published var onboardingPurpose = ElephantAppModel.persistedAppLanguage().defaultElephantVibe
     @Published var onboardingPreferredName = ""
@@ -1733,6 +1734,9 @@ final class ElephantAppModel: ObservableObject {
     func startNewChat() {
         speechOutput.stop()
         activeEpisodeID = ""
+        pendingQuestionReply = nil
+        wakeDraft = ""
+        wakeAttachments = []
         messages = [
             ChatMessage(role: .system, text: text(.newConversationReady))
         ]
@@ -2564,55 +2568,47 @@ final class ElephantAppModel: ObservableObject {
         let answer = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else { return }
         do {
-            try await client.answerPersonalModelQuestion(
-                question.id,
-                content: answer,
-                personalModelID: snapshot.currentPersonalModelID,
-                episodeID: activeEpisodeID
-            )
-            try await refreshDashboard()
+            try await submitQuestionAnswer(question, answer: answer)
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    func sendQuestionReplyAsConversation(_ question: PersonalModelQuestionItem, content: String) async {
-        let answer = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !answer.isEmpty else { return }
-        selectedSection = .wake
-        await enqueueWakeMessage(
-            inputModality: .text,
-            voiceDuration: nil,
-            textOverride: Self.questionReplyConversationPrompt(question: question, answer: answer, language: appLanguage)
+    private func submitQuestionAnswer(_ question: PersonalModelQuestionItem, answer: String) async throws {
+        try await client.answerPersonalModelQuestion(
+            question.id,
+            content: answer,
+            personalModelID: snapshot.currentPersonalModelID,
+            episodeID: activeEpisodeID
         )
+        try await refreshDashboard()
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        try? await refreshDashboard()
     }
 
-    func draftAnswerForQuestion(_ question: PersonalModelQuestionItem) {
+    func answerQuestionFromReplySurface(_ question: PersonalModelQuestionItem, content: String) async {
+        let answer = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else { return }
+        await answerQuestion(question, content: answer)
+    }
+
+    func startQuestionReplyInChat(_ question: PersonalModelQuestionItem) {
         selectedSection = .wake
-        wakeDraft = Self.questionReplyConversationPrompt(question: question, answer: "", language: appLanguage)
+        pendingQuestionReply = question
+        wakeDraft = ""
+        wakeAttachments = []
         focusComposer()
     }
 
-    private static func questionReplyConversationPrompt(question: PersonalModelQuestionItem, answer: String, language: AppLanguage) -> String {
-        let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prefix = localizedText(
-            language,
-            en: "I want to answer a question you wanted to confirm.",
-            zh: "我来回答你之前想确认的问题。",
-            fr: "Je veux répondre à une question que tu voulais confirmer.",
-            de: "Ich möchte eine Frage beantworten, die du bestätigen wolltest."
-        )
-        let questionLabel = localizedText(language, en: "Question", zh: "问题", fr: "Question", de: "Frage")
-        let answerLabel = localizedText(language, en: "My answer", zh: "我的回答", fr: "Ma réponse", de: "Meine Antwort")
-        let instruction = localizedText(
-            language,
-            en: "Please treat this as a real conversation and update how you understand and help me.",
-            zh: "请把这次回答当作一次真实对话来理解，并更新你之后怎么理解和帮助我。",
-            fr: "Traite cela comme une vraie conversation et mets à jour ta façon de me comprendre et de m'aider.",
-            de: "Bitte behandle das als echtes Gespräch und aktualisiere, wie du mich verstehst und unterstützt."
-        )
-        let answerBlock = trimmedAnswer.isEmpty ? "\(answerLabel): " : "\(answerLabel): \(trimmedAnswer)"
-        return "\(prefix)\n\n\(questionLabel): \(question.text)\n\(answerBlock)\n\n\(instruction)"
+    func draftAnswerForQuestion(_ question: PersonalModelQuestionItem) {
+        startQuestionReplyInChat(question)
+    }
+
+    func cancelQuestionReplyDraft() {
+        pendingQuestionReply = nil
+        wakeDraft = ""
+        wakeAttachments = []
+        focusComposer()
     }
 
     func createHerdElephant(
@@ -3037,7 +3033,40 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func sendWakeMessage() async {
+        if let question = pendingQuestionReply, wakeAttachments.isEmpty {
+            await sendPendingQuestionReply(question)
+            return
+        }
         await enqueueWakeMessage(inputModality: .text, voiceDuration: nil)
+    }
+
+    private func sendPendingQuestionReply(_ question: PersonalModelQuestionItem) async {
+        let answer = wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else { return }
+        pendingQuestionReply = nil
+        wakeDraft = ""
+        messages.append(ChatMessage(role: .user, text: answer))
+        chatScrollRevision += 1
+        do {
+            try await submitQuestionAnswer(question, answer: answer)
+            messages.append(ChatMessage(role: .assistant, text: questionReplySavedText))
+        } catch {
+            pendingQuestionReply = question
+            lastError = error.localizedDescription
+            messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(error)))
+        }
+        chatScrollRevision += 1
+        focusComposer()
+    }
+
+    private var questionReplySavedText: String {
+        Self.localizedText(
+            appLanguage,
+            en: "I saved this answer, updated the question, and will keep refreshing what is worth asking next.",
+            zh: "我已经记下这次回答，也会继续整理接下来真正值得确认的问题。",
+            fr: "J'ai enregistré cette réponse et je vais continuer à ajuster les questions utiles.",
+            de: "Ich habe diese Antwort gespeichert und aktualisiere weiter, welche Fragen wirklich wichtig sind."
+        )
     }
 
     func sendVoiceWakeMessage(text: String? = nil, duration: TimeInterval?) async {
@@ -3766,6 +3795,7 @@ final class ElephantAppModel: ObservableObject {
         try removeLocalAvatarFilesForReset(paths: avatarPaths)
 
         wakeDraft = ""
+        pendingQuestionReply = nil
         providerTestResult = ""
         providerActionFailed = false
         providerActionInFlight = false

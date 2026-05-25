@@ -31,6 +31,7 @@ from apps.api.api_runtime_routes import API_HEALTH_ROUTE, API_V1_ROUTE_FAMILY_PA
 from apps.api.capabilities import APITelemetrySink
 from packages.context.epoch_store import FileEpochStore
 from packages.context.session_projection import SessionContextEpoch
+from packages.contracts import OpenQuestion
 from packages.contracts.runtime import PromptMessage
 from packages.operator.local_agents import LocalAgentRuntimeRecord
 from packages.storage import RuntimeStorageRepository
@@ -321,6 +322,62 @@ class HerdDiscoveryAPITest(unittest.TestCase):
                     ("babies",),
                     json.dumps({"runtime_id": record.runtime_id}).encode("utf-8"),
                 )
+
+
+class OperatorPersonalModelQuestionDispatchTest(unittest.TestCase):
+    def test_answer_question_marks_answered_and_enqueues_question_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            state = app.repository.create_state(
+                personal_model_id="you",
+                elephant_id="mother-elephant",
+                state_id="state:mother-elephant",
+                elephant_name="Mother Elephant",
+            )
+            app.repository.upsert_open_question(
+                OpenQuestion(
+                    question_id="oq:test",
+                    personal_model_id=state.personal_model_id,
+                    lens="world",
+                    sub_lens="projects_priority",
+                    text="Which project should I prioritize?",
+                    rationale="Need user answer to prioritize help.",
+                    priority=0.9,
+                    sensitivity="low",
+                    source="contextual",
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+            reflect_calls: list[dict[str, object]] = []
+
+            def trigger_reflect_job(**kwargs: object) -> dict[str, object]:
+                reflect_calls.append(dict(kwargs))
+                return {"status": "queued", "job_id": "job:questions", "features": kwargs.get("features", "")}
+
+            app.trigger_reflect_job = trigger_reflect_job
+            response = _dispatch_operator(
+                app,
+                "POST",
+                ("personal-model", "questions", "oq:test", "answer"),
+                json.dumps(
+                    {
+                        "personal_model_id": state.personal_model_id,
+                        "episode_id": "episode:question-answer",
+                        "content": "Prioritize Semantic Router this week.",
+                    }
+                ).encode("utf-8"),
+            )
+            answered = app.repository.list_open_questions(
+                personal_model_id=state.personal_model_id,
+                status="answered",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(answered), 1)
+        self.assertEqual(answered[0].question_id, "oq:test")
+        self.assertEqual(answered[0].user_response_episode_ids, ("episode:question-answer",))
+        self.assertEqual(reflect_calls, [{"trigger": "question_answer", "features": "questions"}])
+        self.assertEqual(response.payload["reflect"]["job_id"], "job:questions")
 
 
 class OperatorCronDispatchTest(unittest.TestCase):
