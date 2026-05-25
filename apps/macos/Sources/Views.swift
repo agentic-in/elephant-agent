@@ -134,7 +134,8 @@ struct OnboardingLetterToast: View {
                         Text(onboardingLetterTitle(model.appLanguage))
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(ElephantTheme.ink)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(localizedYouText(model.appLanguage, en: "It is ready to read.", zh: "它已经写好了。", fr: "Elle est prête à lire.", de: "Er ist bereit."))
                             .font(.caption)
                             .foregroundStyle(ElephantTheme.muted)
@@ -334,6 +335,8 @@ struct ElephantLetterEnvelopeOverlay: View {
                 Text(onboardingLetterTitle(model.appLanguage))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(entry.generatedAt.isEmpty ? localizedYouText(model.appLanguage, en: "written after onboarding", zh: "在认识你之后写下", fr: "écrite après l'accueil", de: "nach dem Onboarding geschrieben") : MacLocalDateTime.formattedDate(entry.generatedAt, language: model.appLanguage))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
@@ -5211,10 +5214,10 @@ private func localizedFormat(_ language: AppLanguage, en: String, zh: String, fr
 private func onboardingLetterTitle(_ language: AppLanguage) -> String {
     localizedYouText(
         language,
-        en: "A letter from Elephant",
-        zh: "来自 Elephant 的一封信",
-        fr: "Une lettre d'Elephant",
-        de: "Ein Brief von Elephant"
+        en: "A letter from Elephant: we evolve together",
+        zh: "来自 Elephant 的一封信：别怕，我们一同进化",
+        fr: "Une lettre d'Elephant : nous évoluons ensemble",
+        de: "Ein Brief von Elephant: wir wachsen gemeinsam"
     )
 }
 
