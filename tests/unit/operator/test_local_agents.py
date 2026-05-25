@@ -70,6 +70,21 @@ class LocalAgentDiscoveryTest(unittest.TestCase):
         self.assertFalse(cursor.can_execute)
         self.assertEqual(cursor.metadata["adapter"], "")
 
+    def test_copilot_and_hermes_have_noninteractive_adapters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bin_dir = Path(tmpdir) / "bin"
+            _fake_executable(bin_dir, "copilot", "copilot 1")
+            _fake_executable(bin_dir, "hermes", "hermes 2")
+
+            records = scan_local_agents(env={"PATH": str(bin_dir)})
+
+        copilot = _one(records, "copilot")
+        hermes = _one(records, "hermes")
+        self.assertTrue(copilot.can_execute)
+        self.assertTrue(hermes.can_execute)
+        self.assertEqual(copilot.metadata["adapter"], "argv_prompt")
+        self.assertEqual(hermes.metadata["adapter"], "argv_prompt")
+
 
 def _fake_executable(directory: Path, name: str, version: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)

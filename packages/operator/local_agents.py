@@ -129,6 +129,9 @@ def provider_specs() -> tuple[LocalAgentProviderSpec, ...]:
             display_name="GitHub Copilot CLI",
             default_role_title="github assistant",
             role_prompt="Use Copilot for GitHub-centric code questions and repository workflow assistance.",
+            executable=True,
+            run_args=("--allow-all-tools", "--allow-all-paths", "--no-ask-user", "--output-format", "text", "-p", "{prompt}"),
+            model_arg="--model",
         ),
         LocalAgentProviderSpec(
             provider_id="cursor-agent",
@@ -171,6 +174,9 @@ def provider_specs() -> tuple[LocalAgentProviderSpec, ...]:
             display_name="Hermes",
             default_role_title="local assistant",
             role_prompt="Use Hermes for local assistant tasks when its CLI is configured.",
+            executable=True,
+            run_args=("-z", "{prompt}"),
+            model_arg="-m",
         ),
         LocalAgentProviderSpec(
             provider_id="pi",
