@@ -204,59 +204,42 @@ struct ElephantLetterEnvelopeOverlay: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var entry: DiaryEntry
     @State private var opened = false
+    @State private var measuredContentHeight: CGFloat = 0
 
     var body: some View {
-        ZStack {
-            LetterVideoBackdrop(paused: true)
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            let content = displayedOnboardingLetterContent(entry.content, language: model.appLanguage)
+            let layout = letterLayout(for: geometry.size)
 
-            Rectangle()
-                .fill(Color.black.opacity(0.20))
+            ZStack {
+                LetterOpenBackdrop()
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        model.closeOnboardingLetterEnvelope()
+                    }
+
+                VStack(spacing: 0) {
+                    envelopeHeader
+                    Divider().opacity(0.55)
+                    letterScrollView(content: content, viewportHeight: layout.contentHeight)
+                }
+                .frame(width: layout.width, height: layout.height)
+                .background(letterPaper)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
-                    LinearGradient(
-                        colors: [
-                            ElephantTheme.gold.opacity(0.16),
-                            Color.black.opacity(0.10),
-                            ElephantTheme.accent.opacity(0.10)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(ElephantTheme.gold.opacity(0.34), lineWidth: 1.2)
                 )
-                .ignoresSafeArea()
-                .onTapGesture {
-                    model.closeOnboardingLetterEnvelope()
-                }
-
-            VStack(spacing: 0) {
-                envelopeHeader
-                Divider().opacity(0.7)
-                ScrollView {
-                    MarkdownBody(text: displayedOnboardingLetterContent(entry.content, language: model.appLanguage), font: .body, color: ElephantTheme.ink)
-                        .padding(.horizontal, 34)
-                        .padding(.top, 26)
-                        .padding(.bottom, 34)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(minHeight: 520, maxHeight: 680)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(Color.white.opacity(0.54), lineWidth: 1)
+                        .padding(7)
+                )
+                .shadow(color: Color.black.opacity(0.28), radius: 42, y: 24)
+                .scaleEffect(opened ? 1 : 0.94)
+                .rotation3DEffect(.degrees(opened ? 0 : -4), axis: (x: 1, y: 0, z: 0), perspective: 0.72)
+                .opacity(opened ? 1 : 0)
             }
-            .frame(width: 720)
-            .background(letterPaper)
-            .overlay(letterDecoration)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(ElephantTheme.gold.opacity(0.28), lineWidth: 1.2)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.46), lineWidth: 1)
-                    .padding(7)
-            )
-            .shadow(color: Color.black.opacity(0.34), radius: 46, y: 28)
-            .scaleEffect(opened ? 1 : 0.92)
-            .rotation3DEffect(.degrees(opened ? 0 : -6), axis: (x: 1, y: 0, z: 0), perspective: 0.72)
-            .opacity(opened ? 1 : 0)
         }
         .onAppear {
             guard !reduceMotion else {
@@ -270,6 +253,71 @@ struct ElephantLetterEnvelopeOverlay: View {
         .onExitCommand {
             model.closeOnboardingLetterEnvelope()
         }
+    }
+
+    private func letterScrollView(content: String, viewportHeight: CGFloat) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    MarkdownBody(
+                        text: content,
+                        font: .body,
+                        color: ElephantTheme.ink,
+                        blockSpacing: 7,
+                        lineSpacing: 3.2
+                    )
+                    .background(
+                        GeometryReader { contentProxy in
+                            Color.clear.preference(key: LetterContentHeightPreferenceKey.self, value: contentProxy.size.height)
+                        }
+                    )
+                    .padding(.horizontal, 38)
+                    .padding(.top, 28)
+                    .padding(.bottom, 38)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id("letter-bottom")
+                }
+            }
+            .frame(height: viewportHeight)
+            .scrollIndicators(.visible)
+            .onPreferenceChange(LetterContentHeightPreferenceKey.self) { height in
+                measuredContentHeight = height
+            }
+            .task(id: autoScrollKey(content: content, viewportHeight: viewportHeight)) {
+                guard shouldAutoScroll(viewportHeight: viewportHeight), !reduceMotion else { return }
+                try? await Task.sleep(nanoseconds: 1_150_000_000)
+                withAnimation(.linear(duration: autoScrollDuration(viewportHeight: viewportHeight))) {
+                    proxy.scrollTo("letter-bottom", anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    private func letterLayout(for container: CGSize) -> (width: CGFloat, height: CGFloat, contentHeight: CGFloat) {
+        let width = min(max(container.width - 112, 660), 880)
+        let maxHeight = min(max(container.height - 96, 520), 820)
+        let desiredHeight = headerHeight + measuredContentHeight + 78
+        let height = min(max(desiredHeight, minimumLetterHeight), maxHeight)
+        return (width, height, max(260, height - headerHeight))
+    }
+
+    private var headerHeight: CGFloat { 96 }
+    private var minimumLetterHeight: CGFloat { 420 }
+
+    private func shouldAutoScroll(viewportHeight: CGFloat) -> Bool {
+        measuredContentHeight + 66 > viewportHeight + 12
+    }
+
+    private func autoScrollDuration(viewportHeight: CGFloat) -> Double {
+        let overflow = max(0, measuredContentHeight + 66 - viewportHeight)
+        return min(18, max(7.5, Double(overflow / 54)))
+    }
+
+    private func autoScrollKey(content: String, viewportHeight: CGFloat) -> String {
+        "\(content.hashValue)-\(Int(measuredContentHeight.rounded()))-\(Int(viewportHeight.rounded()))"
     }
 
     private var envelopeHeader: some View {
@@ -299,24 +347,29 @@ struct ElephantLetterEnvelopeOverlay: View {
             .help(localizedYouText(model.appLanguage, en: "Close letter", zh: "收起信", fr: "Fermer la lettre", de: "Brief schliessen"))
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 18)
+        .frame(height: headerHeight)
     }
 
     private var letterPaper: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(.regularMaterial)
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color(nsColor: .textBackgroundColor).opacity(0.985))
             .overlay(
                 LinearGradient(
                     colors: [
-                        Color(nsColor: .textBackgroundColor).opacity(0.78),
-                        ElephantTheme.gold.opacity(0.14),
-                        Color(nsColor: .textBackgroundColor).opacity(0.68),
-                        ElephantTheme.ember.opacity(0.07)
+                        Color.white.opacity(0.20),
+                        ElephantTheme.gold.opacity(0.10),
+                        Color(nsColor: .textBackgroundColor).opacity(0.10),
+                        ElephantTheme.ember.opacity(0.045)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            )
+            .overlay(
+                LetterPaperTexture()
+                    .opacity(0.10)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             )
     }
 
@@ -360,6 +413,34 @@ struct LetterVideoBackdrop: View {
     }
 }
 
+struct LetterOpenBackdrop: View {
+    var body: some View {
+        ZStack {
+            if let image = BundleAssets.image(named: "onboarding-letter-bg.png", subdirectory: "Blog") {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                AppBackground()
+            }
+
+            Rectangle()
+                .fill(Color.black.opacity(0.34))
+                .overlay(
+                    LinearGradient(
+                        colors: [
+                            ElephantTheme.gold.opacity(0.20),
+                            Color.black.opacity(0.12),
+                            ElephantTheme.accent.opacity(0.16)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+    }
+}
+
 struct LetterAmbientBackdrop: View {
     var paused: Bool
 
@@ -377,6 +458,14 @@ struct LetterAmbientBackdrop: View {
                 }
             }
         }
+    }
+}
+
+private struct LetterContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -820,14 +909,24 @@ struct HomeFirstLookPanel: View {
                             )
                         }
 
-                        PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, language: model.appLanguage)
-                            .frame(height: 360)
+                        ZStack(alignment: .bottom) {
+                            PersonalModelDotMapCanvas(userName: model.userDisplayName, snapshot: model.snapshot, selectedNode: $selectedNode, language: model.appLanguage)
+                                .frame(height: 360)
 
-                        if let selectedNode {
-                            PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage)
-                        } else {
-                            EmptyLine(symbol: "circle.hexagongrid", text: model.text(.mapClickHint))
+                            if let selectedNode {
+                                PersonalGraphDetailStrip(selection: selectedNode, language: model.appLanguage, compact: true)
+                                    .padding(10)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            } else {
+                                HStack {
+                                    EmptyLine(symbol: "circle.hexagongrid", text: model.text(.mapClickHint))
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(10)
+                                .transition(.opacity)
+                            }
                         }
+                        .animation(.easeOut(duration: 0.18), value: selectedNode?.id)
                     }
                     .frame(width: rightWidth, alignment: .topLeading)
                 }
@@ -5760,10 +5859,12 @@ struct PageStepper: View {
 struct QuestionLedgerRow: View {
     @EnvironmentObject private var model: ElephantAppModel
     var question: PersonalModelQuestionItem
-    @State private var answerDraft = ""
+    @State private var isExpanded = false
+    @State private var isReplying = false
+    @State private var replyDraft = ""
 
     var body: some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Pill(text: lensText, symbol: "circle.grid.cross", tint: tint)
@@ -5808,18 +5909,25 @@ struct QuestionLedgerRow: View {
                     }
                     .controlSize(.small)
 
-                    HStack(alignment: .bottom, spacing: 8) {
-                        TextField(localizedYouText(model.appLanguage, en: "Answer this question here...", zh: "也可以直接在这里回答...", fr: "Répondez ici...", de: "Hier antworten..."), text: $answerDraft, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
-                            .lineLimit(1...3)
-                        Button(localizedYouText(model.appLanguage, en: "Save", zh: "保存", fr: "Enregistrer", de: "Speichern")) {
-                            let draft = answerDraft
-                            answerDraft = ""
-                            Task { await model.answerQuestion(question, content: draft) }
+                    if isReplying {
+                        HStack(alignment: .bottom, spacing: 8) {
+                            TextField(replyPlaceholder, text: $replyDraft, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(1...3)
+                                .onSubmit {
+                                    sendReply()
+                                }
+                            Button(sendText) {
+                                sendReply()
+                            }
+                            .disabled(replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            Button(cancelText) {
+                                replyDraft = ""
+                                isReplying = false
+                            }
                         }
-                        .disabled(answerDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .controlSize(.small)
                     }
-                    .controlSize(.small)
                 }
             }
             .padding(.top, 10)
@@ -5845,6 +5953,23 @@ struct QuestionLedgerRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                if question.canAct {
+                    Button {
+                        isExpanded = true
+                        isReplying = true
+                    } label: {
+                        Label(replyText, systemImage: "arrowshape.turn.up.left.fill")
+                            .font(.caption.weight(.semibold))
+                            .labelStyle(.titleAndIcon)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .foregroundStyle(ElephantTheme.accent)
+                            .background(ElephantTheme.accent.opacity(0.10), in: Capsule())
+                            .overlay(Capsule().stroke(ElephantTheme.accent.opacity(0.18), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help(replyHelpText)
+                }
             }
             .padding(.vertical, 10)
         }
@@ -5866,6 +5991,46 @@ struct QuestionLedgerRow: View {
         case "dismissed": return ElephantTheme.faint
         default: return ElephantTheme.muted
         }
+    }
+
+    private var replyText: String {
+        localizedYouText(model.appLanguage, en: "Reply", zh: "回复", fr: "Répondre", de: "Antworten")
+    }
+
+    private var replyHelpText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Reply in a conversation so Elephant can learn from the answer.",
+            zh: "用一次对话来回答，让 Elephant 从这次回答里学习。",
+            fr: "Répondre dans une conversation pour qu'Elephant apprenne de la réponse.",
+            de: "In einem Gespräch antworten, damit Elephant aus der Antwort lernt."
+        )
+    }
+
+    private var replyPlaceholder: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Write your answer...",
+            zh: "写下你的回答...",
+            fr: "Écrivez votre réponse...",
+            de: "Schreibe deine Antwort..."
+        )
+    }
+
+    private var sendText: String {
+        localizedYouText(model.appLanguage, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden")
+    }
+
+    private var cancelText: String {
+        localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")
+    }
+
+    private func sendReply() {
+        let draft = replyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !draft.isEmpty else { return }
+        replyDraft = ""
+        isReplying = false
+        Task { await model.sendQuestionReplyAsConversation(question, content: draft) }
     }
 }
 
@@ -6645,9 +6810,10 @@ private struct PersonalDotMapLayout {
 struct PersonalGraphDetailStrip: View {
     var selection: PersonalGraphSelection
     var language: AppLanguage
+    var compact = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
             HStack {
                 Text(selection.title)
                     .font(.callout.weight(.semibold))
@@ -6664,7 +6830,8 @@ struct PersonalGraphDetailStrip: View {
                 Text(detailText)
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(2)
+                    .lineLimit(compact ? 1 : 2)
+                    .truncationMode(.tail)
             }
             if selection.lens == "overview" {
                 Text(localizedYouText(
@@ -6674,8 +6841,9 @@ struct PersonalGraphDetailStrip: View {
                     fr: "Aucun champ de profil personnel n'est affiché ici. Sélectionnez une branche seulement si nécessaire.",
                     de: "Hier werden keine Profilfelder angezeigt. Wähle einen Zweig nur, wenn du Erinnerungen prüfen willst."
                 ))
-                .font(.callout)
+                .font(compact ? .caption : .callout)
                 .foregroundStyle(ElephantTheme.muted)
+                .lineLimit(compact ? 2 : nil)
                 .fixedSize(horizontal: false, vertical: true)
             } else if selection.facts.isEmpty {
                 EmptyLine(
@@ -6689,17 +6857,25 @@ struct PersonalGraphDetailStrip: View {
                     )
                 )
             } else {
-                ForEach(Array(selection.facts.prefix(3).enumerated()), id: \.offset) { _, fact in
+                ForEach(Array(selection.facts.prefix(compact ? 1 : 3).enumerated()), id: \.offset) { _, fact in
                     Text(friendlyMemoryPreview(fact, language: language))
-                        .font(.callout)
+                        .font(compact ? .caption : .callout)
                         .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(2)
+                        .lineLimit(compact ? 1 : 2)
+                        .truncationMode(.tail)
                 }
             }
         }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(compact ? 10 : 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            compact
+                ? Color(nsColor: .windowBackgroundColor).opacity(0.88)
+                : Color(nsColor: .controlBackgroundColor),
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+        .shadow(color: compact ? Color.black.opacity(0.06) : .clear, radius: 12, y: 6)
     }
 
     private var countLabel: String {
@@ -8771,41 +8947,47 @@ struct HerdView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            PageHeader(
-                title: AppSection.herd.title(language: model.appLanguage),
-                subtitle: localizedYouText(model.appLanguage, en: "Mother keeps context. Baby elephants bring local CLI skills when she delegates.", zh: "母象守住上下文，小象在需要时带着本地 CLI 技能加入。", fr: "Mother garde le contexte; les babies apportent les CLI locaux.", de: "Mother hält Kontext; Babies bringen lokale CLI-Fähigkeiten."),
-                actionTitle: localizedYouText(model.appLanguage, en: "Rescan", zh: "重新扫描", fr: "Réanalyser", de: "Neu scannen"),
-                actionSymbol: "arrow.clockwise"
-            ) {
-                Task { await model.scanLocalAgentsForHerd() }
-            }
+        GeometryReader { proxy in
+            let panelHeight = max(640, proxy.size.height - 104)
 
-            NativePanel {
-                HStack(alignment: .top, spacing: 0) {
-                    HerdRosterPane(
-                        motherItems: motherItems,
-                        babyItems: babyItems,
-                        candidates: discoveredCandidates,
-                        selectedKind: $selectedKind,
-                        selectedID: $selectedID
-                    )
-                    .frame(width: 330)
-
-                    Divider()
-
-                    HerdDetailPane(
-                        selectedKind: selectedKind,
-                        selectedID: selectedID,
-                        motherItems: motherItems,
-                        babyItems: babyItems,
-                        candidates: discoveredCandidates,
-                        showingCreate: $showingCreate
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            VStack(alignment: .leading, spacing: 18) {
+                PageHeader(
+                    title: AppSection.herd.title(language: model.appLanguage),
+                    subtitle: localizedYouText(model.appLanguage, en: "Mother keeps context. Baby elephants bring local CLI skills when she delegates.", zh: "母象守住上下文，小象在需要时带着本地 CLI 技能加入。", fr: "Mother garde le contexte; les babies apportent les CLI locaux.", de: "Mother hält Kontext; Babies bringen lokale CLI-Fähigkeiten."),
+                    actionTitle: localizedYouText(model.appLanguage, en: "Rescan", zh: "重新扫描", fr: "Réanalyser", de: "Neu scannen"),
+                    actionSymbol: "arrow.clockwise"
+                ) {
+                    Task { await model.scanLocalAgentsForHerd() }
                 }
-                .frame(minHeight: 520, alignment: .top)
+
+                NativePanel {
+                    HStack(alignment: .top, spacing: 0) {
+                        HerdRosterPane(
+                            motherItems: motherItems,
+                            babyItems: babyItems,
+                            candidates: discoveredCandidates,
+                            selectedKind: $selectedKind,
+                            selectedID: $selectedID
+                        )
+                        .frame(width: 330)
+
+                        Divider()
+
+                        HerdDetailPane(
+                            selectedKind: selectedKind,
+                            selectedID: selectedID,
+                            motherItems: motherItems,
+                            babyItems: babyItems,
+                            candidates: discoveredCandidates,
+                            showingCreate: $showingCreate
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
+                .frame(maxWidth: .infinity, minHeight: panelHeight, maxHeight: panelHeight, alignment: .top)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .sheet(isPresented: $showingCreate) {
             HerdCreateSheet(isPresented: $showingCreate)
@@ -8913,6 +9095,7 @@ struct HerdRosterPane: View {
             }
         }
         .padding(14)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func candidateSubtitle(_ runtime: LocalAgentRuntimeItem) -> String {
@@ -8996,29 +9179,32 @@ struct HerdDetailPane: View {
     @Binding var showingCreate: Bool
 
     var body: some View {
-        Group {
-            if selectedKind == "candidate", let runtime = candidates.first(where: { $0.runtimeID == selectedID }) {
-                LocalAgentRuntimeDetail(runtime: runtime)
-                    .id(runtime.runtimeID)
-            } else if let item = (motherItems + babyItems).first(where: { $0.id == selectedID || $0.elephantID == selectedID }) {
-                HerdElephantDetail(item: item)
-                    .id(item.id)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionLabel(
-                        title: localizedYouText(model.appLanguage, en: "No selection", zh: "未选择", fr: "Aucune sélection", de: "Keine Auswahl"),
-                        subtitle: localizedYouText(model.appLanguage, en: "Choose Mother, a baby elephant, or a discovered local agent.", zh: "选择母象、小象，或一个发现到的本地 agent。", fr: "Choisissez Mother, un baby elephant ou un agent local.", de: "Wähle Mother, ein Baby Elephant oder einen lokalen Agent.")
-                    )
-                    Button {
-                        showingCreate = true
-                    } label: {
-                        Label(model.text(.newElephant), systemImage: "plus")
+        ScrollView {
+            Group {
+                if selectedKind == "candidate", let runtime = candidates.first(where: { $0.runtimeID == selectedID }) {
+                    LocalAgentRuntimeDetail(runtime: runtime)
+                        .id(runtime.runtimeID)
+                } else if let item = (motherItems + babyItems).first(where: { $0.id == selectedID || $0.elephantID == selectedID }) {
+                    HerdElephantDetail(item: item)
+                        .id(item.id)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionLabel(
+                            title: localizedYouText(model.appLanguage, en: "No selection", zh: "未选择", fr: "Aucune sélection", de: "Keine Auswahl"),
+                            subtitle: localizedYouText(model.appLanguage, en: "Choose Mother, a baby elephant, or a discovered local agent.", zh: "选择母象、小象，或一个发现到的本地 agent。", fr: "Choisissez Mother, un baby elephant ou un agent local.", de: "Wähle Mother, ein Baby Elephant oder einen lokalen Agent.")
+                        )
+                        Button {
+                            showingCreate = true
+                        } label: {
+                            Label(model.text(.newElephant), systemImage: "plus")
+                        }
                     }
+                    .padding(18)
                 }
-                .padding(18)
             }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(18)
     }
 }
 
@@ -9115,7 +9301,8 @@ struct HerdElephantDetail: View {
                 }
                 HerdMarkdownReadCard(
                     title: localizedYouText(model.appLanguage, en: "Vibe", zh: "Vibe", fr: "Vibe", de: "Vibe"),
-                    text: identityText
+                    text: identityText,
+                    minHeight: isMotherKind ? 260 : 230
                 )
             }
 
@@ -9407,6 +9594,7 @@ private struct HerdReadField: View {
 private struct HerdMarkdownReadCard: View {
     var title: String
     var text: String
+    var minHeight: CGFloat = 220
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -9415,7 +9603,7 @@ private struct HerdMarkdownReadCard: View {
                 .foregroundStyle(ElephantTheme.muted)
             MarkdownBody(text: text, font: .callout, color: ElephantTheme.ink)
                 .padding(14)
-                .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
                 .background(Color(nsColor: .textBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.62), lineWidth: 1))
         }
@@ -21704,25 +21892,11 @@ struct OnboardingLearningToolTimeline: View {
 
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
-                    VStack(spacing: 9) {
-                        if !modelProgress.isEmpty {
-                            OnboardingLearningModelLiveSlot(progress: modelProgress)
-                                .id("model")
+                    VStack(spacing: 8) {
+                        ForEach(feedMessages) { message in
+                            OnboardingLearningMessageBubble(message: message)
+                                .id(message.id)
                                 .transition(toolSlotTransition)
-                        }
-                        if let item = latestToolItem {
-                            OnboardingLearningToolLiveSlot(item: item)
-                                .id(item.id)
-                                .transition(toolSlotTransition)
-                        } else if modelProgress.isEmpty {
-                            OnboardingLearningToolTimelineEmpty(
-                                text: localizedYouText(model.appLanguage, en: "Waiting for the first activity", zh: "等待第一次实时动态", fr: "En attente de la première activité", de: "Wartet auf die erste Aktivität"),
-                                detail: statusText,
-                                tint: statusTint,
-                                isActive: isActive
-                            )
-                            .id("waiting")
-                            .transition(toolSlotTransition)
                         }
                         Color.clear
                             .frame(height: 1)
@@ -21741,7 +21915,7 @@ struct OnboardingLearningToolTimeline: View {
         }
         .frame(maxWidth: .infinity, minHeight: timelineHeight, maxHeight: timelineHeight, alignment: .top)
         .clipped()
-        .animation(toolSlotAnimation, value: "\(latestToolItem?.id ?? "waiting")-\(modelProgress.text)")
+        .animation(toolSlotAnimation, value: activityScrollKey)
     }
 
     private var modelProgress: LearningModelProgress {
@@ -21760,7 +21934,59 @@ struct OnboardingLearningToolTimeline: View {
     private var timelineHeight: CGFloat { 156 }
 
     private var activityScrollKey: String {
-        "\(modelProgress.text)|\(latestToolItem?.id ?? "")|\(job?.progressStage ?? "")|\(job?.progressDetail ?? "")"
+        "\(feedMessages.map(\.id).joined(separator: "|"))|\(modelProgress.text)|\(job?.progressStage ?? "")|\(job?.progressDetail ?? "")"
+    }
+
+    private var feedMessages: [OnboardingLearningFeedMessage] {
+        var messages: [OnboardingLearningFeedMessage] = toolTimelineItems.suffix(6).map { item in
+            let isResult = item.phase == "execution.completed"
+            let preview = item.preview
+                .replacingOccurrences(of: "tool.", with: "")
+                .replacingOccurrences(of: "_", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = preview.isEmpty ? item.detail : preview
+            return OnboardingLearningFeedMessage(
+                id: "tool-\(item.id)",
+                title: isResult
+                    ? localizedYouText(model.appLanguage, en: "Result", zh: "执行结果", fr: "Résultat", de: "Ergebnis")
+                    : item.name,
+                detail: detail,
+                symbol: isResult ? "arrow.down.left.circle.fill" : item.symbol,
+                tint: isResult ? ElephantTheme.green : item.tint,
+                outgoing: !isResult,
+                active: isActive && !isResult && item.id == latestToolItem?.id
+            )
+        }
+
+        if !modelProgress.isEmpty {
+            messages.append(
+                OnboardingLearningFeedMessage(
+                    id: "model-\(modelProgress.text.hashValue)",
+                    title: localizedYouText(model.appLanguage, en: "Elephant", zh: "Elephant", fr: "Elephant", de: "Elephant"),
+                    detail: modelProgress.text,
+                    symbol: "sparkles",
+                    tint: ElephantTheme.accent,
+                    outgoing: true,
+                    active: isActive
+                )
+            )
+        }
+
+        if messages.isEmpty {
+            messages.append(
+                OnboardingLearningFeedMessage(
+                    id: "waiting",
+                    title: localizedYouText(model.appLanguage, en: "Waiting", zh: "等待动态", fr: "En attente", de: "Wartet"),
+                    detail: statusText,
+                    symbol: "clock",
+                    tint: statusTint,
+                    outgoing: false,
+                    active: isActive
+                )
+            )
+        }
+
+        return Array(messages.suffix(4))
     }
 
     private func scrollActivityToBottom(_ proxy: ScrollViewProxy) {
@@ -21998,6 +22224,75 @@ struct OnboardingLearningToolTraceItem: Identifiable {
     var preview: String = ""
     var symbol: String
     var tint: Color
+}
+
+struct OnboardingLearningFeedMessage: Identifiable {
+    var id: String
+    var title: String
+    var detail: String
+    var symbol: String
+    var tint: Color
+    var outgoing: Bool
+    var active: Bool
+}
+
+struct OnboardingLearningMessageBubble: View {
+    var message: OnboardingLearningFeedMessage
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if message.outgoing {
+                Spacer(minLength: 58)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(message.tint.opacity(message.outgoing ? 0.14 : 0.12))
+                    if message.active {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: message.symbol)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(message.tint)
+                    }
+                }
+                .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.title)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(message.outgoing ? ElephantTheme.accent : ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(message.detail)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 430, alignment: .leading)
+            .background(
+                message.outgoing
+                    ? ElephantTheme.accent.opacity(0.095)
+                    : Color(nsColor: .textBackgroundColor).opacity(0.62),
+                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(message.tint.opacity(message.outgoing ? 0.18 : 0.14), lineWidth: 1)
+            )
+
+            if !message.outgoing {
+                Spacer(minLength: 58)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: message.outgoing ? .trailing : .leading)
+    }
 }
 
 struct OnboardingLearningToolTimelineEmpty: View {

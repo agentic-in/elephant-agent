@@ -2576,10 +2576,43 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    func sendQuestionReplyAsConversation(_ question: PersonalModelQuestionItem, content: String) async {
+        let answer = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else { return }
+        selectedSection = .wake
+        await enqueueWakeMessage(
+            inputModality: .text,
+            voiceDuration: nil,
+            textOverride: Self.questionReplyConversationPrompt(question: question, answer: answer, language: appLanguage)
+        )
+    }
+
     func draftAnswerForQuestion(_ question: PersonalModelQuestionItem) {
         selectedSection = .wake
-        wakeDraft = "Help me answer this Personal Model question:\n\(question.text)\n\n"
+        wakeDraft = Self.questionReplyConversationPrompt(question: question, answer: "", language: appLanguage)
         focusComposer()
+    }
+
+    private static func questionReplyConversationPrompt(question: PersonalModelQuestionItem, answer: String, language: AppLanguage) -> String {
+        let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = localizedText(
+            language,
+            en: "I want to answer a question you wanted to confirm.",
+            zh: "我来回答你之前想确认的问题。",
+            fr: "Je veux répondre à une question que tu voulais confirmer.",
+            de: "Ich möchte eine Frage beantworten, die du bestätigen wolltest."
+        )
+        let questionLabel = localizedText(language, en: "Question", zh: "问题", fr: "Question", de: "Frage")
+        let answerLabel = localizedText(language, en: "My answer", zh: "我的回答", fr: "Ma réponse", de: "Meine Antwort")
+        let instruction = localizedText(
+            language,
+            en: "Please treat this as a real conversation and update how you understand and help me.",
+            zh: "请把这次回答当作一次真实对话来理解，并更新你之后怎么理解和帮助我。",
+            fr: "Traite cela comme une vraie conversation et mets à jour ta façon de me comprendre et de m'aider.",
+            de: "Bitte behandle das als echtes Gespräch und aktualisiere, wie du mich verstehst und unterstützt."
+        )
+        let answerBlock = trimmedAnswer.isEmpty ? "\(answerLabel): " : "\(answerLabel): \(trimmedAnswer)"
+        return "\(prefix)\n\n\(questionLabel): \(question.text)\n\(answerBlock)\n\n\(instruction)"
     }
 
     func createHerdElephant(
