@@ -337,7 +337,8 @@ def _letter_evidence_use_lines() -> tuple[str, ...]:
         "- Treat the portrait below as grounding evidence, not copy to paste into the letter.",
         "- Synthesize repeated facts once. Do not list the user's traits like a dashboard or psychological report.",
         "- Do not mention raw lens names, PM topics, field IDs, demographic fragments, avatar paths, or schema language.",
-        "- Warmth should come from specific attention to rhythm, pressure/recovery style, current focus, values, tastes, and hopes.",
+        "- Warmth should come from specific attention to rhythm, pressure/recovery style, current focus, values, tastes, hopes, and the tension underneath the facts.",
+        "- Prefer two or three deeper observations over many shallow facts. Name what the user may be trying to protect, carry, or move toward when the evidence supports it.",
         "- Elephant may promise to remember this beginning and keep useful traces, but must not pretend a long shared history that is not in evidence.",
     )
 
@@ -614,7 +615,7 @@ def build_evidence(
             *(portrait or ("(no facts yet)",)),
             "",
             "## Product promise to weave into the letter",
-            "AI is becoming more capable, many people worry about being replaced, and Elephant's answer is: 别怕，我们一同进化. Write this as Elephant's own promise: I remember the path we start walking, I keep the useful traces, and I evolve with you rather than replacing you.",
+            "AI is becoming more capable, and many people quietly worry about being replaced, flattened, or forced to speed up. Do not drop a slogan. Write this as Elephant's own promise: I keep memory for the user, help them stay close to what matters, and grow beside them rather than replacing them.",
         ])
 
     return "\n".join(lines)

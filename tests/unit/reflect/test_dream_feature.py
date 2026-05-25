@@ -71,7 +71,8 @@ class DreamFeatureTest(unittest.TestCase):
 
         prompt = _assemble_system_prompt(features, conservatism="creative")
 
-        self.assertIn("别怕，我们一同进化", prompt)
+        self.assertIn("without sounding like a slogan", prompt)
+        self.assertIn("small elephant", prompt)
         self.assertIn("metadata={\"kind\":\"onboarding_letter\"", prompt)
         self.assertIn("The diary metadata MUST include kind=onboarding_letter", prompt)
         self.assertIn("Elephant is Elephant", prompt)
@@ -79,6 +80,7 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("## Onboarding Letter Stance", prompt)
         self.assertIn("Write as Elephant, not as an assistant describing Elephant", prompt)
         self.assertIn("not a profile report", prompt)
+        self.assertIn("do not include a top-level title", prompt)
         self.assertNotIn("CLAIM TEXT RULE", prompt)
         self.assertNotIn("tool.personal_model.update call MUST", prompt)
         self.assertNotIn("Never store system artifacts as PM facts", prompt)
@@ -237,7 +239,8 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("[identity] 用户压力大时需要先安静下来。", evidence)
         self.assertNotIn("user-avatar.jpg", evidence)
         self.assertNotIn("blog: liuxunzhuo.com", evidence)
-        self.assertIn("别怕，我们一同进化", evidence)
+        self.assertIn("Do not drop a slogan", evidence)
+        self.assertIn("grow beside them rather than replacing them", evidence)
 
     def test_dream_prompt_requires_pm_consolidation_and_concise_claims(self) -> None:
         features = resolve_features("dream")

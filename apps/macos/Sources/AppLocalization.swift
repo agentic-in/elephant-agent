@@ -591,7 +591,7 @@ enum AppText {
         case .providerNeedsDetails:
             return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "请选择模型服务并填写模型 ID；OpenAI Compatible 通常还需要 Base URL，除非复用已有配置。", fr: "Provider et ID de modèle sont requis ; OpenAI Compatible nécessite aussi une Base URL sauf si vous réutilisez une configuration.", de: "Provider und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
         case .learningTitle:
-            return pick(language, en: "Building Your Elephant", zh: "正在建立你的 Elephant", fr: "Construction de votre Elephant", de: "Dein Elephant wird aufgebaut")
+            return pick(language, en: "Building your Personal Model deeply", zh: "深度构建你的个人模型中", fr: "Construction approfondie de votre Personal Model", de: "Dein Personal Model wird vertieft aufgebaut")
         case .learningPreparing:
             return pick(language, en: "Preparing your first learning pass", zh: "准备第一次学习", fr: "Préparation du premier apprentissage", de: "Ersten Lernlauf vorbereiten")
         case .learningCreateModel:

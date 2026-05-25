@@ -118,25 +118,26 @@ struct OnboardingLetterToast: View {
         Button {
             model.openOnboardingLetter(entry)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: 11) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(ElephantTheme.gold.opacity(0.16))
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(ElephantTheme.ember.opacity(0.10))
                     Image(systemName: "envelope.open.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(ElephantTheme.ember)
                 }
-                .frame(width: 42, height: 42)
+                .frame(width: 36, height: 36)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(onboardingLetterTitle(model.appLanguage))
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text(localizedYouText(model.appLanguage, en: "Open the first note it wrote after getting to know you.", zh: "打开它认识你之后写下的第一封信。", fr: "Ouvrez sa première note après vous avoir connu.", de: "Öffne die erste Nachricht nach dem Kennenlernen."))
+                        .lineLimit(1)
+                    Text(localizedYouText(model.appLanguage, en: "It is ready to read.", zh: "它已经写好了。", fr: "Elle est prête à lire.", de: "Er ist bereit."))
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
 
                 HStack(spacing: 5) {
@@ -144,21 +145,21 @@ struct OnboardingLetterToast: View {
                         .font(.caption2.weight(.bold))
                 }
                 .foregroundStyle(ElephantTheme.ember)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 7)
+                .frame(width: 30, height: 30)
                 .background(Color.white.opacity(0.52), in: Capsule())
                 .overlay(Capsule().stroke(ElephantTheme.ember.opacity(0.22), lineWidth: 1))
             }
-            .padding(14)
-            .frame(width: 380, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .frame(width: 330, alignment: .leading)
             .background(letterToastBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(hovering ? ElephantTheme.ember.opacity(0.48) : ElephantTheme.gold.opacity(0.28), lineWidth: hovering ? 1.5 : 1)
             )
-            .shadow(color: ElephantTheme.ember.opacity(hovering ? 0.20 : 0.12), radius: hovering ? 24 : 18, y: hovering ? 14 : 10)
+            .shadow(color: ElephantTheme.ember.opacity(hovering ? 0.16 : 0.09), radius: hovering ? 22 : 16, y: hovering ? 12 : 8)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .scaleEffect(hovering ? 1.012 : 1)
+            .scaleEffect(hovering ? 1.008 : 1)
         }
         .buttonStyle(PressablePlainButtonStyle())
         .overlay(alignment: .topTrailing) {
@@ -168,11 +169,11 @@ struct OnboardingLetterToast: View {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(ElephantTheme.faint)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 22, height: 22)
                     .background(.thinMaterial, in: Circle())
             }
             .buttonStyle(PressablePlainButtonStyle())
-            .offset(x: 8, y: -8)
+            .offset(x: 7, y: -7)
             .help(localizedYouText(model.appLanguage, en: "Dismiss", zh: "暂不查看", fr: "Ignorer", de: "Schliessen"))
         }
         .onHover { hovering = $0 }
@@ -237,9 +238,9 @@ struct ElephantLetterEnvelopeOverlay: View {
                         .padding(.bottom, 34)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 520)
+                .frame(minHeight: 520, maxHeight: 680)
             }
-            .frame(width: 660)
+            .frame(width: 720)
             .background(letterPaper)
             .overlay(letterDecoration)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -5118,7 +5119,10 @@ private func displayedOnboardingLetterContent(_ content: String, language: AppLa
         return content
     }
     if isLegacyOnboardingLetterTitle(lines[titleIndex]) {
-        lines[titleIndex] = onboardingLetterTitle(language)
+        lines.remove(at: titleIndex)
+        while let first = lines.first, first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.removeFirst()
+        }
     }
     return lines.joined(separator: "\n")
 }
@@ -5130,6 +5134,8 @@ private func isLegacyOnboardingLetterTitle(_ line: String) -> Bool {
         .lowercased()
     guard normalized.contains("elephant") else { return false }
     return (normalized.contains("first") && normalized.contains("letter"))
+        || (normalized.contains("letter") && normalized.contains("from"))
+        || normalized.contains("一封信")
         || normalized.contains("第一封信")
         || normalized.contains("première lettre")
         || normalized.contains("erster brief")
@@ -21417,9 +21423,9 @@ struct OnboardingLearningLivePanel: View {
     var statusText: String
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             OnboardingLearningAnimation()
-                .frame(width: 88, height: 88)
+                .frame(width: 62, height: 62)
                 .accessibilityHidden(true)
 
             VStack(spacing: 8) {
@@ -21474,7 +21480,7 @@ struct OnboardingLearningLivePanel: View {
                 .frame(maxWidth: 540)
         }
         .padding(.horizontal, 26)
-        .padding(.vertical, 22)
+        .padding(.vertical, 20)
         .frame(maxWidth: .infinity, minHeight: 442, alignment: .center)
         .background(learningPanelBackground)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.white.opacity(0.50), lineWidth: 1))
@@ -21508,27 +21514,25 @@ struct OnboardingLearningLivePanel: View {
     }
 
     private var latestToolItem: OnboardingLearningToolTraceItem? {
-        guard let event = job?.toolProgress.events.last else { return nil }
-        let phase = resolvedToolPhase(event)
-        return OnboardingLearningToolTraceItem(
-            toolID: event.toolID,
-            phase: phase,
-            name: toolDisplayName(event.toolID),
-            detail: toolPhaseDisplayName(phase),
-            preview: event.preview,
-            symbol: toolPhaseSymbol(phase),
-            tint: toolPhaseTint(phase)
-        )
+        guard let events = job?.toolProgress.events else { return nil }
+        for event in events.reversed() {
+            let phase = resolvedToolPhase(event)
+            guard !isHiddenToolPhase(phase) else { continue }
+            return OnboardingLearningToolTraceItem(
+                toolID: event.toolID,
+                phase: phase,
+                name: toolDisplayName(event.toolID),
+                detail: toolPhaseDisplayName(phase),
+                preview: event.preview,
+                symbol: toolPhaseSymbol(phase),
+                tint: toolPhaseTint(phase)
+            )
+        }
+        return nil
     }
 
     private var panelSubtitle: String {
-        if !modelProgress.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return localizedYouText(model.appLanguage, en: "Elephant is turning your answers into the first usable memory.", zh: "Elephant 正在把你的回答整理成第一版可用记忆。", fr: "Elephant transforme vos réponses en première mémoire.", de: "Elephant macht aus deinen Antworten die erste Erinnerung.")
-        }
-        if latestToolItem != nil {
-            return localizedYouText(model.appLanguage, en: "Following one live signal at a time.", zh: "正在跟随一个实时信号，不打断你的开始体验。", fr: "Suit un signal en direct.", de: "Folgt einem Live-Signal.")
-        }
-        return localizedYouText(model.appLanguage, en: "Keep this as one calm moment while setup finishes.", zh: "最后一步保持成一个安静的建立时刻。", fr: "Un moment calme pendant la fin de configuration.", de: "Ein ruhiger Moment, während die Einrichtung endet.")
+        localizedYouText(model.appLanguage, en: "This usually takes 3 to 5 minutes.", zh: "需要 3 到 5 分钟", fr: "Cela prend généralement 3 à 5 minutes.", de: "Das dauert meist 3 bis 5 Minuten.")
     }
 
     private var stageTitle: String {
@@ -21606,6 +21610,11 @@ struct OnboardingLearningLivePanel: View {
             return "execution.started"
         }
         return event.phase
+    }
+
+    private func isHiddenToolPhase(_ phase: String) -> Bool {
+        let normalized = phase.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.contains("failed") || normalized.contains("error") || normalized.contains("cancel")
     }
 
     private func toolDisplayName(_ tool: String) -> String {
@@ -21771,9 +21780,9 @@ struct OnboardingLearningToolTimeline: View {
         return "\(title) · \(detail)"
     }
 
-    private var liveContentHeight: CGFloat { 88 }
+    private var liveContentHeight: CGFloat { 118 }
 
-    private var timelineHeight: CGFloat { 144 }
+    private var timelineHeight: CGFloat { 174 }
 
     private var activityScrollKey: String {
         "\(modelProgress.text)|\(latestToolItem?.id ?? "")|\(job?.progressStage ?? "")|\(job?.progressDetail ?? "")"
@@ -21819,7 +21828,7 @@ struct OnboardingLearningToolTimeline: View {
         case "tool_completed":
             return localizedYouText(model.appLanguage, en: "One step completed", zh: "已完成一步", fr: "Une étape terminée", de: "Ein Schritt abgeschlossen")
         case "tool_failed":
-            return localizedYouText(model.appLanguage, en: "One step needs attention", zh: "有一步需要处理", fr: "Une étape à vérifier", de: "Ein Schritt braucht Prüfung")
+            return localizedYouText(model.appLanguage, en: "Continuing the build", zh: "继续整理信息", fr: "Construction en cours", de: "Aufbau läuft weiter")
         case "result_written":
             return localizedYouText(model.appLanguage, en: "Writing the learning result", zh: "正在写入学习结果", fr: "Écriture du résultat", de: "Schreibt Ergebnis")
         case "completed":
@@ -21855,6 +21864,7 @@ struct OnboardingLearningToolTimeline: View {
             let toolID = event.toolID.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !toolID.isEmpty else { continue }
             let phase = resolvedToolPhase(event, progress: progress)
+            guard !isHiddenToolPhase(phase) else { continue }
             let key = "\(toolID)-\(phase)-\(event.preview)"
             guard !seen.contains(key) else { continue }
             seen.insert(key)
@@ -21922,6 +21932,11 @@ struct OnboardingLearningToolTimeline: View {
             return "execution.started"
         }
         return event.phase
+    }
+
+    private func isHiddenToolPhase(_ phase: String) -> Bool {
+        let normalized = phase.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.contains("failed") || normalized.contains("error") || normalized.contains("cancel")
     }
 
     private func toolPhaseDisplayName(_ phase: String) -> String {
@@ -22204,13 +22219,9 @@ struct OnboardingLearningAnimation: View {
                     context.fill(Path(ellipseIn: rect), with: .color(palette[index % palette.count].opacity(0.78)))
                 }
 
-                let iconRect = CGRect(x: center.x - 30, y: center.y - 30, width: 60, height: 60)
-                context.fill(Path(roundedRect: iconRect, cornerRadius: 8), with: .color(ElephantTheme.accent.opacity(0.10)))
-                context.stroke(Path(roundedRect: iconRect, cornerRadius: 8), with: .color(ElephantTheme.accent.opacity(0.22)), lineWidth: 1)
-            }
-            .overlay {
-                BrandMark(size: 62, framed: true)
-                    .shadow(color: ElephantTheme.accent.opacity(0.16), radius: 18, y: 8)
+                let core = CGRect(x: center.x - 8, y: center.y - 8, width: 16, height: 16)
+                context.fill(Path(ellipseIn: core), with: .color(ElephantTheme.accent.opacity(0.22)))
+                context.fill(Path(ellipseIn: core.insetBy(dx: 4, dy: 4)), with: .color(ElephantTheme.accent.opacity(0.62)))
             }
         }
     }
