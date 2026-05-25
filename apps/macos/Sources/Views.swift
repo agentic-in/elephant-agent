@@ -115,65 +115,70 @@ struct OnboardingLetterToast: View {
     @State private var hovering = false
 
     var body: some View {
-        Button {
-            model.openOnboardingLetter(entry)
-        } label: {
-            HStack(spacing: 11) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(ElephantTheme.ember.opacity(0.10))
-                    Image(systemName: "envelope.open.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(ElephantTheme.ember)
-                }
-                .frame(width: 36, height: 36)
+        ZStack(alignment: .topTrailing) {
+            Button {
+                model.openOnboardingLetter(entry)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(ElephantTheme.ember.opacity(0.11))
+                        Image(systemName: "envelope.open.fill")
+                            .font(.system(size: 19, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(ElephantTheme.ember)
+                    }
+                    .frame(width: 44, height: 44)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(onboardingLetterTitle(model.appLanguage))
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(ElephantTheme.ink)
-                        .lineLimit(1)
-                    Text(localizedYouText(model.appLanguage, en: "It is ready to read.", zh: "它已经写好了。", fr: "Elle est prête à lire.", de: "Er ist bereit."))
-                        .font(.caption)
-                        .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(1)
-                }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(onboardingLetterTitle(model.appLanguage))
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                            .lineLimit(1)
+                        Text(localizedYouText(model.appLanguage, en: "It is ready to read.", zh: "它已经写好了。", fr: "Elle est prête à lire.", de: "Er ist bereit."))
+                            .font(.caption)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .lineLimit(1)
+                    }
 
-                HStack(spacing: 5) {
+                    Spacer(minLength: 8)
+
                     Image(systemName: "arrow.right")
-                        .font(.caption2.weight(.bold))
+                        .font(.callout.weight(.bold))
+                        .foregroundStyle(ElephantTheme.ember)
+                        .frame(width: 34, height: 34)
+                        .background(Color.white.opacity(0.54), in: Circle())
+                        .overlay(Circle().stroke(ElephantTheme.ember.opacity(0.24), lineWidth: 1))
                 }
-                .foregroundStyle(ElephantTheme.ember)
-                .frame(width: 30, height: 30)
-                .background(Color.white.opacity(0.52), in: Capsule())
-                .overlay(Capsule().stroke(ElephantTheme.ember.opacity(0.22), lineWidth: 1))
+                .padding(.leading, 14)
+                .padding(.trailing, 42)
+                .padding(.vertical, 13)
+                .frame(width: 382, alignment: .leading)
+                .frame(minHeight: 78)
+                .background(letterToastBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(hovering ? ElephantTheme.ember.opacity(0.50) : ElephantTheme.gold.opacity(0.30), lineWidth: hovering ? 1.5 : 1)
+                )
+                .shadow(color: ElephantTheme.ember.opacity(hovering ? 0.17 : 0.10), radius: hovering ? 24 : 18, y: hovering ? 13 : 9)
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .scaleEffect(hovering ? 1.008 : 1)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .frame(width: 330, alignment: .leading)
-            .background(letterToastBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(hovering ? ElephantTheme.ember.opacity(0.48) : ElephantTheme.gold.opacity(0.28), lineWidth: hovering ? 1.5 : 1)
-            )
-            .shadow(color: ElephantTheme.ember.opacity(hovering ? 0.16 : 0.09), radius: hovering ? 22 : 16, y: hovering ? 12 : 8)
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .scaleEffect(hovering ? 1.008 : 1)
-        }
-        .buttonStyle(PressablePlainButtonStyle())
-        .overlay(alignment: .topTrailing) {
+            .buttonStyle(PressablePlainButtonStyle())
+
             Button {
                 model.dismissOnboardingLetterPrompt()
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(ElephantTheme.faint)
-                    .frame(width: 22, height: 22)
-                    .background(.thinMaterial, in: Circle())
+                    .frame(width: 24, height: 24)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: Circle())
+                    .overlay(Circle().stroke(ElephantTheme.line.opacity(0.62), lineWidth: 1))
             }
             .buttonStyle(PressablePlainButtonStyle())
-            .offset(x: 7, y: -7)
+            .padding(.top, 9)
+            .padding(.trailing, 9)
             .help(localizedYouText(model.appLanguage, en: "Dismiss", zh: "暂不查看", fr: "Ignorer", de: "Schliessen"))
         }
         .onHover { hovering = $0 }
@@ -182,7 +187,7 @@ struct OnboardingLetterToast: View {
     }
 
     private var letterToastBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(Color(nsColor: .textBackgroundColor).opacity(0.96))
             .overlay(
                 LinearGradient(
@@ -194,7 +199,7 @@ struct OnboardingLetterToast: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             )
     }
 }
@@ -340,13 +345,17 @@ struct ElephantLetterEnvelopeOverlay: View {
                 model.closeOnboardingLetterEnvelope()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.callout.weight(.bold))
-                    .frame(width: 32, height: 32)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ElephantTheme.ink.opacity(0.70))
+                    .frame(width: 30, height: 30)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.62), in: Circle())
+                    .overlay(Circle().stroke(ElephantTheme.line.opacity(0.64), lineWidth: 1))
             }
             .buttonStyle(PressablePlainButtonStyle())
             .help(localizedYouText(model.appLanguage, en: "Close letter", zh: "收起信", fr: "Fermer la lettre", de: "Brief schliessen"))
         }
-        .padding(.horizontal, 24)
+        .padding(.leading, 24)
+        .padding(.trailing, 18)
         .frame(height: headerHeight)
     }
 

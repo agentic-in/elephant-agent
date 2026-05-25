@@ -345,8 +345,11 @@ def _letter_evidence_use_lines() -> tuple[str, ...]:
         "- Treat the portrait below as grounding evidence, not copy to paste into the letter.",
         "- Synthesize repeated facts once. Do not list the user's traits like a dashboard or psychological report.",
         "- Do not mention raw lens names, PM topics, field IDs, demographic fragments, avatar paths, or schema language.",
+        "- Facts that mention skill matching or skill affinity are only clues about the user's work-world and repeated needs; do not write the literal phrase 'skill matching'/'技能匹配' in the letter.",
+        "- If many facts point to projects, communities, research, open source, or product narratives, collapse them into one or two meaningful observations about the user's social and technical world.",
         "- Warmth should come from specific attention to rhythm, pressure/recovery style, current focus, values, tastes, hopes, and the tension underneath the facts.",
         "- Prefer two or three deeper observations over many shallow facts. Name what the user may be trying to protect, carry, or move toward when the evidence supports it.",
+        "- The letter may use paragraph breaks and a few short bold phrases for natural emphasis, but it must not use a top-level title.",
         "- Elephant may promise to remember this beginning and keep useful traces, but must not pretend a long shared history that is not in evidence.",
     )
 
@@ -513,8 +516,10 @@ def build_evidence(
                 "All active facts available after onboarding and initial learning are below. Treat them as grounding evidence, not phrases to paste into the letter.",
                 *(portrait or ("(no facts yet)",)),
                 "",
+                *_letter_evidence_use_lines(),
+                "",
                 "## Elephant promise",
-                "AI is becoming more capable, and many people quietly worry about being replaced, accelerated, or flattened. Elephant's answer is not to decide for the user or turn them into an efficiency metric. Keep memory of this beginning, preserve the useful traces, help the user see clearly, adjust gently, and evolve with the user.",
+                "AI is becoming more capable, and many people quietly worry about being replaced, accelerated, or flattened. Elephant's answer is not to decide for the user or turn them into an efficiency metric. Weave in the localized promise once in the user's language: Chinese '别怕，我们一同进化'; English 'Don't be afraid; we evolve together'; French 'N'aie pas peur, nous évoluons ensemble'; German 'Hab keine Angst, wir entwickeln uns gemeinsam weiter'. Do not use the Chinese phrase in a non-Chinese letter. Keep memory of this beginning, preserve the useful traces, help the user see clearly, adjust gently, and evolve with the user.",
             ]
         )
 
