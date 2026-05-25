@@ -5909,25 +5909,6 @@ struct QuestionLedgerRow: View {
                     }
                     .controlSize(.small)
 
-                    if isReplying {
-                        HStack(alignment: .bottom, spacing: 8) {
-                            TextField(replyPlaceholder, text: $replyDraft, axis: .vertical)
-                                .textFieldStyle(.roundedBorder)
-                                .lineLimit(1...3)
-                                .onSubmit {
-                                    sendReply()
-                                }
-                            Button(sendText) {
-                                sendReply()
-                            }
-                            .disabled(replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            Button(cancelText) {
-                                replyDraft = ""
-                                isReplying = false
-                            }
-                        }
-                        .controlSize(.small)
-                    }
                 }
             }
             .padding(.top, 10)
@@ -5955,7 +5936,6 @@ struct QuestionLedgerRow: View {
                 Spacer(minLength: 0)
                 if question.canAct {
                     Button {
-                        isExpanded = true
                         isReplying = true
                     } label: {
                         Label(replyText, systemImage: "arrowshape.turn.up.left.fill")
@@ -5969,6 +5949,18 @@ struct QuestionLedgerRow: View {
                     }
                     .buttonStyle(.plain)
                     .help(replyHelpText)
+                    .popover(isPresented: $isReplying, arrowEdge: .trailing) {
+                        QuestionReplyPopover(
+                            language: model.appLanguage,
+                            question: question,
+                            draft: $replyDraft,
+                            onCancel: {
+                                replyDraft = ""
+                                isReplying = false
+                            },
+                            onSend: sendReply
+                        )
+                    }
                 }
             }
             .padding(.vertical, 10)
@@ -6031,6 +6023,159 @@ struct QuestionLedgerRow: View {
         replyDraft = ""
         isReplying = false
         Task { await model.sendQuestionReplyAsConversation(question, content: draft) }
+    }
+}
+
+struct QuestionReplyPopover: View {
+    var language: AppLanguage
+    var question: PersonalModelQuestionItem
+    @Binding var draft: String
+    var onCancel: () -> Void
+    var onSend: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "questionmark.bubble.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 38, height: 38)
+                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(localizedYouText(language, en: "Reply to this question", zh: "回复这个问题", fr: "Répondre à cette question", de: "Diese Frage beantworten"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                    Text(localizedYouText(language, en: "Your answer will be sent as a conversation, so Elephant can learn from it naturally.", zh: "你的回答会作为一次对话发送，让 Elephant 自然地学习这条信息。", fr: "Votre réponse sera envoyée comme une conversation.", de: "Deine Antwort wird als Gespräch gesendet."))
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(ElephantTheme.muted)
+                        .frame(width: 26, height: 26)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: Circle())
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .help(localizedYouText(language, en: "Close", zh: "关闭", fr: "Fermer", de: "Schließen"))
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Pill(text: localizedQuestionStatus(question, language: language), symbol: "circle.fill", tint: tint)
+                    if question.priority > 0 {
+                        Pill(text: localizedYouText(language, en: "priority", zh: "优先级", fr: "priorité", de: "Priorität") + " \(String(format: "%.2f", question.priority))", symbol: "flag.fill", tint: ElephantTheme.orange)
+                    }
+                }
+                Text(question.text)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Pill(text: lensText, symbol: "circle.grid.cross", tint: tint)
+                    if !question.source.isEmpty {
+                        Pill(text: question.source, symbol: "link", tint: ElephantTheme.faint)
+                    }
+                    if !question.sensitivity.isEmpty {
+                        Pill(text: question.sensitivity, symbol: "lock", tint: ElephantTheme.faint)
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(ElephantTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.accent.opacity(0.14), lineWidth: 1))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localizedYouText(language, en: "Your answer", zh: "你的回答", fr: "Votre réponse", de: "Deine Antwort"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $draft)
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.ink)
+                        .focused($isFocused)
+                        .frame(minHeight: 132)
+                        .padding(8)
+                    if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(replyPlaceholder)
+                            .font(.callout)
+                            .foregroundStyle(ElephantTheme.muted.opacity(0.74))
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 16)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(isFocused ? ElephantTheme.accent.opacity(0.58) : ElephantTheme.line.opacity(0.72), lineWidth: 1))
+            }
+
+            HStack(spacing: 10) {
+                Text(localizedYouText(language, en: "You can be brief. A phrase or a few sentences are both fine.", zh: "可以很短，一句话或几句都可以。", fr: "Une phrase ou quelques lignes suffisent.", de: "Ein Satz oder ein paar Zeilen reichen."))
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 12)
+                Button(localizedYouText(language, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen"), action: onCancel)
+                    .buttonStyle(PressablePlainButtonStyle())
+                    .foregroundStyle(ElephantTheme.muted)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.72), in: Capsule())
+                Button(action: onSend) {
+                    Label(localizedYouText(language, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden"), systemImage: "paperplane.fill")
+                        .font(.callout.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .foregroundStyle(.white)
+                        .background(canSend ? ElephantTheme.accent : ElephantTheme.faint.opacity(0.42), in: Capsule())
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .disabled(!canSend)
+            }
+        }
+        .padding(18)
+        .frame(width: 520)
+        .background(ElephantTheme.elevated)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                isFocused = true
+            }
+        }
+    }
+
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var lensText: String {
+        if question.subLens.isEmpty {
+            return question.lens
+        }
+        return "\(question.lens) · \(question.subLens)"
+    }
+
+    private var tint: Color {
+        switch question.status {
+        case "ready": return ElephantTheme.accent
+        case "asked": return ElephantTheme.orange
+        case "answered": return ElephantTheme.green
+        case "dismissed": return ElephantTheme.faint
+        default: return ElephantTheme.muted
+        }
+    }
+
+    private var replyPlaceholder: String {
+        localizedYouText(
+            language,
+            en: "Write your answer...",
+            zh: "写下你的回答...",
+            fr: "Écrivez votre réponse...",
+            de: "Schreibe deine Antwort..."
+        )
     }
 }
 
@@ -8948,7 +9093,7 @@ struct HerdView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let panelHeight = max(640, proxy.size.height - 104)
+            let panelHeight = max(760, proxy.size.height - 42)
 
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
@@ -8979,6 +9124,7 @@ struct HerdView: View {
                             motherItems: motherItems,
                             babyItems: babyItems,
                             candidates: discoveredCandidates,
+                            detailHeight: panelHeight,
                             showingCreate: $showingCreate
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -9176,16 +9322,18 @@ struct HerdDetailPane: View {
     var motherItems: [HerdItem]
     var babyItems: [HerdItem]
     var candidates: [LocalAgentRuntimeItem]
+    var detailHeight: CGFloat
     @Binding var showingCreate: Bool
 
     var body: some View {
         ScrollView {
+            let contentHeight = max(0, detailHeight - 36)
             Group {
                 if selectedKind == "candidate", let runtime = candidates.first(where: { $0.runtimeID == selectedID }) {
-                    LocalAgentRuntimeDetail(runtime: runtime)
+                    LocalAgentRuntimeDetail(runtime: runtime, availableHeight: contentHeight)
                         .id(runtime.runtimeID)
                 } else if let item = (motherItems + babyItems).first(where: { $0.id == selectedID || $0.elephantID == selectedID }) {
-                    HerdElephantDetail(item: item)
+                    HerdElephantDetail(item: item, availableHeight: contentHeight)
                         .id(item.id)
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
@@ -9203,7 +9351,7 @@ struct HerdDetailPane: View {
                 }
             }
             .padding(18)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: contentHeight, alignment: .topLeading)
         }
     }
 }
@@ -9211,6 +9359,7 @@ struct HerdDetailPane: View {
 struct HerdElephantDetail: View {
     @EnvironmentObject private var model: ElephantAppModel
     var item: HerdItem
+    var availableHeight: CGFloat = 0
     @State private var name = ""
     @State private var identityText = ""
     @State private var roleTitle = ""
@@ -9302,7 +9451,7 @@ struct HerdElephantDetail: View {
                 HerdMarkdownReadCard(
                     title: localizedYouText(model.appLanguage, en: "Vibe", zh: "Vibe", fr: "Vibe", de: "Vibe"),
                     text: identityText,
-                    minHeight: isMotherKind ? 260 : 230
+                    minHeight: vibeCardMinHeight
                 )
             }
 
@@ -9325,6 +9474,7 @@ struct HerdElephantDetail: View {
                 .disabled(item.current)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: availableHeight, alignment: .topLeading)
         .onAppear(perform: loadDraft)
         .onChange(of: item.id) { _ in loadDraft() }
         .confirmationDialog(localizedFormat(model.appLanguage, en: "Delete %@?", zh: "删除 %@？", fr: "Supprimer %@ ?", de: "%@ löschen?", item.title), isPresented: $confirmDelete) {
@@ -9349,33 +9499,46 @@ struct HerdElephantDetail: View {
                 Button {
                     model.pickHerdAvatar(for: item)
                 } label: {
-                    Label(model.text(.changeImage), systemImage: "camera")
+                    HerdToolbarButtonLabel(title: model.text(.changeImage), symbol: "camera", tint: ElephantTheme.accent)
                 }
-                .controlSize(.small)
+                .buttonStyle(PressablePlainButtonStyle())
 
-                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
+                Button {
                     loadDraft()
                     editingDetails = false
+                } label: {
+                    HerdToolbarButtonLabel(title: localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen"), symbol: "xmark", tint: ElephantTheme.muted)
                 }
-                .controlSize(.small)
+                .buttonStyle(PressablePlainButtonStyle())
 
                 Button {
                     saveDraft()
                 } label: {
-                    Label(localizedYouText(model.appLanguage, en: "Save", zh: "保存", fr: "Enregistrer", de: "Speichern"), systemImage: "checkmark")
+                    HerdToolbarButtonLabel(title: localizedYouText(model.appLanguage, en: "Save", zh: "保存", fr: "Enregistrer", de: "Speichern"), symbol: "checkmark", tint: ElephantTheme.accent, filled: true)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(ElephantTheme.accent)
+                .buttonStyle(PressablePlainButtonStyle())
             } else {
                 Button {
                     editingDetails = true
                 } label: {
-                    Label(localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"), systemImage: "pencil")
+                    HerdToolbarButtonLabel(title: localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"), symbol: "pencil", tint: ElephantTheme.accent)
                 }
-                .controlSize(.small)
+                .buttonStyle(PressablePlainButtonStyle())
             }
         }
+    }
+
+    private var vibeCardMinHeight: CGFloat {
+        let reserved: CGFloat
+        if editingDetails {
+            reserved = 280
+        } else if item.herdKind == "baby" {
+            reserved = rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 310 : 385
+        } else {
+            reserved = 235
+        }
+        let floor: CGFloat = isMotherKind ? 360 : 250
+        return max(floor, availableHeight - reserved)
     }
 
     private var kindLabel: String {
@@ -9591,6 +9754,29 @@ private struct HerdReadField: View {
     }
 }
 
+private struct HerdToolbarButtonLabel: View {
+    var title: String
+    var symbol: String
+    var tint: Color
+    var filled = false
+
+    var body: some View {
+        Label(title, systemImage: symbol)
+            .font(.caption.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .foregroundStyle(filled ? Color.white : tint)
+            .background(backgroundFill, in: Capsule())
+            .overlay(Capsule().stroke(filled ? Color.clear : tint.opacity(0.18), lineWidth: 1))
+            .contentShape(Capsule())
+    }
+
+    private var backgroundFill: Color {
+        filled ? tint : tint.opacity(0.10)
+    }
+}
+
 private struct HerdMarkdownReadCard: View {
     var title: String
     var text: String
@@ -9635,6 +9821,7 @@ private struct HerdEditCard<Content: View>: View {
 struct LocalAgentRuntimeDetail: View {
     @EnvironmentObject private var model: ElephantAppModel
     var runtime: LocalAgentRuntimeItem
+    var availableHeight: CGFloat = 0
     @State private var displayName = ""
     @State private var roleTitle = ""
     @State private var rolePrompt = ""
@@ -9671,14 +9858,15 @@ struct LocalAgentRuntimeDetail: View {
                 Button {
                     editingDetails.toggle()
                 } label: {
-                    Label(
-                        editingDetails
+                    HerdToolbarButtonLabel(
+                        title: editingDetails
                             ? localizedYouText(model.appLanguage, en: "Preview", zh: "预览", fr: "Aperçu", de: "Vorschau")
                             : localizedYouText(model.appLanguage, en: "Edit", zh: "编辑", fr: "Modifier", de: "Bearbeiten"),
-                        systemImage: editingDetails ? "eye" : "pencil"
+                        symbol: editingDetails ? "eye" : "pencil",
+                        tint: runtime.canExecute ? ElephantTheme.accent : ElephantTheme.faint
                     )
                 }
-                .controlSize(.small)
+                .buttonStyle(PressablePlainButtonStyle())
                 .disabled(!runtime.canExecute)
             }
 
@@ -9716,7 +9904,7 @@ struct LocalAgentRuntimeDetail: View {
                     value: rolePrompt,
                     symbol: "quote.bubble",
                     tint: ElephantTheme.orange,
-                    minHeight: 68
+                    minHeight: candidateInstructionMinHeight
                 )
             }
 
@@ -9752,6 +9940,7 @@ struct LocalAgentRuntimeDetail: View {
                 EmptyLine(symbol: "info.circle", text: localizedYouText(model.appLanguage, en: "Elephant found this CLI. It will become adoptable after a stable non-interactive adapter is added.", zh: "Elephant 已经发现这个 CLI；等稳定的非交互 adapter 加上后就能领养。", fr: "CLI détecté; il sera adoptable après ajout d'un adapter stable.", de: "CLI gefunden; übernehmbar nach stabilem Adapter."))
             }
         }
+        .frame(maxWidth: .infinity, minHeight: availableHeight, alignment: .topLeading)
         .onAppear(perform: loadDraft)
         .onChange(of: runtime.runtimeID) { _ in loadDraft() }
     }
@@ -9786,6 +9975,11 @@ struct LocalAgentRuntimeDetail: View {
             return localizedYouText(model.appLanguage, en: "GitHub-centric assistance and repository workflow support.", zh: "负责 GitHub 和仓库工作流相关协助。", fr: "Assistance GitHub et workflows repo.", de: "GitHub- und Repository-Unterstützung.")
         }
         return localizedYouText(model.appLanguage, en: "A focused local helper Mother can delegate to.", zh: "母象可以委派的本地专长帮手。", fr: "Un spécialiste local pour Mother.", de: "Ein lokaler Spezialist für Mother.")
+    }
+
+    private var candidateInstructionMinHeight: CGFloat {
+        let reserved: CGFloat = editingDetails ? 280 : 310
+        return max(112, availableHeight - reserved)
     }
 }
 
