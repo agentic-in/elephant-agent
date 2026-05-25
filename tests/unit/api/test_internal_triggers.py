@@ -148,7 +148,8 @@ class InternalReflectTriggerTest(unittest.TestCase):
 
         self.assertEqual(features, ("onboarding_letter",))
         self.assertIn("tool.diary.write", tools)
-        self.assertIn("tool.personal_model.search", tools)
+        self.assertNotIn("tool.diary.list", tools)
+        self.assertNotIn("tool.personal_model.search", tools)
 
 
 if __name__ == "__main__":

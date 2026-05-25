@@ -195,14 +195,20 @@ def _basic_user_anchor_lines(facts: tuple[Any, ...]) -> tuple[str, ...]:
     return tuple(anchors.values())
 
 
-def _pm_portrait_lines(facts: tuple[Any, ...], *, limit: int = 40, canonical_only: bool = False) -> tuple[str, ...]:
+def _pm_portrait_lines(
+    facts: tuple[Any, ...],
+    *,
+    limit: int | None = 40,
+    canonical_only: bool = False,
+    include_affinity: bool = False,
+) -> tuple[str, ...]:
     """Build a full portrait from PM facts for diary/creative features."""
     lines: list[str] = []
     seen: set[str] = set()
     for fact in facts:
         fact_meta = dict(fact.metadata) if isinstance(fact.metadata, Mapping) else {}
         topic = fact_meta.get("topic", "")
-        if "letter" in topic or "affinity" in topic:
+        if "letter" in topic or (not include_affinity and "affinity" in topic):
             continue
         if canonical_only and not _canonical_pm_topic(topic):
             continue
@@ -214,6 +220,8 @@ def _pm_portrait_lines(facts: tuple[Any, ...], *, limit: int = 40, canonical_onl
             continue
         seen.add(key)
         lines.append(f"- [{fact.lens}] {text}")
+    if limit is None:
+        return tuple(lines)
     return tuple(lines[:limit])
 
 
@@ -483,6 +491,32 @@ def build_evidence(
     # Compress has a dedicated minimal evidence format
     if feature_ids == {"compress"}:
         return _build_compress_evidence(metadata)
+
+    if feature_ids == {"onboarding_letter"}:
+        target_date = str(metadata.get("target_date") or date.today().isoformat()).strip() or date.today().isoformat()
+        user_tz = "Asia/Shanghai"
+        try:
+            user = runtime.inspect_user(session_id=job.episode_id)
+            if user and user.timezone:
+                user_tz = user.timezone
+        except Exception:
+            LOGGER.debug("Failed to inspect user timezone for onboarding letter evidence.", exc_info=True)
+            pass
+        portrait = _pm_portrait_lines(active_facts, limit=None, include_affinity=True)
+        return "\n".join(
+            [
+                f"target_date: {target_date}",
+                f"user_timezone: {user_tz}",
+                "letter_kind: onboarding_letter",
+                "",
+                "## Personal Model facts",
+                "All active facts available after onboarding and initial learning are below. Treat them as grounding evidence, not phrases to paste into the letter.",
+                *(portrait or ("(no facts yet)",)),
+                "",
+                "## Elephant promise",
+                "AI is becoming more capable, and many people quietly worry about being replaced, accelerated, or flattened. Elephant's answer is not to decide for the user or turn them into an efficiency metric. Keep memory of this beginning, preserve the useful traces, help the user see clearly, adjust gently, and evolve with the user.",
+            ]
+        )
 
     lines: list[str] = [
         f"trigger: {job.trigger}",

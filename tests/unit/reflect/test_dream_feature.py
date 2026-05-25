@@ -68,19 +68,24 @@ class DreamFeatureTest(unittest.TestCase):
 
         self.assertEqual(tuple(feature.feature_id for feature in features), ("onboarding_letter",))
         self.assertIn("tool.diary.write", _compose_tools(features))
+        self.assertNotIn("tool.diary.list", _compose_tools(features))
+        self.assertNotIn("tool.personal_model.search", _compose_tools(features))
 
         prompt = _assemble_system_prompt(features, conservatism="creative")
 
-        self.assertIn("without sounding like a slogan", prompt)
+        self.assertIn("writing your first letter to the user", prompt)
         self.assertIn("small elephant", prompt)
         self.assertIn("metadata={\"kind\":\"onboarding_letter\"", prompt)
-        self.assertIn("The diary metadata MUST include kind=onboarding_letter", prompt)
-        self.assertIn("Elephant is Elephant", prompt)
+        self.assertIn("call tool.diary.write exactly once", prompt)
         self.assertIn("Never say or imply \"I am not Elephant\"", prompt)
-        self.assertIn("## Onboarding Letter Stance", prompt)
-        self.assertIn("Write as Elephant, not as an assistant describing Elephant", prompt)
-        self.assertIn("not a profile report", prompt)
-        self.assertIn("do not include a top-level title", prompt)
+        self.assertIn("This letter is only the body text", prompt)
+        self.assertIn("psychological, sociological, and philosophical depth", prompt)
+        self.assertIn("work-world, the tension being carried", prompt)
+        self.assertNotIn("Active features:", prompt)
+        self.assertNotIn("Allowed tools:", prompt)
+        self.assertNotIn("## SOP", prompt)
+        self.assertNotIn("tool.diary.list", prompt)
+        self.assertNotIn("tool.personal_model.search", prompt)
         self.assertNotIn("CLAIM TEXT RULE", prompt)
         self.assertNotIn("tool.personal_model.update call MUST", prompt)
         self.assertNotIn("Never store system artifacts as PM facts", prompt)
@@ -211,6 +216,11 @@ class DreamFeatureTest(unittest.TestCase):
                         text="blog: liuxunzhuo.com",
                         metadata={"topic": "world.links.blog"},
                     ),
+                    SimpleNamespace(
+                        lens="world",
+                        text="用户适合使用 code-review-pro skill。",
+                        metadata={"topic": "world.skills.affinity.code_review"},
+                    ),
                 )
 
         runtime = SimpleNamespace(
@@ -230,17 +240,20 @@ class DreamFeatureTest(unittest.TestCase):
 
         evidence = build_evidence(runtime, job, resolve_features("onboarding_letter"))
 
-        self.assertIn("## Onboarding letter context", evidence)
         self.assertIn("target_date: 2026-05-23", evidence)
         self.assertIn("letter_kind: onboarding_letter", evidence)
-        self.assertIn("## Letter Evidence Use Guide", evidence)
-        self.assertIn("Treat the portrait below as grounding evidence", evidence)
+        self.assertIn("## Personal Model facts", evidence)
+        self.assertIn("All active facts available after onboarding and initial learning", evidence)
         self.assertIn("[world] 用户正在做工程方向的 AI 产品。", evidence)
         self.assertIn("[identity] 用户压力大时需要先安静下来。", evidence)
+        self.assertIn("[world] 用户适合使用 code-review-pro skill。", evidence)
         self.assertNotIn("user-avatar.jpg", evidence)
-        self.assertNotIn("blog: liuxunzhuo.com", evidence)
-        self.assertIn("Do not drop a slogan", evidence)
-        self.assertIn("grow beside them rather than replacing them", evidence)
+        self.assertIn("blog: liuxunzhuo.com", evidence)
+        self.assertIn("replaced, accelerated, or flattened", evidence)
+        self.assertIn("evolve with the user", evidence)
+        self.assertNotIn("trigger: onboarding_letter", evidence)
+        self.assertNotIn("features: onboarding_letter", evidence)
+        self.assertNotIn("## User anchors", evidence)
 
     def test_dream_prompt_requires_pm_consolidation_and_concise_claims(self) -> None:
         features = resolve_features("dream")
