@@ -58,6 +58,19 @@ jobs:
             pyproject.toml
             uv.lock
 
+      - name: Setup LLVM for Intel runtime build
+        if: ${{ matrix.target == 'x86_64-apple-darwin' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install llvm
+          llvm_prefix="$(brew --prefix llvm)"
+          echo "${llvm_prefix}/bin" >> "$GITHUB_PATH"
+          echo "LLVM_DIR=${llvm_prefix}/lib/cmake/llvm" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=${llvm_prefix}:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
+          echo "LDFLAGS=-L${llvm_prefix}/lib ${LDFLAGS:-}" >> "$GITHUB_ENV"
+          echo "CPPFLAGS=-I${llvm_prefix}/include ${CPPFLAGS:-}" >> "$GITHUB_ENV"
+
       - name: Cache macOS runtime payloads
         uses: actions/cache@v4
         with:
