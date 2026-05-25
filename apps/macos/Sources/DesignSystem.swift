@@ -539,11 +539,11 @@ struct SettingsRow: View {
     var value: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 18) {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(label)
-                .font(.callout)
+                .font(.callout.weight(.medium))
                 .foregroundStyle(ElephantTheme.muted)
-                .frame(width: 148, alignment: .leading)
+                .frame(width: 132, alignment: .leading)
             Text(value)
                 .font(.callout)
                 .foregroundStyle(ElephantTheme.ink)
@@ -552,7 +552,8 @@ struct SettingsRow: View {
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .padding(.vertical, 5)
     }
 }
 
@@ -572,21 +573,76 @@ struct SettingsFieldRow<Accessory: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 18) {
+        HStack(alignment: .center, spacing: 16) {
             Text(label)
-                .font(.callout)
+                .font(.callout.weight(.medium))
                 .foregroundStyle(ElephantTheme.muted)
-                .frame(width: 148, alignment: .leading)
+                .frame(width: 132, alignment: .leading)
             Text(value)
                 .font(.callout)
                 .foregroundStyle(ElephantTheme.ink)
                 .textSelection(.enabled)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Spacer(minLength: 0)
+                .frame(maxWidth: 260, alignment: .leading)
+            Spacer(minLength: 12)
             accessory
         }
-        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .padding(.vertical, 5)
+    }
+}
+
+private struct SettingsControlFieldModifier: ViewModifier {
+    var width: CGFloat?
+    var minHeight: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .font(.callout)
+            .foregroundStyle(ElephantTheme.ink)
+            .padding(.horizontal, 10)
+            .frame(width: width, alignment: .center)
+            .frame(minHeight: minHeight, alignment: .center)
+            .frame(maxWidth: width == nil ? .infinity : width, alignment: .center)
+            .background(
+                Color(nsColor: .controlBackgroundColor).opacity(0.84),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
+            )
+    }
+}
+
+private struct SettingsTextEditorModifier: ViewModifier {
+    var minHeight: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .padding(8)
+            .frame(minHeight: minHeight)
+            .background(
+                Color(nsColor: .controlBackgroundColor).opacity(0.84),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    func settingsControlField(width: CGFloat? = nil, minHeight: CGFloat = 34) -> some View {
+        modifier(SettingsControlFieldModifier(width: width, minHeight: minHeight))
+    }
+
+    func settingsTextEditor(minHeight: CGFloat = 120) -> some View {
+        modifier(SettingsTextEditorModifier(minHeight: minHeight))
     }
 }
 

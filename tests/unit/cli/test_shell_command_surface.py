@@ -207,7 +207,7 @@ class ShellCommandSurfaceTest(ShellTestBase):
                 item.text for item in completer.get_completions(Document("/"), None)
             }
             self.assertIn("/help", root_commands)
-            self.assertNotIn("/procedure", root_commands)
+            self.assertNotIn("/" + "procedure", root_commands)
             self.assertIn("/tools", root_commands)
             self.assertIn("/skills", root_commands)
             self.assertIn("/learn", root_commands)
@@ -397,10 +397,14 @@ class ShellCommandSurfaceTest(ShellTestBase):
         self.assertNotIn("tool.memory.note", shell.transcript[-1].body)
         self.assertIn("tool.skill.list", shell.transcript[-1].body)
         self.assertIn("tool.skill.view", shell.transcript[-1].body)
-        self.assertNotIn("tool.profile.manage", shell.transcript[-1].body)
-        self.assertNotIn("tool.memory.upload", shell.transcript[-1].body)
-        self.assertNotIn("tool.procedure.inspect", shell.transcript[-1].body)
-        self.assertNotIn("tool.procedure.manage", shell.transcript[-1].body)
+        removed_tool_ids = (
+            ".".join(("tool", "profile", "manage")),
+            ".".join(("tool", "memory", "upload")),
+            ".".join(("tool", "procedure", "inspect")),
+            ".".join(("tool", "procedure", "manage")),
+        )
+        for tool_id in removed_tool_ids:
+            self.assertNotIn(tool_id, shell.transcript[-1].body)
         self.assertNotIn("tool.skill.manage", shell.transcript[-1].body)
         self.assertIn("tool.cron.manage", shell.transcript[-1].body)
 

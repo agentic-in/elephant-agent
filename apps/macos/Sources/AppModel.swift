@@ -1197,8 +1197,8 @@ final class ElephantAppModel: ObservableObject {
     @Published var userAvatarPath = UserDefaults.standard.string(forKey: ElephantAppModel.userAvatarPathKey) ?? ""
     @Published var herdAvatarPaths: [String: String] = UserDefaults.standard.dictionary(forKey: ElephantAppModel.herdAvatarPathsKey) as? [String: String] ?? [:]
     @Published var hiddenEpisodeIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ElephantAppModel.hiddenEpisodeIDsKey) ?? [])
-    @Published var isSleepDisplayPresented = false
-    @Published var sleepDisplayReason = "manual"
+    @Published var isSleepDisplayPresented = ElephantAppModel.shouldPresentLaunchLockScreen()
+    @Published var sleepDisplayReason = ElephantAppModel.shouldPresentLaunchLockScreen() ? "launch" : "manual"
     @Published var sleepUnlockPassword = ""
     @Published var sleepUnlockError = ""
     @Published var sleepIdleMinutes = ElephantAppModel.persistedSleepIdleMinutes()
@@ -1258,6 +1258,10 @@ final class ElephantAppModel: ObservableObject {
             return defaultValue
         }
         return UserDefaults.standard.bool(forKey: key)
+    }
+
+    private static func shouldPresentLaunchLockScreen() -> Bool {
+        !onboardingPreviewMode && storedAppLockPasswordRecord() != nil
     }
 
     private static func localizedText(_ language: AppLanguage, en: String, zh: String, fr: String, de: String) -> String {

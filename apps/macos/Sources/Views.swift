@@ -19,7 +19,7 @@ struct RootView: View {
                 DetailView(section: model.selectedSection)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(!model.showingOnboarding)
+            .allowsHitTesting(!model.isSleepDisplayPresented && !model.showingOnboarding)
             .accessibilityHidden(model.isSleepDisplayPresented || model.showingOnboarding)
             .blur(radius: model.showingOnboardingLetterEnvelope ? 8 : 0)
             .animation(.easeInOut(duration: 0.18), value: sidebarVisible)
@@ -745,38 +745,20 @@ struct HomeFirstLookPanel: View {
                 let dividerWidth: CGFloat = 1
                 let panelHeight: CGFloat = 438
                 let availableWidth = max(0, geometry.size.width - (spacing * 2) - dividerWidth)
-                let leftWidth = max(360, availableWidth / 3)
+                let preferredLeftWidth = min(max(390, availableWidth * 0.42), 520)
+                let leftWidth = min(max(340, preferredLeftWidth), availableWidth)
                 let rightWidth = max(0, availableWidth - leftWidth)
 
                 HStack(alignment: .top, spacing: spacing) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(alignment: .center, spacing: 14) {
-                            Button {
-                                model.pickUserAvatar()
-                            } label: {
-                                UserAvatarOrbitView(size: 122, editable: true)
+                    VStack(alignment: .leading, spacing: 17) {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .center, spacing: 18) {
+                                avatarButton(size: 154)
+                                identityCopy
                             }
-                            .buttonStyle(PressablePlainButtonStyle())
-                            .help(model.text(.changeProfilePhoto))
-                            .accessibilityLabel(model.text(.changeProfilePhoto))
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                    Text(model.userDisplayName)
-                                        .font(.title2.weight(.semibold))
-                                        .foregroundStyle(ElephantTheme.ink)
-                                        .lineLimit(1)
-                                    HomeIdentityBadge(
-                                        text: companionDayText(snapshot: model.snapshot, language: model.appLanguage)
-                                            ?? localizedYouText(model.appLanguage, en: "Private memory", zh: "私有记忆", fr: "Mémoire privée", de: "Privates Gedächtnis"),
-                                        symbol: "heart"
-                                    )
-                                }
-                                HomeIdentityStatusRow(
-                                    connectionText: connectionText,
-                                    phaseTint: phaseTint,
-                                    companionText: nil
-                                )
+                            VStack(alignment: .leading, spacing: 12) {
+                                avatarButton(size: 154)
+                                identityCopy
                             }
                         }
 
@@ -789,14 +771,6 @@ struct HomeFirstLookPanel: View {
                                 .font(.callout)
                                 .foregroundStyle(ElephantTheme.muted)
                                 .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        HomeStartIconButton(
-                            title: AppSection.wake.title(language: model.appLanguage),
-                            subtitle: model.text(.typeMessagePlaceholder)
-                        ) {
-                            model.selectedSection = .wake
-                            model.focusComposer()
                         }
 
                         HomeMemoryPulseRow()
@@ -855,6 +829,55 @@ struct HomeFirstLookPanel: View {
             }
             .frame(height: 438)
         }
+    }
+
+    private var identityCopy: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    identityName
+                    companionBadge
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    identityName
+                    companionBadge
+                }
+            }
+            HomeIdentityStatusRow(
+                connectionText: connectionText,
+                phaseTint: phaseTint,
+                companionText: nil
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var identityName: some View {
+        Text(model.userDisplayName)
+            .font(.system(size: 27, weight: .semibold))
+            .foregroundStyle(ElephantTheme.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .help(model.userDisplayName)
+    }
+
+    private var companionBadge: some View {
+        HomeIdentityBadge(
+            text: companionDayText(snapshot: model.snapshot, language: model.appLanguage)
+                ?? localizedYouText(model.appLanguage, en: "Private memory", zh: "私有记忆", fr: "Mémoire privée", de: "Privates Gedächtnis"),
+            symbol: "heart"
+        )
+    }
+
+    private func avatarButton(size: CGFloat) -> some View {
+        Button {
+            model.pickUserAvatar()
+        } label: {
+            UserAvatarOrbitView(size: size, editable: true)
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .help(model.text(.changeProfilePhoto))
+        .accessibilityLabel(model.text(.changeProfilePhoto))
     }
 }
 
@@ -919,35 +942,6 @@ struct HomeIdentityStatusRow: View {
                 .labelStyle(.titleAndIcon)
                 .lineLimit(1)
         }
-    }
-}
-
-private struct HomeStartIconButton: View {
-    var title: String
-    var subtitle: String
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(hovering ? ElephantTheme.accent.opacity(0.94) : ElephantTheme.accent)
-                )
-                .overlay(Circle().stroke(Color.white.opacity(0.30), lineWidth: 1))
-                .shadow(color: ElephantTheme.accent.opacity(hovering ? 0.22 : 0.14), radius: hovering ? 16 : 10, y: hovering ? 8 : 5)
-                .contentShape(Circle())
-        }
-        .buttonStyle(PressablePlainButtonStyle())
-        .help("\(title): \(subtitle)")
-        .accessibilityLabel(title)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.14), value: hovering)
     }
 }
 
@@ -11907,13 +11901,17 @@ struct SettingsView: View {
             )
 
             NativePanel {
-                VStack(spacing: 0) {
+                VStack(spacing: 8) {
                     SettingsControlStrip()
-                        .padding(.horizontal, 12)
-                        .padding(.top, 10)
-                        .padding(.bottom, 12)
-                    Divider()
-                        .padding(.leading, 58)
+                        .padding(12)
+                        .background(
+                            Color(nsColor: .controlBackgroundColor).opacity(0.56),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(ElephantTheme.line.opacity(0.52), lineWidth: 1)
+                        )
                     ExpandableSettingsRow(
                         symbol: "globe",
                         title: model.text(.languageSettingsTitle),
@@ -12007,6 +12005,7 @@ struct SettingsView: View {
                         RuntimeConfigSettingsContent()
                     }
                 }
+                .padding(10)
             }
 
         if !model.lastError.isEmpty {
@@ -12114,7 +12113,6 @@ private struct SettingsLockedView: View {
 
 struct SettingsControlStrip: View {
     @EnvironmentObject private var model: ElephantAppModel
-    @State private var hoveringRestart = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -12144,23 +12142,8 @@ struct SettingsControlStrip: View {
                 Task { await model.restartCore() }
             } label: {
                 Label(model.text(.restartCore), systemImage: "arrow.clockwise")
-                    .font(.callout.weight(.semibold))
-                    .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 12)
-                    .frame(height: 34)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(hoveringRestart ? ElephantTheme.accent.opacity(0.14) : ElephantTheme.accent.opacity(0.08))
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(hoveringRestart ? ElephantTheme.accent.opacity(0.34) : ElephantTheme.accent.opacity(0.18), lineWidth: 1)
-                    )
-                    .contentShape(Capsule(style: .continuous))
             }
-            .buttonStyle(PressablePlainButtonStyle())
-            .foregroundStyle(ElephantTheme.accent)
-            .onHover { hoveringRestart = $0 }
+            .settingsActionButton(.primary)
             .help(model.text(.restartCore))
         }
         .frame(maxWidth: .infinity, minHeight: 46, alignment: .center)
@@ -12236,7 +12219,7 @@ struct ExpandableSettingsRow<Content: View>: View {
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(iconColor)
                     }
-                    .frame(width: 34, height: 34)
+                    .frame(width: 36, height: 36)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(title)
@@ -12253,7 +12236,7 @@ struct ExpandableSettingsRow<Content: View>: View {
 
                     ZStack {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(expanded ? ElephantTheme.accent.opacity(0.14) : hovering ? ElephantTheme.accent.opacity(0.08) : Color.clear)
+                            .fill(expanded ? ElephantTheme.accent.opacity(0.14) : hovering ? ElephantTheme.accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor).opacity(0.42))
                         Image(systemName: "chevron.down")
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(expanded || hovering ? ElephantTheme.accent : ElephantTheme.faint)
@@ -12262,8 +12245,8 @@ struct ExpandableSettingsRow<Content: View>: View {
                     .frame(width: 32, height: 32)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
                 .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -12277,33 +12260,27 @@ struct ExpandableSettingsRow<Content: View>: View {
             .accessibilityLabel("\(title), \(subtitle)")
 
             if expanded {
-                HStack(alignment: .top, spacing: 14) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(ElephantTheme.accent.opacity(0.18))
-                        .frame(width: 3)
-                        .padding(.top, 12)
+                VStack(alignment: .leading, spacing: 0) {
                     content
-                        .padding(14)
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.44))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(ElephantTheme.line.opacity(0.42), lineWidth: 1)
-                        )
                 }
-                .padding(.leading, 26)
-                .padding(.trailing, 12)
+                .background(
+                    Color(nsColor: .controlBackgroundColor).opacity(0.54),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(ElephantTheme.line.opacity(0.56), lineWidth: 1)
+                )
+                .padding(.horizontal, 12)
                 .padding(.bottom, 12)
-                .transition(.opacity.combined(with: .scale(scale: 0.992, anchor: .top)))
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
             }
-
-            Divider()
-                .padding(.leading, 58)
         }
-        .animation(settingsDisclosureAnimation, value: expanded)
         .animation(.easeOut(duration: 0.14), value: hovering)
     }
 
@@ -12318,7 +12295,7 @@ struct ExpandableSettingsRow<Content: View>: View {
     }
 
     private var settingsDisclosureAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.92, blendDuration: 0.02)
+        reduceMotion ? nil : .easeInOut(duration: 0.16)
     }
 
     private var iconColor: Color {
@@ -12333,15 +12310,15 @@ struct ExpandableSettingsRow<Content: View>: View {
     }
 
     private var rowBackground: Color {
-        if expanded { return Color(nsColor: .controlBackgroundColor).opacity(0.66) }
-        if hovering { return Color(nsColor: .controlBackgroundColor).opacity(0.58) }
-        return Color.clear
+        if expanded { return ElephantTheme.accent.opacity(0.055) }
+        if hovering { return Color(nsColor: .controlBackgroundColor).opacity(0.64) }
+        return Color(nsColor: .controlBackgroundColor).opacity(0.34)
     }
 
     private var rowBorder: Color {
-        if expanded { return ElephantTheme.accent.opacity(0.16) }
+        if expanded { return ElephantTheme.accent.opacity(0.28) }
         if hovering { return ElephantTheme.line.opacity(0.74) }
-        return Color.clear
+        return ElephantTheme.line.opacity(0.28)
     }
 }
 
@@ -12399,7 +12376,7 @@ private struct SettingsActionButtonModifier: ViewModifier {
     private var foreground: Color {
         switch kind {
         case .primary:
-            return ElephantTheme.accent
+            return Color.white
         case .secondary:
             return ElephantTheme.ink.opacity(0.88)
         case .destructive:
@@ -12410,7 +12387,7 @@ private struct SettingsActionButtonModifier: ViewModifier {
     private var fill: Color {
         switch kind {
         case .primary:
-            return ElephantTheme.accent.opacity(0.10)
+            return ElephantTheme.accent
         case .secondary:
             return Color(nsColor: .controlBackgroundColor).opacity(0.72)
         case .destructive:
@@ -12421,7 +12398,7 @@ private struct SettingsActionButtonModifier: ViewModifier {
     private var stroke: Color {
         switch kind {
         case .primary:
-            return ElephantTheme.accent.opacity(0.30)
+            return ElephantTheme.accent.opacity(0.80)
         case .secondary:
             return ElephantTheme.line.opacity(0.78)
         case .destructive:
@@ -13056,7 +13033,7 @@ struct ProviderSettingsContent: View {
 
     var body: some View {
         providerFactoryContent
-            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: showingProviderConfig)
+            .animation(.easeInOut(duration: 0.16), value: showingProviderConfig)
         .onAppear {
             guard !loaded else { return }
             loadFromSnapshot()
@@ -13075,9 +13052,9 @@ struct ProviderSettingsContent: View {
             }
 
             if model.snapshot.providerOptions.isEmpty {
-                LabeledContent("Provider ID") {
+                SettingsFieldRow(label: "Provider ID", value: providerID.isEmpty ? "openai-compatible" : providerID) {
                     TextField("openai-compatible", text: $providerID)
-                        .textFieldStyle(.roundedBorder)
+                        .settingsControlField(width: 260)
                 }
                 providerConfigurationForm
             } else {
@@ -13109,7 +13086,10 @@ struct ProviderSettingsContent: View {
                             .frame(maxWidth: 620)
                             .padding(.top, 8)
                             .padding(.trailing, 8)
-                            .transition(.scale(scale: 0.96, anchor: .topTrailing).combined(with: .opacity))
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity
+                            ))
                             .zIndex(2)
                         }
                     }
@@ -13150,7 +13130,7 @@ struct ProviderSettingsContent: View {
                         )
                     }
                     .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loadingModels)
-                    .controlSize(.small)
+                    .settingsActionButton()
                 }
 
                 ModelOptionPicker(
@@ -13160,27 +13140,26 @@ struct ProviderSettingsContent: View {
                     activeModelID: model.snapshot.providerModelID
                 )
 
-                LabeledContent(model.text(.customModelID)) {
+                SettingsFieldRow(label: model.text(.customModelID), value: modelID.isEmpty ? model.text(.modelID) : modelID) {
                     TextField(model.text(.modelID), text: $modelID)
-                        .textFieldStyle(.roundedBorder)
+                        .settingsControlField(width: 300)
                 }
             }
             .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.70), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line.opacity(0.72), lineWidth: 1))
 
-            LabeledContent("Base URL") {
+            SettingsFieldRow(label: "Base URL", value: baseURL.isEmpty ? localizedYouText(model.appLanguage, en: "optional", zh: "可选", fr: "optionnel", de: "optional") : baseURL) {
                 TextField(localizedYouText(model.appLanguage, en: "optional endpoint", zh: "可选接口地址", fr: "endpoint optionnel", de: "optionaler Endpoint"), text: $baseURL)
-                    .textFieldStyle(.roundedBorder)
+                    .settingsControlField(width: 300)
             }
-            LabeledContent(model.text(.apiKey)) {
+            SettingsFieldRow(label: model.text(.apiKey), value: apiKey.isEmpty ? localizedYouText(model.appLanguage, en: "stored locally", zh: "只保存在本机", fr: "stocké localement", de: "lokal gespeichert") : localizedYouText(model.appLanguage, en: "ready to save", zh: "待保存", fr: "prêt à enregistrer", de: "bereit zum Speichern")) {
                 SecureField(localizedYouText(model.appLanguage, en: "stored locally", zh: "只保存在本机", fr: "stocké localement", de: "lokal gespeichert"), text: $apiKey)
-                    .textFieldStyle(.roundedBorder)
+                    .settingsControlField(width: 300)
             }
-            LabeledContent(model.text(.contextWindowTokens)) {
+            SettingsFieldRow(label: model.text(.contextWindowTokens), value: contextWindow.isEmpty ? localizedYouText(model.appLanguage, en: "auto", zh: "自动", fr: "auto", de: "auto") : contextWindow) {
                 TextField(localizedYouText(model.appLanguage, en: "auto", zh: "自动", fr: "auto", de: "auto"), text: $contextWindow)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 160)
+                    .settingsControlField(width: 160)
             }
             if contextWindow.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                let contextLine = selectedModelContextLine {
@@ -13197,8 +13176,8 @@ struct ProviderSettingsContent: View {
                     : model.snapshot.providerSource
             )
 
-            HStack {
-                Button(localizedYouText(model.appLanguage, en: "Save Provider", zh: "保存模型服务", fr: "Enregistrer le provider", de: "Provider speichern")) {
+            SettingsActionBar {
+                Button {
                     Task {
                         await model.saveProviderSettings(
                             providerID: providerID,
@@ -13208,12 +13187,18 @@ struct ProviderSettingsContent: View {
                             contextWindow: contextWindow
                         )
                     }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Save Provider", zh: "保存模型服务", fr: "Enregistrer le provider", de: "Provider speichern"), systemImage: "checkmark.circle")
                 }
+                .settingsActionButton(.primary)
                 .disabled(providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.providerActionInFlight)
 
-                Button(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen")) {
+                Button {
                     Task { await model.testProvider() }
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen"), systemImage: "bolt")
                 }
+                .settingsActionButton()
                 .disabled((model.snapshot.providerID.isEmpty && providerID.isEmpty) || model.providerActionInFlight)
             }
 
@@ -14443,9 +14428,9 @@ struct SleepDisplaySettingsContent: View {
             )
             HStack(spacing: 10) {
                 SecureField(model.text(.lockPassword), text: $password)
-                    .textFieldStyle(.roundedBorder)
+                    .settingsControlField()
                 SecureField(model.text(.lockPasswordConfirm), text: $confirmation)
-                    .textFieldStyle(.roundedBorder)
+                    .settingsControlField()
             }
             SettingsActionBar {
                 Button(role: .destructive) {
@@ -14674,8 +14659,7 @@ private struct MCPManagementPanel: View {
                         } label: {
                             Label(localizedYouText(model.appLanguage, en: "Add Server", zh: "新增服务", fr: "Ajouter", de: "Server hinzufügen"), systemImage: "plus")
                         }
-                        .controlSize(.small)
-                        .buttonStyle(.borderedProminent)
+                        .settingsActionButton(.primary)
                     }
                 }
 
@@ -15133,24 +15117,25 @@ private struct MCPServerEditorSheet: View {
             .padding(20)
 
             Divider()
-            HStack {
+            HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
                     isPresented = false
                 }
+                .settingsActionButton()
                 Button {
                     Task { await test() }
                 } label: {
                     Label(localizedYouText(model.appLanguage, en: "Test", zh: "测试", fr: "Tester", de: "Testen"), systemImage: "checkmark.seal")
                 }
+                .settingsActionButton()
                 Button {
                     Task { await save() }
                 } label: {
                     Label(localizedYouText(model.appLanguage, en: "Save & Sync", zh: "保存并同步", fr: "Enregistrer et sync", de: "Speichern & sync"), systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(.borderedProminent)
+                .settingsActionButton(.primary)
             }
-            .controlSize(.small)
             .disabled(model.mcpActionInFlight)
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
@@ -15276,14 +15261,14 @@ private struct MCPServerForm: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                     TextField("filesystem", text: $draft.serverID)
-                        .textFieldStyle(.roundedBorder)
+                        .settingsControlField()
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Label")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                     TextField("Filesystem", text: $draft.serverLabel)
-                        .textFieldStyle(.roundedBorder)
+                        .settingsControlField()
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Transport")
@@ -15307,7 +15292,7 @@ private struct MCPServerForm: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                     TextField("uvx", text: $draft.command)
-                        .textFieldStyle(.roundedBorder)
+                        .settingsControlField()
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Args JSON or CSV")
@@ -15315,11 +15300,8 @@ private struct MCPServerForm: View {
                         .foregroundStyle(ElephantTheme.muted)
                     TextEditor(text: $draft.argsText)
                         .font(.system(.callout, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .padding(8)
+                        .settingsTextEditor(minHeight: 72)
                         .frame(height: 72)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
                 }
                 MCPKeyValueEditor(title: "Environment", rows: $draft.envRows)
             } else {
@@ -15328,7 +15310,7 @@ private struct MCPServerForm: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(ElephantTheme.muted)
                     TextField("https://example.com/mcp", text: $draft.url)
-                        .textFieldStyle(.roundedBorder)
+                        .settingsControlField()
                 }
                 MCPKeyValueEditor(title: "Headers", rows: $draft.headerRows)
             }
@@ -15352,15 +15334,15 @@ private struct MCPKeyValueEditor: View {
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
-                .controlSize(.small)
+                .settingsActionButton()
             }
             VStack(spacing: 7) {
                 ForEach($rows) { $row in
                     HStack(spacing: 8) {
                         TextField("Key", text: $row.key)
-                            .textFieldStyle(.roundedBorder)
+                            .settingsControlField()
                         TextField("Value", text: $row.value)
-                            .textFieldStyle(.roundedBorder)
+                            .settingsControlField()
                         Button {
                             rows.removeAll { $0.id == row.id }
                             if rows.isEmpty { rows = [.empty] }
@@ -15925,11 +15907,7 @@ struct RuntimeConfigSettingsContent: View {
                     TextEditor(text: $draft)
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(ElephantTheme.ink)
-                        .scrollContentBackground(.hidden)
-                        .padding(8)
-                        .frame(minHeight: 260)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+                        .settingsTextEditor(minHeight: 260)
                         .accessibilityLabel("Global runtime configuration YAML")
                 }
 
@@ -17273,26 +17251,29 @@ struct OnboardingWelcomeStep: View {
                     }
 
                     Button(action: enter) {
-                        HStack(spacing: 10) {
-                            Text(model.text(.startSetup))
-                                .font(.body.weight(.semibold))
-                            Image(systemName: "arrow.right")
-                                .font(.body.weight(.bold))
-                        }
-                        .foregroundStyle(.white.opacity(0.96))
-                        .padding(.horizontal, 26)
-                        .frame(minWidth: 188, minHeight: 54)
-                        .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule().fill(.white.opacity(hoveringCTA ? 0.16 : 0.10))
-                                }
-                        }
-                        .overlay(Capsule().stroke(.white.opacity(hoveringCTA ? 0.58 : 0.38), lineWidth: 1))
-                        .shadow(color: .black.opacity(hoveringCTA ? 0.32 : 0.20), radius: hoveringCTA ? 20 : 13, y: hoveringCTA ? 10 : 7)
-                        .contentShape(Capsule())
-                        .scaleEffect(hoveringCTA ? 1.035 : 1)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 21, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.96))
+                            .frame(width: 58, height: 58)
+                            .background {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay {
+                                        Circle().fill(.white.opacity(hoveringCTA ? 0.18 : 0.10))
+                                    }
+                            }
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(hoveringCTA ? 0.72 : 0.46), lineWidth: 1.1)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                                    .padding(4)
+                            )
+                            .shadow(color: .black.opacity(hoveringCTA ? 0.32 : 0.20), radius: hoveringCTA ? 18 : 12, y: hoveringCTA ? 9 : 6)
+                            .contentShape(Circle())
+                            .scaleEffect(hoveringCTA ? 1.055 : 1)
                     }
                     .buttonStyle(PressablePlainButtonStyle())
                     .onHover { hoveringCTA = $0 }
