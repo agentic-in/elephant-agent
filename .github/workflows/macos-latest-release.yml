@@ -63,8 +63,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install llvm
-          llvm_prefix="$(brew --prefix llvm)"
+          brew install llvm@20
+          llvm_prefix="$(brew --prefix llvm@20)"
           echo "${llvm_prefix}/bin" >> "$GITHUB_PATH"
           echo "LLVM_DIR=${llvm_prefix}/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "CMAKE_PREFIX_PATH=${llvm_prefix}:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
