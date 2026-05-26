@@ -1,18 +1,21 @@
 ---
 title: "Overview"
-description: "Elephant Agent is agency-first personal AI: a macOS-first local workspace with a correctable Personal Model, user-paced curiosity, and visible runtime surfaces."
+description: "Elephant Agent helps you hand work to agents without handing over judgment: a macOS-first workspace with a correctable Personal Model and visible runtime surfaces."
 slug: /
 ---
 
 # Overview
 
-Elephant Agent is **agency-first personal AI**: it should help you do more
-without thinking less.
+Elephant Agent helps you hand work to agents without handing over your
+judgment.
 
-The product position is L4 personal AI. L1 agents execute tasks. L2 agents
-carry context. L3 agents improve procedures. Elephant Agent's position is L4:
-personal AI should help the user keep judgment, evidence, questions, and
-growth.
+Most agent products optimize for doing tasks faster. Elephant Agent adds the
+missing loop: a correctable **Personal Model** of what matters to you, what has
+evidence, what is still a question, and what should shape future help.
+
+That is the L4 position. L1 agents execute tasks. L2 agents carry context. L3
+agents improve procedures. Elephant Agent's position is L4: personal AI should
+make the person more capable over time, not just automate more sessions.
 
 The mechanism is a correctable **Personal Model**. Memory is the beginning, not
 the product. The center is what Elephant Agent currently understands about your

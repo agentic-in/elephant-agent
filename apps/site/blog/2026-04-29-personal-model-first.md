@@ -418,7 +418,7 @@ change the next answer?
 The next step is to make that understanding deeper, safer, and more capable
 without losing the center.
 
-We want background learning to do more than notice skill affinity. When the
+We want background learning to do more than notice skill matching. When the
 same useful pattern appears across real work, Elephant Agent should be able to
 propose a new skill or improve an existing one, with the evidence visible and
 the final shape still yours to accept.

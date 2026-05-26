@@ -7,7 +7,7 @@
 #   make check  - inspect the latest log for common issues
 
 MAIN     = main
-OUTNAME  = Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI
+OUTNAME  = Elephant_Agent__Agency_First_Personal_AI
 TEX      = pdflatex
 BIB      = bibtex
 TEXFLAGS = -interaction=nonstopmode -halt-on-error -file-line-error -jobname=$(OUTNAME)

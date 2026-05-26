@@ -132,7 +132,7 @@ export const navigation: readonly NavigationItem[] = [
     to: "/cron",
     code: "CRN",
     cluster: "System",
-    label: "Job",
+    label: "Jobs",
     eyebrow: "Scheduled jobs",
     title: "Jobs",
     detail: "The scheduled work your Elephant Agent can run on its own — nudges, reminders, reviews, and recurring prompts.",
@@ -144,7 +144,7 @@ export const navigation: readonly NavigationItem[] = [
     label: "Reflect",
     eyebrow: "Background reflect agents",
     title: "Reflect",
-    detail: "Background agents that learn from conversations, consolidate facts, write diary entries, audit your Personal Model, and maintain skill affinities.",
+    detail: "Background agents that learn from conversations, consolidate facts, write diary entries, audit your Personal Model, and maintain skill matching.",
   },
   {
     to: "/settings",

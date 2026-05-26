@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.2.14)  26 MAY 2026 19:59
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.2.14)  26 MAY 2026 21:10
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -909,9 +909,8 @@ ef
 File: l3backend-pdftex.def 2024-05-08 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count340
 \l__pdf_internal_box=\box78
-) (./Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI.aux)
-\openout1 = `Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI.aux
-'.
+) (./Elephant_Agent__Agency_First_Personal_AI.aux)
+\openout1 = `Elephant_Agent__Agency_First_Personal_AI.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 38.
 LaTeX Font Info:    ... okay on input line 38.
@@ -990,11 +989,10 @@ Package: ltcaption 2021/01/08 v1.4c longtable captions (AR)
 Package caption Info: End \AtBeginDocument code.
 Package hyperref Info: Link coloring ON on input line 38.
 
-(./Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI.out)
-(./Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI.out)
+(./Elephant_Agent__Agency_First_Personal_AI.out)
+(./Elephant_Agent__Agency_First_Personal_AI.out)
 \@outlinefile=\write4
-\openout4 = `Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI.out
-'.
+\openout4 = `Elephant_Agent__Agency_First_Personal_AI.out'.
 
 
 *geometry* driver: auto-detecting
@@ -1127,7 +1125,7 @@ sed on input line 70.
 (pdftex.def)             Requested size: 455.24411pt x 256.20798pt.
 
 
-[2 <../../apps/site/static/assets/resources/paper-1.png (PNG copy)>])
+[2 <../../apps/site/static/assets/resources/paper-1.png>])
 (./sections/abstraction.tex
 LaTeX Font Info:    Trying to load font information for TS1+lmr on input line 1
 5.
@@ -1138,7 +1136,7 @@ File: ts1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 
 [3{/usr/local/texlive/2025basic/texmf-dist/fonts/enc/dvips/lm/lm-ts1.enc}])
 (./sections/architecture.tex
-<../../apps/site/static/assets/resources/paper-2.png, id=228, 1453.43pt x 1090.
+<../../apps/site/static/assets/resources/paper-2.png, id=229, 1453.43pt x 1090.
 0725pt>
 File: ../../apps/site/static/assets/resources/paper-2.png Graphic file (type pn
 g)
@@ -1150,9 +1148,9 @@ sed on input line 13.
 
 [4]
 
-[5 <../../apps/site/static/assets/resources/paper-2.png (PNG copy)>])
+[5 <../../apps/site/static/assets/resources/paper-2.png>])
 (./sections/continuity_grammar.tex
-<../../apps/site/static/assets/resources/paper-6.png, id=238, 1453.43pt x 1090.
+<../../apps/site/static/assets/resources/paper-6.png, id=240, 1453.43pt x 1090.
 0725pt>
 File: ../../apps/site/static/assets/resources/paper-6.png Graphic file (type pn
 g)
@@ -1164,9 +1162,9 @@ sed on input line 10.
 
 [6]
 
-[7 <../../apps/site/static/assets/resources/paper-6.png (PNG copy)>])
+[7 <../../apps/site/static/assets/resources/paper-6.png>])
 (./sections/curiosity.tex
-<../../apps/site/static/assets/resources/paper-5.png, id=249, 1453.43pt x 1090.
+<../../apps/site/static/assets/resources/paper-5.png, id=252, 1453.43pt x 1090.
 0725pt>
 File: ../../apps/site/static/assets/resources/paper-5.png Graphic file (type pn
 g)
@@ -1176,11 +1174,11 @@ sed on input line 13.
 (pdftex.def)             Requested size: 409.71692pt x 307.28073pt.
 
 
-[8 <../../apps/site/static/assets/resources/paper-5.png (PNG copy)>])
+[8 <../../apps/site/static/assets/resources/paper-5.png>])
 (./sections/understanding_recovery.tex
 
 [9]
-<../../apps/site/static/assets/resources/paper-4.png, id=264, 1453.43pt x 1090.
+<../../apps/site/static/assets/resources/paper-4.png, id=268, 1453.43pt x 1090.
 0725pt>
 File: ../../apps/site/static/assets/resources/paper-4.png Graphic file (type pn
 g)
@@ -1188,7 +1186,7 @@ g)
 Package pdftex.def Info: ../../apps/site/static/assets/resources/paper-4.png  u
 sed on input line 47.
 (pdftex.def)             Requested size: 409.71692pt x 307.28073pt.
-<../../apps/site/static/assets/resources/paper-7.png, id=265, 1453.43pt x 1090.
+<../../apps/site/static/assets/resources/paper-7.png, id=269, 1453.43pt x 1090.
 0725pt>
 File: ../../apps/site/static/assets/resources/paper-7.png Graphic file (type pn
 g)
@@ -1218,14 +1216,14 @@ g-ging Face and $\T1/lmtt/m/n/10 agentic-[]intelligence-[]lab /
 
 
 
-[11 <../../apps/site/static/assets/resources/paper-4.png (PNG copy)>])
+[11 <../../apps/site/static/assets/resources/paper-4.png>])
 (./sections/implementation_direction.tex
 
-[12 <../../apps/site/static/assets/resources/paper-7.png (PNG copy)>] [13])
+[12 <../../apps/site/static/assets/resources/paper-7.png>] [13])
 (./sections/related_work.tex
 
 [14]) (./sections/future_work.tex
-<../../apps/site/static/assets/resources/paper-3.png, id=299, 1453.43pt x 1090.
+<../../apps/site/static/assets/resources/paper-3.png, id=305, 1453.43pt x 1090.
 0725pt>
 File: ../../apps/site/static/assets/resources/paper-3.png Graphic file (type pn
 g)
@@ -1235,24 +1233,24 @@ sed on input line 8.
 (pdftex.def)             Requested size: 409.71692pt x 307.28073pt.
 
 
-[15 <../../apps/site/static/assets/resources/paper-3.png (PNG copy)>])
+[15 <../../apps/site/static/assets/resources/paper-3.png>])
 (./sections/conclusion.tex)
 
 [16]
 
-[17] (./Elephant_Agent__Personal_Model_First_Evolution_for_Personal_AI.aux)
+[17] (./Elephant_Agent__Agency_First_Personal_AI.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
-Package rerunfilecheck Info: File `Elephant_Agent__Personal_Model_First_Evoluti
-on_for_Personal_AI.out' has not changed.
+Package rerunfilecheck Info: File `Elephant_Agent__Agency_First_Personal_AI.out
+' has not changed.
 (rerunfilecheck)             Checksum: 03ED8ACDDB9A0C22CBD8545DCD4DCCB6;7496.
  )
 Here is how much of TeX's memory you used:
  29847 strings out of 474662
- 570753 string characters out of 5751109
- 980652 words of memory out of 5000000
+ 570379 string characters out of 5751109
+ 980586 words of memory out of 5000000
  52264 multiletter control sequences out of 15000+600000
  617189 words of font info for 81 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
@@ -1269,10 +1267,10 @@ lm/lmr10.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/lm/lmr
 local/texlive/2025basic/texmf-dist/fonts/type1/public/lm/lmsy7.pfb></usr/local/
 texlive/2025basic/texmf-dist/fonts/type1/public/lm/lmtt10.pfb></usr/local/texli
 ve/2025basic/texmf-dist/fonts/type1/public/lm/lmtt9.pfb>
-Output written on Elephant_Agent__Personal_Model_First_Evolution_for_Personal_A
-I.pdf (17 pages, 2353487 bytes).
+Output written on Elephant_Agent__Agency_First_Personal_AI.pdf (17 pages, 59498
+88 bytes).
 PDF statistics:
- 458 PDF objects out of 1000 (max. 8388607)
+ 465 PDF objects out of 1000 (max. 8388607)
  337 compressed objects within 4 object streams
  87 named destinations out of 1000 (max. 500000)
  13210 words of extra memory for PDF output out of 14400 (max. 10000000)

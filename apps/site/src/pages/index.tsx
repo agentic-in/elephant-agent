@@ -11,7 +11,7 @@ const releaseUrl = `${githubRepoUrl}/releases/latest`;
 const pageTitle = "Agency-First Personal AI";
 const pageTitleWithSite = `${pageTitle} | Elephant Agent`;
 const pageDescription =
-  "Elephant Agent is agency-first personal AI with a correctable Personal Model, user-paced curiosity, and visible local runtime surfaces.";
+  "Elephant Agent helps you hand work to agents without handing over judgment, using a correctable Personal Model and visible local runtime surfaces.";
 const pageKeywords = [
   "agency-first personal AI",
   "personal-model-first AI",
@@ -205,7 +205,7 @@ export default function HomePage(): React.JSX.Element {
                   Do more without thinking less.
                 </p>
                 <p>
-                  Agency-first personal AI, build around You.
+                  Agency-first personal AI, built around you.
                 </p>
                 <div className="pill-row">
                   <span className="info-pill info-pill-highlight">Personal Model first</span>

@@ -23,6 +23,8 @@ Do not keep here:
 
 - `main.tex`
   - the primary LaTeX entrypoint for the current Elephant Agent system report
+- `Elephant_Agent__Agency_First_Personal_AI.pdf`
+  - the generated PDF for the current Agency-First Personal AI paper
 - `sections/`
   - section-level paper text for the Personal-Model-first architecture,
     including the agency-first L4 positioning, Claim/Question boundaries,

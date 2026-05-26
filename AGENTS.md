@@ -4,7 +4,7 @@ This is the short entrypoint for coding agents. The detailed human-readable syst
 
 ## Product North Star
 
-Elephant Agent is a Personal-Model-first (PM-first) evolving personal AI agent. Public and technical changes should converge on the canonical Understanding System in [docs/system-design/system-layer-model.md](docs/system-design/system-layer-model.md): Personal Model facts and questions, Elephant State, Episodes, Loops, Steps, semantic recall, and background learning jobs.
+Elephant Agent is agency-first personal AI with a Personal-Model-first technical spine. Public and technical changes should converge on the canonical Understanding System in [docs/system-design/system-layer-model.md](docs/system-design/system-layer-model.md): Personal Model facts and questions, Elephant State, Episodes, Loops, Steps, semantic recall, and background learning jobs.
 
 ## Read First
 

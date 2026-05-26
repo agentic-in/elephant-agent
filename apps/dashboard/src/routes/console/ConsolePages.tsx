@@ -219,7 +219,7 @@ function personalModelHeading(row: DashboardRow | undefined, fallback: string): 
   return personalPreferredName(row) || fallback;
 }
 
-// What Elephant Agent has learned about the person, in a shape the You page
+// What Elephant Agent has learned about the person, in a shape the Personal Model page
 // can render as human facts instead of dumping raw memory blobs.
 type YouProfileFact = { label: string; value: string; full?: boolean };
 type YouProfileList = { label: string; items: readonly string[] };
@@ -2842,13 +2842,13 @@ const reflectJobPresets: ReflectJobPreset[] = [
   {
     id: "memory",
     label: "Memory review",
-    detail: "Update PM facts, questions, and skill affinity from recent context.",
+    detail: "Update PM facts, questions, and skill matching from recent context.",
     trigger: "manual",
   },
   {
     id: "skill-affinity",
     label: "Skill matching",
-    detail: "Only audit the existing skill catalog and update affinity facts.",
+    detail: "Only audit the existing skill catalog and update skill-matching facts.",
     trigger: "manual",
     features: "skill_affinity",
   },
@@ -4053,9 +4053,9 @@ export function SkillsPage(): React.JSX.Element {
               <MetricCard compact metric={{ label: "Skills", value: `${dashboard.operations.skills.length}`, note: "Installed, authored, built-in, and external entries.", tone: "neutral" }} />
               <MetricCard compact metric={{ label: "Ready to use", value: `${enabledCount}`, note: "Skills active and available to Elephant Agent's next reply.", tone: enabledCount ? "healthy" : "neutral" }} />
               <MetricCard compact metric={{ label: "Drafts", value: `${pendingDraftCount}`, note: "Skill Evolution drafts waiting for approval.", tone: pendingDraftCount ? "attention" : "neutral" }} />
-              <MetricCard compact metric={{ label: "Affinities", value: `${skillAffinities.length}`, note: `${activeAffinityClaims} active PM skill affinity claim(s).`, tone: skillAffinities.length ? "healthy" : "neutral" }} />
+              <MetricCard compact metric={{ label: "Matches", value: `${skillAffinities.length}`, note: `${activeAffinityClaims} active PM skill-matching claim(s).`, tone: skillAffinities.length ? "healthy" : "neutral" }} />
             </section>
-            <Panel eyebrow="Skills" title="What Elephant Agent knows how to do" detail="Search, inspect, and toggle skill packages. What Elephant Agent has learned to use naturally stays on the You page.">
+            <Panel eyebrow="Skills" title="What Elephant Agent knows how to do" detail="Search, inspect, and toggle skill packages. What Elephant Agent has learned to use naturally stays on the Personal Model page.">
               <SearchBox
                 query={query}
                 setQuery={setQuery}

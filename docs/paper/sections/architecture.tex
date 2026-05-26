@@ -22,7 +22,7 @@ traceable to runtime Steps and source Episodes.
 
 The system is easier to reason about as five planes that cooperate at runtime.
 The \textbf{surface plane} accepts triggers from the chat TUI, Dashboard,
-messaging gateways, API calls, cron jobs, and background jobs. The
+messaging gateways, API calls, scheduled jobs, and background jobs. The
 \textbf{response plane} owns the current foreground answer: it resolves the elephant,
 selects provider and model posture, calls tools, and returns a response,
 pause, or handoff. The \textbf{continuity plane} owns Elephant State, Episodes,
@@ -119,7 +119,7 @@ tools.
 
 \subsection{Capability Path}
 
-Tools, skills, models, cron jobs, messaging adapters, the chat TUI, and the
+Tools, skills, models, scheduled jobs, messaging adapters, the chat TUI, and the
 Dashboard make Elephant Agent operationally useful. They remain visible capabilities
 around the Personal Model. When a workflow should become reusable, it remains
 an explicit skill package or operator action. When the user corrects Elephant Agent, the

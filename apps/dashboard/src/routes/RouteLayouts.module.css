@@ -1506,7 +1506,7 @@
   white-space: nowrap;
 }
 
-/* PM fact sheet — structured user_profile fields on the You page */
+/* PM fact sheet: structured user_profile fields on the Personal Model page */
 .youFactsLayout {
   display: grid;
   gap: 0.78rem;

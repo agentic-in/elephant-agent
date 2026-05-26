@@ -1,7 +1,7 @@
 ---
 name: Web Search
 skill_id: web-search
-description: Keeps lightweight public-web discovery available for prompts, cron jobs, and follow-up research.
+description: Keeps lightweight public-web discovery available for prompts, scheduled jobs, and follow-up research.
 version: 1.0.0
 source_kind: elephant-builtin
 default_enabled: true

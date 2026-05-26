@@ -14,7 +14,7 @@ from .runtime import CronJob
 
 DREAM_CRON_NAME = "Nightly dream"
 DREAM_CRON_SCHEDULE = "every day at 1am"
-DREAM_CRON_SUMMARY = "nightly Personal Model, question, skill affinity, skill evolution, and diary maintenance"
+DREAM_CRON_SUMMARY = "nightly Personal Model, question, skill matching, skill evolution, and diary maintenance"
 DREAM_CRON_FEATURES = "dream,questions,skill_affinity,skill_evolution,diary"
 
 

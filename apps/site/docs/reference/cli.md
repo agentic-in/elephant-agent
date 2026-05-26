@@ -100,7 +100,7 @@ The built-in runtime already exposes this curated tool catalog:
 <!-- END:GENERATED_BUILTIN_TOOL_SUMMARY -->
 
 The wider extension surface still includes built-in skills, authored skills,
-and recurring cron jobs on top of the built-in tools. The `personal_model`
+and recurring scheduled jobs on top of the built-in tools. The `personal_model`
 family is the durable understanding surface: search returns active claims with
 match status, update changes one lens/topic claim, and questions manage useful
 future prompts.

@@ -66,7 +66,7 @@ export type SkillHubCatalogData = {
 };
 
 export const skillHubCatalog: SkillHubCatalogData = {
-  "generated_at": "2026-05-25T07:57:54Z",
+  "generated_at": "2026-05-26T13:10:03Z",
   "headline": "Browse the skills that ship with Elephant Agent.",
   "summary": "Packaged Elephant Agent skills and the external source lanes the CLI can install from.",
   "builtin_posture": "Bundled skills already ship with Elephant Agent. Use `elephant skills install <skill-id>` only when you want an explicit local materialization record for one packaged skill.",
@@ -230,7 +230,7 @@ export const skillHubCatalog: SkillHubCatalogData = {
           "skill_id": "web-search",
           "slug": "web-search",
           "display_name": "Web Search",
-          "summary": "Keeps lightweight public-web discovery available for prompts, cron jobs, and follow-up research.",
+          "summary": "Keeps lightweight public-web discovery available for prompts, scheduled jobs, and follow-up research.",
           "reference": "web-search",
           "section_id": "runtime",
           "section_display_name": "Runtime",
@@ -6420,7 +6420,7 @@ export const skillHubCatalog: SkillHubCatalogData = {
       "skill_id": "web-search",
       "slug": "web-search",
       "display_name": "Web Search",
-      "summary": "Keeps lightweight public-web discovery available for prompts, cron jobs, and follow-up research.",
+      "summary": "Keeps lightweight public-web discovery available for prompts, scheduled jobs, and follow-up research.",
       "reference": "web-search",
       "section_id": "runtime",
       "section_display_name": "Runtime",

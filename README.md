@@ -5,8 +5,8 @@
 <div align="center">
   <h1>Elephant Agent</h1>
   <p>
-    <strong>Agency-first personal AI.</strong><br />
-    A correctable Personal Model for Identity, World, Pulse, and Journey.
+    <strong>Do more without thinking less.</strong><br />
+    Agency-first personal AI, built around you.
   </p>
   <p>
     <a href="https://elephant.agentic-in.ai/">Website</a>
@@ -20,15 +20,15 @@
 
 ## What It Is
 
-Elephant Agent is **agency-first personal AI**.
+Elephant Agent helps you hand work to agents without handing over your
+judgment.
 
-It keeps one durable object at the center: a correctable, evidence-backed
-**Personal Model** of what should shape future help. Tools, skills, memory,
-messaging, cron jobs, and background learning orbit that model instead of
-replacing it.
+Most agent products optimize for doing tasks faster. Elephant Agent adds the
+missing loop: a correctable **Personal Model** of what matters to you, what has
+evidence, what is still a question, and what should shape future help.
 
-The product position is **L4 personal AI**: agents may do more work, but the
-person should not lose judgment, continuity, or growth in the process.
+That is the L4 position: personal AI should make the person more capable over
+time, not just automate more sessions.
 
 ## Personal Agent Levels
 
@@ -99,21 +99,12 @@ hidden behind a chat box.
 <table>
   <tr>
     <td width="50%">
-      <img src="apps/site/static/assets/screenshots/macos-onboarding-start.jpg" alt="Elephant Agent onboarding start screen" />
-      <br />
-      <strong>Onboarding</strong>
-      <br />
-      <sub>Create your first elephant before you start delegating work.</sub>
-    </td>
-    <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-onboarding-language.jpg" alt="Elephant Agent onboarding language screen" />
       <br />
       <strong>Preferences</strong>
       <br />
       <sub>Choose language, boundaries, model posture, and curiosity effort.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-wake.jpg" alt="Elephant Agent Wake chat surface" />
       <br />
@@ -121,6 +112,8 @@ hidden behind a chat box.
       <br />
       <sub>Return to the same elephant, not a blank prompt.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-personal-model.jpg" alt="Elephant Agent Personal Model map" />
       <br />
@@ -128,8 +121,6 @@ hidden behind a chat box.
       <br />
       <sub>Inspect Identity, World, Pulse, and Journey as correctable claims.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-providers.jpg" alt="Elephant Agent model provider settings" />
       <br />
@@ -137,6 +128,8 @@ hidden behind a chat box.
       <br />
       <sub>Use local or hosted models without turning the provider into the product.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-skills.jpg" alt="Elephant Agent skills screen" />
       <br />
@@ -144,8 +137,6 @@ hidden behind a chat box.
       <br />
       <sub>See which skills match your Personal Model and active work.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-tools.jpg" alt="Elephant Agent tools screen" />
       <br />
@@ -153,6 +144,8 @@ hidden behind a chat box.
       <br />
       <sub>Keep browser, filesystem, MCP, and operator actions explicit.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-herd.jpg" alt="Elephant Agent herd screen" />
       <br />
@@ -160,8 +153,6 @@ hidden behind a chat box.
       <br />
       <sub>Coordinate the mother elephant and local baby agents under one context.</sub>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-messaging.jpg" alt="Elephant Agent messaging integrations" />
       <br />
@@ -169,6 +160,8 @@ hidden behind a chat box.
       <br />
       <sub>Connect WeChat, Feishu, Discord, DingDing, or WeCom when you want it.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-calendar.jpg" alt="Elephant Agent calendar and reminders" />
       <br />
@@ -176,9 +169,7 @@ hidden behind a chat box.
       <br />
       <sub>Keep reminders and scheduled agent work visible in one place.</sub>
     </td>
-  </tr>
-  <tr>
-    <td colspan="2">
+    <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-usage.jpg" alt="Elephant Agent token usage screen" />
       <br />
       <strong>Usage</strong>
