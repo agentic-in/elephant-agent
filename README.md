@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/site/static/assets/resources/readme-1.png" alt="Elephant Agent follows a personal path with people, places, risks, rhythms, decisions, and a Personal Model" width="920" />
+  <img src="apps/site/static/assets/screenshots/readme-macos-home.png" alt="Elephant Agent macOS desktop app showing the Personal Model map, current context, and next useful question" width="920" />
 </p>
 
 <div align="center">
@@ -68,23 +68,54 @@ feature, not a failure.
 
 ## Quickstart
 
-Install Elephant Agent, create your first named elephant, then come back through `wake` whenever
-you want to continue.
+Elephant Agent has two supported product shapes.
 
-### Install
+### 1. macOS desktop app (recommended)
+
+Use this path for the full local desktop workspace: Wake, You, Diary, Reflect,
+Jobs, Skills, Settings, and the Personal Model map in one native app.
+
+<p align="center">
+  <img src="apps/site/static/assets/screenshots/readme-macos-chat.png" alt="Elephant Agent macOS Wake chat surface" width="920" />
+</p>
+
+1. Download the latest macOS build from [GitHub Releases](https://github.com/agentic-in/elephant-agent/releases/latest).
+2. Open `Elephant Agent.app`.
+3. Create your first elephant, choose a provider, and set curiosity effort.
+4. Return through Wake when you want to continue the same path.
+
+### 2. CLI + Dashboard (Linux / Cloud)
+
+Use this path for Linux, cloud machines, SSH workflows, and terminal-first
+operators. The CLI is the daily work surface; the Dashboard is the visual
+inspection surface for Personal Model, evidence, jobs, skills, and runtime
+state.
+
+<p align="center">
+  <img src="apps/site/static/assets/screenshots/readme-cli.png" alt="Elephant Agent CLI wake session" width="920" />
+</p>
+
+<p align="center">
+  <img src="apps/site/static/assets/screenshots/readme-dashboard.png" alt="Elephant Agent Dashboard Personal Model map" width="920" />
+</p>
+
+Install:
 
 ```bash
 curl -fsSL https://elephant.agentic-in.ai/install.sh | bash
 ```
 
-### First run
+First run:
 
 ```bash
 elephant init        # choose identity, provider, and curiosity effort
-elephant herd new    # create another named elephant when you need one
+elephant status      # check provider and local runtime readiness
 elephant wake        # enter the chat TUI
 elephant dashboard   # open You, Questions, and Evidence
 ```
+
+For remote or cloud use, `elephant dashboard --no-open` prints the local URL so
+you can attach through your preferred tunnel or browser setup.
 
 ## Read More
 
