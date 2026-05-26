@@ -2202,7 +2202,14 @@ final class ElephantAppModel: ObservableObject {
         guard !date.isEmpty else { return }
         do {
             try await client.writeDiary(targetDate: date)
-            diaryActionResult = "Diary write queued for \(date)."
+            diaryActionResult = Self.localizedText(
+                appLanguage,
+                en: "Diary write queued for %@.",
+                zh: "已排队写 %@ 的日记。",
+                fr: "Écriture du journal planifiée pour %@.",
+                de: "Tagebuchschreiben für %@ eingereiht.",
+                date
+            )
             try? await Task.sleep(nanoseconds: 700_000_000)
             try await refreshDashboard()
         } catch {

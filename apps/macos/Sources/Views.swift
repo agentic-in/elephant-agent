@@ -8461,7 +8461,8 @@ struct DiaryView: View {
                 title: AppSection.diary.title(language: model.appLanguage),
                 subtitle: model.text(.diaryPageSubtitle),
                 actionTitle: model.isReflecting ? model.text(.writing) : model.text(.writeDiary),
-                actionSymbol: "book.closed"
+                actionSymbol: "square.and.pencil",
+                actionIconOnly: true
             ) {
                 writeDiaryForSelectedDate()
             }
@@ -8514,46 +8515,21 @@ struct DiaryView: View {
 
     private var diaryDateControls: some View {
         HStack(spacing: 8) {
-            Button {
+            DiaryStepButton(
+                symbol: "chevron.left",
+                title: localizedYouText(model.appLanguage, en: "Previous diary day", zh: "前一天日记", fr: "Jour de journal précédent", de: "Vorheriger Tagebuchtag")
+            ) {
                 moveTargetDate(by: -1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .frame(width: 24, height: 22)
             }
-            .buttonStyle(.borderless)
             .help(localizedYouText(model.appLanguage, en: "Previous day", zh: "前一天", fr: "Jour précédent", de: "Vorheriger Tag"))
-            .accessibilityLabel(localizedYouText(model.appLanguage, en: "Previous diary day", zh: "前一天日记", fr: "Jour de journal précédent", de: "Vorheriger Tagebuchtag"))
 
-            Button {
+            DiaryDateSelectorButton(
+                title: compactDateTitle,
+                subtitle: compactDateSubtitle,
+                isPresented: showsDatePicker
+            ) {
                 showsDatePicker.toggle()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "calendar")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(ElephantTheme.accent)
-                        .frame(width: 18)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(compactDateTitle)
-                            .font(.callout.weight(.semibold))
-                            .foregroundStyle(ElephantTheme.ink)
-                        Text(compactDateSubtitle)
-                            .font(.caption2)
-                            .foregroundStyle(ElephantTheme.muted)
-                    }
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(ElephantTheme.faint)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minWidth: 172, alignment: .leading)
-                .background(ElephantTheme.panel.opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(ElephantTheme.line, lineWidth: 1)
-                )
             }
-            .buttonStyle(PressablePlainButtonStyle())
             .popover(isPresented: $showsDatePicker, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 12) {
                     DatePicker(localizedYouText(model.appLanguage, en: "Diary day", zh: "日记日期", fr: "Jour du journal", de: "Tagebuchtag"), selection: $targetDate, displayedComponents: .date)
@@ -8561,10 +8537,18 @@ struct DiaryView: View {
                         .labelsHidden()
                         .frame(width: 300)
                     HStack(spacing: 8) {
-                        Button(localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern")) {
+                        DiaryQuickDateButton(
+                            title: localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern"),
+                            symbol: "arrow.counterclockwise",
+                            isSelected: isTargetDate(relativeToTodayBy: -1)
+                        ) {
                             setTargetDate(relativeToTodayBy: -1)
                         }
-                        Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
+                        DiaryQuickDateButton(
+                            title: localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute"),
+                            symbol: "sun.max",
+                            isSelected: isTargetDate(relativeToTodayBy: 0)
+                        ) {
                             setTargetDate(relativeToTodayBy: 0)
                         }
                         Spacer()
@@ -8575,53 +8559,51 @@ struct DiaryView: View {
                     }
                 }
                 .padding(14)
+                .environment(\.locale, Locale(identifier: model.appLanguage.localeIdentifier))
             }
             .help(localizedYouText(model.appLanguage, en: "Choose diary day", zh: "选择日记日期", fr: "Choisir le jour du journal", de: "Tagebuchtag wählen"))
-                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Diary day", zh: "日记日期", fr: "Jour du journal", de: "Tagebuchtag"))
+            .accessibilityLabel(localizedYouText(model.appLanguage, en: "Diary day", zh: "日记日期", fr: "Jour du journal", de: "Tagebuchtag"))
 
-            Button {
+            DiaryStepButton(
+                symbol: "chevron.right",
+                title: localizedYouText(model.appLanguage, en: "Next diary day", zh: "后一天日记", fr: "Jour de journal suivant", de: "Nächster Tagebuchtag")
+            ) {
                 moveTargetDate(by: 1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .frame(width: 24, height: 22)
             }
-            .buttonStyle(.borderless)
             .help(localizedYouText(model.appLanguage, en: "Next day", zh: "后一天", fr: "Jour suivant", de: "Nächster Tag"))
-            .accessibilityLabel(localizedYouText(model.appLanguage, en: "Next diary day", zh: "后一天日记", fr: "Jour de journal suivant", de: "Nächster Tagebuchtag"))
 
             Divider()
                 .frame(height: 24)
 
-            Button(localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern")) {
+            DiaryQuickDateButton(
+                title: localizedYouText(model.appLanguage, en: "Yesterday", zh: "昨天", fr: "Hier", de: "Gestern"),
+                symbol: "arrow.counterclockwise",
+                isSelected: isTargetDate(relativeToTodayBy: -1)
+            ) {
                 setTargetDate(relativeToTodayBy: -1)
             }
-            .buttonStyle(.bordered)
             .help(localizedYouText(model.appLanguage, en: "Select yesterday", zh: "选择昨天", fr: "Sélectionner hier", de: "Gestern auswählen"))
 
-            Button(localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute")) {
+            DiaryQuickDateButton(
+                title: localizedYouText(model.appLanguage, en: "Today", zh: "今天", fr: "Aujourd'hui", de: "Heute"),
+                symbol: "sun.max",
+                isSelected: isTargetDate(relativeToTodayBy: 0)
+            ) {
                 setTargetDate(relativeToTodayBy: 0)
             }
-            .buttonStyle(.bordered)
             .help(localizedYouText(model.appLanguage, en: "Select today", zh: "选择今天", fr: "Sélectionner aujourd'hui", de: "Heute auswählen"))
         }
     }
 
     private var writeDiaryButton: some View {
-        Button {
+        DiaryWriteActionButton(
+            title: model.isReflecting ? model.text(.writing) : model.text(.writeDiary),
+            subtitle: localizedFormat(model.appLanguage, en: "For %@", zh: "日期：%@", fr: "Pour %@", de: "Für %@", selectedDateDisplay),
+            isDisabled: model.isReflecting
+        ) {
             writeDiaryForSelectedDate()
-        } label: {
-            Label(
-                model.isReflecting
-                    ? model.text(.writing)
-                    : localizedFormat(model.appLanguage, en: "Write for %@", zh: "写 %@", fr: "Écrire pour %@", de: "Schreiben für %@", requestDateString),
-                systemImage: "square.and.pencil"
-            )
-                .lineLimit(1)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(ElephantTheme.accent)
-        .disabled(model.isReflecting)
+        .help(localizedFormat(model.appLanguage, en: "Write diary for %@", zh: "写 %@ 的日记", fr: "Écrire le journal pour %@", de: "Tagebuch für %@ schreiben", selectedDateDisplay))
     }
 
     @ViewBuilder
@@ -8648,15 +8630,15 @@ struct DiaryView: View {
     }
 
     private var selectedDateDisplay: String {
-        Self.displayDateFormatter.string(from: targetDate)
+        Self.localizedDate(targetDate, language: model.appLanguage, dateStyle: .full)
     }
 
     private var compactDateTitle: String {
-        Self.compactDateFormatter.string(from: targetDate)
+        Self.localizedDate(targetDate, language: model.appLanguage, template: "EEE MMM d")
     }
 
     private var compactDateSubtitle: String {
-        Self.yearFormatter.string(from: targetDate)
+        Self.localizedDate(targetDate, language: model.appLanguage, template: "yyyy")
     }
 
     private func writeDiaryForSelectedDate() {
@@ -8672,6 +8654,11 @@ struct DiaryView: View {
         targetDate = Calendar.current.date(byAdding: .day, value: dayDelta, to: Date()) ?? Date()
     }
 
+    private func isTargetDate(relativeToTodayBy dayDelta: Int) -> Bool {
+        let referenceDate = Calendar.current.date(byAdding: .day, value: dayDelta, to: Date()) ?? Date()
+        return Calendar.current.isDate(targetDate, inSameDayAs: referenceDate)
+    }
+
     private static func defaultDiaryDate() -> Date {
         Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
     }
@@ -8684,24 +8671,223 @@ struct DiaryView: View {
         return formatter
     }()
 
-    private static let displayDateFormatter: DateFormatter = {
+    private static func localizedDate(_ date: Date, language: AppLanguage, dateStyle: DateFormatter.Style) -> String {
         let formatter = DateFormatter()
-        formatter.dateStyle = .full
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.timeZone = TimeZone.current
+        formatter.dateStyle = dateStyle
         formatter.timeStyle = .none
-        return formatter
-    }()
+        return formatter.string(from: date)
+    }
 
-    private static let compactDateFormatter: DateFormatter = {
+    private static func localizedDate(_ date: Date, language: AppLanguage, template: String) -> String {
         let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("EEE, MMM d")
-        return formatter
-    }()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.timeZone = TimeZone.current
+        formatter.setLocalizedDateFormatFromTemplate(template)
+        return formatter.string(from: date)
+    }
+}
 
-    private static let yearFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("yyyy")
-        return formatter
-    }()
+private struct DiaryStepButton: View {
+    var symbol: String
+    var title: String
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(hovering ? ElephantTheme.accent : ElephantTheme.muted)
+                .frame(width: 30, height: 30)
+                .background(
+                    (hovering ? ElephantTheme.accent.opacity(0.10) : Color(nsColor: .controlBackgroundColor).opacity(0.58)),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(hovering ? ElephantTheme.accent.opacity(0.28) : ElephantTheme.line.opacity(0.62), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .accessibilityLabel(title)
+    }
+}
+
+private struct DiaryDateSelectorButton: View {
+    var title: String
+    var subtitle: String
+    var isPresented: Bool
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 20, height: 20)
+                    .background(ElephantTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(1)
+                }
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .rotationEffect(.degrees(isPresented ? 180 : 0))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minWidth: 184, minHeight: 44, alignment: .leading)
+            .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(border, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.14), value: isPresented)
+    }
+
+    private var background: Color {
+        isPresented || hovering
+            ? Color(nsColor: .controlBackgroundColor).opacity(0.96)
+            : Color(nsColor: .controlBackgroundColor).opacity(0.72)
+    }
+
+    private var border: Color {
+        isPresented
+            ? ElephantTheme.accent.opacity(0.46)
+            : hovering ? ElephantTheme.accent.opacity(0.30) : ElephantTheme.line.opacity(0.68)
+    }
+}
+
+private struct DiaryQuickDateButton: View {
+    var title: String
+    var symbol: String
+    var isSelected: Bool
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(foreground)
+                .lineLimit(1)
+                .padding(.horizontal, 11)
+                .frame(height: 32)
+                .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(border, lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .onHover { hovering = $0 }
+        .accessibilityLabel(title)
+    }
+
+    private var foreground: Color {
+        if isSelected { return .white }
+        return hovering ? ElephantTheme.accent : ElephantTheme.ink
+    }
+
+    private var background: Color {
+        if isSelected { return ElephantTheme.accent }
+        return hovering
+            ? ElephantTheme.accent.opacity(0.10)
+            : Color(nsColor: .controlBackgroundColor).opacity(0.68)
+    }
+
+    private var border: Color {
+        if isSelected { return Color.white.opacity(0.20) }
+        return hovering ? ElephantTheme.accent.opacity(0.30) : ElephantTheme.line.opacity(0.62)
+    }
+}
+
+private struct DiaryWriteActionButton: View {
+    var title: String
+    var subtitle: String
+    var isDisabled: Bool
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            guard !isDisabled else { return }
+            action()
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: isDisabled ? "hourglass" : "square.and.pencil")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isDisabled ? ElephantTheme.faint : ElephantTheme.accent)
+                    .frame(width: 32, height: 32)
+                    .background(iconBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(isDisabled ? ElephantTheme.faint : ElephantTheme.ink)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(isDisabled ? ElephantTheme.faint : ElephantTheme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.86)
+                }
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 8)
+            .frame(minHeight: 48, alignment: .leading)
+            .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(border, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.68 : 1)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("\(title), \(subtitle)")
+    }
+
+    private var iconBackground: Color {
+        isDisabled ? ElephantTheme.faint.opacity(0.10) : ElephantTheme.accent.opacity(0.12)
+    }
+
+    private var background: Color {
+        if isDisabled { return Color(nsColor: .controlBackgroundColor).opacity(0.58) }
+        return hovering
+            ? ElephantTheme.accent.opacity(0.13)
+            : ElephantTheme.accent.opacity(0.08)
+    }
+
+    private var border: Color {
+        if isDisabled { return ElephantTheme.line.opacity(0.52) }
+        return hovering ? ElephantTheme.accent.opacity(0.44) : ElephantTheme.accent.opacity(0.22)
+    }
 }
 
 struct SkillsView: View {
