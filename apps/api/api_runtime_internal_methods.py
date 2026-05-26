@@ -532,8 +532,28 @@ def _step_metadata(step: Any) -> Mapping[str, str]:
     return metadata if isinstance(metadata, Mapping) else {}
 
 
-def _metadata_text(metadata: Mapping[str, str], key: str) -> str:
-    return str(metadata.get(key) or "").strip()
+_DASHBOARD_TEXT_FIELD_LIMITS = {
+    "tool_arguments": 4_000,
+    "tool_result": 8_000,
+    "model_prompt": 4_000,
+    "assistant_reasoning": 4_000,
+    "effective_user_query": 2_000,
+    "raw_user_query": 2_000,
+    "user_query": 2_000,
+}
+
+
+def _truncate_dashboard_text(value: str, *, limit: int | None = None) -> str:
+    text = str(value or "").strip()
+    if limit is None or limit <= 0 or len(text) <= limit:
+        return text
+    omitted = len(text) - limit
+    return f"{text[:limit].rstrip()}\n… [truncated {omitted} chars]"
+
+
+def _metadata_text(metadata: Mapping[str, str], key: str, *, limit: int | None = None) -> str:
+    resolved_limit = limit if limit is not None else _DASHBOARD_TEXT_FIELD_LIMITS.get(key)
+    return _truncate_dashboard_text(metadata.get(key) or "", limit=resolved_limit)
 
 
 def _metadata_int(metadata: Mapping[str, str], key: str) -> int:
@@ -588,21 +608,21 @@ def _step_event_content(step: Any, source_payloads: Mapping[str, Mapping[str, An
     metadata = _step_metadata(step)
     event_type = _step_event_type(step)
     if event_type == "user_query":
-        return _metadata_text(metadata, "effective_user_query") or _metadata_text(metadata, "user_query") or _payload_ref_prompt(step, source_payloads)
+        return _metadata_text(metadata, "effective_user_query") or _metadata_text(metadata, "user_query") or _truncate_dashboard_text(_payload_ref_prompt(step, source_payloads), limit=2_000)
     if event_type == "source_input":
-        return _metadata_text(metadata, "user_query") or _metadata_text(metadata, "raw_user_query") or _payload_ref_prompt(step, source_payloads)
+        return _metadata_text(metadata, "user_query") or _metadata_text(metadata, "raw_user_query") or _truncate_dashboard_text(_payload_ref_prompt(step, source_payloads), limit=2_000)
     if event_type == "system_prompt":
-        return _metadata_text(metadata, "system_prompt") or _metadata_text(metadata, "model_prompt")
+        return _metadata_text(metadata, "system_prompt", limit=4_000) or _metadata_text(metadata, "model_prompt")
     if event_type == "tool_call":
-        arguments = _metadata_text(metadata, "tool_arguments")
+        arguments = _metadata_text(metadata, "tool_arguments", limit=2_000)
         return f"{_metadata_text(metadata, 'tool_name')} {arguments}".strip()
     if event_type == "tool_execute":
-        return _metadata_text(metadata, "tool_result") or str(getattr(step, "summary", "") or "")
+        return _metadata_text(metadata, "tool_result", limit=4_000) or _truncate_dashboard_text(str(getattr(step, "summary", "") or ""), limit=4_000)
     if event_type == "final_response":
-        return _metadata_text(metadata, "final_response") or str(getattr(step, "summary", "") or "")
+        return _metadata_text(metadata, "final_response", limit=4_000) or _truncate_dashboard_text(str(getattr(step, "summary", "") or ""), limit=4_000)
     if event_type == "llm_answer":
-        return _metadata_text(metadata, "assistant_response") or str(getattr(step, "summary", "") or "")
-    return str(getattr(step, "summary", "") or "")
+        return _metadata_text(metadata, "assistant_response", limit=4_000) or _truncate_dashboard_text(str(getattr(step, "summary", "") or ""), limit=4_000)
+    return _truncate_dashboard_text(str(getattr(step, "summary", "") or ""), limit=2_000)
 
 
 def _dashboard_step_row(step: Any, source_payloads: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -617,6 +637,16 @@ def _dashboard_step_row(step: Any, source_payloads: Mapping[str, Mapping[str, An
             "tool_arguments": _metadata_text(metadata, "tool_arguments"),
             "tool_result": _metadata_text(metadata, "tool_result"),
             "execution_id": _metadata_text(metadata, "execution_id"),
+            "telemetry_event_ids": _metadata_text(metadata, "telemetry_event_ids"),
+            "sandbox_backend": _metadata_text(metadata, "sandbox_backend"),
+            "sandbox_provider": _metadata_text(metadata, "sandbox_provider"),
+            "sandbox_backend_class": _metadata_text(metadata, "sandbox_backend_class"),
+            "sandbox_id": _metadata_text(metadata, "sandbox_id"),
+            "sandbox_resolution": _metadata_text(metadata, "sandbox_resolution"),
+            "sandbox_cwd": _metadata_text(metadata, "sandbox_cwd"),
+            "sandbox_template": _metadata_text(metadata, "sandbox_template"),
+            "sandbox_timeout_seconds": _metadata_text(metadata, "sandbox_timeout_seconds"),
+            "sandbox_cached_session": _metadata_text(metadata, "sandbox_cached_session"),
             "context_bundle_id": _metadata_text(metadata, "context_bundle_id"),
             "model_prompt": _metadata_text(metadata, "model_prompt"),
             "effective_user_query": _metadata_text(metadata, "effective_user_query"),

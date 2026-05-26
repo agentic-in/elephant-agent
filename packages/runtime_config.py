@@ -83,6 +83,27 @@ def default_global_config(*, state_dir: str | Path) -> dict[str, Any]:
             "otel_endpoint": "",
             "service_name": "elephant-agent",
         },
+        "sandbox": {
+            "mode": "off",
+            "backend": "local",
+            "scope": "session",
+            "workspace_access": "none",
+            "resource_limits": {
+                "max_wall_seconds": 120,
+                "max_memory_mb": 512,
+                "max_processes": 256,
+                "max_file_size_mb": 50,
+            },
+            "docker": {
+                "image": "elephant-sandbox",
+            },
+            "ssh": {
+                "host": "",
+                "port": 22,
+                "user": "",
+                "identity_file": "",
+            },
+        },
         "extensions": {},
     }
 
@@ -255,6 +276,26 @@ def save_extensions_to_config(
     """Write the extensions section into the global config file."""
     config = load_global_config(config_path, state_dir=state_dir)
     config["extensions"] = dict(extensions)
+    write_global_config(config_path, config)
+
+
+def load_sandbox_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract the sandbox section from global config."""
+    sandbox = config.get("sandbox")
+    if not isinstance(sandbox, Mapping):
+        return {}
+    return dict(sandbox)
+
+
+def save_sandbox_to_config(
+    config_path: str | Path,
+    *,
+    state_dir: str | Path,
+    sandbox_payload: Mapping[str, Any],
+) -> None:
+    """Write the sandbox section into the global config file."""
+    config = load_global_config(config_path, state_dir=state_dir)
+    config["sandbox"] = dict(sandbox_payload)
     write_global_config(config_path, config)
 
 

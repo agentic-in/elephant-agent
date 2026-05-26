@@ -439,11 +439,19 @@ class SentenceTransformerEmbeddingProvider:
                 _suppress_local_embedding_load_warnings(self.model_root)
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(
-                    str(embedding_model_root_path(self.model_root)),
-                    local_files_only=True,
-                    processor_kwargs={"fix_mistral_regex": True},
-                )
+                _model_path = str(embedding_model_root_path(self.model_root))
+                # sentence-transformers 5.x renamed tokenizer_kwargs → processor_kwargs.
+                # Try processor_kwargs → tokenizer_kwargs → plain load.
+                import inspect as _inspect
+                _st_params = set(_inspect.signature(SentenceTransformer.__init__).parameters)
+                _regex_kwarg = "processor_kwargs" if "processor_kwargs" in _st_params else ("tokenizer_kwargs" if "tokenizer_kwargs" in _st_params else "")
+                if _regex_kwarg:
+                    try:
+                        self._model = SentenceTransformer(_model_path, local_files_only=True, **{_regex_kwarg: {"fix_mistral_regex": True}})
+                    except (TypeError, ValueError):
+                        self._model = SentenceTransformer(_model_path, local_files_only=True)
+                else:
+                    self._model = SentenceTransformer(_model_path, local_files_only=True)
             return self._model
 
     def _encode_texts(self, texts: tuple[str, ...], *, dimensions: int) -> tuple[tuple[float, ...], ...]:

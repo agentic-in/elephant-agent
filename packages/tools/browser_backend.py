@@ -32,6 +32,7 @@ from .browser_providers import (
     CloudBrowserProvider,
     CloudBrowserSession,
     FirecrawlProvider,
+    TencentCloudBrowserProvider,
     _http_json,
 )
 from .browser_scripts import ANNOTATE_JS, CLEAR_ANNOTATIONS_JS, IMAGES_JS, SNAPSHOT_JS
@@ -321,7 +322,10 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             close_browser = True
         elif provider is not None:
             provider_session = provider.create_session(session_key)
-            browser = self._playwright.chromium.connect_over_cdp(provider_session.cdp_url)
+            connect_kwargs: dict[str, Any] = {}
+            if provider_session.headers:
+                connect_kwargs["headers"] = provider_session.headers
+            browser = self._playwright.chromium.connect_over_cdp(provider_session.cdp_url, **connect_kwargs)
             close_browser = True
         else:
             if self._local_browser is None:
@@ -357,6 +361,11 @@ class PlaywrightBrowserBackend(BrowserToolBackend):
             "browser-use": BrowserUseProvider(),
             "browserbase": BrowserbaseProvider(),
             "firecrawl": FirecrawlProvider(),
+            "tencent-cloud": TencentCloudBrowserProvider(
+                template=os.environ.get("ELEPHANT_BROWSER_CLOUD_TEMPLATE", "browser-v1"),
+                domain=os.environ.get("E2B_DOMAIN", ""),
+                api_key=os.environ.get("E2B_API_KEY", ""),
+            ),
         }
         if self.config.cloud_provider in {"", "local", "none"}:
             if self.config.cloud_provider in {"local", "none"}:

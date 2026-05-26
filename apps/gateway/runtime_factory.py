@@ -436,6 +436,7 @@ def build_gateway_app(
             ),
         ),
         context_resolver=_tool_context_for_session,
+        state_dir=runtime_config_state_dir,
     )
     sync_custom_mcp_tools(
         tool_runtime,
@@ -482,6 +483,7 @@ def build_gateway_app(
             security_policy=SecurityPolicy.default(),
             skill_runtime=skill_runtime,
             semantic_summary_indexer=semantic_summary_indexer,
+            session_resource_manager=tool_runtime,
         )
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -56,6 +57,9 @@ class ServiceDaemon:
 
     async def start(self) -> None:
         """Start all daemon tasks and block until shutdown."""
+        # Ensure unbuffered stdout/stderr so logs are flushed immediately
+        os.environ.setdefault("PYTHONUNBUFFERED", "1")
+
         self._started_at = datetime.now(UTC).isoformat()
         loop = asyncio.get_running_loop()
 
@@ -206,6 +210,7 @@ class ServiceDaemon:
             from apps.gateway.runtime import build_gateway_app
             app, chat_adapter, webhook_adapter = build_gateway_app(
                 state_dir=str(self.state_dir),
+                control_state_dir=str(self.cli_state_dir),
                 start_learning_worker=False,
             )
             self._gateway_app = app
@@ -670,7 +675,7 @@ class ServiceDaemon:
 
     # ── Status ─────────────────────────────────────────────────
 
-    def get_status(self) -> dict[str, Any]:
+    def get_status(self, *, include_details: bool = True) -> dict[str, Any]:
         result: dict[str, Any] = {
             "status": "running" if not self._shutdown.is_set() else "stopping",
             "pid": _pid(),
@@ -689,6 +694,9 @@ class ServiceDaemon:
                 for name, s in self._service_statuses.items()
             },
         }
+
+        if not include_details:
+            return result
 
         # Add adapter-specific describe() info for running services
         for key, service in self._daemon_services.items():
@@ -766,7 +774,7 @@ def run_daemon_foreground(
     log_level: str = "INFO",
 ) -> int:
     """Run the daemon in the foreground (blocking)."""
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, log_path=state_dir / "daemon.log")
     daemon = ServiceDaemon(
         state_dir=state_dir,
         cli_state_dir=cli_state_dir,

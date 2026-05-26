@@ -376,11 +376,11 @@ def register_event_route(app: Any, path: str, service: Any, service_key: str) ->
 
 
 async def _handle_healthz(request: Any) -> Any:
-    """Return daemon health status."""
+    """Return lightweight daemon health status."""
     from aiohttp import web
 
     daemon = request.app["daemon"]
-    status = daemon.get_status()
+    status = daemon.get_status(include_details=False)
 
     # Determine overall HTTP status code
     http_status = 200 if status["status"] == "running" else 503

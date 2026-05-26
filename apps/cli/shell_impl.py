@@ -383,6 +383,7 @@ def run(self) -> int:
                         reason="shell_exit",
                         summary="wake surface closed by EOF",
                         semantic_summary_indexer=getattr(self.runtime, "_semantic_summary_indexer", None),
+                        session_resource_manager=self.runtime.tool_runtime,
                     )
                     # close_episode only enqueues; an explicit worker start is needed to consume the job
                     self.runtime._ensure_learning_worker_if_needed()

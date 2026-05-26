@@ -539,6 +539,53 @@ class KernelLifecycleSupportTests(unittest.TestCase):
         assert refreshed_state is not None
         self.assertEqual(refreshed_state.current_context_note, "")
 
+    def test_close_episode_lifecycle_cleans_session_resources(self) -> None:
+        class _ResourceManager:
+            def __init__(self) -> None:
+                self.cleaned: list[str] = []
+
+            def cleanup_session(self, session_id: str) -> bool:
+                self.cleaned.append(session_id)
+                return True
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
+            repository.bootstrap()
+            model = repository.ensure_default_personal_model()
+            state = repository.create_state(
+                personal_model_id=model.personal_model_id,
+                elephant_name="CLI",
+                elephant_id="elephant-cli",
+                state_id="state-cli-cleanup",
+            )
+            episode = Episode(
+                episode_id="episode:cleanup-session",
+                state_id=state.state_id,
+                personal_model_id=model.personal_model_id,
+                entry_surface="cli",
+                status="open",
+                started_at=datetime(2026, 4, 24, 10, tzinfo=timezone.utc),
+                metadata={"policy": "single_turn"},
+            )
+            repository.upsert_episode(episode)
+            lifecycle = type(
+                "_Lifecycle",
+                (),
+                {"episode": episode, "close_on_completion": True},
+            )()
+            manager = _ResourceManager()
+
+            closed = close_episode_lifecycle(
+                repository,
+                lifecycle,
+                summary="close and cleanup sandbox session",
+                current=datetime(2026, 4, 24, 11, tzinfo=timezone.utc),
+                session_resource_manager=manager,
+            )
+
+        self.assertEqual(closed.status, "closed")
+        self.assertEqual(manager.cleaned, ["episode:cleanup-session"])
+
 
 if __name__ == "__main__":
     unittest.main()

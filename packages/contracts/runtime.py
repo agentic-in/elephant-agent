@@ -671,6 +671,7 @@ class ExecutionResult:
     cache_usage_reported: bool = False
     produced_artifact_ids: tuple[str, ...] = ()
     telemetry_event_ids: tuple[str, ...] = ()
+    trace_metadata: Mapping[str, str] = field(default_factory=dict)
     side_effects: tuple[str, ...] = ()
     tool_calls: tuple["ExecutionToolCall", ...] = ()
 

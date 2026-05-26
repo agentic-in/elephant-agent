@@ -426,6 +426,9 @@ class InMemoryToolExecutor:
         outcome = str(payload.get("outcome", "success"))
         produced_artifact_ids = tuple(payload.get("produced_artifact_ids", ()))
         telemetry_event_ids = tuple(payload.get("telemetry_event_ids", ()))
+        trace_metadata = payload.get("trace_metadata", {})
+        if not isinstance(trace_metadata, Mapping):
+            trace_metadata = {}
         side_effects = tuple(payload.get("side_effects", definition.side_effects.categories))
         return ExecutionResult(
             execution_id=str(payload.get("execution_id", invocation.invocation_id)),
@@ -434,6 +437,7 @@ class InMemoryToolExecutor:
             summary=summary,
             produced_artifact_ids=produced_artifact_ids,
             telemetry_event_ids=telemetry_event_ids,
+            trace_metadata={str(key): str(value) for key, value in trace_metadata.items() if str(key).strip()},
             side_effects=side_effects,
         )
 
@@ -481,6 +485,24 @@ class ToolRuntime(ToolCapability):
     @property
     def executor(self) -> ToolExecutionBackend:
         return self._executor
+
+    def cleanup_session(self, session_id: str) -> bool:
+        cleaner = getattr(self._executor, "cleanup_session", None)
+        if not callable(cleaner):
+            return False
+        try:
+            return bool(cleaner(session_id))
+        except Exception:
+            return False
+
+    def cleanup_all_sessions(self) -> None:
+        cleaner = getattr(self._executor, "cleanup_all_sessions", None)
+        if not callable(cleaner):
+            return
+        try:
+            cleaner()
+        except Exception:
+            return
 
     def register_tool(self, definition: ToolDefinition, handler: ToolHandler | None = None) -> None:
         self._register_tool(definition, handler=handler)
@@ -661,6 +683,12 @@ class ToolRuntime(ToolCapability):
         )
 
         try:
+            _executor_type = type(self._executor).__name__
+            import logging as _logging
+            _logging.getLogger(__name__).debug(
+                "🔧 ToolRuntime.execute: tool=%s executor=%s session=%s",
+                tool_name, _executor_type, session_id[:8] if session_id else "?",
+            )
             result = self._executor.execute(definition, invocation)
         except Exception as error:
             failure = ExecutionResult(

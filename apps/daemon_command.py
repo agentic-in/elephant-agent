@@ -578,6 +578,18 @@ def _show_status(state_dir: Path) -> int:
     running = daemon_is_running(state_dir)
     record = _load_record(record_path) or {}
 
+    if not running:
+        stale_record = False
+        if pid is not None:
+            _remove_file_if_exists(pid_path)
+            pid = None
+            stale_record = True
+        if record.get("status") == "running":
+            stale_record = True
+        if stale_record:
+            record.update({"status": "stopped", "stopped_at": _utc_now_iso(), "pid": None})
+            _write_record(record_path, record)
+
     # Try to recover PID from healthz when PID file is missing
     if running and pid is None:
         pid = _pid_from_healthz(state_dir)

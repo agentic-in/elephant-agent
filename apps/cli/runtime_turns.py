@@ -200,6 +200,7 @@ def open_next_episode(
         current=now,
         episode_id=next_episode_id,
         semantic_summary_indexer=getattr(runtime, "_semantic_summary_indexer", None),
+        session_resource_manager=runtime.tool_runtime,
     )
     runtime._ensure_learning_worker_if_needed()
     session = transition.episode
@@ -858,6 +859,7 @@ def build_kernel_dependencies(
             skill_prompt_context=runtime.skill_prompt_context,
             workspaces_dir=runtime.paths.workspaces_dir,
             startup_cwd=Path.cwd(),
+            sandbox_path_mapper=_sandbox_path_mapper_for_runtime(runtime),
             summary_model_provider=runtime.model_provider,
             embedding_service=embedding_service,
         ),
@@ -870,4 +872,22 @@ def build_kernel_dependencies(
         security_policy=runtime.security_policy,
         skill_runtime=runtime.skill_runtime,
         semantic_summary_indexer=semantic_summary_indexer,
+        session_resource_manager=runtime.tool_runtime,
+    )
+
+
+def _sandbox_path_mapper_for_runtime(runtime: CliRuntime):
+    """Build a SandboxPathMapper if sandbox is active, else None."""
+    from packages.tools.factory import sandbox_config_from_state_dir
+
+    state_dir = runtime.paths.state_dir
+    config = sandbox_config_from_state_dir(state_dir)
+    if config is None:
+        return None
+
+    from packages.sandbox.path_mapper import SandboxPathMapper
+
+    return SandboxPathMapper(
+        workspaces_dir=runtime.paths.workspaces_dir,
+        startup_cwd=Path.cwd(),
     )

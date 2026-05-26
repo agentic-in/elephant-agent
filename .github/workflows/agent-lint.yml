@@ -49,11 +49,24 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
 
       - name: Install project dependencies
         run: uv sync --frozen
+
+      - name: Install frontend dependencies
+        run: |
+          for dir in apps/dashboard apps/site; do
+            if [ -f "$dir/package.json" ]; then
+              npm --prefix "$dir" install 2>/dev/null || true
+            fi
+          done
 
       - name: Resolve base ref
         run: |
