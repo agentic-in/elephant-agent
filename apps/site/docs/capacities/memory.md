@@ -19,11 +19,11 @@ governed update writes through the Personal Model.
 
 | Layer | What it remembers | How to inspect it |
 | --- | --- | --- |
-| **Personal Model** | Active, retired, and disputed claims across Identity, World, Pulse, Journey. | Dashboard You / Diary / Why views. |
+| **Personal Model** | Active, retired, and disputed claims across Identity, World, Pulse, Journey. | Dashboard Personal Model, Diary, and source views. |
 | **Elephant State** | Elephant identity and one current context note. | Herd, status, wake resume. |
 | **Episode / Loop / Step trail** | Inputs, replies, tool calls, results, updates, and provenance. | History, runtime trace, Why inspection. |
 | **Contextual recall** | Current-turn support retrieved from facts and Steps. | `/recall`, diagnostics, search result status. |
-| **Background learning** | Episode-close, diary, dream, grounding, and skill-affinity updates. | Reflect, jobs, learning results. |
+| **Background learning** | Episode-close, diary, dream, questions, and visible skill-matching updates. | Reflect, jobs, learning results. |
 
 ```mermaid
 flowchart TB
@@ -56,9 +56,10 @@ every old note is support.
 | `weak_match` | The result is relevant but not strong enough to overstate. | Mention uncertainty or ask if needed. |
 | `no_match` | There is no reliable Personal Model support. | Do not fabricate memory. |
 
-Exact lookup can use `mode=exact` and a `topic`. Conceptual lookup can use
-`mode=semantic` and `query_variants`. Verification can use `mode=verify`, which
-is stricter than normal lookup.
+The public modes are intentionally small: use `mode=auto` for claim lookup and
+`mode=inventory` for the lens/topic map. Exactness comes from `topic`, `ref`,
+`status`, and diagnostics; cross-language or conceptual lookup can use
+`query_variants`.
 
 ## Current-turn recall
 
@@ -78,8 +79,9 @@ memory write.
 
 ## Inspect understanding in practice
 
-Use the dashboard You page to inspect and correct claims, Questions to manage
-useful prompts, and Why views to trace the support material behind them.
+Use the dashboard Personal Model page to inspect and correct claims, Curiosity
+to manage useful prompts, and source/history views to trace the support material
+behind them.
 Diagnostics can explain why a search matched or returned `no_match`; they are for
 inspection and debugging, not prompt truth.
 

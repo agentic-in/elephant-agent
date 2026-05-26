@@ -136,7 +136,7 @@
 
 % ── Running header ────────────────────────────────────────────────────────────
 \newcommand{\elephantHeaderWidth}{\textwidth}
-\newcommand{\elephantRunningTitle}{Elephant Agent: Personal-Model-First Memory}
+\newcommand{\elephantRunningTitle}{Elephant Agent: Agency-First Personal AI}
 \newcommand{\elephantRunningHeaderBar}{%
   {\small\color{elephantfg}\elephantRunningTitle\hfill\color{elephantfg}\thepage}\par
   \vspace{-0.52em}%

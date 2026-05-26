@@ -5,7 +5,7 @@ const sidebars: SidebarsConfig = {
     "intro",
     {
       type: "category",
-      label: "Getting Started",
+      label: "Start",
       collapsible: false,
       collapsed: false,
       items: [
@@ -16,23 +16,27 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
-      label: "Philosophy",
+      label: "Product Surfaces",
+      collapsible: false,
+      collapsed: false,
+      items: [
+        "user-interface/macos",
+        "user-interface/cli-tui",
+        "user-interface/dashboard",
+      ],
+    },
+    {
+      type: "category",
+      label: "Understanding",
       collapsible: false,
       collapsed: false,
       items: [
         "philosophy/overview",
         "philosophy/design-principles",
         "philosophy/system-model",
-      ],
-    },
-    {
-      type: "category",
-      label: "User Interface",
-      collapsible: false,
-      collapsed: false,
-      items: [
-        "user-interface/cli-tui",
-        "user-interface/dashboard",
+        "learning/correctable",
+        "learning/proactive",
+        "learning/background",
       ],
     },
     {
@@ -47,17 +51,6 @@ const sidebars: SidebarsConfig = {
         "capacities/embeddings",
         "capacities/memory",
         "capacities/continuity",
-      ],
-    },
-    {
-      type: "category",
-      label: "Learning",
-      collapsible: false,
-      collapsed: false,
-      items: [
-        "learning/proactive",
-        "learning/background",
-        "learning/correctable",
       ],
     },
     {

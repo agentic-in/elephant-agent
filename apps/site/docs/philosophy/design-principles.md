@@ -70,7 +70,7 @@ not replace the center.
 
 | Capability | What it adds | How it stays grounded |
 | --- | --- | --- |
-| Skills | Repeatable workflows. | Skill affinity can be learned, but the user can inspect and toggle skills. |
+| Skills | Repeatable workflows. | Skill matching can be learned, but the user can inspect and toggle skills. |
 | Tools | Action and retrieval. | Tool use records Steps and can update claims only through explicit paths. |
 | Models | Dialogue and reasoning. | Provider choice changes how Elephant Agent thinks, not what is true. |
 | Messaging | More surfaces. | The same elephant owns the continuity line. |

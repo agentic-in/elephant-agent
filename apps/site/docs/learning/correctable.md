@@ -73,7 +73,6 @@ Personal Model claim operations.
 | Surface | Best for |
 | --- | --- |
 | Chat / `wake` | Correcting naturally in conversation. |
-| Dashboard You | Reviewing and correcting active claims. |
+| Dashboard Personal Model | Reviewing and correcting active claims. |
 | Dashboard Curiosity | Answering or dismissing open questions. |
 | Dashboard History / Why | Inspecting source support before changing a claim. |
-

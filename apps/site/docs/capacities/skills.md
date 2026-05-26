@@ -21,7 +21,7 @@ work, but they do not become a hidden second profile.
 | Domain instruction | A skill can teach Elephant Agent how to approach a domain or workflow. |
 | Operator workflow | A skill can expose a repeatable command or process. |
 | Inspectable package | A skill can be viewed, installed, enabled, or disabled explicitly. |
-| Affinity signal | Background learning may notice which skills fit the user, but the skill remains visible. |
+| Skill matching | Background learning may notice which skills fit the user, but the skill remains visible. |
 
 ## Where skills show up
 

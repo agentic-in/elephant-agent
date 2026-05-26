@@ -4,7 +4,10 @@
 
 Canonical design reference for Elephant Agent's Personal Model, Elephant Memory Architecture, contextual recall, background learning, and proactive questions.
 
-This document intentionally replaces the older memory-note / component-record / L1-L2-L3 design. New work must converge here instead of preserving legacy memory surfaces.
+This document is the implementation mechanism behind the public agency-first,
+L4 personal-AI positioning. It intentionally replaces the older memory-note,
+component-record, and legacy layer-taxonomy design. New work must converge here
+instead of preserving legacy memory surfaces.
 
 ## Principle
 

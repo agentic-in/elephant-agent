@@ -1,14 +1,26 @@
 ---
 title: "Why Elephant Agent"
-description: "Elephant Agent is a personal AI that grows a correctable Personal Model from claims, provenance, and useful questions."
+description: "Elephant Agent is agency-first personal AI: an L4 product position built around judgment, evidence, questions, and human growth."
 ---
 
 # Why Elephant Agent
 
 Elephant Agent begins from a simple belief:
 
-> Personal AI should not ask you to become its memory. It should grow a
-> correctable understanding of the path you are already walking.
+> Personal AI should help you do more without thinking less.
+
+That is the agency-first position. The agent can execute more work, carry more
+context, and improve more procedures, but the person should keep judgment,
+evidence, questions, and growth.
+
+## The level Elephant Agent is aiming at
+
+| Level | What improves | Public examples | What remains insufficient |
+| --- | --- | --- | --- |
+| **L1** | Task execution. | Claude Code, Cursor, Devin, Codex-style agents. | Each task still needs human steering and review. |
+| **L2** | Context continuity. | OpenClaw publicly emphasizes local agents, persistent memory, full system access, skills, plugins, and integrations. | Memory can carry context without improving the person's judgment. |
+| **L3** | Procedures and skills. | Hermes Agent publicly positions itself around a self-improving learning loop, skill creation, recall, and user modeling. | Better procedures can still leave the user cognitively passive. |
+| **L4** | The person. | Elephant Agent's product position. | Personal AI should keep judgment, evidence, questions, and growth with the user. |
 
 Most agent systems still lose the thread in predictable ways. They can have a
 long transcript, many tools, and even a memory feature, yet still fail to answer:
@@ -24,7 +36,7 @@ what should this agent reliably understand about the person it helps?
 | Hidden personalization | The user cannot see or correct what changed. | Claims, questions, and evidence stay inspectable. |
 | Pushy autonomy | Proactive behavior becomes interruption. | Curiosity is visible, optional, and user-paced. |
 
-## The core bet
+## The core mechanism
 
 Elephant Agent puts a **Personal Model** at the center. That model is not a
 profile in the advertising sense. It is the current, correctable understanding

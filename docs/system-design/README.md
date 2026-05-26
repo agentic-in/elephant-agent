@@ -11,6 +11,8 @@ truth.
 ## Current Inventory
 
 - [system-layer-model.md](system-layer-model.md)
+  - the implementation mechanism behind the public agency-first, L4 personal-AI
+    positioning
   - the canonical Understanding System model for Personal Model claims,
     Evidence, Questions, Episodes, Elephant State, and Steps
   - the canonical prompt boundary for active claims, current-turn recall support, and

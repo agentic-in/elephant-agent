@@ -36,7 +36,7 @@ description: "The public CLI stays intentionally direct while still exposing ski
 | `elephant gateway feishu logs ops-feishu --follow` | Tails one Feishu account log and keeps streaming new output. |
 | `elephant gateway discord setup --account-id ops-discord --bot-token-env-var ELEPHANT_DISCORD_BOT_TOKEN` | Adds or updates one Discord account configuration. |
 | `elephant daemon start` | Starts the unified local daemon that serves IM adapters, cron, learning, and the dashboard HTTP surface. |
-| `elephant dashboard` | Opens the daemon-served dashboard when frontend assets are built and the local daemon is running. |
+| `elephant dashboard` | Opens the daemon-served dashboard, building frontend assets from a checkout when needed and starting the daemon by default. |
 | `elephant upgrade` | Backs up state, stops managed gateway/cron runtimes, upgrades the package, bootstraps storage, and restarts prior runtimes. |
 
 ## Installers
@@ -107,29 +107,26 @@ future prompts.
 
 ## Local dashboard
 
-`elephant dashboard` is the private local web surface. It reads live
-`elephant.sqlite3` state through page-specific internal dashboard routes such as
+`elephant dashboard` is the private local web surface. It is served by the
+unified Elephant daemon and reads live `elephant.sqlite3` state through
+page-specific internal dashboard routes such as
 `/v1/internal/dashboard/overview`, `/v1/internal/dashboard/runtime`, and
-`/v1/internal/dashboard/tools`, then launches the React app under `apps/dashboard/`
-when the current install includes those frontend assets.
+`/v1/internal/dashboard/tools`.
 
 That means:
 
 - PyPI installs launch from the prebuilt dashboard assets shipped in the wheel,
   without requiring Node.js or npm at runtime
 - repo checkouts can launch it directly after installing dashboard dependencies
-- `elephant dashboard` runs one frontend build check before launch so the checkout
-  is current; use `--skip-build` only when you are iterating and already know
-  the frontend compiles
-- `elephant dashboard` starts a fresh local API by default and shifts to the next
-  free API/UI port when older dashboard processes are still running; use
-  `--reuse-api` when you intentionally want to attach to an existing healthy API
+- repo checkouts run one frontend build check before launch so the checkout is
+  current; use `--skip-build` only when you are iterating and already know the
+  frontend assets exist
+- `elephant dashboard` starts the daemon by default when it is not already
+  running; use `--no-start` when you only want to attach to an existing daemon
 - `elephant dashboard` opens the default browser automatically; use `--no-open`
   when you only want the URL printed in the terminal
-- frontend-only dashboard launches with `npm --prefix apps/dashboard run dev`
-  auto-start or reuse the local Elephant Agent API against `~/.elephant/herd/elephant.sqlite3`
-  unless `VITE_ELEPHANT_API_BASE_URL` or `ELEPHANT_DASHBOARD_API_DATABASE` is set
-  explicitly
+- use `--rebuild` after frontend code changes when you want to force a fresh
+  dashboard asset build
 - installs that do not include `apps/dashboard` assets stay truthful by printing
   launch guidance instead of pretending the web surface exists
 

@@ -108,8 +108,8 @@ That is where Elephant Agent keeps the durable local posture between sessions. B
 | Need | Command or page |
 | --- | --- |
 | Confirm provider and embedding readiness | `elephant status` |
-| See what the current elephant understands | Dashboard You page |
+| See what the current elephant understands | Dashboard Personal Model page |
 | Inspect saved elephants | Dashboard Herd page or `elephant herd` |
 | Check messaging adapters | Dashboard Messaging page or `elephant gateway doctor` |
-| Review background learning jobs | Dashboard Job and Reflect pages |
+| Review background learning jobs | Dashboard Jobs and Reflect pages |
 | Inspect conversation continuity | Dashboard History page |

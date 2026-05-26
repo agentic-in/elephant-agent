@@ -58,12 +58,12 @@ providers stay close but do not become the product center.
 | Need | Slash command | Dashboard counterpart |
 | --- | --- | --- |
 | Check readiness | `/status` | Overview / Settings |
-| Inspect understanding | `/recall` | You, Diary, Why views |
+| Inspect understanding | `/recall` | Personal Model, Diary, History |
 | Inspect tools | `/tools` | Tools |
 | Inspect skills | `/skills` | Skills |
 | Change provider/model posture | `/providers`, `/models` | Models / Providers |
 | Messaging setup | `/gateway` | Messaging |
-| Scheduled work | `/cron` | Jobs |
+| Scheduled work | `/cron` | Jobs / Reflect |
 
 ## Local-first posture
 

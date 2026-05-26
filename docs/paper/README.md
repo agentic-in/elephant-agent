@@ -25,8 +25,9 @@ Do not keep here:
   - the primary LaTeX entrypoint for the current Elephant Agent system report
 - `sections/`
   - section-level paper text for the Personal-Model-first architecture,
-    including Claim/Question boundaries, step-provenanced recall,
-    background learning, and operator-managed skills as downstream capabilities
+    including the agency-first L4 positioning, Claim/Question boundaries,
+    step-provenanced recall, background learning, and operator-managed skills as
+    downstream capabilities
 - `references.bib`
   - bibliography file; add only programmatically verified references
 - `assets/`
@@ -39,7 +40,8 @@ The current paper draft is grounded in this order:
 1. `../system-design/system-layer-model.md`
 2. `../system-design/README.md`
 3. `../../README.md`
-4. `../../apps/site/blog/2026-04-29-personal-model-first.md`
+4. `../../apps/site/src/pages/index.tsx`
+5. `../../apps/site/blog/2026-04-29-personal-model-first.md`
 
 ## Working Rule
 

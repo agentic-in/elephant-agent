@@ -16,7 +16,7 @@ flowchart TB
   state["Elephant State<br/>elephant identity + current context note"]
   trail["Episode / Loop / Step Trail<br/>source events, tool use, replies, updates"]
   recall["Contextual Recall<br/>current-turn support from facts and steps"]
-  learning["Background Learning<br/>grounding, curiosity, diary, dream, skill affinity"]
+  learning["Background Learning<br/>curiosity, diary, dream, skill matching"]
 
   state --> pm
   trail --> recall
@@ -32,7 +32,7 @@ flowchart TB
 | **Elephant State** | The elephant identity and one continuation note. | Across wakes for one elephant. | `elephant_id`, name, identity text, current context note. |
 | **Episode / Loop / Step Trail** | Raw lived trace and provenance. | Audit and learning history. | Inputs, replies, tool calls, tool results, updates. |
 | **Contextual Recall** | Support for the current turn. | Current turn only. | Retrieved claims or Step evidence with match status. |
-| **Background Learning** | Slow maintenance of understanding. | Scheduled or lifecycle-triggered. | Episode close, diary, dream, grounding, skill affinity. |
+| **Background Learning** | Slow maintenance of understanding. | Scheduled or lifecycle-triggered. | Episode close, diary, dream, questions, and visible skill matching. |
 
 :::note
 Contextual recall is not discarded as "just recall." It is one layer of the
@@ -73,11 +73,12 @@ Personal Model search returns claims, not generic note chunks. It can use:
 | Unicode lexical and CJK n-grams | Support multilingual and mixed-language matching. |
 | Semantic retrieval | Recover meaning when wording changes. |
 | Query variants | Let the model provide translated or paraphrased variants. |
-| Verification mode | Require stronger support before using a claim. |
+| Diagnostics | Explain why a claim was matched, weakly matched, or not matched. |
 
-Search returns `strong_match`, `weak_match`, or `no_match`, so Elephant Agent can
-avoid inventing support when the Personal Model does not contain reliable
-understanding.
+The public search modes are `auto` for claim lookup and `inventory` for the
+lens/topic map. Search returns `strong_match`, `weak_match`, or `no_match`, so
+Elephant Agent can avoid inventing support when the Personal Model does not
+contain reliable understanding.
 
 ## Prompt projection
 

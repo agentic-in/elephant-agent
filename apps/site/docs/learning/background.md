@@ -1,6 +1,6 @@
 ---
 title: "Background learning"
-description: "Background learning lets Elephant Agent maintain understanding outside the immediate reply through episode close, diary, dream, and skill-affinity jobs."
+description: "Background learning lets Elephant Agent maintain understanding outside the immediate reply through episode close, diary, dream, questions, and visible skill-matching jobs."
 ---
 
 # Background learning
@@ -10,7 +10,7 @@ is better after the conversation breathes.
 
 Background learning lets Elephant Agent review source material, ask narrow
 maintenance questions, refresh context notes, write diary-style summaries, and
-update skill affinity through governed paths.
+surface skill matches through governed paths.
 
 ## Learning jobs
 
@@ -20,7 +20,7 @@ update skill affinity through governed paths.
 | Diary | Produces a readable reflection of what Elephant Agent picked up. | No, it remains inspectable output unless promoted. |
 | Dream | Consolidates long-running patterns and stale material. | No, it proposes or writes governed updates. |
 | Orientation | Maintains identity, world, pulse, and journey anchors. | Only through explicit claim updates. |
-| Skill affinity | Notices which skills fit the user or workflow. | No hidden skill profile; skills stay visible. |
+| Skill matching | Notices which visible skills may fit the user or workflow. | No hidden skill profile; skills stay visible. |
 
 ## Lifecycle
 
@@ -54,7 +54,7 @@ the correction path and leave results inspectable.
 - Dashboard **Reflect** for background jobs and learning summaries.
 - Dashboard **Diary** for readable accumulated understanding.
 - Dashboard **History** for the source trail behind a learning result.
-- Dashboard **You** for the Personal Model claims that survived the process.
+- Dashboard **Personal Model** for the claims that survived the process.
 
 ## Good background learning
 

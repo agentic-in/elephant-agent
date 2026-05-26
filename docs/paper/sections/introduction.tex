@@ -13,11 +13,32 @@ or warning sign changes future behavior.
 Personal AI has an analogous design problem. It is not only an assistant that
 can answer the current prompt. It is an individual system that should become
 better at working with a particular person across days, surfaces,
-interruptions, corrections, and repeated work. The central improvement target
-is therefore not a larger chat window, a longer log, a vector memory store, or
-a growing catalog of reusable skills. The central target is the Personal Model:
-the explicit object that says what the agent currently understands about the
-person, why it believes that, what is uncertain, and what should be asked next.
+interruptions, corrections, and repeated work. The product position is
+agency-first: personal AI should help the user do more without thinking less.
+The central improvement target is therefore not a larger chat window, a longer
+log, a vector memory store, or a growing catalog of reusable skills. The central
+target is the Personal Model: the explicit object that says what the agent
+currently understands about the person, why it believes that, what is
+uncertain, and what should be asked next.
+
+We can describe the product landscape as four cumulative levels:
+
+\begin{center}
+\begin{tabularx}{0.98\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Level} & \textbf{Personal-AI capability} \\
+\midrule
+L1 & Executes tasks: the agent follows instructions, uses tools, and delivers results. \\
+L2 & Carries context: the agent resumes a thread instead of starting from zero. \\
+L3 & Improves procedures: the agent refines skills, rules, and workflows over time. \\
+L4 & Keeps the person growing: the agent helps the user preserve judgment, evidence, questions, and growth. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Elephant Agent's product position is the fourth level. It still needs the lower
+levels, but it treats them as support for a more important loop: the person's
+understanding should deepen as the agent becomes more capable.
 
 This distinction matters because many personal-agent systems now include
 memory, and many self-evolving agent systems define progress primarily as

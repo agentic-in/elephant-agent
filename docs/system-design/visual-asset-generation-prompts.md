@@ -9,16 +9,17 @@ multiple variants unless a section explicitly says so.
 
 ## Approved Visual Direction
 
-Elephant Agent should feel like a native Mac companion and a
-personal-model-first AI system, not a generic memory app, chatbot, or mascot
-toy.
+Elephant Agent should feel like a native Mac companion and an agency-first
+personal AI system built around a Personal Model, not a generic memory app,
+chatbot, or mascot toy.
 
 Core product meaning:
 
-- Personal-model-first AI.
+- Agency-first personal AI.
 - Remembers less, understands deeper.
 - Starts from the person, not from a blank task.
 - Grows a correctable understanding across Identity, World, Pulse, and Journey.
+- Keeps judgment, evidence, questions, and growth with the person.
 - Asks gently at the user's pace.
 - Reflects after the turn.
 - Helps the user pick up the right thread.
@@ -109,7 +110,7 @@ Create one 1672x941 README hero illustration for Elephant Agent.
 
 Use a warm porcelain and soft matte glass visual system: warm ivory, greige, muted blue-gray ink lines, muted mint-gray panels, calm dimensional lighting, soft shadows, and exactly one amber Personal Model core accent.
 
-Elephant Agent is a personal-model-first AI companion. It remembers less but understands deeper. It starts from the person, grows a correctable understanding, asks gently at the user's pace, reflects after the turn, and helps the user pick up the right thread.
+Elephant Agent is an agency-first personal AI companion built around a correctable Personal Model. It remembers less but understands deeper. It starts from the person, grows a correctable understanding, asks gently at the user's pace, reflects after the turn, and helps the user pick up the right thread.
 
 Scene: a quiet personal path map. A calm porcelain elephant companion walks beside one person. A soft path flows across the image through symbolic people, places, risks, rhythms, decisions, and one central Personal Model core. The path should feel like returning to the right thread, not like a fantasy treasure map.
 
@@ -161,7 +162,7 @@ Composition: large porcelain elephant-head logo mark on the left, quiet Personal
 
 Text: include only this exact text, large and legible:
 Elephant Agent
-Personal-model-first AI. Remembers less, understands deeper.
+Agency-first personal AI. Remembers less, understands deeper.
 
 Avoid extra slogans, tiny labels, screenshots, terminal windows, stock AI imagery, neon, cyberpunk, realistic safari photography, and childish cartoon style.
 ```
@@ -255,7 +256,7 @@ Size: `1672x941`
 Prompt:
 
 ```text
-Create one 1672x941 paper figure for Elephant Agent: "Personal-Model-First Memory for Personal AI".
+Create one 1672x941 paper figure for Elephant Agent: "Agency-First Personal AI".
 
 Use a publication-ready porcelain technical illustration style: warm ivory, greige, muted blue-gray ink, soft matte glass panels, precise rounded shapes, calm shadows, and one amber Personal Model core. It must feel consistent with a premium Mac app visual system.
 
@@ -277,7 +278,7 @@ Size: `1448x1086`
 Prompt:
 
 ```text
-Create one 1448x1086 paper architecture figure for Elephant Agent: "Personal-Model-First Memory Architecture".
+Create one 1448x1086 paper architecture figure for Elephant Agent: "Agency-First Personal AI Architecture".
 
 Use a warm porcelain and soft matte glass technical diagram style: warm ivory, greige, muted blue-gray ink, muted mint-gray surfaces, soft shadows, rounded panels, and one amber Personal Model core accent.
 

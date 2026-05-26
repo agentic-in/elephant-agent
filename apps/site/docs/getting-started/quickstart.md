@@ -8,6 +8,10 @@ description: "Start with the macOS desktop app, or use CLI + Dashboard for Linux
 Use the macOS desktop app when you can. Use CLI + Dashboard when you are on
 Linux, cloud, SSH, or a terminal-first macOS setup.
 
+Elephant Agent's product position is agency-first: it should help you do more
+without thinking less. The Personal Model is how the product keeps judgment,
+evidence, questions, and growth close to the person.
+
 ## Path overview
 
 ```mermaid
