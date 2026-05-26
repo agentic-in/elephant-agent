@@ -19,7 +19,7 @@ flowchart LR
   start["Start"] --> desktop["macOS desktop app"]
   start --> cli["CLI + Dashboard"]
   desktop --> app_setup["create first elephant"]
-  app_setup --> app_wake["Wake"]
+  app_setup --> app_wake["Chat / Wake"]
   cli --> init["elephant init"]
   init --> status["elephant status"]
   status --> wake["elephant wake"]
@@ -32,10 +32,10 @@ flowchart LR
 | --- | --- | --- |
 | Download | Get the latest build from [GitHub Releases](https://github.com/agentic-in/elephant-agent/releases/latest). | `Elephant Agent.app` is installed locally. |
 | Create | Open the app and create your first elephant. | The app has a local elephant to return to. |
-| Configure | Choose provider, model, embedding posture, and curiosity effort. | Wake and Personal Model are ready. |
-| Continue | Open **Wake**. | You are back in the same conversation path. |
+| Configure | Choose provider, model, embedding posture, and curiosity effort. | Chat / Wake and Personal Model are ready. |
+| Continue | Open **Chat / Wake**. | You are back in the same conversation path. |
 
-The desktop app is the primary surface for Wake, Personal Model, providers,
+The desktop app is the primary surface for Chat / Wake, Personal Model, providers,
 skills, tools, herd, messaging, reminders, usage, and settings.
 
 ## CLI + Dashboard

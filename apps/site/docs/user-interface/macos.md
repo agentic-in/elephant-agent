@@ -1,6 +1,6 @@
 ---
 title: "macOS app"
-description: "Use the macOS desktop app as the primary Elephant Agent workspace for Wake, Personal Model, providers, skills, tools, herd, messaging, reminders, usage, and settings."
+description: "Use the macOS desktop app as the primary Elephant Agent workspace for Chat / Wake, Personal Model, providers, skills, tools, herd, messaging, reminders, usage, and settings."
 ---
 
 # macOS app
@@ -15,7 +15,7 @@ dashboard.
 | Area | Use it for | Product boundary |
 | --- | --- | --- |
 | **Home** | Start from the Personal Model map, current context, and the next useful question. | The person comes before task delegation. |
-| **Wake** | Continue the same elephant. | New work should resume from the same path, not a blank prompt. |
+| **Chat / Wake** | Continue the same elephant. | New work should resume from the same path, not a blank prompt. |
 | **Personal Model** | Inspect Identity, World, Pulse, and Journey claims. | Claims stay correctable and evidence-backed. |
 | **Providers** | Choose model, reasoning, and embedding posture. | Provider choice changes how Elephant Agent thinks, not what is true. |
 | **Skills** | Inspect and enable workflow packages. | Skills are visible capabilities around the Personal Model. |
@@ -42,7 +42,7 @@ shape for a macOS user who wants one local workspace.
 
 1. Open the app.
 2. Check Home if you need orientation.
-3. Use Wake for the actual conversation.
+3. Use Chat / Wake for the actual conversation.
 4. Inspect or correct Personal Model claims when something feels stale.
 5. Adjust providers, skills, tools, messaging, reminders, and usage from their
    visible app surfaces instead of hiding them in prompt text.

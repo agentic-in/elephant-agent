@@ -373,7 +373,7 @@ Most reflect features read the evidence packet and write through their governed 
 
 ## Dashboard Contract
 
-The You page should show four cards:
+The Dashboard Personal Model page should show four cards:
 
 - Identity
 - World

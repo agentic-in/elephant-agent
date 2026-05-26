@@ -568,11 +568,11 @@ Create one 1672x941 blog illustration for Elephant Agent: "The Operator Surface"
 
 Use a warm porcelain and soft matte glass Mac-product style: ivory, greige, muted blue-gray ink, muted mint-gray UI panels, calm shadows, and one amber Personal Model core accent.
 
-Meaning: CLI, Dashboard, Chat, Messaging, Cron, Tools, and Skills are surfaces around the Personal Model. They should remain visible capabilities, not hidden personality changes.
+Meaning: CLI, Dashboard, Chat, Messaging, Calendar, Tools, and Skills are surfaces around the Personal Model. They should remain visible capabilities, not hidden personality changes.
 
-Composition: center one amber Personal Model core inside a porcelain elephant-head mark. Around it place simple quiet Mac-like panels for CLI, Dashboard, Chat, Messaging, Cron, Tools, and Skills. Use soft connector paths. Keep it clean, not screenshot-heavy.
+Composition: center one amber Personal Model core inside a porcelain elephant-head mark. Around it place simple quiet Mac-like panels for CLI, Dashboard, Chat, Messaging, Calendar, Tools, and Skills. Use soft connector paths. Keep it clean, not screenshot-heavy.
 
-Text: use only these labels: CLI, Dashboard, Chat, Messaging, Cron, Tools, Skills.
+Text: use only these labels: CLI, Dashboard, Chat, Messaging, Calendar, Tools, Skills.
 
 Avoid real screenshots, terminal clutter, dense dashboards, neon, stock SaaS cards, and cartoon mascots.
 ```

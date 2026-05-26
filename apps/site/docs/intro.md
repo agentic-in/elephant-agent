@@ -30,7 +30,7 @@ return through `elephant wake`.
 | If you want to... | Read this first | What you will understand |
 | --- | --- | --- |
 | Start using Elephant Agent | [Quickstart](./getting-started/quickstart.md) | Choose macOS app or CLI + Dashboard. |
-| Use the primary product | [macOS app](./user-interface/macos.md) | Wake, Personal Model, providers, skills, tools, herd, messaging, reminders, usage, and settings in one workspace. |
+| Use the primary product | [macOS app](./user-interface/macos.md) | Chat / Wake, Personal Model, providers, skills, tools, herd, messaging, reminders, usage, and settings in one workspace. |
 | Use a terminal or remote machine | [CLI / Chat TUI](./user-interface/cli-tui.md) | How `elephant`, `init`, `wake`, slash commands, and `dashboard --no-open` fit together. |
 | Inspect what it knows | [Dashboard](./user-interface/dashboard.md) | How Personal, Agent, and System pages map to implementation surfaces. |
 | Understand the thesis | [Why Elephant Agent](./philosophy/overview.md) | Why L4 personal AI keeps judgment, evidence, questions, and growth with the person. |

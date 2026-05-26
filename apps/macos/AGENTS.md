@@ -42,7 +42,7 @@
 - Do not expose local source import or evidence-staging surfaces until Elephant can actually learn from them. Prefer explicit conversations, profile links, diary, and reflect jobs for current Personal Model learning.
 - Herd rows default to expanded for editability, but never expose hidden metadata comments or internal scaffolding text in user-facing fields.
 - Skills Library must support search and pagination so large installed skill sets remain usable without turning Settings into a long static dump.
-- Skills Affinity belongs on the Skills surface only. Do not repeat affinity summaries at the bottom of Settings skill-library sections.
+- Skill matching belongs on the Skills surface only. Do not repeat matching summaries at the bottom of Settings skill-library sections.
 
 ## Visual System
 

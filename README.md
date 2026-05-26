@@ -85,10 +85,10 @@ show why it matters, and let you change it.
 
 ## macOS Desktop App
 
-The macOS app is the recommended product surface. Wake is where you continue
-the same path; the rest of the app keeps the Personal Model, providers, skills,
-tools, messaging, jobs, and runtime state visible instead of hidden behind a
-chat box.
+The macOS app is the recommended product surface. Chat / Wake is where you
+continue the same path; the rest of the app keeps the Personal Model,
+providers, skills, tools, messaging, jobs, and runtime state visible instead of
+hidden behind a chat box.
 
 <p align="center">
   <img src="apps/site/static/assets/screenshots/macos-home.jpg" alt="Elephant Agent macOS Home screen with the Personal Model map, current context, and next useful question" width="920" />
@@ -117,7 +117,7 @@ chat box.
     <td width="50%">
       <img src="apps/site/static/assets/screenshots/macos-wake.jpg" alt="Elephant Agent Wake chat surface" />
       <br />
-      <strong>Wake</strong>
+      <strong>Chat / Wake</strong>
       <br />
       <sub>Return to the same elephant, not a blank prompt.</sub>
     </td>
@@ -194,14 +194,14 @@ Elephant Agent has two supported product shapes.
 
 ### 1. macOS desktop app (recommended)
 
-Use this path for the full local desktop workspace: Wake, Personal Model,
+Use this path for the full local desktop workspace: Chat / Wake, Personal Model,
 providers, skills, tools, herd, messaging, reminders, usage, and settings in
 one native app.
 
 1. Download the latest macOS build from [GitHub Releases](https://github.com/agentic-in/elephant-agent/releases/latest).
 2. Open `Elephant Agent.app`.
 3. Create your first elephant, choose a provider, and set curiosity effort.
-4. Return through Wake when you want to continue the same path.
+4. Return through Chat / Wake when you want to continue the same path.
 
 ### 2. CLI + Dashboard (Linux / Cloud)
 
