@@ -180,7 +180,7 @@ def append_outcome_experience(runtime: CliRuntime, outcome: KernelOutcome) -> Ex
         session_id=session.episode_id,
         profile_id=session.personal_model_id,
         elephant_id=session.elephant_id,
-        summary=outcome.state.summary.strip() or execution.summary,
+        summary=_outcome_experience_summary(outcome),
         source_event_id=outcome.event.event_id,
         run_id=None,
         work_item_id=None,
@@ -191,6 +191,21 @@ def append_outcome_experience(runtime: CliRuntime, outcome: KernelOutcome) -> Ex
         tags=tuple(extra_tags),
     )
     return record
+
+
+def _outcome_experience_summary(outcome: KernelOutcome) -> str:
+    execution = outcome.execution
+    summary = outcome.state.summary.strip()
+    if summary:
+        return summary
+    if execution is not None and execution.summary.strip():
+        return execution.summary.strip()
+    payload = outcome.event.payload
+    for key in ("summary", "content", "message"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
 
 
 def append_outcome_growth(

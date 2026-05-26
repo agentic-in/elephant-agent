@@ -4,10 +4,19 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
 
-from apps.cli.runtime_snapshot import _growth_state_predates_profile_sessions
+from apps.cli.runtime_snapshot import _growth_state_predates_profile_sessions, _outcome_experience_summary
 
 
 class RuntimeSnapshotGrowthTests(unittest.TestCase):
+    def test_experience_summary_falls_back_to_turn_payload(self) -> None:
+        outcome = SimpleNamespace(
+            state=SimpleNamespace(summary=""),
+            execution=SimpleNamespace(summary=""),
+            event=SimpleNamespace(payload={"summary": "second turn"}),
+        )
+
+        self.assertEqual(_outcome_experience_summary(outcome), "second turn")
+
     def test_growth_staleness_check_uses_bounded_personal_model_episode_query(self) -> None:
         class Repository:
             def __init__(self) -> None:
