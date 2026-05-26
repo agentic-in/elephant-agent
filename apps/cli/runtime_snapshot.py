@@ -568,13 +568,18 @@ def _derive_session_epoch_focus(
     work_items: tuple[object, ...],
 ) -> str:
     del work_items
-    # Episode-open frozen context must not infer the current turn's focus. It can
-    # only carry the previous wake/resume summary captured before this Episode.
-    continuity = runtime.inspect_continuity(session_id=session.episode_id)
-    normalized = str(getattr(continuity, "wake_summary", "") or "").strip()
-    if normalized and not _focus_summary_is_planner_fallback(normalized):
-        return normalized
-    return "No prior Episode summary was available when this Episode froze."
+    # Fast path: read the elephant state summary directly instead of calling
+    # inspect_continuity (which triggers profile loading, voice doctor, etc.).
+    # The previous implementation called inspect_continuity just to read
+    # wake_summary, which itself comes from the state's summary field.
+    elephant_id = runtime.elephant_id_for_session(session)
+    if elephant_id:
+        state = runtime.state_for_elephant(elephant_id)
+        if state is not None:
+            normalized = str(getattr(state, "summary", "") or "").strip()
+            if normalized and not _focus_summary_is_planner_fallback(normalized):
+                return normalized
+    return "No durable elephant focus is available yet."
 
 
 def _focus_summary_is_planner_fallback(text: str) -> bool:

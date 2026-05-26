@@ -605,6 +605,7 @@ def list_steps(
     *,
     loop_id: str | None = None,
     episode_id: str | None = None,
+    episode_ids: tuple[str, ...] | None = None,
     state_id: str | None = None,
     personal_model_id: str | None = None,
     created_at_start: datetime | None = None,
@@ -621,6 +622,12 @@ def list_steps(
     if episode_id is not None:
         clauses.append("episode_id = ?")
         parameters.append(episode_id)
+    if episode_ids is not None:
+        if not episode_ids:
+            return ()
+        placeholders = ",".join("?" * len(episode_ids))
+        clauses.append(f"episode_id IN ({placeholders})")
+        parameters.extend(episode_ids)
     if state_id is not None:
         clauses.append("state_id = ?")
         parameters.append(state_id)

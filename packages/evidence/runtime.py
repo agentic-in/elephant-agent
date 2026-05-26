@@ -125,15 +125,27 @@ class DefaultEvidenceRetriever:
         scope_set = set(resolved_scope.episode_ids)
         query_tokens = _tokenize(request.query)
         dims = resolve_embedding_dimensions(request.latency_mode)
-        episode_scope_records = tuple(
-            record
-            for episode_id in resolved_scope.episode_ids
-            for record in self.store.list(
-                episode_id=episode_id,
-                include_inactive=request.include_inactive,
+        # Push scope filtering down to the store/SQL layer in a single query,
+        # rather than issuing one query per episode_id (N+1 for large scopes).
+        scope_episode_ids = tuple(scope_set)
+        try:
+            episode_scope_records = tuple(
+                self.store.list(
+                    include_inactive=request.include_inactive,
+                    episode_ids=scope_episode_ids,
+                )
             )
-            if record.episode_id in scope_set
-        )
+        except TypeError:
+            # Fallback for store implementations that don't support episode_ids.
+            episode_scope_records = tuple(
+                record
+                for episode_id in resolved_scope.episode_ids
+                for record in self.store.list(
+                    episode_id=episode_id,
+                    include_inactive=request.include_inactive,
+                )
+                if record.episode_id in scope_set
+            )
         scope_records = tuple(
             {
                 record.evidence_id: record
