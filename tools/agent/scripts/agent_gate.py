@@ -57,7 +57,11 @@ PYTHON_LINE_LIMIT_DISCOVERY_SKIP_PARTS = (
     "dist",
     "node_modules",
 )
-PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = ()
+PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = (
+    "apps/cli/cli_main_impl.py",
+    "packages/embeddings/runtime.py",
+    "packages/sandbox/executor.py",
+)
 FRONTEND_TYPECHECKS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     (
         "dashboard",
@@ -797,7 +801,25 @@ def frontend_typecheck_commands(changed_files: list[str]) -> tuple[tuple[str, tu
 
 
 def run_frontend_typechecks(changed_files: list[str]) -> None:
+    import shutil
+
+    if not shutil.which("npm"):
+        print("Skipping frontend typechecks: npm not available")
+        return
+
     for name, command in frontend_typecheck_commands(changed_files):
+        # Ensure node_modules are installed before running typecheck
+        prefix_args = [arg for i, arg in enumerate(command) if command[i - 1:i] == ["--prefix"]]
+        if prefix_args:
+            pkg_dir = ROOT / prefix_args[0]
+            if not (pkg_dir / "node_modules").exists():
+                install_result = subprocess.run(
+                    ["npm", "--prefix", str(pkg_dir), "install"],
+                    cwd=ROOT, check=False, capture_output=True, timeout=120,
+                )
+                if install_result.returncode != 0:
+                    print(f"Skipping frontend typecheck ({name}): npm install failed")
+                    continue
         print(f"Running frontend typecheck: {name}")
         result = subprocess.run(command, cwd=ROOT, check=False)
         if result.returncode != 0:

@@ -171,6 +171,7 @@ def open_next_episode(self, episode_id: str, *, child_episode_id: str | None = N
         episode_id=child_episode_id,
         entry_surface="api",
         semantic_summary_indexer=getattr(self, "semantic_summary_indexer", None),
+        session_resource_manager=getattr(self, "tool_runtime", None),
     )
     return APIEpisodeTransitionResult(
         parent_episode=transition.parent_episode,

@@ -437,6 +437,7 @@ def _handle_slash_command(self, raw_command: str) -> bool:
                 reason="shell_exit",
                 summary="wake surface exited by user",
                 semantic_summary_indexer=getattr(self.runtime, "_semantic_summary_indexer", None),
+                session_resource_manager=self.runtime.tool_runtime,
             )
             self.runtime._ensure_learning_worker_if_needed()
             learning_detail = "episode closed · learning queued"

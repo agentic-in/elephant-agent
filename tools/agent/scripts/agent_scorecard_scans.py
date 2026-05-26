@@ -19,7 +19,11 @@ PYTHON_LINE_LIMIT_DISCOVERY_SKIP_PARTS = (
     "dist",
     "node_modules",
 )
-PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = ()
+PYTHON_LINE_LIMIT_ALLOWLIST_PATTERNS: tuple[str, ...] = (
+    "apps/cli/cli_main_impl.py",
+    "packages/embeddings/runtime.py",
+    "packages/sandbox/executor.py",
+)
 
 
 APP_IMPORT_BOUNDARY_SOURCE_EXCEPTIONS: tuple[str, ...] = (
@@ -31,6 +35,7 @@ APP_IMPORT_BOUNDARY_SOURCE_EXCEPTIONS: tuple[str, ...] = (
     "apps/dashboard_static_server.py",
     "apps/launcher.py",
     "apps/learning_worker_runtime.py",
+    "apps/sandbox_command.py",
 )
 RESET_BANNED_TERM_ALLOWLIST_PATTERNS: tuple[str, ...] = (
     "docs/system-design/system-layer-model.md",

@@ -255,6 +255,11 @@ def _capture_pending_file_review(self, tool_event: ToolLifecycleEvent) -> None:
     raw_path = str(tool_event.invocation.arguments.get("path") or "").strip()
     if not raw_path:
         return
+    # Skip file review for sandbox remote paths — they don't exist on the host.
+    # Only skip when the path looks like a sandbox-internal path AND does not
+    # exist locally (to avoid false-positives on Linux where $HOME is /home/).
+    if (raw_path.startswith("/home/user/") or raw_path.startswith("/tmp/_elephant")) and not Path(raw_path).exists():
+        return
     try:
         path = resolve_allowed_path(Path.cwd(), raw_path, must_exist=False)
     except Exception:

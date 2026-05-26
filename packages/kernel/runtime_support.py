@@ -193,6 +193,14 @@ class KernelStoragePort(Protocol):
         """List Steps."""
 
 
+@runtime_checkable
+class KernelSessionResourceManager(Protocol):
+    """Optional cleanup hook for session-scoped runtime resources."""
+
+    def cleanup_session(self, session_id: str) -> bool:
+        """Best-effort cleanup for resources tied to a closed episode/session."""
+
+
 @dataclass(frozen=True, slots=True)
 class KernelDependencies:
     storage: KernelStoragePort
@@ -210,6 +218,7 @@ class KernelDependencies:
     # on commit, so the NEXT turn's recall block can retrieve them with
     # BM25+vector fusion.
     semantic_summary_indexer: object | None = None
+    session_resource_manager: KernelSessionResourceManager | None = None
 
 
 @dataclass(frozen=True, slots=True)

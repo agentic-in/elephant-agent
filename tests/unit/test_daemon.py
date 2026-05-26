@@ -10,10 +10,12 @@ import os
 import signal
 import sys
 import time
+import unittest
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 from unittest.mock import patch
 
 import pytest
@@ -609,6 +611,7 @@ class TestServiceDaemonStartup:
         asyncio.run(daemon._start_gateway_app())
 
         assert captured["state_dir"] == str(tmp_path)
+        assert captured["control_state_dir"] == str(tmp_path)
         assert captured["start_learning_worker"] is False
 
     def test_mark_runtime_ready_updates_record(self, tmp_path: Path) -> None:
@@ -678,21 +681,14 @@ class TestLearningWorkerLoop:
     def test_learning_worker_does_not_idle_exit_by_default(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from apps import daemon_tasks
 
-        class FakeRepository:
-            def bootstrap(self) -> None:
-                pass
-
-            def claim_learning_job(self, *, worker_id: str) -> object | None:
-                return None
-
-        def fake_repository_factory(_database_path: Path) -> FakeRepository:
-            return FakeRepository()
-
         def fake_write_record(*_args: object, **_kwargs: object) -> dict[str, object]:
             return {}
 
-        monkeypatch.setattr(daemon_tasks, "RuntimeStorageRepository", fake_repository_factory)
+        def fake_claim_learning_job(_state_dir: Path, _worker_id: str) -> None:
+            return None
+
         monkeypatch.setattr("apps.learning_worker_runtime._write_learning_worker_record", fake_write_record)
+        monkeypatch.setattr(daemon_tasks, "_claim_learning_job", fake_claim_learning_job)
 
         running = True
 
@@ -714,39 +710,33 @@ class TestLearningWorkerLoop:
     def test_claimed_learning_job_runs_off_event_loop(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from apps import daemon_tasks
 
-        class FakeRepository:
-            def __init__(self) -> None:
-                self.claimed = False
-
-            def bootstrap(self) -> None:
-                pass
-
-            def claim_learning_job(self, *, worker_id: str) -> object | None:
-                if self.claimed:
-                    return None
-                self.claimed = True
-                return SimpleNamespace(job_id="job-1", progress_stage="queued", attempt_count=1)
-
-            def fail_learning_job(self, *_args: object, **_kwargs: object) -> None:
-                pytest.fail("learning job should not fail")
-
-        repository = FakeRepository()
         running = True
-
-        def fake_repository_factory(_database_path: Path) -> FakeRepository:
-            return repository
+        claimed = False
+        job = SimpleNamespace(job_id="job-1", progress_stage="queued", attempt_count=1)
 
         def fake_write_record(*_args: object, **_kwargs: object) -> dict[str, object]:
             return {}
 
-        def fake_run_claimed_job(_state_dir: Path, _job_id: str, _worker_id: str) -> None:
+        def fake_claim_learning_job(_state_dir: Path, _worker_id: str) -> object | None:
+            nonlocal claimed
+            if claimed:
+                return None
+            claimed = True
+            return job
+
+        def fake_run_learning_job_once(_state_dir: Path, _job: object, _worker_id: str) -> None:
             nonlocal running
+            assert _job is job
             time.sleep(0.2)
             running = False
 
-        monkeypatch.setattr(daemon_tasks, "RuntimeStorageRepository", fake_repository_factory)
+        def fake_fail_learning_job(*_args: object, **_kwargs: object) -> None:
+            pytest.fail("learning job should not fail")
+
         monkeypatch.setattr("apps.learning_worker_runtime._write_learning_worker_record", fake_write_record)
-        monkeypatch.setattr(daemon_tasks, "_run_claimed_learning_job", fake_run_claimed_job)
+        monkeypatch.setattr(daemon_tasks, "_claim_learning_job", fake_claim_learning_job)
+        monkeypatch.setattr(daemon_tasks, "_run_learning_job_once", fake_run_learning_job_once)
+        monkeypatch.setattr(daemon_tasks, "_fail_learning_job", fake_fail_learning_job)
 
         tick_at = 0.0
 
@@ -769,3 +759,162 @@ class TestLearningWorkerLoop:
         asyncio.run(run_loop())
 
         assert tick_at < 0.15
+
+
+class ServiceDaemonGatewayAppTest(unittest.TestCase):
+    def test_start_gateway_app_passes_cli_state_dir_as_control_state_dir(self) -> None:
+        from apps.daemon import ServiceDaemon
+
+        daemon = ServiceDaemon(
+            state_dir=Path("/tmp/gateway-state"),
+            cli_state_dir=Path("/tmp/cli-state"),
+        )
+        fake_app = SimpleNamespace(profile_id="you")
+
+        with mock.patch(
+            "apps.gateway.runtime.build_gateway_app",
+            return_value=(fake_app, object(), object()),
+        ) as build_gateway_app:
+            asyncio.run(daemon._start_gateway_app())
+
+        build_gateway_app.assert_called_once_with(
+            state_dir=str(daemon.state_dir),
+            control_state_dir=str(daemon.cli_state_dir),
+            start_learning_worker=False,
+        )
+        self.assertIs(daemon._gateway_app, fake_app)
+
+
+class RunDaemonForegroundLoggingTest(unittest.TestCase):
+    def test_run_daemon_foreground_writes_to_daemon_log(self) -> None:
+        from apps.daemon import run_daemon_foreground
+
+        state_dir = Path("/tmp/gateway-state")
+        cli_state_dir = Path("/tmp/cli-state")
+        fake_daemon = mock.Mock()
+        fake_daemon.start.return_value = object()
+
+        with (
+            mock.patch("apps.daemon.setup_logging") as setup_logging,
+            mock.patch("apps.daemon.ServiceDaemon", return_value=fake_daemon) as daemon_cls,
+            mock.patch("apps.daemon.asyncio.run") as asyncio_run,
+        ):
+            result = run_daemon_foreground(
+                state_dir=state_dir,
+                cli_state_dir=cli_state_dir,
+                host="127.0.0.1",
+                port=8911,
+                log_level="DEBUG",
+            )
+
+        self.assertEqual(result, 0)
+        setup_logging.assert_called_once_with(
+            level="DEBUG",
+            log_path=state_dir / "daemon.log",
+        )
+        daemon_cls.assert_called_once_with(
+            state_dir=state_dir,
+            cli_state_dir=cli_state_dir,
+            host="127.0.0.1",
+            port=8911,
+        )
+        asyncio_run.assert_called_once_with(fake_daemon.start.return_value)
+
+
+class ServiceDaemonStatusTest(unittest.TestCase):
+    def test_get_status_skips_details_when_requested(self) -> None:
+        from apps.daemon import DaemonServiceStatus, ServiceDaemon
+
+        daemon = ServiceDaemon(
+            state_dir=Path("/tmp/gateway-state"),
+            cli_state_dir=Path("/tmp/cli-state"),
+        )
+        describe = mock.Mock(return_value={"adapter_id": "weixin"})
+        daemon._daemon_services["weixin"] = SimpleNamespace(describe=describe)
+        daemon._service_statuses["weixin"] = DaemonServiceStatus(name="weixin", status="running")
+
+        status = daemon.get_status(include_details=False)
+
+        describe.assert_not_called()
+        self.assertNotIn("details", status["services"]["weixin"])
+
+
+class LearningWorkerLoopThreadedDispatchTest(unittest.IsolatedAsyncioTestCase):
+    async def test_learning_worker_offloads_blocking_work_to_threads(self) -> None:
+        from apps import daemon_tasks
+
+        state_dir = Path("/tmp/herd")
+        job = SimpleNamespace(job_id="job-1", progress_stage="starting", attempt_count=1)
+        to_thread_calls: list[str] = []
+        run_calls: list[tuple[Path, object, str]] = []
+        claimed = False
+
+        def fake_claim_learning_job(_state_dir: Path, _worker_id: str) -> object | None:
+            nonlocal claimed
+            if claimed:
+                return None
+            claimed = True
+            return job
+
+        def fake_run_learning_job_once(_state_dir: Path, _job: object, _worker_id: str) -> None:
+            run_calls.append((_state_dir, _job, _worker_id))
+
+        async def fake_to_thread(func, /, *args, **kwargs):
+            to_thread_calls.append(func.__name__)
+            return func(*args, **kwargs)
+
+        with (
+            mock.patch("apps.learning_worker_runtime._write_learning_worker_record"),
+            mock.patch.object(daemon_tasks, "_claim_learning_job", new=fake_claim_learning_job),
+            mock.patch.object(daemon_tasks, "_run_learning_job_once", new=fake_run_learning_job_once),
+            mock.patch.object(daemon_tasks, "_fail_learning_job"),
+            mock.patch("apps.daemon_tasks.asyncio.to_thread", side_effect=fake_to_thread),
+            mock.patch("apps.daemon_tasks.time.monotonic", side_effect=[0.0, 0.1, 2.0]),
+        ):
+            await daemon_tasks.learning_worker_loop(
+                state_dir=state_dir,
+                is_running=lambda: True,
+                idle_seconds=0.1,
+            )
+
+        self.assertEqual(to_thread_calls[:2], ["_claim_learning_job", "_run_learning_job_once"])
+        self.assertGreaterEqual(to_thread_calls.count("_claim_learning_job"), 2)
+        self.assertEqual(len(run_calls), 1)
+        self.assertEqual(run_calls[0][0], state_dir)
+        self.assertIs(run_calls[0][1], job)
+
+
+class DaemonCommandStatusTest(unittest.TestCase):
+    def test_show_status_reconciles_stale_running_record(self) -> None:
+        from apps import daemon_command
+
+        state_dir = Path("/tmp/herd")
+        record = {
+            "status": "running",
+            "pid": 81744,
+            "host": "0.0.0.0",
+            "port": 8900,
+            "started_at": "2026-05-20T04:39:38.830848+00:00",
+        }
+
+        with (
+            mock.patch("apps.daemon_command._read_pid", return_value=81744),
+            mock.patch("apps.daemon_command.daemon_is_running", return_value=False),
+            mock.patch("apps.daemon_command._load_record", return_value=record.copy()),
+            mock.patch("apps.daemon_command._remove_file_if_exists") as remove_file,
+            mock.patch("apps.daemon_command._write_record") as write_record,
+            mock.patch("apps.daemon_command._utc_now_iso", return_value="2026-05-20T14:05:00+00:00"),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            result = daemon_command._show_status(state_dir)
+
+        self.assertEqual(result, 0)
+        remove_file.assert_called_once_with(state_dir / "daemon.pid")
+        write_record.assert_called_once()
+        _, written_record = write_record.call_args.args
+        self.assertEqual(written_record["status"], "stopped")
+        self.assertIsNone(written_record["pid"])
+        self.assertEqual(written_record["stopped_at"], "2026-05-20T14:05:00+00:00")
+        rendered = "\n".join(" ".join(str(arg) for arg in call.args) for call in print_mock.call_args_list)
+        self.assertIn("stopped", rendered)
+        self.assertNotIn("running", rendered)

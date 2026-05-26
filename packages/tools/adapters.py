@@ -95,3 +95,28 @@ class StructuredClarifySurface(ClarifySurface):
             summary="\n".join(lines),
             side_effects=("clarify",),
         )
+
+
+@dataclass(slots=True)
+class DelegatingClarifySurface(ClarifySurface):
+    delegate: ClarifySurface | None = None
+    fallback_surface: ClarifySurface = field(default_factory=StructuredClarifySurface)
+
+    def set_delegate(self, surface: ClarifySurface | None) -> None:
+        self.delegate = surface
+
+    def request_clarification(
+        self,
+        *,
+        session_id: str,
+        question: str,
+        mode: str,
+        choices: tuple[str, ...] = (),
+    ) -> Mapping[str, Any] | ExecutionResult:
+        surface = self.delegate or self.fallback_surface
+        return surface.request_clarification(
+            session_id=session_id,
+            question=question,
+            mode=mode,
+            choices=choices,
+        )

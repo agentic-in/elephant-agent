@@ -16,13 +16,24 @@ def tool_summary(
     *,
     side_effects: tuple[str, ...] = ("tool",),
     outcome: str = "success",
+    telemetry_event_ids: tuple[str, ...] = (),
+    trace_metadata: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "execution_id": invocation.invocation_id,
         "summary": summary,
         "outcome": outcome,
         "side_effects": side_effects,
     }
+    if telemetry_event_ids:
+        payload["telemetry_event_ids"] = tuple(str(item) for item in telemetry_event_ids if str(item).strip())
+    if trace_metadata:
+        payload["trace_metadata"] = {
+            str(key): str(value)
+            for key, value in trace_metadata.items()
+            if value is not None and str(value).strip()
+        }
+    return payload
 
 
 def coerce_bool(value: Any, *, default: bool) -> bool:

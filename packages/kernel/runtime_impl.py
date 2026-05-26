@@ -176,6 +176,7 @@ class KernelService:
             request,
             identity,
             current=current,
+            session_resource_manager=self.dependencies.session_resource_manager,
         )
         loop_lifecycle = open_loop_lifecycle(
             self.dependencies.storage,
@@ -451,6 +452,7 @@ class KernelService:
             summary=execution.summary,
             current=_clock_now(),
             semantic_summary_indexer=getattr(self.dependencies, "semantic_summary_indexer", None),
+            session_resource_manager=self.dependencies.session_resource_manager,
         )
         if episode.status == "closed":
             refreshed_state = self.dependencies.storage.load_state(projected_state.state_id)

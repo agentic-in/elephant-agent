@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime, timezone
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -455,7 +456,10 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
 
     def set_clarify_surface(self, surface: Any) -> None:
         object.__setattr__(self, "clarify_surface", surface)
-        self._refresh_extensions(profile_id=self.current_profile().state.profile_id)
+        tool_clarify_surface = getattr(self, "tool_clarify_surface", None)
+        set_delegate = getattr(tool_clarify_surface, "set_delegate", None)
+        if callable(set_delegate):
+            set_delegate(surface)
 
     def cron_jobs(self, *, session_id: str) -> tuple[CronJob, ...]:
         profile_id, elephant_id = self._cron_scope(session_id)
@@ -668,7 +672,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
         session = self._load_session(session_id)
         return session.personal_model_id, self.elephant_id_for_session(session)
 
-    def _refresh_extensions(self, *, profile_id: str | None = None) -> None:
+    def _refresh_extensions(self, *, profile_id: str | None = None, force: bool = False) -> None:
         if profile_id is None:
             loaded = self.current_profile()
         else:
@@ -676,8 +680,25 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
         manifest_payload, removed_manifest_keys = sanitize_extension_manifest_payload(dict(loaded.manifest))
         if removed_manifest_keys:
             self._save_extensions_manifest(manifest_payload)
+        signature = json.dumps(
+            {
+                "profile_id": loaded.state.profile_id,
+                "profile_dir": str(Path(loaded.profile_dir)),
+                "manifest": manifest_payload,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        if (
+            not force
+            and self.active_extension_profile_id == loaded.state.profile_id
+            and self.active_extension_manifest_signature == signature
+        ):
+            return
         self._apply_extension_manifest(
-            load_extension_manifest(manifest_payload, profile_dir=Path(loaded.profile_dir))
+            load_extension_manifest(manifest_payload, profile_dir=Path(loaded.profile_dir)),
+            profile_id=loaded.state.profile_id,
+            signature=signature,
         )
 
     def _sync_global_custom_mcp_tools(self) -> None:
@@ -693,7 +714,13 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
             cwd=Path.cwd(),
         )
 
-    def _apply_extension_manifest(self, manifest: CliExtensionManifest) -> None:
+    def _apply_extension_manifest(
+        self,
+        manifest: CliExtensionManifest,
+        *,
+        profile_id: str | None = None,
+        signature: str = "",
+    ) -> None:
         def _elephant_file_root_for_session(session_id: str | None) -> Path:
             session = self.repository.load_episode_state(session_id) if session_id else None
             if session is not None and session.elephant_id:
@@ -749,10 +776,15 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
                     sub_agents_surface=self,
                     todo_store=self.todo_store,
                     browser_backend=self.browser_backend,
-                    clarify_surface=self.clarify_surface or StructuredClarifySurface(surface_label="cli"),
+                    clarify_surface=(
+                        self.tool_clarify_surface
+                        or self.clarify_surface
+                        or StructuredClarifySurface(surface_label="cli")
+                    ),
                 ),
                 snapshot_path=self.snapshot_path,
                 security_policy=self.security_policy,
+                state_dir=self.paths.state_dir,
             ),
         )
         self._sync_global_custom_mcp_tools()
@@ -766,6 +798,8 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
                 profile_loader=self.profile_loader,
             ),
         )
+        object.__setattr__(self, "active_extension_profile_id", profile_id)
+        object.__setattr__(self, "active_extension_manifest_signature", signature)
 
     def _tool_manifest_load_record(self, manifest_path: Path) -> ToolManifestLoadRecord:
         for record in reversed(self.tool_runtime.list_manifest_loads()):

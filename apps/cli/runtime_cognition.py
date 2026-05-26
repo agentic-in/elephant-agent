@@ -311,6 +311,7 @@ class _CliContextCapability:
     install_root: Path | None = None
     workspaces_dir: Path | None = None
     startup_cwd: Path | None = None
+    sandbox_path_mapper: Any | None = None
     summary_model_provider: Any | None = None
     embedding_service: Any | None = None
     last_projection_compaction: ContextProjectionCompactionResult | None = field(default=None, init=False, repr=False, compare=False)
@@ -628,12 +629,15 @@ class _CliContextCapability:
         )
 
     def _runtime_path_artifact(self, session: Episode) -> str:
+        mapper = self.sandbox_path_mapper
         lines: list[str] = []
         if self.startup_cwd is not None:
-            lines.append(f"startup_cwd={self.startup_cwd.expanduser().resolve()} (the directory where this session launched; use as working directory when the user asks to explore 'here' or 'current project')")
+            cwd_display = mapper.to_remote(str(self.startup_cwd.expanduser().resolve())) if mapper else str(self.startup_cwd.expanduser().resolve())
+            lines.append(f"startup_cwd={cwd_display} (the directory where this session launched; use as working directory when the user asks to explore 'here' or 'current project')")
         if self.workspaces_dir is not None and session.elephant_id:
             elephant_ws = self.workspaces_dir.expanduser().resolve() / quote(session.elephant_id.strip(), safe='')
-            lines.append(f"elephant_workspace={elephant_ws} (default scratch directory for file output when the user does not specify a path)")
+            ws_display = mapper.to_remote(str(elephant_ws)) if mapper else str(elephant_ws)
+            lines.append(f"elephant_workspace={ws_display} (default scratch directory for file output when the user does not specify a path)")
         if not lines:
             return ""
         return "runtime-paths: " + "; ".join(lines)

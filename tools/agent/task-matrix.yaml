@@ -151,7 +151,9 @@
       "execution_plan_policy": "long_horizon",
       "paths": [
         "packages/tools/**",
-        "packages/skills/**"
+        "packages/skills/**",
+        "packages/sandbox/**",
+        "Dockerfile.sandbox"
       ],
       "read_first": [
         "packages/tools/AGENTS.md",

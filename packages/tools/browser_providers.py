@@ -16,6 +16,7 @@ class CloudBrowserSession:
     provider_name: str
     session_id: str
     cdp_url: str
+    headers: dict[str, str] = field(default_factory=dict)
     features: Mapping[str, object] = field(default_factory=dict)
 
 
@@ -184,11 +185,61 @@ def _env_bool(name: str, *, default: bool) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+class TencentCloudBrowserProvider(CloudBrowserProvider):
+    """Cloud browser via Tencent Cloud Agent Runtime (E2B browser-v1 template).
+
+    Creates a dedicated browser sandbox instance with Chromium pre-installed.
+    The browser is controlled via CDP (Chrome DevTools Protocol) over HTTPS.
+    """
+
+    name = "tencent-cloud"
+
+    def __init__(self, *, template: str = "browser-v1", domain: str = "", api_key: str = ""):
+        self._template = template or "browser-v1"
+        self._domain = domain
+        self._api_key = api_key
+        self._sandboxes: dict[str, Any] = {}  # session_id -> Sandbox
+
+    def is_configured(self) -> bool:
+        return bool(self._api_key or os.environ.get("E2B_API_KEY"))
+
+    def create_session(self, task_id: str) -> CloudBrowserSession:
+        if self._domain:
+            os.environ["E2B_DOMAIN"] = self._domain
+        if self._api_key:
+            os.environ["E2B_API_KEY"] = self._api_key
+
+        from e2b import Sandbox  # type: ignore[import-not-found]
+
+        sandbox = Sandbox(template=self._template)
+        token = str(sandbox._envd_access_token or "")
+        cdp_url = f"https://{sandbox.get_host(9000)}/cdp?access_token={token}"
+
+        self._sandboxes[sandbox.sandbox_id] = sandbox
+
+        return CloudBrowserSession(
+            provider_name=self.name,
+            session_id=sandbox.sandbox_id,
+            cdp_url=cdp_url,
+            headers={"X-Access-Token": token} if token else {},
+            features={"sandbox_id": sandbox.sandbox_id, "template": self._template},
+        )
+
+    def close_session(self, session_id: str) -> None:
+        sandbox = self._sandboxes.pop(session_id, None)
+        if sandbox is not None:
+            try:
+                sandbox.kill()
+            except Exception:
+                pass
+
+
 __all__ = [
     "BrowserUseProvider",
     "BrowserbaseProvider",
     "CloudBrowserProvider",
     "CloudBrowserSession",
     "FirecrawlProvider",
+    "TencentCloudBrowserProvider",
     "_http_json",
 ]

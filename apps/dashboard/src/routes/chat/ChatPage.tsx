@@ -210,6 +210,37 @@ function toolLabel(step: DashboardRow): string {
   return compactText(readString(detailOf(step), ["tool_name"], "tool"), 42);
 }
 
+function shortSandboxId(value: string): string {
+  if (!value) {
+    return "";
+  }
+  return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
+}
+
+function sandboxRuntimeLabel(detail: DashboardRow): string {
+  const backend = readString(detail, ["sandbox_backend"], "");
+  const provider = readString(detail, ["sandbox_provider"], "");
+  const parts = [backend, provider].filter(Boolean);
+  return parts.join("/");
+}
+
+function sandboxEngineLabel(detail: DashboardRow): string {
+  return readString(detail, ["sandbox_backend_class"], "");
+}
+
+function hasSandboxDetail(detail: DashboardRow): boolean {
+  return [
+    "sandbox_backend",
+    "sandbox_provider",
+    "sandbox_backend_class",
+    "sandbox_id",
+    "sandbox_resolution",
+    "sandbox_cwd",
+    "sandbox_template",
+    "sandbox_timeout_seconds",
+  ].some((key) => readString(detail, [key], "") !== "");
+}
+
 function stepBadges(step: DashboardRow): string[] {
   const eventType = valueOf(step, "event_type", valueOf(step, "action", "step"));
   const detail = detailOf(step);
@@ -225,6 +256,18 @@ function stepBadges(step: DashboardRow): string[] {
   if (eventType === "tool_execute") {
     badges.push(toolLabel(step));
     badges.push(readString(detail, ["execution_id"], "execution") || "execution");
+  }
+  const sandboxRuntime = sandboxRuntimeLabel(detail);
+  if (sandboxRuntime) {
+    badges.push(sandboxRuntime);
+  }
+  const sandboxResolution = readString(detail, ["sandbox_resolution"], "");
+  if (sandboxResolution) {
+    badges.push(sandboxResolution);
+  }
+  const sandboxId = readString(detail, ["sandbox_id"], "");
+  if (sandboxId) {
+    badges.push(`sandbox:${shortSandboxId(sandboxId)}`);
   }
   if (numberOf(usage, "total_tokens") > 0 && !eventType.startsWith("tool_")) {
     badges.push(`${valueOf(usage, "prompt_tokens", "0")} in / ${valueOf(usage, "completion_tokens", "0")} out`);
@@ -582,6 +625,14 @@ function ToolCallPanel({
   const executionId = readString(detail, ["execution_id"], "");
   const status = valueOf(row, "status", "");
   const outcome = valueOf(row, "outcome", "");
+  const sandboxRuntime = sandboxRuntimeLabel(detail);
+  const sandboxEngine = sandboxEngineLabel(detail);
+  const sandboxId = readString(detail, ["sandbox_id"], "");
+  const sandboxResolution = readString(detail, ["sandbox_resolution"], "");
+  const sandboxCwd = readString(detail, ["sandbox_cwd"], "");
+  const sandboxTemplate = readString(detail, ["sandbox_template"], "");
+  const sandboxTimeoutSeconds = readString(detail, ["sandbox_timeout_seconds"], "");
+  const sandboxCachedSession = readString(detail, ["sandbox_cached_session"], "");
 
   return (
     <section className={styles.toolCallPanel}>
@@ -600,6 +651,45 @@ function ToolCallPanel({
           <code>No arguments persisted.</code>
         </ToolField>
       )}
+      {hasSandboxDetail(detail) ? (
+        <>
+          {(sandboxRuntime || sandboxEngine) ? (
+            <ToolField label="Sandbox">
+              <div>
+                {sandboxRuntime ? <code>{sandboxRuntime}</code> : null}
+                {sandboxEngine ? <div><small>{sandboxEngine}</small></div> : null}
+              </div>
+            </ToolField>
+          ) : null}
+          {(sandboxId || sandboxResolution || sandboxCachedSession) ? (
+            <ToolField label="Session">
+              <div>
+                {sandboxId ? <code>{sandboxId}</code> : null}
+                {sandboxResolution || sandboxCachedSession ? (
+                  <div>
+                    <small>
+                      {[sandboxResolution, sandboxCachedSession === "true" ? "cached" : ""].filter(Boolean).join(" · ")}
+                    </small>
+                  </div>
+                ) : null}
+              </div>
+            </ToolField>
+          ) : null}
+          {sandboxCwd ? (
+            <ToolField label="CWD">
+              <code>{sandboxCwd}</code>
+            </ToolField>
+          ) : null}
+          {(sandboxTemplate || sandboxTimeoutSeconds) ? (
+            <ToolField label="Profile">
+              <div>
+                {sandboxTemplate ? <code>{sandboxTemplate}</code> : null}
+                {sandboxTimeoutSeconds ? <div><small>timeout {sandboxTimeoutSeconds}s</small></div> : null}
+              </div>
+            </ToolField>
+          ) : null}
+        </>
+      ) : null}
       {eventType === "tool_execute" ? (
         <ToolField label="Result">
           <MarkdownText text={toolResult || "No tool result persisted."} />

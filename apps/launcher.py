@@ -239,6 +239,24 @@ def build_typer_app() -> typer.Typer:
         raise typer.Exit(_forward_cli(["reflect", *ctx.args], state_dir=obj["state_dir"]))
 
     @app.command(
+        "sandbox",
+        help="Inspect, configure, or diagnose the sandbox environment.",
+        context_settings=passthrough_settings,
+        add_help_option=False,
+    )
+    def sandbox_command(ctx: typer.Context) -> None:
+        from apps.sandbox_command import command_main as sandbox_command_main
+
+        obj = ctx.obj or {}
+        args = list(ctx.args)
+        raise typer.Exit(
+            sandbox_command_main(
+                args,
+                default_state_dir=obj["state_dir"],
+            )
+        )
+
+    @app.command(
         "daemon",
         help="Run all Elephant services (IM gateways, cron, supervisor, learning) in a single process.",
         context_settings=passthrough_settings,

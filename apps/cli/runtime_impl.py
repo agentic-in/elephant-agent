@@ -47,7 +47,7 @@ from packages.skills import SkillHub, SkillPromptContextBuilder, SkillSearchHub,
 from packages.state import ProfileLoader
 from packages.storage import RuntimeStorageRepository
 from packages.tools import BuiltinToolDependencies, InMemorySessionTodoStore, ToolRuntime
-from packages.tools.adapters import StructuredClarifySurface
+from packages.tools.adapters import DelegatingClarifySurface, StructuredClarifySurface
 from packages.tools.browser_backend import create_playwright_browser_backend
 from packages.tools.surfaces import BrowserToolBackend, ClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
@@ -111,11 +111,14 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
     todo_store: InMemorySessionTodoStore = field(default_factory=InMemorySessionTodoStore)
     browser_backend: BrowserToolBackend | None = None
     clarify_surface: ClarifySurface | None = None
+    tool_clarify_surface: ClarifySurface | None = field(default=None, repr=False, compare=False)
     message_delivery_surface: Any = None
     sub_agent_active: bool = field(default=False, repr=False, compare=False)
     active_provider_id: str | None = None
     growth_updates: dict[str, GrowthUpdate] = field(default_factory=dict, repr=False, compare=False)
     kernel_event_observer: Any = field(default=None, repr=False, compare=False)
+    active_extension_profile_id: str | None = field(default=None, repr=False, compare=False)
+    active_extension_manifest_signature: str = field(default="", repr=False, compare=False)
 
     @classmethod
     def create(
@@ -186,6 +189,21 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
         # browser_backend and semantic_index_bundle are the two slowest
         # components (500ms-4.5s each). Run them in parallel threads to
         # halve the total boot time.
+
+        # Inject browser sandbox env vars before browser backend creation
+        # so that BrowserBackendConfig.from_env() picks up tencent-cloud provider.
+        from packages.tools.factory import sandbox_config_from_state_dir as _sandbox_cfg
+        _sandbox = _sandbox_cfg(state_dir)
+        if _sandbox is not None and _sandbox.backend == "cloud":
+            _cloud = _sandbox.effective_cloud()
+            if _cloud.browser_template:
+                os.environ.setdefault("ELEPHANT_BROWSER_CLOUD_PROVIDER", "tencent-cloud")
+                os.environ.setdefault("ELEPHANT_BROWSER_CLOUD_TEMPLATE", _cloud.browser_template)
+                if _cloud.domain:
+                    os.environ.setdefault("E2B_DOMAIN", _cloud.domain)
+                if _cloud.api_key:
+                    os.environ.setdefault("E2B_API_KEY", _cloud.api_key)
+
         browser_holder: dict[str, object] = {}
         semantic_holder: dict[str, object] = {}
 
@@ -226,6 +244,10 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             identity_store=FileGatewayIdentityStore(state_dir / "gateway-identities.json"),
         )
         clarify_surface = StructuredClarifySurface(surface_label="cli")
+        tool_clarify_surface = DelegatingClarifySurface(
+            delegate=clarify_surface,
+            fallback_surface=clarify_surface,
+        )
 
         def _elephant_file_root_for_session(session_id: str | None) -> Path:
             if session_id:
@@ -257,10 +279,11 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
                 todo_store=todo_store,
                 learning_result_surface=None,
                 browser_backend=browser_backend,
-                clarify_surface=clarify_surface,
+                clarify_surface=tool_clarify_surface,
             ),
             snapshot_path=paths.snapshot_path,
             security_policy=security_policy,
+            state_dir=state_dir,
         )
         # Kick the sentence-transformer steady as early as possible — right
         # after the embedding service is constructed. `steady_async` is
@@ -317,11 +340,15 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             todo_store=todo_store,
             browser_backend=browser_backend,
             clarify_surface=clarify_surface,
+            tool_clarify_surface=tool_clarify_surface,
             message_delivery_surface=message_delivery,
             sub_agent_active=os.environ.get("ELEPHANT_SUB_AGENT_CHILD") == "1",
             active_provider_id=active_provider_id,
         )
-        runtime._apply_extension_manifest(extension_manifest)
+        runtime._refresh_extensions(
+            profile_id=runtime.current_profile().state.profile_id,
+            force=True,
+        )
         return runtime
 
     def start(

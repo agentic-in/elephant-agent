@@ -317,6 +317,7 @@ class ElephantAPIApp:
                 ),
             ),
             context_resolver=_tool_context_for_session,
+            state_dir=runtime_state_dir,
         )
         sync_custom_mcp_tools(
             self.tool_runtime,
@@ -348,6 +349,7 @@ class ElephantAPIApp:
                 embedding_service=self.recall_runtime.evidence_retriever.embedding_service,
                 skill_runtime=self.skill_runtime,
                 semantic_summary_indexer=self.semantic_summary_indexer,
+                session_resource_manager=self.tool_runtime,
             )
         )
         self._loops: dict[str, list[APILoopRecord]] = {}

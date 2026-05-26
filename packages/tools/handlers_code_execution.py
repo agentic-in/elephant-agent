@@ -59,6 +59,7 @@ def run_code_execute(
     runtime: ToolRuntime,
     allowlist: tuple[str, ...],
     cwd: Path,
+    code_launcher: object | None = None,
 ) -> Mapping[str, Any]:
     code = str(invocation.arguments.get("code") or "")
     if not code.strip():
@@ -68,6 +69,14 @@ def run_code_execute(
     mode = str(invocation.arguments.get("mode") or "project").strip().lower()
     if mode not in CODE_EXECUTION_MODES:
         raise ValueError("tool.code.execute mode must be project or strict")
+
+    # Check if a sandbox code launcher was injected by SandboxToolExecutor
+    effective_launcher = code_launcher
+    if effective_launcher is None:
+        injected = invocation.arguments.get("__sandbox_code_launcher__")
+        if injected is not None:
+            effective_launcher = injected
+
     summary, tool_call_count = _run_code_subprocess(
         code,
         invocation=invocation,
@@ -76,6 +85,7 @@ def run_code_execute(
         timeout_seconds=timeout_seconds,
         cwd=cwd,
         mode=mode,
+        code_launcher=effective_launcher,
     )
     return tool_summary(
         invocation,
@@ -135,6 +145,7 @@ def _run_code_subprocess(
     timeout_seconds: int,
     cwd: Path,
     mode: str,
+    code_launcher: object | None = None,
 ) -> tuple[str, int]:
     with tempfile.TemporaryDirectory(prefix="elephant-code-") as tempdir:
         root = Path(tempdir)
@@ -157,7 +168,24 @@ def _run_code_subprocess(
             timeout_seconds=timeout_seconds,
         )
         tool_call_count = 0
-        with stdout_path.open("wb") as stdout_file, stderr_path.open("wb") as stderr_file:
+
+        # Determine launcher: use provided sandbox launcher or default local
+        use_sandbox_launcher = code_launcher is not None
+        if use_sandbox_launcher:
+            launcher = code_launcher
+
+        if use_sandbox_launcher:
+            # Sandbox launcher manages its own file handles
+            process = launcher.start(
+                runner_path=runner_path,
+                child_cwd=child_cwd,
+                env=env,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+            )
+        else:
+            stdout_file = stdout_path.open("wb")
+            stderr_file = stderr_path.open("wb")
             process = subprocess.Popen(
                 [child_python, str(runner_path)],
                 cwd=child_cwd,
@@ -166,6 +194,8 @@ def _run_code_subprocess(
                 stdout=stdout_file,
                 stderr=stderr_file,
             )
+
+        try:
             deadline = time.monotonic() + timeout_seconds
             while process.poll() is None:
                 tool_call_count = _serve_code_tool_requests(
@@ -194,6 +224,11 @@ def _run_code_subprocess(
                 if tool_call_count == previous:
                     break
                 time.sleep(0.02)
+        finally:
+            if not use_sandbox_launcher:
+                stdout_file.close()
+                stderr_file.close()
+
         stdout_text = _read_limited_text(stdout_path, limit=MAX_CODE_STDOUT_CHARS)
         stderr_text = _read_limited_text(stderr_path, limit=MAX_CODE_STDERR_CHARS)
         if process.returncode != 0:

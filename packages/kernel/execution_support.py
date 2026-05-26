@@ -7,7 +7,10 @@ from collections.abc import Mapping
 from dataclasses import replace
 from datetime import timedelta
 import json
+import logging as _diag_logging
 from uuid import uuid4
+
+_diag_logging.getLogger(__name__).info("🔍 execution_support module loaded (diagnostic patch v2)")
 
 from packages.context import queue_projection_history_embedding_backfill
 
@@ -94,11 +97,11 @@ def execute_kernel_turn(
             summary=execution.summary,
             outcome=execution.outcome,
             payload_refs=(execution.execution_id,),
-            metadata={
-                "tool_name": request.tool_name,
-                "execution_id": execution.execution_id,
-                "tool_result": execution.summary,
-            },
+            metadata=_tool_execution_step_metadata(
+                tool_name=request.tool_name,
+                execution=execution,
+                tool_arguments=request.tool_arguments,
+            ),
         )
         return execution, checkpoint, (*turn_messages, *assistant_turn_messages(_clean_execution_summary(execution)))
 
@@ -285,6 +288,29 @@ def _metadata_text(value: object) -> str:
         return json.dumps(value, separators=(",", ":"), sort_keys=True, default=str)[:12_000]
     except (TypeError, ValueError):
         return str(value)[:12_000]
+
+
+def _tool_execution_step_metadata(
+    *,
+    tool_name: str,
+    execution: ExecutionResult,
+    tool_arguments: Mapping[str, object] | None = None,
+    tool_call_id: str = "",
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "tool_name": tool_name,
+        "execution_id": execution.execution_id,
+        "tool_result": execution.summary,
+    }
+    if tool_arguments is not None:
+        metadata["tool_arguments"] = dict(tool_arguments)
+    if tool_call_id:
+        metadata["tool_call_id"] = tool_call_id
+    if execution.telemetry_event_ids:
+        metadata["telemetry_event_ids"] = execution.telemetry_event_ids
+    if execution.trace_metadata:
+        metadata.update(dict(execution.trace_metadata))
+    return metadata
 
 
 def _execute_model_tool_loop(
@@ -498,13 +524,12 @@ def _invoke_tools_for_loop(
             summary=result.summary,
             outcome=result.outcome,
             payload_refs=(result.execution_id,),
-            metadata={
-                "tool_name": call.tool_name,
-                "tool_call_id": call.call_id,
-                "execution_id": result.execution_id,
-                "tool_arguments": call.arguments,
-                "tool_result": result.summary,
-            },
+            metadata=_tool_execution_step_metadata(
+                tool_name=call.tool_name,
+                execution=result,
+                tool_arguments=call.arguments,
+                tool_call_id=call.call_id,
+            ),
         )
         if current_loop is not None:
             current_loop, tool_step = loop_service.record_tool_step(
@@ -642,6 +667,11 @@ def _invoke_tool_call(
     *,
     session: Episode,
 ) -> ExecutionResult:
+    import logging as _logging
+    _logging.getLogger(__name__).info(
+        "📞 _invoke_tool_call: tool=%s session=%s",
+        call.tool_name, session.episode_id[:8] if session.episode_id else "?",
+    )
     try:
         assert service.dependencies.tools is not None
         return service.dependencies.tools.invoke(call.tool_name, dict(call.arguments), session_id=session.episode_id)
