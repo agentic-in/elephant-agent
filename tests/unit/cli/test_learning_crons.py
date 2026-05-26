@@ -51,7 +51,7 @@ class NightlyLearningCronTest(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0].name, "Nightly dream")
         self.assertEqual(jobs[0].payload["trigger"], "dream")
-        self.assertEqual(jobs[0].payload["metadata"]["features"], "dream,questions,skills,diary")
+        self.assertEqual(jobs[0].payload["metadata"]["features"], "dream,questions,skill_affinity,skill_evolution,diary")
 
 
 if __name__ == "__main__":

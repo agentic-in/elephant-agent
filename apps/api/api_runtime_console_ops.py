@@ -146,6 +146,22 @@ def _override_enabled(
     return default
 
 
+def _skill_catalog_review_status(self, item_id: str) -> str:
+    try:
+        from packages.skills import operator_skill_catalog_entries
+
+        for entry in operator_skill_catalog_entries(install_root=self.config.install_root):
+            if entry.skill_id == item_id:
+                return str(entry.metadata.get("review_status") or "").strip().lower()
+    except Exception:
+        LOGGER.warning(
+            "failed to inspect skill review status before writing console override",
+            extra={"skill_id": item_id},
+            exc_info=True,
+        )
+    return ""
+
+
 def _mapping_rows(value: object) -> dict[str, dict[str, Any]]:
     if not isinstance(value, Mapping):
         return {}
@@ -910,7 +926,16 @@ def set_console_item_enabled(
         if isinstance(manifest.get(section), Mapping)
         else {}
     )
-    overrides[item_id] = {"enabled": bool(enabled)}
+    previous_override = overrides.get(item_id)
+    next_override = dict(previous_override) if isinstance(previous_override, Mapping) else {}
+    next_override["enabled"] = bool(enabled)
+    if kind == "skill" and bool(enabled):
+        review_status = str(next_override.get("review_status") or "").strip().lower()
+        if review_status == "pending" or (
+            not review_status and _skill_catalog_review_status(self, item_id) == "pending"
+        ):
+            next_override["review_status"] = "approved"
+    overrides[item_id] = next_override
     next_manifest = dict(manifest)
     next_manifest[section] = overrides
     _write_manifest_to_config(state_dir, next_manifest)

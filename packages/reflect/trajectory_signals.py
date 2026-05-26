@@ -49,6 +49,19 @@ def _started_at_key(item: Any) -> tuple[str, str]:
     return (_text(getattr(item, "started_at", "")), _text(getattr(item, "episode_id", getattr(item, "loop_id", ""))))
 
 
+def _is_internal_learning_episode(episode: Any) -> bool:
+    metadata = getattr(episode, "metadata", {})
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    entry_surface = _text(getattr(episode, "entry_surface", "")).lower()
+    learning_agent = _text(metadata.get("learning_agent")).lower()
+    return (
+        learning_agent in {"1", "true", "yes"}
+        or "learning.sub_agent" in entry_surface
+        or bool(_text(metadata.get("authoritative_skill_optimization_candidates_json")))
+    )
+
+
 def _step_sort_key(step: Any) -> tuple[int, str]:
     try:
         sequence = int(getattr(step, "sequence", 0) or 0)
@@ -92,6 +105,15 @@ def _extract_instruction_tool_names(skill: Any) -> tuple[str, ...]:
     if not instruction_text:
         return ()
     return tuple(dict.fromkeys(match.group(0).lower() for match in _TOOL_NAME_RE.finditer(instruction_text)))
+
+
+def _is_authored_skill(skill: Any) -> bool:
+    metadata = getattr(skill, "metadata", {})
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    source_id = _text(getattr(skill, "source_id", "")).lower()
+    source_kind = _text(metadata.get("source_kind")).lower()
+    return source_id == "elephant-authored" or source_kind == "elephant-authored"
 
 
 def _contains_contiguous_sequence(haystack: Sequence[str], needle: Sequence[str]) -> bool:
@@ -138,7 +160,7 @@ def load_recent_closed_episodes(
         LOGGER.debug("Failed to load recent closed episodes with bounded trajectory query.", exc_info=True)
         return ()
     else:
-        return episodes
+        return tuple(episode for episode in episodes if not _is_internal_learning_episode(episode))
     try:
         episodes = tuple(list_episodes())
     except Exception:
@@ -149,6 +171,7 @@ def load_recent_closed_episodes(
         for episode in episodes
         if _text(getattr(episode, "personal_model_id", "")) == personal_model_id
         and _text(getattr(episode, "status", "")).lower() == "closed"
+        and not _is_internal_learning_episode(episode)
     ]
     filtered.sort(key=_started_at_key, reverse=True)
     return tuple(filtered[:resolved_limit])
@@ -372,6 +395,8 @@ def detect_skill_gaps(
     affinity_map = _load_active_affinity_map(repository, personal_model_id=personal_model_id)
     signals: list[ToolTrajectorySignal] = []
     for skill in skills:
+        if not _is_authored_skill(skill):
+            continue
         skill_id = _text(getattr(skill, "skill_id", ""))
         display_name = _text(getattr(skill, "display_name", ""))
         affinity = (

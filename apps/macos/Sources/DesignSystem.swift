@@ -15,6 +15,7 @@ enum ElephantTheme {
     static let mint = Color(red: 0.53, green: 0.82, blue: 0.70)
     static let ember = Color(red: 0.95, green: 0.54, blue: 0.28)
     static let gold = Color(red: 0.88, green: 0.66, blue: 0.24)
+    static let evolution = Color(red: 0.16, green: 0.58, blue: 0.52)
 }
 
 struct AppBackground: View {
@@ -130,6 +131,7 @@ struct AnimatedDotGrid: View {
 struct BrandMark: View {
     var size: CGFloat = 30
     var framed = true
+    var framedFill: Color?
 
     var body: some View {
         Group {
@@ -149,7 +151,8 @@ struct BrandMark: View {
         .background {
             if framed {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.regularMaterial)
+                    .fill(framedFill ?? Color.clear)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
         .overlay {

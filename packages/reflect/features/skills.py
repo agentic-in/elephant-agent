@@ -1,11 +1,11 @@
-"""Skill audit feature — inspect skill catalog and write affinity facts."""
+"""Skill affinity feature — inspect skill catalog and write affinity facts."""
 
 from __future__ import annotations
 
 from .types import Feature
 
 FEATURE = Feature(
-    feature_id="skills",
+    feature_id="skill_affinity",
     tools=(
         "tool.skill.list",
         "tool.skill.view",

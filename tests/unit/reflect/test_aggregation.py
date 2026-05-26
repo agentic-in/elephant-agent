@@ -53,6 +53,39 @@ class AggregationTest(unittest.TestCase):
         self.assertEqual(candidates[0].optimization_type, "create_new")
         self.assertIsNone(candidates[0].target_skill_id)
 
+    def test_affinity_without_tool_overlap_does_not_capture_unmatched_signal(self) -> None:
+        repository = _Repository(
+            (
+                SimpleNamespace(
+                    metadata={
+                        "topic": "world.skills.affinity.elephant_agent",
+                        "skill_id": "elephant-agent",
+                        "index_id": "elephant_agent",
+                    }
+                ),
+            )
+        )
+        skill = SimpleNamespace(
+            skill_id="elephant-agent",
+            display_name="Elephant Agent",
+            instruction_text="Coordinate long-running user work.",
+        )
+        signal = ToolTrajectorySignal(
+            signal_id="sig-unrelated",
+            signal_type="recurring_sequence",
+            tool_names=("tool.file.search", "tool.file.read"),
+            episode_ids=("ep-1", "ep-2", "ep-3"),
+            occurrence_count=3,
+            confidence=0.74,
+            summary="tool sequence repeated",
+        )
+
+        candidates = aggregate_signals((signal,), repository, personal_model_id="pm", skills=(skill,))
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].optimization_type, "create_new")
+        self.assertIsNone(candidates[0].target_skill_id)
+
     def test_matching_skill_splits_candidates_by_optimization_type(self) -> None:
         repository = _Repository(
             (

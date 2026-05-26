@@ -83,6 +83,7 @@ def delete_diary_entry(self, *, entry_date: str) -> dict[str, Any]:
 def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> dict[str, Any]:
     """Enqueue a reflect job from the dashboard."""
     from apps.learning_worker_runtime import ensure_learning_worker_running
+    from datetime import date as date_type, timedelta
 
     resolved_trigger = trigger or "manual"
     pm, state, episode = _latest_default_episode_context(self)
@@ -92,26 +93,22 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
         return {"status": "error", "detail": "no episodes available"}
     metadata: dict[str, str] = {"source": "dashboard.reflect"}
     normalized_trigger = resolved_trigger.strip().lower()
+    resolved_feature_ids = _resolved_feature_ids(resolved_trigger, features=features)
     if features:
         metadata["features"] = features
-        from datetime import date as date_type, timedelta
-
-        feature_set = {item.strip() for item in features.split(",") if item.strip()}
-        if "dream" in feature_set:
-            metadata["target_date"] = date_type.today().isoformat()
-        if "diary" in feature_set:
-            diary_target_date = (date_type.today() - timedelta(days=1)).isoformat()
-            if "dream" in feature_set:
-                metadata["diary_target_date"] = diary_target_date
-            else:
-                metadata["target_date"] = diary_target_date
+    if "dream" in resolved_feature_ids:
+        metadata["target_date"] = date_type.today().isoformat()
+    if "diary" in resolved_feature_ids:
+        diary_target_date = (date_type.today() - timedelta(days=1)).isoformat()
+        if "dream" in resolved_feature_ids:
+            metadata["diary_target_date"] = diary_target_date
+        else:
+            metadata["target_date"] = diary_target_date
     if normalized_trigger == "onboarding_letter":
-        from datetime import date as date_type
-
         metadata["target_date"] = date_type.today().isoformat()
         metadata["letter_kind"] = "onboarding_letter"
         metadata["source"] = "onboarding_letter"
-    summary_features = _resolved_feature_summary(resolved_trigger, features=features)
+    summary_features = ",".join(resolved_feature_ids) or "default"
     job = self.repository.enqueue_learning_job(
         job_type="episode_boundary_learning",
         trigger=resolved_trigger,
@@ -131,7 +128,7 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
     return {"status": "queued", "job_id": job.job_id, "trigger": resolved_trigger, "features": summary_features}
 
 
-def _resolved_feature_summary(trigger: str, *, features: str | None) -> str:
+def _resolved_feature_ids(trigger: str, *, features: str | None) -> tuple[str, ...]:
     explicit = tuple(item.strip() for item in (features or "").split(",") if item.strip())
     try:
         from packages.reflect.features import resolve_features
@@ -143,8 +140,13 @@ def _resolved_feature_summary(trigger: str, *, features: str | None) -> str:
             extra={"trigger": trigger, "features": features},
             exc_info=True,
         )
-        return features.strip() if features and features.strip() else "default"
-    return ",".join(feature.feature_id for feature in resolved) or "default"
+        fallback = tuple(item.strip() for item in (features or "").split(",") if item.strip())
+        return fallback
+    return tuple(feature.feature_id for feature in resolved)
+
+
+def _resolved_feature_summary(trigger: str, *, features: str | None) -> str:
+    return ",".join(_resolved_feature_ids(trigger, features=features)) or "default"
 
 
 __all__ = ["delete_diary_entry", "trigger_diary_write", "trigger_reflect_job"]

@@ -131,11 +131,11 @@ def skill_optimization_candidate_records(candidates: tuple[Any, ...]) -> tuple[d
     return tuple(_skill_optimization_candidate_record(candidate) for candidate in candidates)
 
 
-def _skill_optimization_candidate_lines(candidates: tuple[Any, ...]) -> tuple[str, ...]:
+def _skill_evolution_candidate_lines(candidates: tuple[Any, ...]) -> tuple[str, ...]:
     records = skill_optimization_candidate_records(candidates)
     lines = [
-        "## Optimization Candidate Records",
-        "authoritative: only the pre-aggregated records below may be persisted or applied",
+        "## Skill Evolution Candidate Records",
+        "authoritative: only the pre-aggregated records below may become pending skill drafts",
         f"candidate_records: {len(records)}",
     ]
     if not records:
@@ -151,11 +151,50 @@ def _skill_optimization_candidate_lines(candidates: tuple[Any, ...]) -> tuple[st
     return tuple(lines)
 
 
-def build_skill_optimization_context(runtime: Any, job: LearningJob) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[dict[str, object], ...]]:
+def _skill_evolution_episode_snapshot_lines(runtime: Any, signals: tuple[Any, ...]) -> tuple[str, ...]:
+    episode_ids: list[str] = []
+    for signal in signals[:8]:
+        for episode_id in tuple(getattr(signal, "episode_ids", ()) or ())[:5]:
+            text = str(episode_id or "").strip()
+            if text and text not in episode_ids:
+                episode_ids.append(text)
+            if len(episode_ids) >= 8:
+                break
+        if len(episode_ids) >= 8:
+            break
+    lines = [
+        "## Supporting Episode Snapshots",
+        "compact summaries only; do not copy private raw turns or tool arguments into skill drafts",
+    ]
+    if not episode_ids:
+        return tuple(lines + ["(none)"])
+    for episode_id in episode_ids:
+        summary = ""
+        try:
+            episode = runtime.repository.load_episode(episode_id)
+        except Exception:
+            LOGGER.debug("Failed to load skill evolution supporting episode.", exc_info=True)
+            episode = None
+        if episode is not None:
+            summary = _compact(getattr(episode, "exit_summary", ""), limit=220)
+        if not summary:
+            turns = tuple(line for line in _episode_turn_summary(runtime, episode_id=episode_id) if line.strip())
+            summary = _compact(" ".join(turns[:3]), limit=220)
+        lines.append(f"- {episode_id}: {summary or '(no summary)'}")
+    return tuple(lines)
+
+
+def build_skill_evolution_context(runtime: Any, job: LearningJob) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[dict[str, object], ...]]:
     skills = _skill_catalog(runtime)
+    metadata = dict(job.metadata) if isinstance(job.metadata, Mapping) else {}
+    try:
+        lookback_episodes = int(metadata.get("skill_evolution_lookback_episodes") or 30)
+    except (TypeError, ValueError):
+        lookback_episodes = 30
     signals = extract_trajectory_signals(
         runtime.repository,
         personal_model_id=job.personal_model_id,
+        lookback_episodes=max(1, min(100, lookback_episodes)),
         skills=skills,
     )
     candidates = aggregate_signals(
@@ -165,6 +204,12 @@ def build_skill_optimization_context(runtime: Any, job: LearningJob) -> tuple[tu
         skills=skills,
     )
     return signals, candidates, skill_optimization_candidate_records(candidates)
+
+
+def build_skill_optimization_context(runtime: Any, job: LearningJob) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[dict[str, object], ...]]:
+    """Compatibility alias for older tests and imports."""
+
+    return build_skill_evolution_context(runtime, job)
 
 
 def _basic_user_anchor_lines(facts: tuple[Any, ...]) -> tuple[str, ...]:
@@ -343,14 +388,16 @@ def _letter_evidence_use_lines() -> tuple[str, ...]:
     return (
         "## Letter Evidence Use Guide",
         "- Treat the portrait below as grounding evidence, not copy to paste into the letter.",
+        "- Read all four lenses together: Identity, World, Pulse, and Journey should all inform the portrait even when their names do not appear.",
         "- Synthesize repeated facts once. Do not list the user's traits like a dashboard or psychological report.",
         "- Do not mention raw lens names, PM topics, field IDs, demographic fragments, avatar paths, or schema language.",
-        "- If many facts point to projects, communities, research, open source, or product narratives, collapse them into one or two meaningful observations about the user's social and technical world.",
+        "- If many facts point to projects, communities, research, open source, or product narratives, keep the weight of that world without enumerating it mechanically. Collapse repetitions into meaningful observations about responsibility, coordination, and what the user is trying to make real.",
         "- Warmth should come from specific attention to rhythm, pressure/recovery style, current focus, values, tastes, hopes, and the tension underneath the facts.",
-        "- Prefer one central insight over many shallow observations. Name what the user may be trying to protect, carry, or move toward when the evidence supports it.",
+        "- Prefer one central reading over many shallow observations. Name what the user may be trying to protect, carry, or move toward when the evidence supports it.",
         "- The best letter should feel like Elephant has understood the shape behind the facts, not translated the facts into warmer prose.",
         "- Use facts as evidence for interpretation: infer the pressure behind responsibilities, the care behind values, and the agency the user may want to preserve. Do not merely restate what the facts say.",
-        "- The letter may use paragraph breaks and a few short bold phrases for natural emphasis, but it must not use a top-level title.",
+        "- The AI-era pressure is important. Treat worries about being replaced, accelerated, or flattened as part of the user's emotional context, then connect Elephant's promise to this specific person's agency and work.",
+        "- The letter may use paragraph breaks, a few short bold phrases, and one short blockquote line for natural emphasis, but it must not use a top-level title.",
         "- Elephant may promise to remember this beginning and keep useful traces, but must not pretend a long shared history that is not in evidence.",
     )
 
@@ -520,7 +567,7 @@ def build_evidence(
                 *_letter_evidence_use_lines(),
                 "",
                 "## Elephant promise",
-                "AI is becoming more capable, and many people quietly worry about being replaced, accelerated, or flattened. In the letter body, write Elephant's answer as a natural thought in the user's language, not as a slogan: Elephant will not decide for the user or turn the user into an efficiency metric; Elephant will keep memory of this beginning, preserve useful traces, help the user see clearly, adjust gently, and grow beside the user.",
+                "AI is becoming more capable, and many people quietly worry about being replaced, accelerated, or flattened. Give this pressure real emotional weight. Write Elephant's promise naturally in the user's language: keep memory for the user, help the user stay close to what matters, and grow beside the user rather than replacing them.",
             ]
         )
 
@@ -570,23 +617,46 @@ def build_evidence(
             f"user_timezone: {user_tz}",
         ])
 
-    if "skill_optimization" in feature_ids:
-        signals, candidates, _ = build_skill_optimization_context(runtime, job)
+    if "skill_evolution" in feature_ids:
+        signals, candidates, _ = build_skill_evolution_context(runtime, job)
+        target_date = str(metadata.get("target_date") or "").strip()
+        lookback = str(metadata.get("skill_evolution_lookback_episodes") or "30").strip() or "30"
         lines.extend([
             "",
-            "## Trajectory Signals",
+            "## Skill Evolution Evidence",
+            "Use this pre-aggregated evidence as the primary source. Conversation search is only for targeted recall on the listed episode IDs or date ranges.",
+            f"primary_window: {target_date or 'latest closed episode context'}",
+            f"recurrence_window: latest {lookback} closed episodes",
+            "",
+            "## Workflow Trajectory Signals",
             f"signals: {len(signals)}",
             *(
                 f"- [{signal.signal_type}] id={signal.signal_id} {signal.summary} "
-                f"(confidence={signal.confidence:.2f}, count={signal.occurrence_count})"
+                f"(confidence={signal.confidence:.2f}, count={signal.occurrence_count}, episodes={','.join(signal.episode_ids[:5])})"
                 for signal in signals[:15]
             ),
             "",
-            "## Optimization Candidates",
+            *_skill_evolution_episode_snapshot_lines(runtime, signals),
+            "",
+            "## Skill Evolution Candidates",
             f"candidates: {len(candidates)}",
             *(f"- [{candidate.optimization_type}] {candidate.suggested_action} (confidence={candidate.confidence:.2f})" for candidate in candidates[:5]),
             "",
-            *_skill_optimization_candidate_lines(candidates),
+            *_skill_evolution_candidate_lines(candidates),
+        ])
+
+    if (
+        "questions" in feature_ids
+        and str(job.trigger or "").strip().lower() not in _INIT_TRIGGERS
+        and "dream" not in feature_ids
+        and feature_ids != {"onboarding_letter"}
+    ):
+        portrait = _pm_portrait_lines(active_facts, limit=80)
+        lines.extend([
+            "",
+            "## Current Personal Model facts",
+            "Use these active facts as first-class evidence for question maintenance. Settle questions already answered by facts; create new questions only for useful gaps, contradictions, or uncertain inferences that remain after reading the facts and conversation together.",
+            *(portrait or ("(no active facts)",)),
         ])
 
     # Episode evidence for features that learn from the supplied close packet.
@@ -595,8 +665,8 @@ def build_evidence(
     if (
         str(job.trigger or "").strip().lower() not in _INIT_TRIGGERS
         and "dream" not in feature_ids
-        and "skill_optimization" not in feature_ids
-        and feature_ids & {"pm", "questions", "skills"}
+        and "skill_evolution" not in feature_ids
+        and feature_ids & {"pm", "questions", "skill_affinity"}
     ):
         episode_summary = _compact(getattr(episode, "exit_summary", "") if episode is not None else "", limit=700)
         turn_lines = _episode_turn_summary(runtime, episode_id=job.episode_id)
@@ -655,7 +725,7 @@ def build_evidence(
             *(portrait or ("(no facts yet)",)),
             "",
             "## Product promise to weave into the letter",
-            "AI is becoming more capable, and many people quietly worry about being replaced, flattened, or forced to speed up. Do not drop a slogan. Write this as Elephant's own promise: I keep memory for the user, help them stay close to what matters, and grow beside them rather than replacing them.",
+            "AI is becoming more capable, and many people quietly worry about being replaced, flattened, or forced to speed up. Give this pressure real emotional weight. Write Elephant's promise naturally in the user's language: keep memory for the user, help the user stay close to what matters, and grow beside the user rather than replacing them.",
         ])
 
     return "\n".join(lines)

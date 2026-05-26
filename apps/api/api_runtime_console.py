@@ -40,6 +40,22 @@ from .api_runtime_http_dispatch_helpers import _cron_job_record
 LOGGER = logging.getLogger(__name__)
 
 
+def _override_mapping(overrides: Mapping[str, Any], item_id: str) -> Mapping[str, Any]:
+    value = overrides.get(item_id)
+    return value if isinstance(value, Mapping) else {}
+
+
+def _effective_review_status(
+    overrides: Mapping[str, Any],
+    item_id: str,
+    metadata: Mapping[str, Any],
+) -> str:
+    override_status = str(_override_mapping(overrides, item_id).get("review_status") or "").strip()
+    if override_status:
+        return override_status
+    return str(metadata.get("review_status") or "").strip()
+
+
 def _skills(
     app: Any,
     *,
@@ -50,6 +66,7 @@ def _skills(
     seen_skill_ids: set[str] = set()
     for entry in operator_skill_catalog_entries(install_root=app.config.install_root):
         enabled = _override_enabled(skill_overrides, entry.skill_id, bool(entry.default_enabled))
+        review_status = _effective_review_status(skill_overrides, entry.skill_id, entry.metadata)
         rows.append(
             {
                 "skillId": entry.skill_id,
@@ -66,6 +83,7 @@ def _skills(
                 "storageTier": entry.storage_tier,
                 "toggleable": True,
                 "promptIndexVisible": bool(enabled) and bool(entry.visibility.include_in_prompt_index),
+                "reviewStatus": review_status,
                 "metadata": dict(entry.metadata),
             }
         )
@@ -112,6 +130,7 @@ def _skills(
                 "storageTier": str(entry.metadata.get("storage_tier") or "external"),
                 "toggleable": False,
                 "promptIndexVisible": False,
+                "reviewStatus": str(entry.metadata.get("review_status") or ""),
                 "metadata": dict(entry.metadata),
             }
         )

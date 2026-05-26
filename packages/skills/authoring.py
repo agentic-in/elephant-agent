@@ -29,6 +29,7 @@ def write_skill_package(
     overwrite: bool = False,
     source_kind: str = "elephant-experience",
     assets: Mapping[str, bytes] | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> Path:
     resolved_skill_id = _validated_segment(skill_id, field_name="skill_id")
     resolved_category = _validated_segment(category, field_name="category") if category else None
@@ -58,6 +59,7 @@ def write_skill_package(
             instruction_text=resolved_instructions,
             source_kind=source_kind,
             asset_paths=tuple(path for path, _ in resolved_assets),
+            metadata=metadata,
         ),
         encoding="utf-8",
     )
@@ -185,6 +187,7 @@ def _render_skill_markdown(
     instruction_text: str,
     source_kind: str,
     asset_paths: tuple[str, ...] = (),
+    metadata: Mapping[str, object] | None = None,
 ) -> str:
     lines = [
         "---",
@@ -194,6 +197,8 @@ def _render_skill_markdown(
         "version: 1.0.0",
         f"source_kind: {source_kind}",
     ]
+    for key, value in _frontmatter_metadata(metadata).items():
+        lines.append(f"{key}: {value}")
     if asset_paths:
         lines.append(f"assets: {', '.join(asset_paths)}")
     lines.extend([
@@ -212,6 +217,42 @@ def _render_skill_markdown(
             "",
         ])
     return "\n".join(lines)
+
+
+def _frontmatter_metadata(metadata: Mapping[str, object] | None) -> dict[str, str]:
+    if not isinstance(metadata, Mapping):
+        return {}
+    allowed_keys = (
+        "default_enabled",
+        "include_in_hub",
+        "include_in_prompt_index",
+        "include_in_site",
+        "include_in_overlay",
+        "review_status",
+        "draft_kind",
+        "target_skill_id",
+        "candidate_key",
+        "confidence",
+        "source_episode_ids",
+        "overlap_reviewed_skill_ids",
+        "evidence_summary",
+    )
+    rendered: dict[str, str] = {}
+    for key in allowed_keys:
+        if key not in metadata:
+            continue
+        value = metadata.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            text = "true" if value else "false"
+        elif isinstance(value, (list, tuple)):
+            text = ", ".join(str(item).strip() for item in value if str(item).strip())
+        else:
+            text = " ".join(str(value).split()).strip()
+        if text:
+            rendered[key] = text.replace("\n", " ")
+    return rendered
 
 
 def _write_install_provenance(skill_file: Path, install_provenance: InstalledSkillProvenance) -> None:

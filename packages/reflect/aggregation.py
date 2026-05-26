@@ -118,7 +118,7 @@ def _resolve_target_skill(
             or affinity_map.get(_normalized_token(getattr(skill, "display_name", "")))
         )
         score = _skill_match_score(skill, signal)
-        if affinity is not None:
+        if affinity is not None and score > 0.0:
             score += 0.2
         if score > best_match[0]:
             target_skill_id = affinity[0] if affinity is not None else skill_id

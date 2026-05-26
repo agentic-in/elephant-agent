@@ -6977,7 +6977,7 @@ button.gatewayStopButton:hover:not(:disabled) {
   border-radius: 12px;
   padding: 1.5rem;
   width: 100%;
-  max-width: 420px;
+  max-width: 560px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
   animation: slideUp 0.2s ease-out;
 }
@@ -7001,8 +7001,8 @@ button.gatewayStopButton:hover:not(:disabled) {
 }
 
 .reflectFeatureGrid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
   margin-bottom: 1.25rem;
 }
@@ -7023,7 +7023,8 @@ button.gatewayStopButton:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-.reflectFeatureItem input[type="checkbox"] {
+.reflectFeatureItem input[type="checkbox"],
+.reflectFeatureItem input[type="radio"] {
   margin-top: 2px;
   accent-color: var(--dashboard-accent, #7c6df0);
   width: 16px;

@@ -260,6 +260,8 @@ class CliRuntimeSkillExtensionsMixin:
         category: str | None = None,
         install: bool = True,
         overwrite: bool = False,
+        source_kind: str = "elephant-authored",
+        metadata: Mapping[str, object] | None = None,
         session_id: str | None = None,
         profile_id: str | None = None,
     ) -> SkillManifestLoadRecord:
@@ -271,7 +273,8 @@ class CliRuntimeSkillExtensionsMixin:
             instruction_text=instruction_text,
             category=category,
             overwrite=overwrite,
-            source_kind="elephant-authored",
+            source_kind=source_kind,
+            metadata=metadata,
         )
         if install:
             return self._install_skill_package_path(
@@ -322,6 +325,8 @@ class CliRuntimeSkillExtensionsMixin:
             category=resolved_category,
             install=True,
             overwrite=True,
+            source_kind="elephant-authored",
+            metadata=None,
             session_id=session_id,
             profile_id=profile_id,
         )

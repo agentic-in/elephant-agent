@@ -328,7 +328,7 @@ The runtime may provide lens/topic-bound question candidates. The assistant asks
 Background reflect is a feature-composable agent system (`apps/reflect/`).
 
 ```text
-Trigger fires (episode_close, manual, diary, dream, init_profile, context_compaction)
+Trigger fires (episode_close, manual, diary, dream, skill_review, init_profile, onboarding_letter, context_compaction)
   → resolve features for this trigger
   → compose system prompt + tools from active features
   → run sub-agent with evidence packet (steps from the episode)
@@ -340,23 +340,33 @@ Trigger fires (episode_close, manual, diary, dream, init_profile, context_compac
 Features (atomic capabilities):
 - `pm` — search + write personal model facts
 - `questions` — create/settle/dismiss questions
-- `recall` — search conversation history for evidence
+- `recall` — optional read-only conversation recall; use only when an explicit feature set asks for additional evidence
 - `diary` — write reflective daily entries
-- `skills` — audit skill affinities
+- `skill_affinity` — audit skill catalog fit and write `world.skills.affinity.*` facts
+- `skill_evolution` — detect repeated workflows and create disabled, pending skill drafts for user approval
+- `init_links` — read user-provided public onboarding links during init/profile learning
+- `onboarding_letter` — write the first reflective welcome letter
 - `compress` — check compressed content for data loss
-- `dream` — run broader imaginative maintenance without writing Personal Model truth directly
+- `dream` — run nightly PM cleanup/consolidation; this replaces the older `pm_consolidation` feature name
+
+Compatibility aliases:
+- `skills` → `skill_affinity`
+- `skill_creation`, `skill_create`, `skill_optimization` → `skill_evolution`
+- `profile`, `init_profile` → `init_links`, `pm`, `questions`, `skill_affinity`
 
 Triggers map to feature sets:
-- `episode_close` → pm, questions, skills (medium conservatism)
-- `manual` → pm, questions, recall, skills (low conservatism)
+- `episode_close` → pm, questions, skill_affinity (medium conservatism)
+- `manual` → pm, questions, skill_affinity (low conservatism)
 - `diary` → diary (creative)
-- `dream` → dream, questions, skills, diary (medium conservatism)
-- `init_profile` → pm, questions, skills, diary (low conservatism)
+- `dream` → dream, questions, skill_affinity, skill_evolution, diary (medium conservatism)
+- `skill_review` → skill_evolution, skill_affinity (medium conservatism)
+- `init_profile` → init_links, pm, questions, skill_affinity (low conservatism)
+- `onboarding_letter` → onboarding_letter (creative)
 - `context_compaction` → compress (high conservatism)
 
 CLI: `elephant reflect run --features pm,diary --date 2026-05-12`
 
-The reflect agent does NOT use intermediate staging (no observations, no proposals, no groundings). It reads steps directly and writes facts directly.
+Most reflect features read the evidence packet and write through their governed tools directly. `skill_evolution` is the exception: it writes a disabled pending Skill draft through `tool.skill.draft`; the macOS Skills surface must approve it before normal agent loops can use it.
 
 ## Dashboard Contract
 

@@ -28,7 +28,8 @@ from packages.contracts import (
 )
 from packages.kernel.loop_checkpoint_support import LoopCheckpointService
 from packages.runtime_config import load_global_config, parse_global_config_text
-from packages.runtime_layout import elephant_file_path
+from packages.runtime_layout import default_authored_skills_dir, elephant_file_path
+from packages.skills.authoring import write_skill_package
 from tests.e2e.api.api_surface_test_base import APISurfaceTestBase
 
 
@@ -227,6 +228,70 @@ class APISurfaceDashboardOpsE2ETest(APISurfaceTestBase):
             ]["external_dirs"],
             [str(external_root)],
         )
+
+    def test_operator_skill_drafts_are_pending_until_approved(self) -> None:
+        skill_id = "daily-log-synthesis"
+        write_skill_package(
+            default_authored_skills_dir(install_root=Path(self.tempdir.name)),
+            skill_id=skill_id,
+            display_name="Daily Log Synthesis",
+            summary="Package repeated daily log review into a reusable workflow.",
+            instruction_text=(
+                "Use this skill when the user asks to synthesize repeated daily "
+                "work notes into decisions, blockers, and next actions."
+            ),
+            category="drafts",
+            source_kind="elephant-authored-draft",
+            metadata={
+                "default_enabled": False,
+                "include_in_prompt_index": True,
+                "review_status": "pending",
+                "draft_kind": "create",
+            },
+        )
+
+        dashboard = self.app.dispatch("GET", "/v1/internal/dashboard/skills")
+        self.assertEqual(dashboard.status_code, 200)
+        draft = next(
+            skill
+            for skill in dashboard.payload["dashboard"]["operations"]["skills"]
+            if skill["skillId"] == skill_id
+        )
+        self.assertFalse(draft["enabled"])
+        self.assertEqual(draft["reviewStatus"], "pending")
+        self.assertFalse(draft["promptIndexVisible"])
+
+        approved = self.app.dispatch(
+            "PATCH",
+            f"/v1/operator/skills/{skill_id}",
+            body=self._body({"enabled": True}),
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        dashboard = self.app.dispatch("GET", "/v1/internal/dashboard/skills")
+        draft = next(
+            skill
+            for skill in dashboard.payload["dashboard"]["operations"]["skills"]
+            if skill["skillId"] == skill_id
+        )
+        self.assertTrue(draft["enabled"])
+        self.assertEqual(draft["reviewStatus"], "approved")
+        self.assertTrue(draft["promptIndexVisible"])
+
+        disabled = self.app.dispatch(
+            "PATCH",
+            f"/v1/operator/skills/{skill_id}",
+            body=self._body({"enabled": False}),
+        )
+        self.assertEqual(disabled.status_code, 200)
+        dashboard = self.app.dispatch("GET", "/v1/internal/dashboard/skills")
+        draft = next(
+            skill
+            for skill in dashboard.payload["dashboard"]["operations"]["skills"]
+            if skill["skillId"] == skill_id
+        )
+        self.assertFalse(draft["enabled"])
+        self.assertEqual(draft["reviewStatus"], "approved")
 
     def test_operator_mcp_discover_supports_stdio_and_remote_headers(self) -> None:
         observed_payloads: list[dict[str, object]] = []

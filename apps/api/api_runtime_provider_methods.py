@@ -196,6 +196,63 @@ def _profile_payload_with_metadata(payload: Mapping[str, Any], profile: AuthProf
     return next_payload
 
 
+def _secret_references_payload(profile: AuthProfile) -> list[dict[str, Any]]:
+    return [
+        {
+            "reference_id": reference.reference_id,
+            "provider_id": reference.provider_id,
+            "secret_name": reference.secret_name,
+            "secret_key": reference.secret_key,
+            "source": reference.source,
+            "metadata": dict(reference.metadata),
+        }
+        for reference in profile.secret_references
+    ]
+
+
+def _missing_text_field(payload: Mapping[str, Any], key: str) -> bool:
+    value = payload.get(key)
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _payload_with_active_provider_defaults(self, provider_profile: Mapping[str, Any]) -> dict[str, Any]:
+    """Treat default-provider writes as partial updates for the active provider."""
+    next_payload = dict(provider_profile)
+    provider_id = str(next_payload.get("provider_id") or "").strip()
+    if not provider_id:
+        return next_payload
+
+    active_profile = self.model_provider.active_profile()
+    if active_profile is None or active_profile.provider_id != provider_id:
+        return next_payload
+
+    inherited_text_fields = {
+        "base_url": active_profile.base_url,
+        "default_model": active_profile.default_model,
+        "transport_id": active_profile.transport_id,
+        "auth_method": active_profile.auth_method,
+        "provider_kind": active_profile.provider_kind,
+    }
+    for key, value in inherited_text_fields.items():
+        if _missing_text_field(next_payload, key) and str(value or "").strip():
+            next_payload[key] = value
+
+    if "extra_headers" not in next_payload and active_profile.extra_headers:
+        next_payload["extra_headers"] = dict(active_profile.extra_headers)
+    if not next_payload.get("secret_references") and active_profile.secret_references:
+        next_payload["secret_references"] = _secret_references_payload(active_profile)
+    if "priority" not in next_payload:
+        next_payload["priority"] = active_profile.priority
+    if next_payload.get("session_pin") is None and active_profile.session_pin is not None:
+        next_payload["session_pin"] = active_profile.session_pin
+    if active_profile.metadata:
+        next_payload["metadata"] = {
+            **{str(key): str(value) for key, value in dict(active_profile.metadata).items()},
+            **{str(key): str(value) for key, value in dict(next_payload.get("metadata", {})).items()},
+        }
+    return next_payload
+
+
 def _provider_profile_with_auto_context(self, profile: AuthProfile) -> AuthProfile:
     metadata = {str(key): str(value) for key, value in dict(profile.metadata).items()}
     context_window_mode = str(metadata.get("context_window_mode") or "auto").strip().lower() or "auto"
@@ -223,8 +280,9 @@ def _provider_profile_with_auto_context(self, profile: AuthProfile) -> AuthProfi
 
 
 def set_default_provider(self, provider_profile: Mapping[str, Any]) -> dict[str, Any]:
-    active_profile = _provider_profile_with_auto_context(self, provider_profile_from_payload(provider_profile))
-    enriched_provider_profile = _profile_payload_with_metadata(provider_profile, active_profile)
+    provider_payload = _payload_with_active_provider_defaults(self, provider_profile)
+    active_profile = _provider_profile_with_auto_context(self, provider_profile_from_payload(provider_payload))
+    enriched_provider_profile = _profile_payload_with_metadata(provider_payload, active_profile)
     _persist_default_provider(self, enriched_provider_profile)
     self.auth_store.register(active_profile)
     self.model_provider.set_active_profile(

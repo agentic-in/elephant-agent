@@ -490,7 +490,30 @@ function skillStateLabel(item: DashboardRow): string {
   if (item.toggleable === false) {
     return "Discover only";
   }
+  if (isPendingSkillDraft(item)) {
+    return "Pending review";
+  }
   return capabilityStateLabel(item);
+}
+
+function skillReviewStatus(item: DashboardRow): string {
+  return valueOf(item, "reviewStatus", valueOf(item, "review_status", "")).trim().toLowerCase();
+}
+
+function isPendingSkillDraft(item: DashboardRow): boolean {
+  return skillReviewStatus(item) === "pending" && item.enabled !== true;
+}
+
+function compareSkillRows(left: DashboardRow, right: DashboardRow): number {
+  const leftPending = isPendingSkillDraft(left);
+  const rightPending = isPendingSkillDraft(right);
+  if (leftPending !== rightPending) {
+    return leftPending ? -1 : 1;
+  }
+  if (Boolean(left.enabled) !== Boolean(right.enabled)) {
+    return Boolean(left.enabled) ? -1 : 1;
+  }
+  return valueOf(left, "displayName", valueOf(left, "skillId")).localeCompare(valueOf(right, "displayName", valueOf(right, "skillId")));
 }
 
 type RowIconKind = "models" | "skills" | "skillsDiscoverOnly" | "tools";
@@ -2807,6 +2830,98 @@ function learningResultSummary(job: DashboardRow): { created: string[]; updated:
   return { created, updated, retired, questions };
 }
 
+type ReflectJobPreset = {
+  id: string;
+  label: string;
+  detail: string;
+  trigger: string;
+  features?: string;
+};
+
+const reflectJobPresets: ReflectJobPreset[] = [
+  {
+    id: "memory",
+    label: "Memory review",
+    detail: "Update PM facts, questions, and skill affinity from recent context.",
+    trigger: "manual",
+  },
+  {
+    id: "skill-affinity",
+    label: "Skill matching",
+    detail: "Only audit the existing skill catalog and update affinity facts.",
+    trigger: "manual",
+    features: "skill_affinity",
+  },
+  {
+    id: "skill-evolution",
+    label: "Skill evolution",
+    detail: "Find repeated workflows and create disabled skill drafts for approval.",
+    trigger: "skill_review",
+  },
+  {
+    id: "dream",
+    label: "Dream review",
+    detail: "Full bundle: patterns, questions, skill matching, skill drafts, and diary.",
+    trigger: "dream",
+  },
+  {
+    id: "diary",
+    label: "Diary",
+    detail: "Write a reflective entry for the latest reviewed day.",
+    trigger: "diary",
+  },
+  {
+    id: "letter",
+    label: "Letter",
+    detail: "Write the Elephant letter from current Personal Model understanding.",
+    trigger: "onboarding_letter",
+  },
+];
+
+function learningFeatureLabel(feature: string): string {
+  const value = feature.trim().toLowerCase();
+  if (value === "pm") return "PM facts";
+  if (value === "questions") return "Questions";
+  if (value === "skill_affinity" || value === "skills") return "Skill matching";
+  if (value === "skill_evolution" || value === "skill_optimization" || value === "skill_creation") return "Skill evolution";
+  if (value === "dream") return "Dream";
+  if (value === "diary") return "Diary";
+  if (value === "onboarding_letter") return "Letter";
+  if (value === "compress") return "Context compaction";
+  return feature;
+}
+
+function learningTriggerLabel(trigger: string): string {
+  const value = trigger.trim().toLowerCase();
+  if (value === "manual" || value === "learn") return "manual review";
+  if (value === "skill_review") return "skill review";
+  if (value === "dream") return "dream";
+  if (value === "diary") return "diary";
+  if (value === "onboarding_letter") return "letter";
+  if (value === "question_answer") return "question answer";
+  if (value === "context_compaction") return "context compaction";
+  return trigger;
+}
+
+function learningJobTitle(job: DashboardRow): string {
+  const metadata = jsonObject(job.metadata);
+  const explicit = String(metadata.features || "").trim();
+  const features = explicit
+    ? explicit.split(",").map((f) => f.trim().toLowerCase()).filter(Boolean)
+    : asTextList((job as any).resolved_features ?? (job as any).resolvedFeatures).map((f) => f.trim().toLowerCase()).filter(Boolean);
+  const featureSet = new Set(features);
+  const summary = valueOf(job, "summary", "").toLowerCase();
+  const trigger = valueOf(job, "trigger", "").toLowerCase();
+  if (featureSet.has("onboarding_letter") || trigger === "onboarding_letter") return "Letter";
+  if (featureSet.has("skill_evolution") || featureSet.has("skill_optimization") || trigger === "skill_review") return "Skill evolution";
+  if (featureSet.has("dream") || trigger === "dream") return "Dream review";
+  if ((featureSet.size === 1 && featureSet.has("diary")) || trigger === "diary") return "Diary";
+  if (featureSet.size === 1 && featureSet.has("skill_affinity")) return "Skill matching";
+  if (featureSet.size === 1 && featureSet.has("questions")) return "Question review";
+  if (featureSet.has("pm") || featureSet.has("questions") || featureSet.has("skill_affinity") || summary.includes("features=default")) return "Memory review";
+  return valueOf(job, "summary", "Reflect job");
+}
+
 function LearningJobTraceCard({ job }: { job: DashboardRow }): React.JSX.Element {
   const duration = learningDuration(job);
   const status = valueOf(job, "status", "queued");
@@ -2818,21 +2933,25 @@ function LearningJobTraceCard({ job }: { job: DashboardRow }): React.JSX.Element
   const isDiary = trigger === "diary";
   const metadata = jsonObject(job.metadata);
   const jobFeatures = String(metadata.features || "").trim();
-  const featureBadges = jobFeatures ? jobFeatures.split(",").map((f) => f.trim()).filter(Boolean) : [];
+  const resolvedFeatures = asTextList((job as any).resolved_features ?? (job as any).resolvedFeatures);
+  const featureBadges = resolvedFeatures.length > 0
+    ? resolvedFeatures
+    : jobFeatures.split(",").map((f) => f.trim()).filter(Boolean);
 
   return (
     <article className={`${styles.runtimeTraceEpisode}${isDiary ? ` ${styles.learningJobDiary}` : ""}`}>
       <header className={styles.runtimeTraceHeader}>
         <div className={styles.runtimeTraceHeading}>
+          <strong>{learningJobTitle(job)}</strong>
           <div className={styles.runtimeTraceTagRow}>
             <StatusBadge tone={toneForStatus(status)}>{status}</StatusBadge>
-            {trigger && <StatusBadge tone={isDiary ? "healthy" : "attention"}>{trigger}</StatusBadge>}
+            {trigger && <StatusBadge tone={isDiary ? "healthy" : "attention"}>{learningTriggerLabel(trigger)}</StatusBadge>}
             {duration && <StatusBadge tone="neutral">{duration}</StatusBadge>}
             {results.length > 0 && <StatusBadge tone="healthy">{results.length} result(s)</StatusBadge>}
           </div>
           {featureBadges.length > 0 && (
             <div className={styles.runtimeTraceTagRow} style={{ marginTop: "0.25rem" }}>
-              {featureBadges.map((f) => <StatusBadge key={f} tone="neutral">{f}</StatusBadge>)}
+              {featureBadges.map((f) => <StatusBadge key={f} tone="neutral">{learningFeatureLabel(f)}</StatusBadge>)}
             </div>
           )}
           {progressDetail ? (
@@ -2880,23 +2999,9 @@ export function ReflectPage(): React.JSX.Element {
   const action = useAsyncAction(async () => undefined);
   const [jobPage, setJobPage] = React.useState(0);
   const [showCreate, setShowCreate] = React.useState(false);
-  const [selectedFeatures, setSelectedFeatures] = React.useState<Record<string, boolean>>({
-    pm: true, questions: true, recall: true, dream: false, diary: false, skills: false, compress: false,
-  });
+  const [selectedPresetId, setSelectedPresetId] = React.useState("memory");
   const jobPageSize = 8;
-
-  const featureList = [
-    { id: "pm", label: "PM Learning", desc: "Search and write personal model facts" },
-    { id: "questions", label: "Questions", desc: "Create, settle, dismiss proactive questions" },
-    { id: "recall", label: "Recall", desc: "Search conversation history for evidence" },
-    { id: "dream", label: "Dream", desc: "Consolidate and clean Personal Model facts" },
-    { id: "diary", label: "Diary", desc: "Write a reflective daily entry" },
-    { id: "skills", label: "Skills", desc: "Audit skill affinities against catalog" },
-    { id: "compress", label: "Compress", desc: "Check if compressed content loses facts" },
-  ];
-
-  const toggleFeature = (id: string) => setSelectedFeatures((prev) => ({ ...prev, [id]: !prev[id] }));
-  const activeFeatures = Object.entries(selectedFeatures).filter(([, v]) => v).map(([k]) => k).join(",");
+  const selectedPreset = reflectJobPresets.find((preset) => preset.id === selectedPresetId) ?? reflectJobPresets[0];
 
   return (
     <DashboardPage section="reflect">
@@ -2954,18 +3059,19 @@ export function ReflectPage(): React.JSX.Element {
                     <strong>New reflect job</strong>
                     <ActionButton variant="ghost" onClick={() => setShowCreate(false)}>✕</ActionButton>
                   </header>
-                  <p className={styles.modalDetail}>Select which features the reflect agent should exercise.</p>
+                  <p className={styles.modalDetail}>Choose the job type. Each preset maps to the same trigger/feature contract used by CLI and the macOS app.</p>
                   <div className={styles.reflectFeatureGrid}>
-                    {featureList.map((f) => (
-                      <label key={f.id} className={styles.reflectFeatureItem}>
+                    {reflectJobPresets.map((preset) => (
+                      <label key={preset.id} className={styles.reflectFeatureItem}>
                         <input
-                          type="checkbox"
-                          checked={Boolean(selectedFeatures[f.id])}
-                          onChange={() => toggleFeature(f.id)}
+                          type="radio"
+                          name="reflect-preset"
+                          checked={selectedPresetId === preset.id}
+                          onChange={() => setSelectedPresetId(preset.id)}
                         />
                         <div>
-                          <strong>{f.label}</strong>
-                          <small>{f.desc}</small>
+                          <strong>{preset.label}</strong>
+                          <small>{preset.detail}</small>
                         </div>
                       </label>
                     ))}
@@ -2973,17 +3079,20 @@ export function ReflectPage(): React.JSX.Element {
                   <div className={styles.modalActions}>
                     <ActionButton variant="ghost" onClick={() => setShowCreate(false)}>Cancel</ActionButton>
                     <ActionButton
-                      disabled={!activeFeatures || Boolean(action.busy)}
+                      disabled={!selectedPreset || Boolean(action.busy)}
                       onClick={() => {
                         void action.run("Trigger reflect", async () => {
-                          await triggerReflectJob({ trigger: "manual", features: activeFeatures });
+                          await triggerReflectJob({
+                            trigger: selectedPreset.trigger,
+                            ...(selectedPreset.features ? { features: selectedPreset.features } : {}),
+                          });
                           setShowCreate(false);
                           await new Promise((r) => setTimeout(r, 500));
                           await refresh();
                         });
                       }}
                     >
-                      {action.busy ? "Running…" : "Run reflect"}
+                      {action.busy ? "Running…" : `Run ${selectedPreset.label}`}
                     </ActionButton>
                   </div>
                 </div>
@@ -3915,7 +4024,7 @@ export function SkillsPage(): React.JSX.Element {
         const normalized = query.trim().toLowerCase();
         const skills = dashboard.operations.skills.filter((skill) =>
           !normalized || JSON.stringify(skill).toLowerCase().includes(normalized),
-        );
+        ).sort(compareSkillRows);
         const totalPages = Math.max(1, Math.ceil(skills.length / pageSize));
         const currentPage = Math.min(page, totalPages - 1);
         const visibleSkills = skills.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
@@ -3935,7 +4044,7 @@ export function SkillsPage(): React.JSX.Element {
         };
         const operatorSkills = dashboard.operations.skills.filter((skill) => skill.toggleable !== false);
         const enabledCount = operatorSkills.filter((skill) => skill.enabled === true).length;
-        const discoverOnlyCount = dashboard.operations.skills.length - operatorSkills.length;
+        const pendingDraftCount = operatorSkills.filter(isPendingSkillDraft).length;
         const skillAffinities = asRows(dashboard.operations.skill_affinities);
         const activeAffinityClaims = skillAffinities.reduce((sum, row) => sum + numberOf(row, "activeCount"), 0);
         return (
@@ -3943,8 +4052,8 @@ export function SkillsPage(): React.JSX.Element {
             <section className={cx(styles.metricGrid, styles.metricGridCompact, styles.skillsMetricGrid)}>
               <MetricCard compact metric={{ label: "Skills", value: `${dashboard.operations.skills.length}`, note: "Installed, authored, built-in, and external entries.", tone: "neutral" }} />
               <MetricCard compact metric={{ label: "Ready to use", value: `${enabledCount}`, note: "Skills active and available to Elephant Agent's next reply.", tone: enabledCount ? "healthy" : "neutral" }} />
+              <MetricCard compact metric={{ label: "Drafts", value: `${pendingDraftCount}`, note: "Skill Evolution drafts waiting for approval.", tone: pendingDraftCount ? "attention" : "neutral" }} />
               <MetricCard compact metric={{ label: "Affinities", value: `${skillAffinities.length}`, note: `${activeAffinityClaims} active PM skill affinity claim(s).`, tone: skillAffinities.length ? "healthy" : "neutral" }} />
-              <MetricCard compact metric={{ label: "Discover only", value: `${discoverOnlyCount}`, note: "External shelves available for list/view without toggles.", tone: discoverOnlyCount ? "attention" : "neutral" }} />
             </section>
             <Panel eyebrow="Skills" title="What Elephant Agent knows how to do" detail="Search, inspect, and toggle skill packages. What Elephant Agent has learned to use naturally stays on the You page.">
               <SearchBox
@@ -3994,7 +4103,7 @@ export function SkillsPage(): React.JSX.Element {
                               onClick={() => void toggle(skill)}
                             >
                               <span />
-                              <strong>{pendingId === skillId ? "Saving" : enabled ? "On" : "Off"}</strong>
+                              <strong>{pendingId === skillId ? "Saving" : enabled ? "On" : isPendingSkillDraft(skill) ? "Approve" : "Off"}</strong>
                             </button>
                           ) : null}
                           <ViewButton title={skillId} items={detailItems(skill)} />

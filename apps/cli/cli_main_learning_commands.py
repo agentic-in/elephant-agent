@@ -73,6 +73,30 @@ CLI_THEME_BULLET = "•"
 CLI_THEME_WELCOME_GLYPH = "🐘"
 CLI_THEME_SUBTITLE = "Personal Model first, curious at your pace."
 
+_REFLECT_RUN_PRESETS: dict[str, tuple[str, str | None]] = {
+    "memory": ("manual", None),
+    "manual": ("manual", None),
+    "reflect": ("manual", None),
+    "question": ("manual", "questions"),
+    "questions": ("manual", "questions"),
+    "skill-affinity": ("manual", "skill_affinity"),
+    "skill_affinity": ("manual", "skill_affinity"),
+    "skills": ("manual", "skill_affinity"),
+    "skill-evolution": ("skill_review", None),
+    "skill_evolution": ("skill_review", None),
+    "skill-review": ("skill_review", None),
+    "skill_review": ("skill_review", None),
+    "skill-creation": ("skill_review", None),
+    "skill_creation": ("skill_review", None),
+    "dream": ("dream", None),
+    "daily-review": ("dream", None),
+    "daily_review": ("dream", None),
+    "diary": ("diary", None),
+    "letter": ("onboarding_letter", None),
+    "onboarding-letter": ("onboarding_letter", None),
+    "onboarding_letter": ("onboarding_letter", None),
+}
+
 
 from .cli_main_init_prompts import *  # noqa: F401,F403
 from .cli_main_init_runtime import *  # noqa: F401,F403
@@ -567,13 +591,25 @@ def _cli_runtime(state_dir: Path, *, warm_embedding: bool = True) -> CliRuntime:
 
 def _resolve_reflect_run_request(
     *,
+    preset: str | None = None,
     trigger: str | None,
     features: str | None,
     date: str | None,
 ) -> tuple[str, dict[str, str]]:
     from datetime import date as date_type, timedelta
 
-    allowed_triggers = {"manual", "dream", "diary", "skill_review"}
+    from packages.reflect.features import TRIGGER_FEATURES
+
+    allowed_triggers = set(TRIGGER_FEATURES)
+    requested_preset = str(preset or "").strip().lower().replace(" ", "-") or None
+    if requested_preset is not None:
+        if requested_preset not in _REFLECT_RUN_PRESETS:
+            choices = ", ".join(sorted(_REFLECT_RUN_PRESETS))
+            raise ValueError(f"--preset must be one of: {choices}")
+        if str(trigger or "").strip() or str(features or "").strip():
+            raise ValueError("--preset cannot be combined with --trigger or --features")
+        trigger, features = _REFLECT_RUN_PRESETS[requested_preset]
+
     requested_trigger = str(trigger or "").strip().lower() or None
     if requested_trigger is not None and requested_trigger not in allowed_triggers:
         choices = ", ".join(sorted(allowed_triggers))

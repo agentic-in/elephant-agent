@@ -83,6 +83,32 @@ class InternalReflectTriggerTest(unittest.TestCase):
         self.assertEqual(metadata["target_date"], (date_type.today() - timedelta(days=1)).isoformat())
         self.assertNotIn("diary_target_date", metadata)
 
+    def test_reflect_dream_trigger_defaults_to_full_bundle_and_dates(self) -> None:
+        repository = _RepositoryStub()
+        app = SimpleNamespace(repository=repository)
+
+        with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
+            result = trigger_reflect_job(app, trigger="dream", features=None)
+
+        self.assertEqual(result["features"], "dream,questions,skill_affinity,skill_evolution,diary")
+        metadata = repository.enqueued_metadata or {}
+        self.assertEqual(metadata["target_date"], date_type.today().isoformat())
+        self.assertEqual(metadata["diary_target_date"], (date_type.today() - timedelta(days=1)).isoformat())
+        self.assertNotIn("features", metadata)
+
+    def test_reflect_dream_feature_alias_expands_to_full_dream_bundle(self) -> None:
+        repository = _RepositoryStub()
+        app = SimpleNamespace(repository=repository)
+
+        with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
+            result = trigger_reflect_job(app, trigger="dream", features="dream")
+
+        self.assertEqual(result["features"], "dream,questions,skill_affinity,skill_evolution,diary")
+        metadata = repository.enqueued_metadata or {}
+        self.assertEqual(metadata["features"], "dream")
+        self.assertEqual(metadata["target_date"], date_type.today().isoformat())
+        self.assertEqual(metadata["diary_target_date"], (date_type.today() - timedelta(days=1)).isoformat())
+
     def test_reflect_init_profile_summary_uses_resolved_features(self) -> None:
         repository = _RepositoryStub()
         app = SimpleNamespace(repository=repository)
@@ -90,8 +116,8 @@ class InternalReflectTriggerTest(unittest.TestCase):
         with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
             result = trigger_reflect_job(app, trigger="init_profile", features=None)
 
-        self.assertEqual(result["features"], "init_links,pm,questions,skills")
-        self.assertEqual(repository.enqueued_summary, "reflect job (features=init_links,pm,questions,skills)")
+        self.assertEqual(result["features"], "init_links,pm,questions,skill_affinity")
+        self.assertEqual(repository.enqueued_summary, "reflect job (features=init_links,pm,questions,skill_affinity)")
 
     def test_reflect_onboarding_letter_sets_letter_metadata(self) -> None:
         repository = _RepositoryStub()
@@ -138,7 +164,7 @@ class InternalReflectTriggerTest(unittest.TestCase):
     def test_learning_job_runtime_contract_exposes_init_tools(self) -> None:
         features, tools = _learning_job_runtime_contract("init_profile", metadata={})
 
-        self.assertEqual(features, ("init_links", "pm", "questions", "skills"))
+        self.assertEqual(features, ("init_links", "pm", "questions", "skill_affinity"))
         self.assertIn("tool.personal_model.update", tools)
         self.assertIn("tool.skill.list", tools)
         self.assertIn("tool.web.read", tools)

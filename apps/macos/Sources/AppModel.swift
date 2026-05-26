@@ -151,6 +151,21 @@ struct ToolUseEvent: Identifiable, Equatable {
             || !childEpisodeID.isEmpty
             || arguments.contains("sub_agent_child")
     }
+
+    var shouldHideInChat: Bool {
+        let normalized = [
+            name,
+            task,
+            invocationID,
+            sourceID
+        ]
+        .joined(separator: " ")
+        .lowercased()
+        .replacingOccurrences(of: "_", with: ".")
+        return normalized.contains("tool.diary.")
+            || normalized.contains("diary.write")
+            || normalized.contains("diary.list")
+    }
 }
 
 struct ChatMessage: Identifiable, Equatable {
@@ -391,6 +406,26 @@ struct OperationItem: Identifiable, Equatable {
     var title: String
     var detail: String
     var enabled: Bool
+    var defaultEnabled: Bool = false
+    var sourceID: String = ""
+    var sourceKind: String = ""
+    var instructionText: String = ""
+    var reviewStatus: String = ""
+    var promptIndexVisible: Bool = false
+    var toggleable: Bool = true
+    var family: String = ""
+    var backend: String = ""
+    var provenance: String = ""
+    var riskClass: String = ""
+    var approvalClass: String = ""
+    var available: Bool = true
+    var availabilityReason: String = ""
+    var readsState: Bool = false
+    var writesState: Bool = false
+    var touchesNetwork: Bool = false
+    var touchesSecrets: Bool = false
+    var requiredFields: [String] = []
+    var schemaJSON: String = ""
 }
 
 struct MCPServerItem: Identifiable, Equatable {
@@ -1168,6 +1203,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var onboardingLetterEntry: DiaryEntry?
     @Published var showingOnboardingLetterPrompt = false
     @Published var showingOnboardingLetterEnvelope = false
+    @Published var isRegeneratingOnboardingLetter = false
     @Published var showingCommandPalette = false
     @Published var lastError = "" {
         didSet {
@@ -1454,7 +1490,13 @@ final class ElephantAppModel: ObservableObject {
     }
 
     private func syncOnboardingLetterState(from snapshot: DashboardSnapshot) {
-        guard let entry = snapshot.diaryEntries.first(where: { $0.isOnboardingLetter }) else { return }
+        guard let entry = snapshot.diaryEntries.first(where: { $0.isOnboardingLetter }) else {
+            onboardingLetterEntry = nil
+            if !UserDefaults.standard.bool(forKey: Self.onboardingLetterPendingKey) {
+                showingOnboardingLetterPrompt = false
+            }
+            return
+        }
         onboardingLetterEntry = entry
         UserDefaults.standard.set(false, forKey: Self.onboardingLetterPendingKey)
         onboardingLetterPollTask?.cancel()
@@ -2097,6 +2139,38 @@ final class ElephantAppModel: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
+        isReflecting = false
+    }
+
+    func regenerateOnboardingLetter(_ entry: DiaryEntry? = nil) async {
+        guard !isReflecting else { return }
+        isReflecting = true
+        isRegeneratingOnboardingLetter = true
+        let targetEntry = entry ?? onboardingLetterEntry
+        do {
+            if let targetEntry, targetEntry.isOnboardingLetter, !targetEntry.date.isEmpty {
+                try await client.deleteDiaryEntry(date: targetEntry.date)
+            }
+            onboardingLetterEntry = nil
+            showingOnboardingLetterEnvelope = false
+            showingOnboardingLetterPrompt = false
+            UserDefaults.standard.removeObject(forKey: Self.onboardingLetterSeenEntryIDKey)
+            let jobID = try await client.runReflect(trigger: "onboarding_letter")
+            onboardingLetterJobID = jobID
+            markOnboardingLetterPending()
+            diaryActionResult = Self.localizedText(
+                appLanguage,
+                en: "Elephant is rewriting your letter.",
+                zh: "Elephant 正在重新写这封信。",
+                fr: "Elephant réécrit votre lettre.",
+                de: "Elephant schreibt deinen Brief neu."
+            )
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            try await refreshDashboard()
+        } catch {
+            lastError = error.localizedDescription
+        }
+        isRegeneratingOnboardingLetter = false
         isReflecting = false
     }
 
@@ -3318,6 +3392,7 @@ final class ElephantAppModel: ObservableObject {
         }
 
         func appendOrUpdateToolActivity(_ event: ToolUseEvent) -> Bool {
+            guard !event.shouldHideInChat else { return false }
             _ = flushAssistantText(force: true)
             let key = toolCardKey(for: event)
             var nextEvent = event
@@ -3355,6 +3430,7 @@ final class ElephantAppModel: ObservableObject {
         }
 
         func appendCompletedToolActivity(_ event: ToolUseEvent) {
+            guard !event.shouldHideInChat else { return }
             let key = toolCardKey(for: event)
             guard liveToolMessageIDs[key] == nil else { return }
             currentAssistantTextMessageID = nil
@@ -3518,10 +3594,11 @@ final class ElephantAppModel: ObservableObject {
                     let toolEvents = reply.toolEvents.isEmpty
                         ? ((try? await client.fetchToolUseEvents(episodeID: episodeID)) ?? [])
                         : reply.toolEvents
+                    let visibleToolEvents = toolEvents.filter { !$0.shouldHideInChat }
                     updateAssistantMessage(
                         id: assistantMessageID,
                         text: reply.text,
-                        toolEvents: toolEvents,
+                        toolEvents: visibleToolEvents,
                         isStreaming: false
                     )
                     finishVoiceReplyIfNeeded(id: assistantMessageID)
@@ -3538,7 +3615,11 @@ final class ElephantAppModel: ObservableObject {
                 let episodeID = activeEpisodeID
                 do {
                     let reply = try await client.runWakeLoop(text, episodeID: episodeID)
-                    let message = ChatMessage(role: .assistant, text: reply.text, toolEvents: reply.toolEvents)
+                    let message = ChatMessage(
+                        role: .assistant,
+                        text: reply.text,
+                        toolEvents: reply.toolEvents.filter { !$0.shouldHideInChat }
+                    )
                     messages.append(message)
                     finishVoiceReplyIfNeeded(id: message.id)
                 } catch {
@@ -3554,7 +3635,7 @@ final class ElephantAppModel: ObservableObject {
                     updateAssistantMessage(
                         id: assistantMessageID,
                         text: fallbackText,
-                        toolEvents: liveToolEvents,
+                        toolEvents: liveToolEvents.filter { !$0.shouldHideInChat },
                         isStreaming: false
                     )
                 } else {
@@ -3785,6 +3866,7 @@ final class ElephantAppModel: ObservableObject {
         onboardingLetterEntry = nil
         showingOnboardingLetterPrompt = false
         showingOnboardingLetterEnvelope = false
+        isRegeneratingOnboardingLetter = false
         onboardingLetterPollTask?.cancel()
         onboardingLetterPollTask = nil
         onboardingCreatedStateID = ""

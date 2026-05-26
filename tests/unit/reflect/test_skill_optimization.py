@@ -64,17 +64,18 @@ class _Repository:
 
 
 class SkillOptimizationFeatureTest(unittest.TestCase):
-    def test_skill_review_trigger_resolves_skill_optimization_and_skills(self) -> None:
+    def test_skill_review_trigger_resolves_skill_evolution_and_affinity(self) -> None:
         features = resolve_features("skill_review")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("skill_optimization", "skills"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("skill_evolution", "skill_affinity"))
 
-    def test_dream_prompt_mentions_skill_optimization_topics(self) -> None:
+    def test_dream_prompt_mentions_skill_evolution_drafts(self) -> None:
         prompt = _assemble_system_prompt(resolve_features("dream"), conservatism="medium")
 
-        self.assertIn("world.skills.optimization.<scope>.<candidate_key>", prompt)
-        self.assertIn("tool.skill.manage", prompt)
-        self.assertIn("authoritative Optimization Candidate Records section", prompt)
+        self.assertIn("tool.skill.draft", prompt)
+        self.assertIn("pending skill drafts", prompt)
+        self.assertIn("Skill Evolution Evidence packet", prompt)
+        self.assertNotIn("tool.skill.manage", prompt)
 
     def test_skill_review_evidence_contains_trajectory_sections(self) -> None:
         runtime = SimpleNamespace(
@@ -99,8 +100,10 @@ class SkillOptimizationFeatureTest(unittest.TestCase):
 
         evidence = build_evidence(runtime, job, resolve_features("skill_review"))
 
-        self.assertIn("## Trajectory Signals", evidence)
-        self.assertIn("## Optimization Candidates", evidence)
+        self.assertIn("## Skill Evolution Evidence", evidence)
+        self.assertIn("## Workflow Trajectory Signals", evidence)
+        self.assertIn("## Skill Evolution Candidates", evidence)
+        self.assertIn("## Skill Evolution Candidate Records", evidence)
         self.assertIn("tool.terminal.exec -> tool.file.read", evidence)
 
 

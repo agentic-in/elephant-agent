@@ -111,7 +111,7 @@ def run_dream_now(self) -> dict[str, Any]:
     job = _dream_system_job(self)
     if job is None:
         raise ValueError("system cron job unavailable: system:dream")
-    result = self.trigger_reflect_job(trigger="dream", features="dream")
+    result = self.trigger_reflect_job(trigger="dream", features=None)
     status = str(result.get("status") or "").strip().lower()
     outcome = "success" if status == "queued" else "error"
     detail = str(result.get("detail") or result.get("job_id") or status or "dream job queued")

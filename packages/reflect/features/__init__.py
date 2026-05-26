@@ -15,30 +15,35 @@ from .compress import FEATURE as COMPRESS
 from .dream import FEATURE as DREAM
 from .init_links import FEATURE as INIT_LINKS
 from .onboarding_letter import FEATURE as ONBOARDING_LETTER
-from .skill_optimization import FEATURE as SKILL_OPTIMIZATION
+from .skill_optimization import FEATURE as SKILL_EVOLUTION
 
 
 ALL_FEATURES: dict[str, Feature] = {
     f.feature_id: f
-    for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM, INIT_LINKS, ONBOARDING_LETTER, SKILL_OPTIMIZATION)
+    for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM, INIT_LINKS, ONBOARDING_LETTER, SKILL_EVOLUTION)
 }
 
-# Trigger → default feature set mapping
+# Canonical trigger → default feature set mapping. Keep this small: triggers
+# explain why a job runs, while features explain what the job may write.
 TRIGGER_FEATURES: dict[str, tuple[str, ...]] = {
-    "episode_close": ("pm", "questions", "skills"),
-    "manual": ("pm", "questions", "recall", "skills"),
+    "episode_close": ("pm", "questions", "skill_affinity"),
+    "manual": ("pm", "questions", "skill_affinity"),
     "diary": ("diary",),
-    "dream": ("dream", "questions", "skills", "skill_optimization", "diary"),
-    "skill_review": ("skill_optimization", "skills"),
-    "init": ("init_links", "pm", "questions", "skills"),
-    "init_profile": ("init_links", "pm", "questions", "skills"),
+    "dream": ("dream", "questions", "skill_affinity", "skill_evolution", "diary"),
+    "skill_review": ("skill_evolution", "skill_affinity"),
+    "init": ("init_links", "pm", "questions", "skill_affinity"),
+    "init_profile": ("init_links", "pm", "questions", "skill_affinity"),
     "onboarding_letter": ("onboarding_letter",),
     "context_compaction": ("compress",),
 }
 
 FEATURE_ALIASES: dict[str, tuple[str, ...]] = {
-    "profile": ("init_links", "pm", "questions", "skills"),
-    "init_profile": ("init_links", "pm", "questions", "skills"),
+    "skills": ("skill_affinity",),
+    "skill_optimization": ("skill_evolution",),
+    "skill_creation": ("skill_evolution",),
+    "skill_create": ("skill_evolution",),
+    "profile": ("init_links", "pm", "questions", "skill_affinity"),
+    "init_profile": ("init_links", "pm", "questions", "skill_affinity"),
     "letter": ("onboarding_letter",),
 }
 
@@ -79,15 +84,15 @@ def resolve_features(
         if "dream" in feature_ids:
             feature_ids = tuple(
                 fid
-                for fid in ("dream", "questions", "skills", "skill_optimization", "diary")
+                for fid in ("dream", "questions", "skill_affinity", "skill_evolution", "diary")
                 if fid in feature_ids
             )
             if trigger == "dream":
-                for bundled_feature in ("skills", "skill_optimization", "diary"):
+                for bundled_feature in ("questions", "skill_affinity", "skill_evolution", "diary"):
                     if bundled_feature not in feature_ids:
                         feature_ids = (*feature_ids, bundled_feature)
     else:
-        feature_ids = TRIGGER_FEATURES.get(trigger, ("pm", "questions", "skills"))
+        feature_ids = TRIGGER_FEATURES.get(trigger, TRIGGER_FEATURES["manual"])
 
     features = []
     for fid in feature_ids:

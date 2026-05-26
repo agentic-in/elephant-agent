@@ -677,8 +677,9 @@ def build_typer_app() -> typer.Typer:
     def reflect_run_command(
         ctx: typer.Context,
         elephant_id: str | None = typer.Option(None, "--elephant-id", help="Run reflect for a named elephant."),
-        trigger: str | None = typer.Option(None, "--trigger", help="Reflect trigger to use: manual, dream, diary, or skill_review."),
-        features: str | None = typer.Option(None, "--features", help="Comma-separated feature set (pm,questions,dream,diary,skills,skill_optimization,recall,compress)."),
+        preset: str | None = typer.Option(None, "--preset", help="User-facing job preset: memory, skill-affinity, skill-evolution, dream, diary, letter."),
+        trigger: str | None = typer.Option(None, "--trigger", help="Reflect trigger to use. Common values: manual, dream, diary, skill_review."),
+        features: str | None = typer.Option(None, "--features", help="Comma-separated feature set: pm, questions, dream, diary, skill_affinity, skill_evolution, compress. Legacy skills/skill_optimization aliases still work."),
         date: str | None = typer.Option(None, "--date", help="Target date for dream/diary trigger or feature (YYYY-MM-DD). Defaults to today for dream and yesterday for diary."),
         wait: bool = typer.Option(False, "--wait", help="Wait for the reflect agent to finish."),
         install_cron: bool = typer.Option(False, "--install-cron", help="Install the built-in nightly Dream learning cron job."),
@@ -707,15 +708,17 @@ def build_typer_app() -> typer.Typer:
 
         try:
             resolved_trigger, extra_metadata = _resolve_reflect_run_request(
+                preset=preset,
                 trigger=trigger,
                 features=features,
                 date=date,
             )
+            summary_label = f"preset={preset.strip()}" if preset and preset.strip() else f"features={features or 'default'}"
             job = _queue_learning_job(
                 runtime,
                 elephant_id=elephant_id,
                 trigger=resolved_trigger,
-                summary=f"reflect run features={features or 'default'}",
+                summary=f"reflect run {summary_label}",
                 source="cli.reflect.run",
                 force_new=True,
                 start_worker=not wait,
@@ -736,6 +739,7 @@ def build_typer_app() -> typer.Typer:
                 sections=(
                     CliCardSection("Job", (
                         f"job_id · {job.job_id}",
+                        *( (f"preset · {preset.strip()}",) if preset and preset.strip() else () ),
                         f"trigger · {resolved_trigger}",
                         f"features · {features or '(trigger default)'}",
                         f"status · {worker_line}",

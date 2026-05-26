@@ -283,6 +283,8 @@ class SkillManagementSurface(Protocol):
         category: str | None = None,
         install: bool = True,
         overwrite: bool = False,
+        source_kind: str = "elephant-authored",
+        metadata: Mapping[str, object] | None = None,
         session_id: str | None = None,
         profile_id: str | None = None,
     ) -> SkillManifestLoadRecord:

@@ -90,4 +90,4 @@ def test_api_startup_self_heals_missing_dream_cron() -> None:
     assert len(jobs) == 1
     assert jobs[0].name == "Nightly dream"
     assert jobs[0].payload["trigger"] == "dream"
-    assert jobs[0].payload["metadata"]["features"] == "dream,questions,skills,diary"
+    assert jobs[0].payload["metadata"]["features"] == "dream,questions,skill_affinity,skill_evolution,diary"

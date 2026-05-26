@@ -15,7 +15,7 @@ class DreamFeatureTest(unittest.TestCase):
 
         self.assertEqual(
             tuple(feature.feature_id for feature in features),
-            ("dream", "questions", "skills", "skill_optimization", "diary"),
+            ("dream", "questions", "skill_affinity", "skill_evolution", "diary"),
         )
 
     def test_explicit_dream_drops_pm_learning_but_preserves_questions(self) -> None:
@@ -28,7 +28,7 @@ class DreamFeatureTest(unittest.TestCase):
 
         self.assertEqual(
             tuple(feature.feature_id for feature in features),
-            ("dream", "questions", "skills", "skill_optimization", "diary"),
+            ("dream", "questions", "skill_affinity", "skill_evolution", "diary"),
         )
 
     def test_explicit_dream_alone_stays_dream_only(self) -> None:
@@ -36,16 +36,16 @@ class DreamFeatureTest(unittest.TestCase):
 
         self.assertEqual(tuple(feature.feature_id for feature in features), ("dream",))
 
-    def test_episode_close_resolves_to_pm_questions_and_skills_without_conversation_search(self) -> None:
+    def test_episode_close_resolves_to_pm_questions_and_skill_affinity_without_conversation_search(self) -> None:
         features = resolve_features("episode_close")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skills"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("pm", "questions", "skill_affinity"))
         self.assertNotIn("tool.conversation.search", _compose_tools(features))
 
     def test_init_profile_resolves_with_link_tools_and_uses_bootstrap_prompt_rules(self) -> None:
         features = resolve_features("init_profile")
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("init_links", "pm", "questions", "skills"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("init_links", "pm", "questions", "skill_affinity"))
 
         prompt = _assemble_system_prompt(features, conservatism="low")
 
@@ -80,17 +80,20 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("Never say or imply \"I am not Elephant\"", prompt)
         self.assertIn("This letter is only the body text", prompt)
         self.assertIn("Do not write a title", prompt)
-        self.assertIn("form one central insight", prompt)
+        self.assertIn("privately read the four lenses as one living portrait", prompt)
+        self.assertIn("Do not throw away many facts", prompt)
         self.assertIn("Do not translate the facts one by one", prompt)
         self.assertIn("not just information about me", prompt)
         self.assertIn("remove checklist-like coverage", prompt)
         self.assertIn("Xu Zhimo", prompt)
+        self.assertIn("keep Xu Zhimo by name", prompt)
         self.assertIn("present-day natural Chinese", prompt)
-        self.assertIn("do not imitate old-fashioned diction", prompt)
+        self.assertIn("Do not imitate old-fashioned diction", prompt)
         self.assertIn("John Keats", prompt)
-        self.assertIn("not as a slogan", prompt)
-        self.assertIn("protect agency, and grow beside the user", prompt)
-        self.assertIn("Use clear paragraph breaks", prompt)
+        self.assertIn("Give real weight to the AI-era pressure", prompt)
+        self.assertIn("Do not force a fixed slogan", prompt)
+        self.assertIn("Use 5-8 clear paragraphs", prompt)
+        self.assertIn("one short blockquote line", prompt)
         self.assertNotIn("UI title", prompt)
         self.assertNotIn("skill-affinity", prompt)
         self.assertNotIn("技能匹配", prompt)
@@ -106,7 +109,7 @@ class DreamFeatureTest(unittest.TestCase):
     def test_init_profile_alias_from_macos_resolves_to_link_learning_bundle(self) -> None:
         features = resolve_features("init", explicit_features=("profile",))
 
-        self.assertEqual(tuple(feature.feature_id for feature in features), ("init_links", "pm", "questions", "skills"))
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("init_links", "pm", "questions", "skill_affinity"))
         self.assertIn("tool.web.read", _compose_tools(features))
         self.assertIn("tool.browser.snapshot", _compose_tools(features))
 
@@ -157,6 +160,48 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertNotIn("## Episode summary", evidence)
         self.assertNotIn("## Conversation turns", evidence)
         self.assertNotIn("## Diary context", evidence)
+
+    def test_questions_evidence_includes_active_pm_facts(self) -> None:
+        class Repository:
+            def load_episode(self, episode_id: str) -> SimpleNamespace:
+                return SimpleNamespace(exit_summary="User answered a pending question about project priorities.")
+
+            def list_personal_model_facts(self, **_: object) -> tuple[object, ...]:
+                return (
+                    SimpleNamespace(
+                        lens="world",
+                        text="用户当前工作横跨技术、产品和研究。",
+                        metadata={"topic": "world.projects.current"},
+                    ),
+                    SimpleNamespace(
+                        lens="identity",
+                        text="用户卡住时需要先理清结构和顺序。",
+                        metadata={"topic": "identity.support.structure"},
+                    ),
+                )
+
+        runtime = SimpleNamespace(repository=Repository())
+        job = LearningJob(
+            job_id="job-questions",
+            job_type="episode_boundary_learning",
+            trigger="question_answer",
+            status="queued",
+            personal_model_id="pm",
+            state_id="state",
+            episode_id="episode",
+            metadata={"features": "questions"},
+        )
+
+        evidence = build_evidence(runtime, job, resolve_features("question_answer", explicit_features=("questions",)))
+
+        self.assertIn("features: questions", evidence)
+        self.assertIn("## Current Personal Model facts", evidence)
+        self.assertIn("first-class evidence for question maintenance", evidence)
+        self.assertIn("[world] 用户当前工作横跨技术、产品和研究。", evidence)
+        self.assertIn("[identity] 用户卡住时需要先理清结构和顺序。", evidence)
+        self.assertIn("## Episode summary", evidence)
+        self.assertIn("User answered a pending question about project priorities.", evidence)
+        self.assertIn("## Conversation turns", evidence)
 
     def test_init_profile_evidence_recovers_seed_answers_and_bare_links(self) -> None:
         class Repository:
@@ -264,10 +309,11 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertIn("blog: liuxunzhuo.com", evidence)
         self.assertNotIn("skill matching", evidence)
         self.assertNotIn("技能匹配", evidence)
-        self.assertIn("one central insight", evidence)
+        self.assertIn("Read all four lenses together", evidence)
+        self.assertIn("one central reading", evidence)
         self.assertIn("not translated the facts", evidence)
         self.assertIn("replaced, accelerated, or flattened", evidence)
-        self.assertIn("not as a slogan", evidence)
+        self.assertIn("Give this pressure real emotional weight", evidence)
         self.assertIn("grow beside the user", evidence)
         self.assertNotIn("trigger: onboarding_letter", evidence)
         self.assertNotIn("features: onboarding_letter", evidence)

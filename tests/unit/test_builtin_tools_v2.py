@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
@@ -181,6 +182,7 @@ class BuiltinToolsV2Test(BuiltinToolsTestBase):
         self.assertNotIn("tool.memory.note", model_visible)
         self.assertIn("tool.skill.list", model_visible)
         self.assertIn("tool.skill.view", model_visible)
+        self.assertIn("tool.skill.draft", model_visible)
         self.assertNotIn("tool.profile.manage", model_visible)
         self.assertNotIn("tool.memory.upload", model_visible)
         self.assertNotIn("tool.procedure.inspect", model_visible)
@@ -336,6 +338,59 @@ class BuiltinToolsV2Test(BuiltinToolsTestBase):
         self.assertEqual(deleted.outcome, "success")
         self.assertIn("skill_id: elephant-brief", deleted.summary)
         self.assertFalse(any(entry.skill_id == "elephant-brief" for entry in runtime.list_skill_hub(limit=None)))
+
+    def test_skill_draft_tool_is_learning_agent_only_and_writes_pending_disabled_skill(self) -> None:
+        runtime = self._make_cli_runtime()
+        session = runtime.start()
+
+        with self.assertRaisesRegex(PermissionError, "background learning agents"):
+            runtime.tool_runtime.invoke(
+                "tool.skill.draft",
+                {
+                    "action": "create",
+                    "skill_id": "paper-summary-flow",
+                    "display_name": "Paper Summary Flow",
+                    "summary": "Use when the user repeatedly asks to turn papers into concise publication notes.",
+                    "workflow_steps": ["Read the paper source.", "Write the reusable summary artifact."],
+                },
+                session_id=session.session_id,
+                requester="model",
+            )
+
+        learning_session = replace(
+            session,
+            episode_id="learning-child",
+            entry_surface="cli:sub_agent",
+            metadata={"episode_kind": "sub_agent", "learning_agent": "true"},
+        )
+        runtime.repository.upsert_episode(learning_session)
+        drafted = runtime.tool_runtime.invoke(
+            "tool.skill.draft",
+            {
+                "action": "create",
+                "skill_id": "paper-summary-flow",
+                "display_name": "Paper Summary Flow",
+                "summary": "Use when the user repeatedly asks to turn papers into concise publication notes.",
+                "workflow_steps": ["1. Read the paper source.", "2. Write the reusable summary artifact."],
+                "inputs": ["paper URL or PDF"],
+                "outputs": ["summary notes"],
+                "validation": ["The output names the source and has concrete next steps."],
+                "source_episode_ids": ["episode-1", "episode-2"],
+                "confidence": "0.72",
+            },
+            session_id=learning_session.session_id,
+            requester="model",
+        )
+
+        self.assertEqual(drafted.outcome, "success")
+        self.assertIn("review_status: pending", drafted.summary)
+        entry = runtime.inspect_skill_hub_entry("paper-summary-flow")
+        self.assertFalse(bool(entry.metadata["default_enabled"]))
+        self.assertEqual(entry.metadata["review_status"], "pending")
+        self.assertEqual(entry.metadata["source_kind"], "elephant-authored-draft")
+        skill = runtime.inspect_skill("paper-summary-flow")
+        self.assertIn("1. Read the paper source.", skill.instruction_text)
+        self.assertNotIn("1. 1. Read the paper source.", skill.instruction_text)
 
     def test_model_skill_list_and_view_include_external_shelves(self) -> None:
         external_tmpdir = tempfile.TemporaryDirectory()

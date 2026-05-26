@@ -487,6 +487,13 @@ struct APIClient {
         )
     }
 
+    func deleteDiaryEntry(date: String) async throws {
+        _ = try await request(
+            path: "/v1/internal/diary/\(Self.pathSegment(date))",
+            method: "DELETE"
+        )
+    }
+
     func updatePersonalModelClaim(
         claimRef: String,
         action: String,
@@ -1140,11 +1147,18 @@ enum SnapshotParser {
         snapshot.skillItems = skills.compactMap { row in
             let id = string(row["skillId"] ?? row["skill_id"] ?? row["id"])
             guard !id.isEmpty else { return nil }
+            let metadata = object(row["metadata"])
             return OperationItem(
                 id: id,
                 title: string(row["displayName"] ?? row["display_name"] ?? row["name"], fallback: id),
                 detail: string(row["summary"] ?? row["source"] ?? row["sourceId"]),
-                enabled: bool(row["enabled"], fallback: false)
+                enabled: bool(row["enabled"], fallback: false),
+                sourceID: string(row["sourceId"] ?? row["source_id"]),
+                sourceKind: string(row["sourceKind"] ?? row["source_kind"] ?? metadata["source_kind"]),
+                instructionText: string(row["instructionText"] ?? row["instruction_text"]),
+                reviewStatus: string(row["reviewStatus"] ?? row["review_status"] ?? metadata["review_status"]),
+                promptIndexVisible: bool(row["promptIndexVisible"] ?? row["prompt_index_visible"], fallback: false),
+                toggleable: bool(row["toggleable"], fallback: true)
             )
         }
         snapshot.skillAffinityRows = affinities.prefix(8).compactMap { row in
@@ -1178,7 +1192,25 @@ enum SnapshotParser {
                 id: id,
                 title: string(row["displayName"] ?? row["display_name"] ?? row["name"], fallback: id),
                 detail: string(row["description"] ?? row["family"] ?? row["backend"]),
-                enabled: bool(row["enabled"], fallback: true)
+                enabled: bool(row["enabled"], fallback: true),
+                defaultEnabled: bool(row["defaultEnabled"] ?? row["default_enabled"], fallback: true),
+                sourceID: string(row["provenance"] ?? row["sourceId"] ?? row["source_id"]),
+                sourceKind: string(row["backend"] ?? row["sourceKind"] ?? row["source_kind"] ?? row["family"]),
+                instructionText: string(row["instructionText"] ?? row["instruction_text"]),
+                toggleable: true,
+                family: string(row["family"]),
+                backend: string(row["backend"]),
+                provenance: string(row["provenance"]),
+                riskClass: string(row["riskClass"] ?? row["risk_class"], fallback: "medium"),
+                approvalClass: string(row["approvalClass"] ?? row["approval_class"], fallback: "standard"),
+                available: bool(row["available"], fallback: true),
+                availabilityReason: string(row["availabilityReason"] ?? row["availability_reason"]),
+                readsState: bool(row["readsState"] ?? row["reads_state"], fallback: false),
+                writesState: bool(row["writesState"] ?? row["writes_state"], fallback: false),
+                touchesNetwork: bool(row["touchesNetwork"] ?? row["touches_network"], fallback: false),
+                touchesSecrets: bool(row["touchesSecrets"] ?? row["touches_secrets"], fallback: false),
+                requiredFields: listStrings(row["requiredFields"] ?? row["required_fields"]),
+                schemaJSON: jsonString(row["schema"])
             )
         }
         snapshot.mcpServers = mcpServerRows.count
@@ -1369,7 +1401,8 @@ enum SnapshotParser {
             from: providerRows,
             providerKeyRows: providerKeyRows,
             activeProviderID: snapshot.providerID,
-            activeProviderModelID: snapshot.providerModelID
+            activeProviderModelID: snapshot.providerModelID,
+            activeProviderBaseURL: snapshot.providerBaseURL
         )
         if snapshot.providerBaseURL.isEmpty,
            let activeOption = snapshot.providerOptions.first(where: { $0.id == snapshot.providerID }),
@@ -1540,14 +1573,16 @@ enum SnapshotParser {
         from providerRows: [[String: Any]],
         providerKeyRows: [[String: Any]],
         activeProviderID: String,
-        activeProviderModelID: String
+        activeProviderModelID: String,
+        activeProviderBaseURL: String
     ) -> [ProviderOption] {
         providerRows.compactMap { row in
             providerOption(
                 from: row,
                 providerKeyRows: providerKeyRows,
                 activeProviderID: activeProviderID,
-                activeProviderModelID: activeProviderModelID
+                activeProviderModelID: activeProviderModelID,
+                activeProviderBaseURL: activeProviderBaseURL
             )
         }
     }
@@ -1560,7 +1595,15 @@ enum SnapshotParser {
             from: providerRows,
             providerKeyRows: providerKeyRows,
             activeProviderID: string(activeProvider["provider_id"] ?? activeProvider["providerId"]),
-            activeProviderModelID: string(activeProvider["model_id"] ?? activeProvider["modelId"])
+            activeProviderModelID: string(activeProvider["model_id"] ?? activeProvider["modelId"]),
+            activeProviderBaseURL: string(
+                activeProvider["base_url"]
+                    ?? activeProvider["baseUrl"]
+                    ?? activeProvider["default_base_url"]
+                    ?? activeProvider["defaultBaseURL"]
+                    ?? activeProvider["endpoint"]
+                    ?? activeProvider["url"]
+            )
         )
     }
 
@@ -1568,7 +1611,8 @@ enum SnapshotParser {
         from row: [String: Any],
         providerKeyRows: [[String: Any]],
         activeProviderID: String,
-        activeProviderModelID: String
+        activeProviderModelID: String,
+        activeProviderBaseURL: String
     ) -> ProviderOption? {
         let id = string(row["provider_id"] ?? row["providerId"] ?? row["id"])
         guard !id.isEmpty else { return nil }
@@ -1580,6 +1624,9 @@ enum SnapshotParser {
         let defaultModel = providerDefaultModel(discovered: discovered, row: row)
         let activeModel = isActive ? activeProviderModelID : ""
         let resolvedModel = activeModel.isEmpty ? defaultModel : activeModel
+        let defaultBaseURL = providerBaseURL(discovered: discovered, row: row)
+        let activeBaseURL = isActive ? activeProviderBaseURL : ""
+        let resolvedBaseURL = activeBaseURL.isEmpty ? defaultBaseURL : activeBaseURL
         let modelRows = providerModelOptions(
             fromDiscoveredRows: providerDiscoveredModels(discovered: discovered, row: row),
             providerRow: row,
@@ -1590,7 +1637,7 @@ enum SnapshotParser {
             id: id,
             displayName: providerDisplayName(row: row, fallback: id),
             defaultModel: resolvedModel,
-            defaultBaseURL: providerBaseURL(discovered: discovered, row: row),
+            defaultBaseURL: resolvedBaseURL,
             status: status,
             source: string(discovered["source"] ?? row["source"]),
             authKind: providerAuthKind(row),
@@ -2142,9 +2189,16 @@ enum SnapshotParser {
 
     private static func learningFeatures(from row: [String: Any], metadata: [String: Any], trigger: String, progressDetail: String) -> [String] {
         let resolved = listStrings(row["resolved_features"] ?? row["resolvedFeatures"] ?? metadata["resolved_features"] ?? metadata["resolvedFeatures"])
-        if !resolved.isEmpty { return deduplicated(resolved) }
+        if !resolved.isEmpty { return canonicalLearningFeatures(resolved) }
         let explicit = listStrings(metadata["features"]).filter { $0.lowercased() != "default" }
-        if !explicit.isEmpty { return deduplicated(explicit) }
+        if !explicit.isEmpty {
+            let normalizedTrigger = trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let canonicalExplicit = canonicalLearningFeatures(explicit)
+            if normalizedTrigger == "dream", canonicalExplicit == ["dream"] {
+                return fallbackFeatures(for: trigger)
+            }
+            return canonicalExplicit
+        }
         let progress = featuresFromProgressDetail(progressDetail)
         if !progress.isEmpty { return progress }
         return fallbackFeatures(for: trigger)
@@ -2339,23 +2393,27 @@ enum SnapshotParser {
         guard let range = detail.range(of: "features=") else { return [] }
         let tail = detail[range.upperBound...]
         let token = tail.split(whereSeparator: { $0.isWhitespace || $0 == ")" || $0 == "]" }).first.map(String.init) ?? ""
-        return deduplicated(listStrings(token).filter { $0.lowercased() != "default" })
+        return canonicalLearningFeatures(listStrings(token).filter { $0.lowercased() != "default" })
     }
 
     private static func fallbackFeatures(for trigger: String) -> [String] {
         switch trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "init", "init_profile", "profile":
-            return ["pm", "questions", "skills", "init_links"]
+            return ["pm", "questions", "skill_affinity", "init_links"]
         case "manual":
-            return ["pm", "questions", "recall", "skills"]
+            return ["pm", "questions", "skill_affinity"]
         case "dream":
-            return ["dream", "questions", "skills", "diary"]
+            return ["dream", "questions", "skill_affinity", "skill_evolution", "diary"]
+        case "skill_review":
+            return ["skill_evolution", "skill_affinity"]
         case "diary":
             return ["diary"]
+        case "onboarding_letter":
+            return ["onboarding_letter"]
         case "context_compaction":
             return ["compress"]
         default:
-            return ["pm", "questions", "skills"]
+            return ["pm", "questions", "skill_affinity"]
         }
     }
 
@@ -2365,8 +2423,10 @@ enum SnapshotParser {
             return ["tool.personal_model.search", "tool.personal_model.update"]
         case "questions":
             return ["tool.personal_model.questions"]
-        case "skills":
+        case "skills", "skill_affinity":
             return ["tool.skill.list", "tool.skill.view", "tool.personal_model.search", "tool.personal_model.update"]
+        case "skill_evolution", "skill_optimization":
+            return ["tool.skill.list", "tool.skill.view", "tool.skill.draft", "tool.conversation.search", "tool.personal_model.search"]
         case "init_links":
             return ["tool.web.search", "tool.web.read", "tool.web.extract", "tool.browser.navigate", "tool.browser.snapshot", "tool.browser.scroll", "tool.browser.images"]
         case "recall":
@@ -2375,6 +2435,8 @@ enum SnapshotParser {
             return ["tool.diary.write", "tool.diary.list", "tool.conversation.search", "tool.personal_model.search"]
         case "dream":
             return ["tool.personal_model.search", "tool.personal_model.update", "tool.conversation.search"]
+        case "onboarding_letter":
+            return ["tool.diary.write"]
         default:
             return []
         }
@@ -2390,6 +2452,19 @@ enum SnapshotParser {
             result.append(normalized)
         }
         return result
+    }
+
+    private static func canonicalLearningFeatures(_ values: [String]) -> [String] {
+        deduplicated(values.map { value in
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "skills":
+                return "skill_affinity"
+            case "skill_optimization", "skill_creation", "skill_create":
+                return "skill_evolution"
+            default:
+                return value
+            }
+        })
     }
 
     private static func looksLikeLongMarkdown(_ text: String) -> Bool {
@@ -2446,6 +2521,9 @@ enum SnapshotParser {
         firstUserMessage: String,
         summary: String
     ) -> Bool {
+        if isInternalLearningThread(row) {
+            return false
+        }
         let userMessages = messages
             .filter { $0.role == .user }
             .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -2461,6 +2539,15 @@ enum SnapshotParser {
             return false
         }
         return !userMessages.allSatisfy(looksLikeInternalChatHistoryTitle)
+    }
+
+    private static func isInternalLearningThread(_ row: [String: Any]) -> Bool {
+        let entrySurface = string(row["entry_surface"] ?? row["entrySurface"]).lowercased()
+        let metadata = object(row["metadata"] ?? row["metadata_json"] ?? row["metadataJson"])
+        let episodeKind = string(metadata["episode_kind"] ?? metadata["episodeKind"]).lowercased()
+        return entrySurface.contains(":sub_agent")
+            || episodeKind == "sub_agent"
+            || bool(metadata["learning_agent"] ?? metadata["learningAgent"])
     }
 
     private static func looksLikeInternalChatHistoryTitle(_ value: String) -> Bool {

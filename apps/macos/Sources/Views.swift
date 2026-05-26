@@ -328,7 +328,7 @@ struct ElephantLetterEnvelopeOverlay: View {
 
     private var envelopeHeader: some View {
         HStack(alignment: .center, spacing: 15) {
-            BrandMark(size: 58, framed: true)
+            BrandMark(size: 58, framed: true, framedFill: Color(nsColor: .textBackgroundColor).opacity(0.96))
                 .shadow(color: Color.black.opacity(0.10), radius: 12, y: 6)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -343,6 +343,20 @@ struct ElephantLetterEnvelopeOverlay: View {
             }
 
             Spacer(minLength: 0)
+
+            Button {
+                Task { await model.regenerateOnboardingLetter(entry) }
+            } label: {
+                Image(systemName: model.isRegeneratingOnboardingLetter ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(model.isReflecting ? 0.26 : 0.62))
+                    .shadow(color: Color.black.opacity(0.10), radius: 3, y: 1)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .disabled(model.isReflecting)
+            .help(localizedYouText(model.appLanguage, en: "Regenerate letter", zh: "重新生成这封信", fr: "Régénérer la lettre", de: "Brief neu erstellen"))
 
             Button {
                 model.closeOnboardingLetterEnvelope()
@@ -2636,11 +2650,7 @@ struct ThreadRailPanel: View {
 
     private var chatThreads: [EpisodeThread] {
         model.snapshot.episodeThreads.filter { thread in
-            let title = thread.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            return !model.hiddenEpisodeIDs.contains(thread.id)
-                && !title.hasPrefix("trigger:")
-                && !title.hasPrefix("job:")
-                && !title.contains("reflect run")
+            !model.hiddenEpisodeIDs.contains(thread.id)
         }
     }
 
@@ -2794,6 +2804,7 @@ struct WakeComposerPanel: View {
                         PendingQuestionReplyCard(
                             language: model.appLanguage,
                             question: question,
+                            isCompact: composerFocused || !model.wakeDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                             onCancel: { model.cancelQuestionReplyDraft() }
                         )
                     }
@@ -3521,39 +3532,47 @@ struct WakeQueuePanel: View {
 struct PendingQuestionReplyCard: View {
     var language: AppLanguage
     var question: PersonalModelQuestionItem
+    var isCompact = false
     var onCancel: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "questionmark.bubble.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(ElephantTheme.accent)
-                .frame(width: 28, height: 28)
-                .background(ElephantTheme.accent.opacity(0.10), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localizedYouText(language, en: "Answer this question", zh: "回答这个问题", fr: "Répondre à cette question", de: "Diese Frage beantworten"))
+        HStack(alignment: isCompact ? .center : .top, spacing: 10) {
+            if !isCompact {
+                Image(systemName: "questionmark.bubble.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ElephantTheme.accent)
+                    .frame(width: 28, height: 28)
+                    .background(ElephantTheme.accent.opacity(0.10), in: Circle())
+            }
+            VStack(alignment: .leading, spacing: isCompact ? 1 : 3) {
+                Text(localizedYouText(language, en: "Replying to", zh: "正在回答", fr: "Réponse à", de: "Antwort auf"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                 Text(question.text)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(ElephantTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(isCompact ? .caption.weight(.medium) : .callout.weight(.medium))
+                    .foregroundStyle(ElephantTheme.ink.opacity(isCompact ? 0.76 : 1))
+                    .lineLimit(isCompact ? 1 : nil)
+                    .fixedSize(horizontal: false, vertical: !isCompact)
             }
             Spacer(minLength: 8)
             Button(action: onCancel) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(ElephantTheme.muted)
-                    .frame(width: 24, height: 24)
-                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.82), in: Circle())
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(ElephantTheme.muted.opacity(0.86))
+                    .frame(width: 22, height: 22)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.86), in: Circle())
             }
             .buttonStyle(PressablePlainButtonStyle())
             .help(localizedYouText(language, en: "Cancel reply", zh: "取消回答", fr: "Annuler la réponse", de: "Antwort abbrechen"))
         }
-        .padding(10)
+        .padding(.horizontal, isCompact ? 4 : 10)
+        .padding(.vertical, isCompact ? 2 : 10)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(ElephantTheme.accent.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.accent.opacity(0.14), lineWidth: 1))
+        .background(Color(nsColor: .textBackgroundColor).opacity(isCompact ? 0.0 : 0.78), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(ElephantTheme.line.opacity(isCompact ? 0.0 : 0.64), lineWidth: 1)
+        )
     }
 }
 
@@ -3849,13 +3868,32 @@ struct MarkdownBody: View {
                         }
                     }
                 case .quote:
-                    InlineMarkdownText(text: block.text, font: font, color: color.opacity(0.86), selectable: selectable, lineSpacing: lineSpacing)
-                        .padding(.leading, 10)
-                        .overlay(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                .fill(ElephantTheme.accent.opacity(0.40))
-                                .frame(width: 3)
-                        }
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(ElephantTheme.ember.opacity(0.42))
+                            .frame(width: 3)
+                        InlineMarkdownText(
+                            text: block.text,
+                            font: font,
+                            color: color.opacity(0.90),
+                            selectable: selectable,
+                            lineSpacing: lineSpacing
+                        )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(ElephantTheme.gold.opacity(0.075), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(ElephantTheme.gold.opacity(0.18), lineWidth: 1)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        Circle()
+                            .fill(ElephantTheme.ember.opacity(0.34))
+                            .frame(width: 5, height: 5)
+                            .offset(x: 8, y: 8)
+                    }
+                    .accessibilityElement(children: .combine)
                 case .table:
                     if let table = block.table {
                         MarkdownTableView(table: table, font: font, color: color)
@@ -4242,11 +4280,37 @@ struct InlineMarkdownText: View {
     var lineSpacing: CGFloat = 2
 
     var body: some View {
-        if let attributed = try? AttributedString(markdown: text) {
+        if let strongText = strongMarkdownText() {
+            styledText(strongText)
+        } else if let attributed = try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
             styledText(Text(attributed))
         } else {
             styledText(Text(text))
         }
+    }
+
+    private func strongMarkdownText() -> Text? {
+        let pattern = #"(\*\*|__)(.+?)\1"#
+        guard text.range(of: pattern, options: .regularExpression) != nil else { return nil }
+
+        var result = Text("")
+        var cursor = text.startIndex
+        while let range = text.range(of: pattern, options: .regularExpression, range: cursor..<text.endIndex) {
+            if cursor < range.lowerBound {
+                result = result + Text(String(text[cursor..<range.lowerBound]))
+            }
+            let token = String(text[range])
+            let inner = String(token.dropFirst(2).dropLast(2))
+            result = result + Text(inner).bold()
+            cursor = range.upperBound
+        }
+        if cursor < text.endIndex {
+            result = result + Text(String(text[cursor..<text.endIndex]))
+        }
+        return result
     }
 
     @ViewBuilder
@@ -4330,10 +4394,10 @@ struct MessageBubble: View, Equatable {
                         transaction.animation = nil
                     }
             }
-            if !message.isAssistantVoiceReply && !message.toolEvents.isEmpty {
-                ToolUseStack(events: message.toolEvents, isLive: message.isStreaming)
+            if !message.isAssistantVoiceReply && !visibleToolEvents.isEmpty {
+                ToolUseStack(events: visibleToolEvents, isLive: message.isStreaming)
                     .padding(.top, visibleText.isEmpty ? 0 : 1)
-            } else if message.isStreaming && visibleText.isEmpty {
+            } else if message.isStreaming && visibleText.isEmpty && message.toolEvents.isEmpty {
                 ToolTraceWaitingView()
             }
         }
@@ -4382,6 +4446,10 @@ struct MessageBubble: View, Equatable {
     private var visibleText: String {
         guard message.role == .assistant else { return message.text }
         return sanitizedAssistantMessageText(message.text)
+    }
+
+    private var visibleToolEvents: [ToolUseEvent] {
+        message.toolEvents.filter { !$0.shouldHideInChat }
     }
 }
 
@@ -4749,11 +4817,11 @@ struct ToolUseStack: View {
     }
 
     private var childAgentEvents: [ToolUseEvent] {
-        events.filter(\.isChildAgentRun)
+        events.filter { $0.isChildAgentRun && !$0.shouldHideInChat }
     }
 
     private var regularEvents: [ToolUseEvent] {
-        events.filter { !$0.isChildAgentRun }
+        events.filter { !$0.isChildAgentRun && !$0.shouldHideInChat }
     }
 
     private var visibleRegularEvents: [ToolUseEvent] {
@@ -5341,8 +5409,11 @@ private func localizedLearningToken(_ rawValue: String, language: AppLanguage) -
     if value == "questions" {
         return localizedYouText(language, en: "questions", zh: "问题", fr: "questions", de: "Fragen")
     }
-    if value == "skills" {
-        return localizedYouText(language, en: "skills", zh: "技能", fr: "skills", de: "Skills")
+    if value == "skills" || value == "skill_affinity" {
+        return localizedYouText(language, en: "skill affinity", zh: "技能匹配", fr: "affinité skill", de: "Skill-Affinität")
+    }
+    if value == "skill_evolution" || value == "skill_optimization" || value == "skill_creation" {
+        return localizedYouText(language, en: "skill drafts", zh: "技能草稿", fr: "brouillons skill", de: "Skill-Entwürfe")
     }
     if value == "diary" || value.contains("diary_reflection") {
         return localizedYouText(language, en: "diary", zh: "日记", fr: "journal", de: "Tagebuch")
@@ -5943,108 +6014,137 @@ struct QuestionLedgerRow: View {
     @State private var replyDraft = ""
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    questionHeader
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if question.canAct {
+                    replyButton
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            if isExpanded {
+                expandedContent
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var questionHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.faint)
+                .frame(width: 12, height: 20)
+            Image(systemName: "questionmark.bubble")
+                .foregroundStyle(tint)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
-                    Pill(text: lensText, symbol: "circle.grid.cross", tint: tint)
-                    Pill(text: question.source, symbol: "link", tint: ElephantTheme.faint)
-                    Pill(text: question.sensitivity, symbol: "lock", tint: ElephantTheme.faint)
-                    if question.askedCount > 0 {
-                        Pill(text: localizedFormat(model.appLanguage, en: "%d asked", zh: "问过 %d 次", fr: "%d posées", de: "%d gefragt", question.askedCount), symbol: "clock", tint: ElephantTheme.orange)
+                    Text(localizedQuestionStatus(question, language: model.appLanguage))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(tint)
+                    if question.priority > 0 {
+                        Text(localizedYouText(model.appLanguage, en: "priority", zh: "优先级", fr: "priorité", de: "Priorität") + " \(String(format: "%.2f", question.priority))")
+                            .font(.caption)
+                            .foregroundStyle(ElephantTheme.muted)
                     }
                 }
+                Text(question.text)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
 
-                if !question.lastAskedSurface.isEmpty || !question.lastAskedAt.isEmpty {
-                    Text([question.lastAskedSurface, MacLocalDateTime.formatted(question.lastAskedAt, language: model.appLanguage, fallback: "")].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(ElephantTheme.muted)
+    private var expandedContent: some View {
+        VStack(alignment: .center, spacing: 10) {
+            HStack(spacing: 8) {
+                Pill(text: lensText, symbol: "circle.grid.cross", tint: tint)
+                Pill(text: question.source, symbol: "link", tint: ElephantTheme.faint)
+                Pill(text: question.sensitivity, symbol: "lock", tint: ElephantTheme.faint)
+                if question.askedCount > 0 {
+                    Pill(text: localizedFormat(model.appLanguage, en: "%d asked", zh: "问过 %d 次", fr: "%d posées", de: "%d gefragt", question.askedCount), symbol: "clock", tint: ElephantTheme.orange)
                 }
+            }
 
-                if !question.resultingFacts.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(localizedYouText(model.appLanguage, en: "Learned memories", zh: "已经学到的记忆", fr: "Souvenirs appris", de: "Gelernte Erinnerungen"))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(ElephantTheme.muted)
-                        ForEach(question.resultingFacts.prefix(3)) { fact in
+            if !question.lastAskedSurface.isEmpty || !question.lastAskedAt.isEmpty {
+                Text([question.lastAskedSurface, MacLocalDateTime.formatted(question.lastAskedAt, language: model.appLanguage, fallback: "")].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+            }
+
+            if !question.resultingFacts.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(localizedYouText(model.appLanguage, en: "Learned memories", zh: "已经学到的记忆", fr: "Souvenirs appris", de: "Gelernte Erinnerungen"), systemImage: "checkmark.seal.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                    ForEach(question.resultingFacts.prefix(3)) { fact in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle()
+                                .fill(ElephantTheme.green.opacity(0.72))
+                                .frame(width: 5, height: 5)
+                                .padding(.top, 7)
                             Text(fact.text)
-                                .font(.callout)
+                                .font(.callout.weight(.medium))
                                 .foregroundStyle(ElephantTheme.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
-
-                if question.canAct {
-                    HStack(spacing: 8) {
-                        Button(localizedYouText(model.appLanguage, en: "Answer in Chat", zh: "去聊天里回答", fr: "Répondre dans Chat", de: "Im Chat antworten")) {
-                            model.draftAnswerForQuestion(question)
-                        }
-                        Button(localizedYouText(model.appLanguage, en: "Ask sooner", zh: "早点问我", fr: "Demander plus tôt", de: "Früher fragen")) {
-                            Task { await model.surfaceQuestionSooner(question) }
-                        }
-                        Button(localizedYouText(model.appLanguage, en: "Dismiss", zh: "忽略", fr: "Ignorer", de: "Verwerfen")) {
-                            Task { await model.dismissQuestion(question) }
-                        }
-                    }
-                    .controlSize(.small)
-
-                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: 560, alignment: .leading)
+                .background(ElephantTheme.green.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.green.opacity(0.14), lineWidth: 1))
             }
-            .padding(.top, 10)
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "questionmark.bubble")
-                    .foregroundStyle(tint)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(localizedQuestionStatus(question, language: model.appLanguage))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(tint)
-                        if question.priority > 0 {
-                            Text(localizedYouText(model.appLanguage, en: "priority", zh: "优先级", fr: "priorité", de: "Priorität") + " \(String(format: "%.2f", question.priority))")
-                                .font(.caption)
-                                .foregroundStyle(ElephantTheme.muted)
-                        }
-                    }
-                    Text(question.text)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(ElephantTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                if question.canAct {
-                    Button {
-                        isReplying = true
-                    } label: {
-                        Label(replyText, systemImage: "arrowshape.turn.up.left.fill")
-                            .font(.caption.weight(.semibold))
-                            .labelStyle(.titleAndIcon)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .foregroundStyle(ElephantTheme.accent)
-                            .background(ElephantTheme.accent.opacity(0.10), in: Capsule())
-                            .overlay(Capsule().stroke(ElephantTheme.accent.opacity(0.18), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .help(replyHelpText)
-                    .popover(isPresented: $isReplying, arrowEdge: .trailing) {
-                        QuestionReplyPopover(
-                            language: model.appLanguage,
-                            question: question,
-                            draft: $replyDraft,
-                            onCancel: {
-                                replyDraft = ""
-                                isReplying = false
-                            },
-                            onSend: sendReply
-                        )
-                    }
-                }
-            }
-            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 44)
+        .padding(.bottom, 12)
+    }
+
+    private var replyButton: some View {
+        Button {
+            isReplying = true
+        } label: {
+            Label(replyText, systemImage: "arrowshape.turn.up.left.fill")
+                .font(.caption.weight(.semibold))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .foregroundStyle(ElephantTheme.accent)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.86), in: Capsule())
+                .overlay(Capsule().stroke(ElephantTheme.accent.opacity(0.22), lineWidth: 1))
+                .shadow(color: ElephantTheme.accent.opacity(0.08), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .help(replyHelpText)
+        .popover(isPresented: $isReplying, arrowEdge: .trailing) {
+            QuestionReplyPopover(
+                language: model.appLanguage,
+                question: question,
+                draft: $replyDraft,
+                onCancel: {
+                    replyDraft = ""
+                    isReplying = false
+                },
+                onSend: sendReply
+            )
+        }
     }
 
     private var lensText: String {
@@ -6114,20 +6214,20 @@ struct QuestionReplyPopover: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 11) {
                 Image(systemName: "questionmark.bubble.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 38, height: 38)
-                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                VStack(alignment: .leading, spacing: 4) {
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 6) {
                     Text(localizedYouText(language, en: "Reply to this question", zh: "回复这个问题", fr: "Répondre à cette question", de: "Diese Frage beantworten"))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text(localizedYouText(language, en: "After sending, Elephant will update this question and refresh what is worth asking next.", zh: "发送后，Elephant 会更新这个问题，并继续整理接下来值得确认的内容。", fr: "Après l'envoi, Elephant mettra cette question à jour.", de: "Nach dem Senden aktualisiert Elephant diese Frage."))
-                        .font(.caption)
-                        .foregroundStyle(ElephantTheme.muted)
+                    Text(question.text)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(ElephantTheme.ink.opacity(0.82))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -6142,17 +6242,6 @@ struct QuestionReplyPopover: View {
                 .help(localizedYouText(language, en: "Close", zh: "关闭", fr: "Fermer", de: "Schließen"))
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(question.text)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(ElephantTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(ElephantTheme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ElephantTheme.accent.opacity(0.14), lineWidth: 1))
-
             VStack(alignment: .leading, spacing: 8) {
                 Text(localizedYouText(language, en: "Your answer", zh: "你的回答", fr: "Votre réponse", de: "Deine Antwort"))
                     .font(.caption.weight(.semibold))
@@ -6162,9 +6251,9 @@ struct QuestionReplyPopover: View {
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.ink)
                         .focused($isFocused)
-                        .frame(minHeight: 132)
+                        .frame(minHeight: 150)
                         .padding(8)
-                    if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isFocused {
                         Text(replyPlaceholder)
                             .font(.callout)
                             .foregroundStyle(ElephantTheme.muted.opacity(0.74))
@@ -6178,7 +6267,7 @@ struct QuestionReplyPopover: View {
             }
 
             HStack(spacing: 10) {
-                Text(localizedYouText(language, en: "You can be brief. A phrase or a few sentences are both fine.", zh: "可以很短，一句话或几句都可以。", fr: "Une phrase ou quelques lignes suffisent.", de: "Ein Satz oder ein paar Zeilen reichen."))
+                Text(localizedYouText(language, en: "A phrase or a few sentences are enough.", zh: "一句话或几句都可以。", fr: "Une phrase ou quelques lignes suffisent.", de: "Ein Satz oder ein paar Zeilen reichen."))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -6203,7 +6292,10 @@ struct QuestionReplyPopover: View {
         }
         .padding(18)
         .frame(width: 520)
-        .background(ElephantTheme.elevated)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.98))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ElephantTheme.line.opacity(0.70), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.black.opacity(0.14), radius: 26, y: 14)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
                 isFocused = true
@@ -8059,79 +8151,128 @@ struct FactDisclosureRow: View {
     var fact: PersonalModelFact
     @State private var correction = ""
     @State private var isEditing = false
+    @State private var isExpanded = false
 
     var body: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 10) {
-                if !fact.detail.isEmpty {
-                    Text(fact.detail)
-                        .font(.caption)
-                        .foregroundStyle(ElephantTheme.muted)
-                        .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    isExpanded.toggle()
                 }
-                HStack(spacing: 8) {
-                    Pill(text: fact.lens, symbol: "circle.grid.cross", tint: tint)
-                    Pill(text: fact.status, symbol: "checkmark.seal", tint: fact.status == "active" ? ElephantTheme.green : ElephantTheme.orange)
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.faint)
+                        .frame(width: 12, height: 20)
+                    Image(systemName: "checkmark.seal")
+                        .foregroundStyle(tint)
+                        .frame(width: 20)
+                    Text(fact.text)
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
                 }
-                if isEditing {
-                    TextField(localizedYouText(model.appLanguage, en: "Correct this fact", zh: "修正这条事实", fr: "Corriger ce fait", de: "Diese Tatsache korrigieren"), text: $correction, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(2...4)
-                    HStack {
-                        Button(localizedYouText(model.appLanguage, en: "Save correction", zh: "保存修正", fr: "Enregistrer", de: "Korrektur speichern")) {
-                            Task {
-                                await model.updatePersonalFact(fact, action: "correct", replacementText: correction)
-                                isEditing = false
-                            }
-                        }
-                        .disabled(correction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen")) {
-                            isEditing = false
-                            correction = fact.text
-                        }
-                    }
-                    .controlSize(.small)
-                } else {
-                    HStack(spacing: 8) {
-                        Button(localizedYouText(model.appLanguage, en: "Correct", zh: "修正", fr: "Corriger", de: "Korrigieren")) {
-                            correction = fact.text
-                            isEditing = true
-                        }
-                        if fact.status.lowercased() == "retired" {
-                            Button(localizedYouText(model.appLanguage, en: "Recover", zh: "恢复", fr: "Rétablir", de: "Wiederherstellen")) {
-                                Task { await model.updatePersonalFact(fact, action: "restore") }
-                            }
-                        } else {
-                            Button(localizedYouText(model.appLanguage, en: "Retire", zh: "停用", fr: "Retirer", de: "Zurückziehen")) {
-                                Task { await model.updatePersonalFact(fact, action: "forget") }
-                            }
-                        }
-                        Button(localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen")) {
-                            Task { await model.updatePersonalFact(fact, action: "delete") }
-                        }
-                        if !model.factActionResult.isEmpty {
-                            Text(model.factActionResult)
-                                .font(.caption)
-                                .foregroundStyle(ElephantTheme.green)
-                        }
-                    }
-                    .controlSize(.small)
-                }
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.top, 6)
-        } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "checkmark.seal")
-                    .foregroundStyle(tint)
-                    .frame(width: 20)
-                Text(fact.text)
-                    .font(.callout)
-                    .foregroundStyle(ElephantTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                expandedContent
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private var expandedContent: some View {
+        VStack(alignment: .center, spacing: 10) {
+            if !fact.detail.isEmpty {
+                Text(fact.detail)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+            }
+            HStack(spacing: 8) {
+                Pill(text: fact.lens, symbol: "circle.grid.cross", tint: tint)
+                Pill(text: fact.status, symbol: "checkmark.seal", tint: fact.status == "active" ? ElephantTheme.green : ElephantTheme.orange)
+            }
+
+            if isEditing {
+                TextField(localizedYouText(model.appLanguage, en: "Correct this fact", zh: "修正这条事实", fr: "Corriger ce fait", de: "Diese Tatsache korrigieren"), text: $correction, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .frame(maxWidth: 560)
+                HStack(spacing: 8) {
+                    FactActionPillButton(
+                        title: localizedYouText(model.appLanguage, en: "Save", zh: "保存", fr: "Enregistrer", de: "Speichern"),
+                        symbol: "checkmark",
+                        tint: ElephantTheme.green,
+                        disabled: correction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ) {
+                        Task {
+                            await model.updatePersonalFact(fact, action: "correct", replacementText: correction)
+                            isEditing = false
+                        }
+                    }
+                    FactActionPillButton(
+                        title: localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen"),
+                        symbol: "xmark",
+                        tint: ElephantTheme.muted
+                    ) {
+                        isEditing = false
+                        correction = fact.text
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    FactActionPillButton(
+                        title: localizedYouText(model.appLanguage, en: "Correct", zh: "修正", fr: "Corriger", de: "Korrigieren"),
+                        symbol: "pencil",
+                        tint: ElephantTheme.accent
+                    ) {
+                        correction = fact.text
+                        isEditing = true
+                    }
+                    if fact.status.lowercased() == "retired" {
+                        FactActionPillButton(
+                            title: localizedYouText(model.appLanguage, en: "Recover", zh: "恢复", fr: "Rétablir", de: "Wiederherstellen"),
+                            symbol: "arrow.uturn.backward",
+                            tint: ElephantTheme.green
+                        ) {
+                            Task { await model.updatePersonalFact(fact, action: "restore") }
+                        }
+                    } else {
+                        FactActionPillButton(
+                            title: localizedYouText(model.appLanguage, en: "Retire", zh: "停用", fr: "Retirer", de: "Zurückziehen"),
+                            symbol: "pause",
+                            tint: ElephantTheme.orange
+                        ) {
+                            Task { await model.updatePersonalFact(fact, action: "forget") }
+                        }
+                    }
+                    FactActionPillButton(
+                        title: localizedYouText(model.appLanguage, en: "Delete", zh: "删除", fr: "Supprimer", de: "Löschen"),
+                        symbol: "trash",
+                        tint: Color(red: 0.78, green: 0.20, blue: 0.18)
+                    ) {
+                        Task { await model.updatePersonalFact(fact, action: "delete") }
+                    }
+                }
+            }
+
+            if !model.factActionResult.isEmpty {
+                Text(model.factActionResult)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.green)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
     }
 
     private var tint: Color {
@@ -8140,6 +8281,30 @@ struct FactDisclosureRow: View {
         if lens.contains("world") { return PersonalModelMapPalette.world }
         if lens.contains("journey") { return PersonalModelMapPalette.journey }
         return PersonalModelMapPalette.identity
+    }
+}
+
+private struct FactActionPillButton: View {
+    var title: String
+    var symbol: String
+    var tint: Color
+    var disabled = false
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(disabled ? ElephantTheme.faint : tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(nsColor: .textBackgroundColor).opacity(disabled ? 0.48 : 0.88), in: Capsule())
+                .overlay(Capsule().stroke((disabled ? ElephantTheme.line : tint).opacity(disabled ? 0.30 : 0.20), lineWidth: 1))
+                .shadow(color: tint.opacity(disabled ? 0 : 0.07), radius: 8, y: 2)
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+        .disabled(disabled)
     }
 }
 
@@ -8556,6 +8721,7 @@ struct SkillsView: View {
             HStack(spacing: 12) {
                 MetricTile(label: localizedYouText(model.appLanguage, en: "Installed", zh: "已安装", fr: "Installés", de: "Installiert"), value: "\(model.snapshot.skills)", symbol: "wand.and.stars")
                 MetricTile(label: localizedYouText(model.appLanguage, en: "For you", zh: "适合你的技能", fr: "Pour vous", de: "Für dich"), value: "\(model.snapshot.skillAffinities)", symbol: "sparkles", tint: ElephantTheme.orange)
+                MetricTile(label: localizedYouText(model.appLanguage, en: "Drafts", zh: "草稿", fr: "Brouillons", de: "Entwürfe"), value: "\(pendingDrafts)", symbol: "sparkles", tint: ElephantTheme.evolution)
                 MetricTile(label: localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activés", de: "Aktiviert"), value: "\(enabledSkills)", symbol: "checkmark.seal", tint: ElephantTheme.green)
             }
 
@@ -8570,6 +8736,12 @@ struct SkillsView: View {
             return enabled
         }
         return model.snapshot.skills
+    }
+
+    private var pendingDrafts: Int {
+        model.snapshot.skillItems.filter {
+            $0.reviewStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "pending" && !$0.enabled
+        }.count
     }
 }
 
@@ -11825,7 +11997,7 @@ struct LearnView: View {
                 actionTitle: model.isReflecting ? model.text(.learning) : model.text(.runLearn),
                 actionSymbol: "brain.head.profile"
             ) {
-                Task { await model.runReflect(trigger: "learn") }
+                Task { await model.runReflect(trigger: "dream") }
             }
 
             HStack(spacing: 12) {
@@ -11868,21 +12040,39 @@ struct LearnControlsPanel: View {
         [
         LearnActionSpec(
             id: "reflect",
-            title: localizedYouText(model.appLanguage, en: "Reflect", zh: "记忆整理", fr: "Réflexion", de: "Reflexion"),
-            subtitle: localizedYouText(model.appLanguage, en: "Review conversations, questions, and evidence into memory.", zh: "把最近的对话、问题和证据整理成记忆。", fr: "Réviser conversations, questions et preuves vers la mémoire.", de: "Gespräche, Fragen und Belege ins Gedächtnis übernehmen."),
+            title: localizedYouText(model.appLanguage, en: "Memory Review", zh: "记忆整理", fr: "Revue mémoire", de: "Gedächtnisprüfung"),
+            subtitle: localizedYouText(model.appLanguage, en: "Update Personal Model facts, questions, and skill fit from recent context.", zh: "从近期上下文更新个人模型、问题和技能匹配。", fr: "Mettre à jour le Personal Model, les questions et les affinités skill.", de: "Personal Model, Fragen und Skill-Fit aus aktuellem Kontext aktualisieren."),
             symbol: "brain.head.profile",
             tint: ElephantTheme.accent,
             trigger: "manual",
             features: nil
         ),
         LearnActionSpec(
+            id: "skill_affinity",
+            title: localizedYouText(model.appLanguage, en: "Skill Matching", zh: "技能匹配", fr: "Affinité skill", de: "Skill-Abgleich"),
+            subtitle: localizedYouText(model.appLanguage, en: "Audit existing skills and update which ones fit your recurring work.", zh: "审核现有技能，更新哪些技能适合你的重复工作。", fr: "Auditer les skills existants et mettre à jour ceux qui correspondent.", de: "Vorhandene Skills prüfen und passende wiederkehrende Arbeit markieren."),
+            symbol: "wand.and.stars",
+            tint: ElephantTheme.orange,
+            trigger: "manual",
+            features: "skill_affinity"
+        ),
+        LearnActionSpec(
+            id: "skill_evolution",
+            title: localizedYouText(model.appLanguage, en: "Skill Evolution", zh: "技能进化", fr: "Évolution skill", de: "Skill-Evolution"),
+            subtitle: localizedYouText(model.appLanguage, en: "Find repeated workflows and draft disabled skills for review.", zh: "发现重复工作流，并生成待审核、未启用的技能草稿。", fr: "Trouver les workflows répétés et créer des brouillons désactivés.", de: "Wiederholte Workflows finden und deaktivierte Skill-Entwürfe erstellen."),
+            symbol: "sparkles",
+            tint: ElephantTheme.evolution,
+            trigger: "skill_review",
+            features: nil
+        ),
+        LearnActionSpec(
             id: "dream",
-            title: localizedYouText(model.appLanguage, en: "Dream", zh: "模式洞察", fr: "Dream", de: "Dream"),
-            subtitle: localizedYouText(model.appLanguage, en: "Look for quiet patterns, loose threads, and useful next questions.", zh: "找出安静的模式、未完的线索，以及下一步该问什么。", fr: "Repérer les motifs discrets, fils ouverts et prochaines questions utiles.", de: "Leise Muster, lose Fäden und nützliche nächste Fragen finden."),
+            title: localizedYouText(model.appLanguage, en: "Dream Review", zh: "综合 Dream", fr: "Revue Dream", de: "Dream-Prüfung"),
+            subtitle: localizedYouText(model.appLanguage, en: "Run the full bundle: patterns, questions, skill fit, skill drafts, and diary.", zh: "运行完整组合：模式、问题、技能匹配、技能草稿和日记。", fr: "Lancer le lot complet : motifs, questions, skills, brouillons et journal.", de: "Ganzes Paket: Muster, Fragen, Skill-Fit, Entwürfe und Tagebuch."),
             symbol: "moon.stars",
             tint: ElephantTheme.green,
             trigger: "dream",
-            features: "dream"
+            features: nil
         ),
         LearnActionSpec(
             id: "diary",
@@ -11891,7 +12081,7 @@ struct LearnControlsPanel: View {
             symbol: "book.closed",
             tint: ElephantTheme.orange,
             trigger: "diary",
-            features: "diary"
+            features: nil
         ),
         LearnActionSpec(
             id: "letter",
@@ -11911,7 +12101,7 @@ struct LearnControlsPanel: View {
                 HStack(alignment: .top, spacing: 14) {
                     SectionLabel(
                         title: localizedYouText(model.appLanguage, en: "New Evolution Job", zh: "新建自我进化任务", fr: "Nouveau job d'évolution", de: "Neuer Evolutionsjob"),
-                        subtitle: localizedYouText(model.appLanguage, en: "Start a focused background pass when memory needs to catch up.", zh: "让后台把近期内容整理进记忆。", fr: "Lancez un passage en arrière-plan quand la mémoire doit rattraper.", de: "Starte einen fokussierten Hintergrundlauf, wenn das Gedächtnis aufholen soll.")
+                        subtitle: localizedYouText(model.appLanguage, en: "Choose a focused reflect job: memory, skills, Dream, diary, or letter.", zh: "选择明确的 reflect 任务：记忆、技能、Dream、日记或信。", fr: "Choisir un job reflect ciblé : mémoire, skills, Dream, journal ou lettre.", de: "Wähle einen klaren Reflect-Job: Gedächtnis, Skills, Dream, Tagebuch oder Brief.")
                     )
                     Spacer(minLength: 12)
                     statusSummary
@@ -12135,17 +12325,29 @@ struct LearningJobRow: View {
     private var displayTitle: String {
         let raw = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = raw.lowercased()
-        if value.contains("nightly") {
-            return localizedYouText(model.appLanguage, en: "Nightly memory maintenance", zh: "夜间记忆维护", fr: "Entretien mémoire nocturne", de: "Nächtliche Gedächtnispflege")
-        }
-        if value.contains("reflect job") {
-            return localizedYouText(model.appLanguage, en: "Memory reflection", zh: "记忆整理", fr: "Réflexion mémoire", de: "Gedächtnisreflexion")
-        }
-        if value.contains("diary") {
-            return localizedYouText(model.appLanguage, en: "Diary reflection", zh: "日记反思", fr: "Réflexion journal", de: "Tagebuchreflexion")
-        }
-        if value.contains("onboarding") && value.contains("letter") {
+        if normalizedFeatures.contains("onboarding_letter") || (value.contains("onboarding") && value.contains("letter")) {
             return onboardingLetterTitle(model.appLanguage)
+        }
+        if normalizedFeatures.contains("skill_evolution") {
+            return localizedYouText(model.appLanguage, en: "Skill Evolution", zh: "技能进化", fr: "Évolution skill", de: "Skill-Evolution")
+        }
+        if normalizedFeatures.contains("dream") || value.contains("nightly") {
+            return localizedYouText(model.appLanguage, en: "Dream Review", zh: "综合 Dream", fr: "Revue Dream", de: "Dream-Prüfung")
+        }
+        if normalizedFeatures == Set(["diary"]) || value.contains("diary") {
+            return localizedYouText(model.appLanguage, en: "Diary Reflection", zh: "日记反思", fr: "Réflexion journal", de: "Tagebuchreflexion")
+        }
+        if normalizedFeatures == Set(["skill_affinity"]) {
+            return localizedYouText(model.appLanguage, en: "Skill Matching", zh: "技能匹配", fr: "Affinité skill", de: "Skill-Abgleich")
+        }
+        if normalizedFeatures == Set(["questions"]) {
+            return localizedYouText(model.appLanguage, en: "Question Review", zh: "问题整理", fr: "Revue questions", de: "Fragenprüfung")
+        }
+        if normalizedFeatures.intersection(["pm", "questions", "skill_affinity"]).isEmpty == false || value.contains("reflect job") {
+            return localizedYouText(model.appLanguage, en: "Memory Review", zh: "记忆整理", fr: "Revue mémoire", de: "Gedächtnisprüfung")
+        }
+        if normalizedFeatures.contains("compress") {
+            return localizedYouText(model.appLanguage, en: "Context Compaction", zh: "上下文压缩", fr: "Compression contexte", de: "Kontextkomprimierung")
         }
         return raw.isEmpty ? localizedYouText(model.appLanguage, en: "Evolution job", zh: "自我进化任务", fr: "Tâche d'évolution", de: "Evolutionsjob") : raw
     }
@@ -12165,10 +12367,17 @@ struct LearningJobRow: View {
         if value.contains("dream") {
             return localizedYouText(model.appLanguage, en: "dream", zh: "Dream", fr: "dream", de: "Dream")
         }
+        if value.contains("skill_review") {
+            return localizedYouText(model.appLanguage, en: "skill review", zh: "技能审核", fr: "revue skill", de: "Skill-Prüfung")
+        }
         if value.contains("diary") {
             return localizedYouText(model.appLanguage, en: "diary", zh: "日记", fr: "journal", de: "Tagebuch")
         }
         return item.trigger
+    }
+
+    private var normalizedFeatures: Set<String> {
+        Set(item.resolvedFeatures.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })
     }
 
     private var statusTint: Color {
@@ -16056,6 +16265,7 @@ private struct OperatorCatalogContent: View {
     var pageSize: Int
     @State private var query = ""
     @State private var page = 0
+    @State private var selectedItem: OperationItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -16067,6 +16277,13 @@ private struct OperatorCatalogContent: View {
                 )
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
+                    if kind == "skills", pendingDraftCount > 0 {
+                        Pill(
+                            text: localizedFormat(model.appLanguage, en: "%d pending", zh: "%d 待审核", fr: "%d en attente", de: "%d wartet", pendingDraftCount),
+                            symbol: "sparkles",
+                            tint: ElephantTheme.evolution
+                        )
+                    }
                     Pill(
                         text: localizedFormat(model.appLanguage, en: "%d enabled", zh: "%d 已启用", fr: "%d activés", de: "%d aktiv", enabledCount),
                         symbol: "checkmark.seal",
@@ -16125,7 +16342,9 @@ private struct OperatorCatalogContent: View {
             if !items.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(pageItems) { item in
-                        OperatorCatalogRow(kind: kind, item: item)
+                        OperatorCatalogRow(kind: kind, item: item) {
+                            selectedItem = item
+                        }
                         if item.id != pageItems.last?.id {
                             Divider()
                                 .padding(.leading, 64)
@@ -16141,6 +16360,10 @@ private struct OperatorCatalogContent: View {
             }
         }
         .onChange(of: query) { _ in page = 0 }
+        .sheet(item: $selectedItem) { item in
+            OperatorItemDetailSheet(kind: kind, item: item)
+                .environmentObject(model)
+        }
     }
 
     private var normalizedQuery: String {
@@ -16149,6 +16372,11 @@ private struct OperatorCatalogContent: View {
 
     private var filteredItems: [OperationItem] {
         let sorted = items.sorted { left, right in
+            let leftPending = isPendingDraft(left)
+            let rightPending = isPendingDraft(right)
+            if leftPending != rightPending {
+                return leftPending && !rightPending
+            }
             if left.enabled != right.enabled {
                 return left.enabled && !right.enabled
             }
@@ -16169,6 +16397,16 @@ private struct OperatorCatalogContent: View {
 
     private var filteredCount: Int {
         items.isEmpty ? filteredNames.count : filteredItems.count
+    }
+
+    private var pendingDraftCount: Int {
+        items.filter(isPendingDraft).count
+    }
+
+    private func isPendingDraft(_ item: OperationItem) -> Bool {
+        kind == "skills"
+            && item.reviewStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "pending"
+            && !item.enabled
     }
 
     private var pageCount: Int {
@@ -16236,6 +16474,7 @@ private struct OperatorCatalogRow: View {
     @EnvironmentObject private var model: ElephantAppModel
     var kind: String
     var item: OperationItem
+    var onOpen: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -16270,30 +16509,502 @@ private struct OperatorCatalogRow: View {
 
             HStack(spacing: 8) {
                 Pill(
-                    text: item.enabled
-                        ? localizedYouText(model.appLanguage, en: "enabled", zh: "已启用", fr: "activé", de: "aktiv")
-                        : localizedYouText(model.appLanguage, en: "available", zh: "可启用", fr: "disponible", de: "verfügbar"),
-                    symbol: item.enabled ? "checkmark" : "circle",
-                    tint: item.enabled ? ElephantTheme.green : ElephantTheme.faint
+                    text: statusText,
+                    symbol: statusSymbol,
+                    tint: statusTint
                 )
+                Button(action: onOpen) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isEvolutionDraft ? ElephantTheme.evolution : ElephantTheme.muted)
+                        .frame(width: 26, height: 24)
+                }
+                .buttonStyle(PressablePlainButtonStyle())
+                .help(localizedYouText(model.appLanguage, en: "View details", zh: "查看详情", fr: "Voir les détails", de: "Details anzeigen"))
                 Button(
-                    item.enabled
-                        ? localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren")
-                        : localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+                    actionText
                 ) {
                     Task { await model.setConsoleItem(kind: kind, id: item.id, enabled: !item.enabled) }
                 }
                 .controlSize(.small)
-                .frame(width: 72)
+                .frame(width: 86)
+                .disabled(!item.toggleable)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .contentShape(Rectangle())
+        .onTapGesture(perform: onOpen)
     }
 
     private var logo: OperatorLogoSpec {
         OperatorLogoSpec.forItem(item, kind: kind)
+    }
+
+    private var normalizedReviewStatus: String {
+        item.reviewStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var isEvolutionDraft: Bool {
+        kind == "skills" && (
+            normalizedReviewStatus == "pending"
+                || item.sourceKind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().contains("draft")
+        )
+    }
+
+    private var statusText: String {
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled {
+            return localizedYouText(model.appLanguage, en: "pending", zh: "待审核", fr: "en attente", de: "wartet")
+        }
+        if item.enabled {
+            return localizedYouText(model.appLanguage, en: "enabled", zh: "已启用", fr: "activé", de: "aktiv")
+        }
+        return localizedYouText(model.appLanguage, en: "available", zh: "可启用", fr: "disponible", de: "verfügbar")
+    }
+
+    private var statusSymbol: String {
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled { return "sparkles" }
+        return item.enabled ? "checkmark" : "circle"
+    }
+
+    private var statusTint: Color {
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled { return ElephantTheme.evolution }
+        return item.enabled ? ElephantTheme.green : ElephantTheme.faint
+    }
+
+    private var actionText: String {
+        if item.enabled {
+            return localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren")
+        }
+        if kind == "skills", normalizedReviewStatus == "pending" {
+            return localizedYouText(model.appLanguage, en: "Approve", zh: "通过", fr: "Approuver", de: "Freigeben")
+        }
+        return localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+    }
+}
+
+private struct OperatorItemDetailSheet: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @Environment(\.dismiss) private var dismiss
+    var kind: String
+    var item: OperationItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            detailHeader
+
+            overviewPanel
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(detailTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .textCase(.uppercase)
+                ScrollView {
+                    MarkdownBody(
+                        text: bodyText,
+                        font: .callout,
+                        color: ElephantTheme.ink,
+                        blockSpacing: 8
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.trailing, 10)
+                    .padding(.bottom, 2)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+
+            Divider()
+
+            HStack(spacing: 10) {
+                Text(footerText)
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 12)
+                Button(localizedYouText(model.appLanguage, en: "Close", zh: "关闭", fr: "Fermer", de: "Schließen")) {
+                    dismiss()
+                }
+                Button(item.enabled ? localizedYouText(model.appLanguage, en: "Disable", zh: "停用", fr: "Désactiver", de: "Deaktivieren") : approveText) {
+                    Task { await model.setConsoleItem(kind: kind, id: item.id, enabled: !item.enabled) }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(isEvolutionDraft ? ElephantTheme.evolution : ElephantTheme.accent)
+                .disabled(!item.toggleable)
+            }
+        }
+        .padding(22)
+        .frame(width: 920, height: 640, alignment: .topLeading)
+    }
+
+    private var detailHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            OperatorCatalogLogo(symbol: logo.symbol, tint: logo.tint, brandSlug: logo.brandSlug)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.title)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(item.id)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.faint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+            Pill(text: statusText, symbol: statusSymbol, tint: statusTint)
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(PressablePlainButtonStyle())
+            .help(localizedYouText(model.appLanguage, en: "Close", zh: "关闭", fr: "Fermer", de: "Schließen"))
+        }
+    }
+
+    @ViewBuilder
+    private var overviewPanel: some View {
+        if kind == "tools" {
+            toolOverviewPanel
+        } else {
+            skillOverviewPanel
+        }
+    }
+
+    private var skillOverviewPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                if isEvolutionDraft {
+                    Pill(
+                        text: localizedYouText(model.appLanguage, en: "Skill Evolution", zh: "技能进化", fr: "Évolution skill", de: "Skill-Evolution"),
+                        symbol: "sparkles",
+                        tint: ElephantTheme.evolution
+                    )
+                }
+                Pill(
+                    text: promptVisibilityText,
+                    symbol: item.promptIndexVisible ? "eye" : "eye.slash",
+                    tint: item.promptIndexVisible ? ElephantTheme.green : ElephantTheme.faint
+                )
+                Pill(
+                    text: defaultText,
+                    symbol: item.enabled ? "checkmark.seal" : "circle",
+                    tint: item.enabled ? ElephantTheme.green : ElephantTheme.faint
+                )
+            }
+
+            HStack(alignment: .top, spacing: 18) {
+                OperatorDetailBlock(
+                    label: localizedYouText(model.appLanguage, en: "Summary", zh: "摘要", fr: "Résumé", de: "Zusammenfassung"),
+                    value: summaryText,
+                    lineLimit: 4
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    OperatorDetailBlock(
+                        label: localizedYouText(model.appLanguage, en: "Source", zh: "来源", fr: "Source", de: "Quelle"),
+                        value: sourceText,
+                        lineLimit: 2
+                    )
+                    OperatorDetailBlock(
+                        label: localizedYouText(model.appLanguage, en: "Review", zh: "审核", fr: "Revue", de: "Review"),
+                        value: reviewText,
+                        lineLimit: 1
+                    )
+                }
+                .frame(width: 270, alignment: .topLeading)
+            }
+        }
+        .padding(14)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.62), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+    }
+
+    private var toolOverviewPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Pill(text: item.available ? localizedYouText(model.appLanguage, en: "Available", zh: "可用", fr: "Disponible", de: "Verfügbar") : localizedYouText(model.appLanguage, en: "Unavailable", zh: "不可用", fr: "Indisponible", de: "Nicht verfügbar"), symbol: item.available ? "checkmark.circle" : "exclamationmark.triangle", tint: item.available ? ElephantTheme.green : ElephantTheme.orange)
+                Pill(text: localizedFormat(model.appLanguage, en: "risk: %@", zh: "风险：%@", fr: "risque : %@", de: "Risiko: %@", normalizedToolRisk), symbol: "shield", tint: toolRiskTint)
+                Pill(text: localizedFormat(model.appLanguage, en: "approval: %@", zh: "审批：%@", fr: "approbation : %@", de: "Freigabe: %@", normalizedToolApproval), symbol: "checkmark.seal", tint: ElephantTheme.accent)
+                Pill(text: item.defaultEnabled ? localizedYouText(model.appLanguage, en: "Default on", zh: "默认开启", fr: "Activé par défaut", de: "Standard ein") : localizedYouText(model.appLanguage, en: "Default off", zh: "默认关闭", fr: "Désactivé par défaut", de: "Standard aus"), symbol: item.defaultEnabled ? "power.circle.fill" : "power.circle", tint: item.defaultEnabled ? ElephantTheme.green : ElephantTheme.faint)
+            }
+
+            HStack(alignment: .top, spacing: 18) {
+                OperatorDetailBlock(
+                    label: localizedYouText(model.appLanguage, en: "What it does", zh: "用途", fr: "Usage", de: "Zweck"),
+                    value: summaryText,
+                    lineLimit: 4
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    OperatorDetailBlock(
+                        label: localizedYouText(model.appLanguage, en: "Runtime", zh: "运行时", fr: "Runtime", de: "Runtime"),
+                        value: toolRuntimeText,
+                        lineLimit: 2
+                    )
+                    OperatorDetailBlock(
+                        label: localizedYouText(model.appLanguage, en: "Required inputs", zh: "必填输入", fr: "Entrées requises", de: "Pflichteingaben"),
+                        value: requiredFieldsText,
+                        lineLimit: 2
+                    )
+                }
+                .frame(width: 270, alignment: .topLeading)
+            }
+
+            if !toolSideEffectLabels.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(toolSideEffectLabels, id: \.self) { label in
+                        Pill(text: label, symbol: "bolt.horizontal", tint: ElephantTheme.orange)
+                    }
+                }
+            }
+
+            if !item.availabilityReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                OperatorDetailBlock(
+                    label: localizedYouText(model.appLanguage, en: "Availability note", zh: "可用性说明", fr: "Note de disponibilité", de: "Verfügbarkeit"),
+                    value: item.availabilityReason,
+                    lineLimit: 2
+                )
+            }
+        }
+        .padding(14)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.62), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+    }
+
+    private var logo: OperatorLogoSpec {
+        OperatorLogoSpec.forItem(item, kind: kind)
+    }
+
+    private var detailTitle: String {
+        if kind == "skills" {
+            return localizedYouText(model.appLanguage, en: "Skill instructions", zh: "技能说明", fr: "Instructions du skill", de: "Skill-Anweisungen")
+        }
+        if kind == "tools" {
+            return localizedYouText(model.appLanguage, en: "Tool contract", zh: "工具契约", fr: "Contrat outil", de: "Tool-Vertrag")
+        }
+        return localizedYouText(model.appLanguage, en: "Details", zh: "详情", fr: "Détails", de: "Details")
+    }
+
+    private var bodyText: String {
+        if kind == "tools" {
+            return toolBodyText
+        }
+        let trimmed = item.instructionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        return localizedYouText(
+            model.appLanguage,
+            en: "No instruction text returned by the local runtime.",
+            zh: "本地运行时没有返回说明。",
+            fr: "Aucune instruction retournée.",
+            de: "Keine Anweisungen zurückgegeben."
+        )
+    }
+
+    private var summaryText: String {
+        let trimmed = item.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        return localizedYouText(
+            model.appLanguage,
+            en: "No description returned by the local runtime.",
+            zh: "本地运行时没有返回摘要。",
+            fr: "Aucune description retournée.",
+            de: "Keine Beschreibung zurückgegeben."
+        )
+    }
+
+    private var promptVisibilityText: String {
+        item.promptIndexVisible
+            ? localizedYouText(model.appLanguage, en: "Prompt visible", zh: "已进入提示索引", fr: "Visible dans le prompt", de: "Prompt-sichtbar")
+            : localizedYouText(model.appLanguage, en: "Not in prompt", zh: "未进入提示索引", fr: "Hors prompt", de: "Nicht im Prompt")
+    }
+
+    private var defaultText: String {
+        item.enabled
+            ? localizedYouText(model.appLanguage, en: "Enabled", zh: "已启用", fr: "Activé", de: "Aktiv")
+            : localizedYouText(model.appLanguage, en: "Disabled", zh: "未启用", fr: "Désactivé", de: "Deaktiviert")
+    }
+
+    private var reviewText: String {
+        if normalizedReviewStatus.isEmpty {
+            return localizedYouText(model.appLanguage, en: "n/a", zh: "无", fr: "n/a", de: "n/a")
+        }
+        return statusText
+    }
+
+    private var footerText: String {
+        if kind == "tools" {
+            return item.toggleable
+                ? localizedYouText(model.appLanguage, en: "Enable or disable controls whether this tool is exposed to local agent runs.", zh: "启用或停用会控制本地 agent 运行时是否暴露这个工具。", fr: "Activer ou désactiver contrôle l'exposition de cet outil aux agents locaux.", de: "Aktivieren oder Deaktivieren steuert, ob dieses Tool lokalen Agent-Läufen bereitsteht.")
+                : localizedYouText(model.appLanguage, en: "This tool is managed by the local runtime.", zh: "这个工具由本地运行时管理。", fr: "Cet outil est géré par le runtime local.", de: "Dieses Tool wird von der lokalen Runtime verwaltet.")
+        }
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled {
+            return localizedYouText(
+                model.appLanguage,
+                en: "Approve this skill to make it available for future prompts.",
+                zh: "通过后，这个技能才会进入可启用流程并可用于后续提示。",
+                fr: "Approuvez ce skill pour le rendre disponible dans les futurs prompts.",
+                de: "Freigeben, damit dieser Skill für zukünftige Prompts verfügbar wird."
+            )
+        }
+        return item.toggleable
+            ? localizedYouText(model.appLanguage, en: "Changes apply locally through the runtime.", zh: "更改会通过本地运行时立即生效。", fr: "Les changements s'appliquent via le runtime local.", de: "Änderungen gelten lokal über die Runtime.")
+            : localizedYouText(model.appLanguage, en: "This item is managed by the local runtime.", zh: "这个项目由本地运行时管理。", fr: "Cet élément est géré par le runtime local.", de: "Dieses Element wird von der lokalen Runtime verwaltet.")
+    }
+
+    private var sourceText: String {
+        if kind == "tools" {
+            let source = [item.backend, item.family, item.provenance]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
+            return source.isEmpty ? "local runtime" : source
+        }
+        let source = [item.sourceID, item.sourceKind]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+        return source.isEmpty ? "n/a" : source
+    }
+
+    private var normalizedReviewStatus: String {
+        item.reviewStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var isEvolutionDraft: Bool {
+        kind == "skills" && (
+            normalizedReviewStatus == "pending"
+                || item.sourceKind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().contains("draft")
+        )
+    }
+
+    private var statusText: String {
+        if kind == "tools", !item.available {
+            return localizedYouText(model.appLanguage, en: "unavailable", zh: "不可用", fr: "indisponible", de: "nicht verfügbar")
+        }
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled {
+            return localizedYouText(model.appLanguage, en: "pending review", zh: "待审核", fr: "en attente", de: "wartet")
+        }
+        if item.enabled {
+            return localizedYouText(model.appLanguage, en: "enabled", zh: "已启用", fr: "activé", de: "aktiv")
+        }
+        return localizedYouText(model.appLanguage, en: "available", zh: "可启用", fr: "disponible", de: "verfügbar")
+    }
+
+    private var statusSymbol: String {
+        if kind == "tools", !item.available { return "exclamationmark.triangle" }
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled { return "sparkles" }
+        return item.enabled ? "checkmark" : "circle"
+    }
+
+    private var statusTint: Color {
+        if kind == "tools", !item.available { return ElephantTheme.orange }
+        if kind == "skills", normalizedReviewStatus == "pending", !item.enabled { return ElephantTheme.evolution }
+        return item.enabled ? ElephantTheme.green : ElephantTheme.faint
+    }
+
+    private var approveText: String {
+        if kind == "skills", normalizedReviewStatus == "pending" {
+            return localizedYouText(model.appLanguage, en: "Approve", zh: "通过", fr: "Approuver", de: "Freigeben")
+        }
+        return localizedYouText(model.appLanguage, en: "Enable", zh: "启用", fr: "Activer", de: "Aktivieren")
+    }
+
+    private var normalizedToolRisk: String {
+        item.riskClass.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "medium" : item.riskClass
+    }
+
+    private var normalizedToolApproval: String {
+        item.approvalClass.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "standard" : item.approvalClass
+    }
+
+    private var toolRiskTint: Color {
+        let value = normalizedToolRisk.lowercased()
+        if value.contains("high") || value.contains("risky") { return ElephantTheme.orange }
+        if value.contains("low") || value.contains("safe") { return ElephantTheme.green }
+        return ElephantTheme.accent
+    }
+
+    private var toolRuntimeText: String {
+        let parts = [item.family, item.backend]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? "local runtime" : parts.joined(separator: " · ")
+    }
+
+    private var requiredFieldsText: String {
+        item.requiredFields.isEmpty ? localizedYouText(model.appLanguage, en: "none", zh: "无", fr: "aucune", de: "keine") : item.requiredFields.joined(separator: ", ")
+    }
+
+    private var toolSideEffectLabels: [String] {
+        var labels: [String] = []
+        if item.readsState {
+            labels.append(localizedYouText(model.appLanguage, en: "reads state", zh: "读取状态", fr: "lit l'état", de: "liest Zustand"))
+        }
+        if item.writesState {
+            labels.append(localizedYouText(model.appLanguage, en: "writes state", zh: "写入状态", fr: "écrit l'état", de: "schreibt Zustand"))
+        }
+        if item.touchesNetwork {
+            labels.append(localizedYouText(model.appLanguage, en: "network", zh: "网络", fr: "réseau", de: "Netzwerk"))
+        }
+        if item.touchesSecrets {
+            labels.append(localizedYouText(model.appLanguage, en: "secrets", zh: "密钥", fr: "secrets", de: "Secrets"))
+        }
+        return labels
+    }
+
+    private var toolBodyText: String {
+        let schema = item.schemaJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasSchema = !schema.isEmpty && schema != "{}"
+        let schemaText = hasSchema
+            ? "```json\n\(schema)\n```"
+            : localizedYouText(model.appLanguage, en: "This tool does not declare an input schema.", zh: "这个工具没有声明输入 schema。", fr: "Cet outil ne déclare pas de schéma d'entrée.", de: "Dieses Tool deklariert kein Eingabeschema.")
+        var lines = [
+            "## \(localizedYouText(model.appLanguage, en: "Input schema", zh: "输入 schema", fr: "Schéma d'entrée", de: "Eingabeschema"))",
+            schemaText,
+            "",
+            "## \(localizedYouText(model.appLanguage, en: "Runtime metadata", zh: "运行时元数据", fr: "Métadonnées runtime", de: "Runtime-Metadaten"))",
+            "- id: \(item.id)",
+            "- family: \(item.family.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "n/a" : item.family)",
+            "- backend: \(item.backend.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "n/a" : item.backend)",
+            "- risk: \(normalizedToolRisk)",
+            "- approval: \(normalizedToolApproval)",
+            "- required: \(requiredFieldsText)"
+        ]
+        let provenance = item.provenance.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !provenance.isEmpty {
+            lines.append("- provenance: \(provenance)")
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
+private struct OperatorDetailBlock: View {
+    var label: String
+    var value: String
+    var lineLimit: Int? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ElephantTheme.muted)
+                .textCase(.uppercase)
+            Text(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "n/a" : value)
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.ink)
+                .lineLimit(lineLimit)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -16337,6 +17048,13 @@ private struct OperatorLogoSpec {
     var brandSlug: String? = nil
 
     static func forItem(_ item: OperationItem, kind: String) -> OperatorLogoSpec {
+        if kind == "skills" {
+            let review = item.reviewStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let sourceKind = item.sourceKind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if review == "pending" || sourceKind.contains("draft") {
+                return OperatorLogoSpec(symbol: "sparkles", tint: ElephantTheme.evolution)
+            }
+        }
         let raw = "\(item.id) \(item.title) \(item.detail)".lowercased()
         return forText(raw, kind: kind)
     }

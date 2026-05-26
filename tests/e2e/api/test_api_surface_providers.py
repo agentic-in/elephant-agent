@@ -329,6 +329,42 @@ class APISurfaceProviderE2ETest(APISurfaceTestBase):
         self.assertIn(bootstrap_check["status"], EMBEDDING_BOOTSTRAP_STATUSES)
         self.assertEqual(doctor.payload["status"], "ready")
 
+    def test_default_provider_model_update_reuses_active_profile_endpoint(self) -> None:
+        provider_profile = self._provider_profile(
+            profile_id="provider-openrouter",
+            base_url=self.stub.openai_base_url,
+            extra_headers={"x-tenant": "elephant"},
+        )
+
+        defaulted = self.app.dispatch(
+            "POST",
+            "/v1/providers/default",
+            body=self._body({"provider_profile": provider_profile}),
+        )
+        self.assertEqual(defaulted.status_code, 200)
+
+        updated = self.app.dispatch(
+            "POST",
+            "/v1/providers/default",
+            body=self._body(
+                {
+                    "provider_profile": {
+                        "profile_id": "provider-openrouter",
+                        "provider_id": "openai-compatible",
+                        "default_model": "openai/gpt-4.1-mini",
+                        "metadata": {"context_window_mode": "auto"},
+                    }
+                }
+            ),
+        )
+
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.payload["provider_profile"]["base_url"], self.stub.openai_base_url)
+        self.assertEqual(updated.payload["provider_profile"]["default_model"], "openai/gpt-4.1-mini")
+        self.assertEqual(updated.payload["provider_profile"]["extra_headers"], {"x-tenant": "elephant"})
+        self.assertEqual(updated.payload["active_provider"]["base_url"], self.stub.openai_base_url)
+        self.assertEqual(updated.payload["active_provider"]["model_id"], "openai/gpt-4.1-mini")
+
     def test_default_provider_bad_request_hides_legacy_profile_field_names(self) -> None:
         response = self.app.dispatch(
             "POST",

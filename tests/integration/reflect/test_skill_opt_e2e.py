@@ -298,9 +298,9 @@ class SkillOptimizationEndToEndTest(unittest.TestCase):
             updated_skill = load_skill_package_definition(skill_surface.skill_dir)
 
         signal_types = {signal.signal_type for signal in signals}
-        self.assertIn("## Trajectory Signals", evidence)
-        self.assertIn("## Optimization Candidates", evidence)
-        self.assertIn("## Optimization Candidate Records", evidence)
+        self.assertIn("## Workflow Trajectory Signals", evidence)
+        self.assertIn("## Skill Evolution Candidates", evidence)
+        self.assertIn("## Skill Evolution Candidate Records", evidence)
         self.assertIn('"review_status": "pending"', evidence)
         self.assertIn('"target_scope": "python_development"', evidence)
         self.assertNotIn("别把对话内容写进候选里", evidence)

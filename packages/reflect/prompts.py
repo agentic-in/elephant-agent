@@ -23,9 +23,9 @@ world — What is around this person? Their environment and relationships.
   tools      : Software, devices, platforms, workflows they rely on.
   places     : Locations — home city, timezone, frequent places.
   assets     : Things they own or maintain — pets, subscriptions, collections.
-  skills     : Capability affinities and optimization candidates.
+  skills     : Capability affinities.
                Use topic world.skills.affinity.<skill_id> for skill affinity facts and include skill_id, index_id, projection_policy in metadata.
-               Use topic world.skills.optimization.<scope>.<candidate_key> or world.skills.optimization.new.<candidate_key> for operator-reviewed optimization candidates.
+               Do not store Skill Evolution drafts as Personal Model facts; create disabled pending skill drafts through the governed skill draft tool instead.
 
 pulse — How is this person right now? Current state that changes frequently.
   chapter    : Current life phase — active work role, life stage, major transitions.

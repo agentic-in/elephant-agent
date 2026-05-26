@@ -610,6 +610,19 @@ def load_skill_package_definition(path: Path) -> SkillDefinition:
         value = _frontmatter_bool(frontmatter.get(key))
         if value is not None:
             metadata[key] = value
+    for key in (
+        "review_status",
+        "draft_kind",
+        "target_skill_id",
+        "candidate_key",
+        "confidence",
+        "source_episode_ids",
+        "overlap_reviewed_skill_ids",
+        "evidence_summary",
+    ):
+        value = str(frontmatter.get(key) or "").strip()
+        if value:
+            metadata[key] = value
     for key in PERSISTED_SOURCE_DESCRIPTOR_FIELDS + PERSISTED_INSTALL_PROVENANCE_FIELDS:
         value = str(frontmatter.get(key) or "").strip()
         if value:

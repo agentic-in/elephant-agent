@@ -97,8 +97,8 @@ _PROPERTY_DESCRIPTIONS: Mapping[str, Mapping[str, str]] = {
         "text": "Claim text for remember/correct.",
         "ref": "Optional claim ref from tool.personal_model.search; prefer it for correct/forget/dispute when topic is uncertain.",
         "reason": "Short grounded reason, preferably in the user's words.",
-        "source": "Where the update came from: user_said, user_corrected, or learned. For world.skills.optimization.* candidates, always use learned.",
-        "recall_policy": "Optional. Use only when obvious: stable, current, temporary, or review. For world.skills.optimization.* candidates, always use review.",
+        "source": "Where the update came from: user_said, user_corrected, or learned.",
+        "recall_policy": "Optional. Use only when obvious: stable, current, temporary, or review.",
     },
     "tool.personal_model.questions": {
         "action": "Use list, ask, answer, dismiss, create, update, reopen, stale, delete, inspect, or bank.",
@@ -122,6 +122,12 @@ _PROPERTY_DESCRIPTIONS: Mapping[str, Mapping[str, str]] = {
     },
     "tool.skill.manage": {
         "action": "Use install, enable, disable, create, update, delete, or remove for operator-owned skill changes.",
+    },
+    "tool.skill.draft": {
+        "action": "Use create for a new pending skill or update for an update draft against target_skill_id.",
+        "skill_id": "Lowercase draft skill id.",
+        "summary": "Trigger-oriented skill description. This is the most important routing text.",
+        "workflow_steps": "Repeatable procedural steps. Keep them concise and stable.",
     },
 }
 

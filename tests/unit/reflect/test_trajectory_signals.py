@@ -137,6 +137,33 @@ class TrajectorySignalsTest(unittest.TestCase):
 
         self.assertEqual(tuple(episode.episode_id for episode in episodes), ("ep-new", "ep-mid"))
 
+    def test_load_recent_closed_episodes_ignores_learning_agent_children(self) -> None:
+        now = datetime(2026, 5, 19, tzinfo=timezone.utc)
+        repository = _FilteringRepository(
+            (
+                SimpleNamespace(
+                    episode_id="ep-learning",
+                    personal_model_id="pm",
+                    status="closed",
+                    started_at=now,
+                    entry_surface="api:sub_agent",
+                    metadata={"learning_agent": "true"},
+                ),
+                SimpleNamespace(
+                    episode_id="ep-user",
+                    personal_model_id="pm",
+                    status="closed",
+                    started_at=now - timedelta(minutes=1),
+                    entry_surface="api",
+                    metadata={},
+                ),
+            )
+        )
+
+        episodes = load_recent_closed_episodes(repository, personal_model_id="pm", lookback_episodes=5)
+
+        self.assertEqual(tuple(episode.episode_id for episode in episodes), ("ep-user",))
+
     def test_load_recent_closed_episodes_uses_repository_filters_when_available(self) -> None:
         repository = _FilteringRepository(self.episodes)
 

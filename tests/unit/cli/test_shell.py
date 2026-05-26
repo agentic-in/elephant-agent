@@ -516,6 +516,7 @@ class ShellPaletteTest(ShellTestBase):
             "tool.sub_agents": "🐘",
             "tool.skill.list": "🧩",
             "tool.skill.view": "🧩",
+            "tool.skill.draft": "🧩",
             "tool.skill.manage": "🧩",
             "tool.message.send": "📨",
             "tool.todo.manage": "📋",

@@ -24,5 +24,5 @@ FEATURE = Feature(
 - Do not explore, do not search, do not ask questions.
 - Do not duplicate facts already in the "User anchors" section.
 - Keep the summary concise and factual.""",
-    incompatible=("pm", "questions", "recall", "diary", "skills"),
+    incompatible=("pm", "questions", "recall", "diary", "skill_affinity", "skill_evolution"),
 )

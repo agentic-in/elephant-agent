@@ -69,7 +69,7 @@ class LearningResultWriteTests(unittest.TestCase):
             self.assertIn("## User anchors", packet)
             self.assertIn("preferred_name: 称呼：zoey。", packet)
             self.assertIn("first_language: 第一语言：中文。", packet)
-            self.assertIn("features: pm, questions, recall, skills", packet)
+            self.assertIn("features: pm, questions, skill_affinity", packet)
             self.assertNotIn("This should be queried through tools", packet)
             self.assertNotIn("## Active PM facts", packet)
             self.assertNotIn("## Open/asked questions", packet)
