@@ -67,11 +67,20 @@ class StepEvidenceStore:
             metadata=metadata,
         )
 
-    def _steps_for_episode(self, episode_id: str | None) -> tuple[object, ...]:
+    def _steps_for_episode(self, episode_id: str | None, *, episode_ids: tuple[str, ...] | None = None) -> tuple[object, ...]:
         repository = self.repository
         list_steps = getattr(repository, "list_steps", None)
         if not callable(list_steps):
             return ()
+        if episode_ids is not None:
+            # Fast path: push filtering down to SQL via episode_ids parameter.
+            try:
+                return tuple(list_steps(episode_ids=episode_ids))
+            except TypeError:
+                # Fallback if the repository doesn't support episode_ids kwarg.
+                steps = tuple(list_steps())
+                id_set = set(episode_ids)
+                return tuple(step for step in steps if getattr(step, "episode_id", None) in id_set)
         if episode_id is None:
             return tuple(list_steps())
         try:
@@ -85,9 +94,9 @@ class StepEvidenceStore:
             return self.get(evidence_id)
         return None
 
-    def list(self, episode_id: str | None = None, *, include_inactive: bool = False) -> tuple[RecallEvidence, ...]:
+    def list(self, episode_id: str | None = None, *, include_inactive: bool = False, episode_ids: tuple[str, ...] | None = None) -> tuple[RecallEvidence, ...]:
         del include_inactive
-        return tuple(self._step_to_evidence(step) for step in self._steps_for_episode(episode_id))
+        return tuple(self._step_to_evidence(step) for step in self._steps_for_episode(episode_id, episode_ids=episode_ids))
 
     def state(self, evidence_ref: str) -> Mapping[str, object]:
         evidence = self.get_by_evidence_id(evidence_ref)

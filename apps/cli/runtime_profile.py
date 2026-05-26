@@ -95,10 +95,12 @@ class CliRuntimeProfileMixin:
             identity_record=identity,
             relationship_record=relationship,
         )
-        recovery = self._planning_recall_evidence_recovery(session)
         wake_action = "continue" if active_state_focus else "idle"
         wake_summary = active_state_focus if active_state_focus else "No durable elephant focus is available yet."
-        wake_factors: tuple[str, ...] = tuple(("state-continuity", f"recall-scope={','.join(recovery.scope_episode_ids)}"))
+        # Use episode lineage length as a fast proxy for recall scope breadth.
+        # The previous _planning_recall_evidence_recovery call scanned all evidence
+        # records (~28s for large herds) only to populate this telemetry tuple.
+        wake_factors: tuple[str, ...] = ("state-continuity", f"recall-scope=lineage:{len(lineage)}")
         return ContinuityStatus(
             profile=profile,
             session=session,
