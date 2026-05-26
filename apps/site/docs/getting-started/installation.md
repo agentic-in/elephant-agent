@@ -1,29 +1,39 @@
 ---
 title: "Installation"
-description: "Use the public installer for the supported path, or the repo-local script when you are developing from a checkout."
+description: "Install the macOS desktop app, or set up CLI + Dashboard for Linux, cloud, SSH, and terminal-first workflows."
 ---
 
 # Installation
 
-Installation should leave you with one local runtime, one `elephant` launcher,
-and one durable herd that future sessions can return to. The normal path is the
-public installer; the repo-local path is only for development.
+Elephant Agent has two supported product shapes:
+
+- **macOS desktop app** — the recommended local workspace.
+- **CLI + Dashboard** — the terminal-first path for Linux, cloud, SSH, and
+  headless machines.
+
+Both paths should leave you with one durable herd that future sessions can
+return to. The repo-local installer is only for development.
 
 ## Choose an install path
 
 | Path | Use when | What it gives you |
 | --- | --- | --- |
-| Public installer | You want to use Elephant Agent locally | A managed Python runtime, `elephant` launcher, local herd, and packaged dashboard assets. |
-| Stable channel | You prefer fewer package changes | The latest stable published package instead of the default development stream. |
-| Custom location | You need a non-default home or bin dir | The same runtime shape under paths you control. |
+| macOS desktop app | You want the primary Elephant Agent experience | A native workspace for Wake, Personal Model, providers, skills, tools, herd, messaging, reminders, usage, and settings. |
+| CLI + Dashboard | You use Linux, cloud, SSH, or terminal-first macOS | A managed Python runtime, `elephant` launcher, local herd, and packaged Dashboard assets. |
+| Stable channel | You prefer fewer package changes for the CLI path | The latest stable published package instead of the default development stream. |
+| Custom location | You need a non-default home or bin dir for the CLI path | The same runtime shape under paths you control. |
 | Repo checkout | You are developing Elephant Agent itself | A launcher pointed at your local source tree. |
 
 ```mermaid
 flowchart LR
-  install["Install"] --> launcher["elephant launcher"]
-  install --> home["~/.elephant"]
-  home --> herd["herd / durable state"]
-  home --> config["config.yaml"]
+  install["Install"] --> desktop["macOS desktop app"]
+  install --> cli["CLI + Dashboard"]
+  cli --> launcher["elephant launcher"]
+  desktop --> state["local herd / Personal Model state"]
+  cli --> state
+  state --> herd["herd / durable state"]
+  state --> config["config.yaml"]
+  desktop --> wake_app["Wake"]
   launcher --> init["elephant init"]
   init --> wake["elephant wake"]
 ```
@@ -33,9 +43,31 @@ The installer prepares local state. Provider credentials stay in local operator
 state or the encrypted local vault; they are not copied into repo files.
 :::
 
-## Recommended: public installer
+## Recommended: macOS desktop app
 
-For macOS and Linux, the supported public install path is:
+Use this path when you are on macOS and want the full local product surface.
+
+1. Download the latest macOS build from [GitHub Releases](https://github.com/agentic-in/elephant-agent/releases/latest).
+2. Open `Elephant Agent.app`.
+3. Create your first elephant.
+4. Choose a provider, model, embedding posture, and curiosity effort.
+5. Return through **Wake** when you want the same path to continue.
+
+The desktop app keeps the important surfaces in one place: Wake, Personal
+Model, providers, skills, tools, herd, messaging, reminders, usage, and
+settings. Use it when you want Elephant Agent to feel like a local workspace
+rather than only a terminal command.
+
+### Desktop requirements
+
+- macOS
+- a model provider or local model runtime you want Elephant Agent to use
+- local storage for the herd and Personal Model state
+
+## CLI + Dashboard: public installer
+
+Use this path for Linux, cloud machines, SSH workflows, and terminal-first
+macOS setups:
 
 ```bash
 curl -fsSL https://elephant.agentic-in.ai/install.sh | bash
@@ -60,7 +92,7 @@ or install skills before opening `wake`.
 ### System requirements
 
 - Python `3.12` or newer on `PATH`
-- macOS or Linux
+- macOS or Linux for the CLI path
 - outbound network access to install the current Elephant Agent package
 
 ### Choose the stable channel instead
@@ -92,6 +124,24 @@ Useful flags:
 
 The launcher keeps the CLI and messaging gateway on the same durable runtime:
 both surfaces use `$ELEPHANT_HOME/herd/elephant.sqlite3`.
+
+### First CLI run
+
+```bash
+elephant init        # choose identity, provider, and curiosity effort
+elephant status      # check provider and local runtime readiness
+elephant wake        # enter the chat TUI
+elephant dashboard   # open Personal Model, questions, evidence, and runtime state
+```
+
+For remote or cloud use, run:
+
+```bash
+elephant dashboard --no-open
+```
+
+The command prints the local URL so you can attach through your preferred
+tunnel or browser setup.
 
 ## Upgrade an existing install
 
@@ -126,7 +176,7 @@ installer instead:
 
 ```bash
 git clone https://github.com/agentic-in/elephant-agent.git
-cd elephant
+cd elephant-agent
 bash scripts/install.sh
 ```
 

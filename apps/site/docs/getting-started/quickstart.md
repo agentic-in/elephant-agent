@@ -1,24 +1,40 @@
 ---
 title: "Quickstart"
-description: "The shortest supported path: install once, run init, check status, and enter wake with the first named elephant already in place."
+description: "Start with the macOS desktop app, or use CLI + Dashboard for Linux, cloud, SSH, and terminal-first setups."
 ---
 
 # Quickstart
 
-After installation, stay in the CLI. The supported path is short on
-purpose: set up identity once, create your first elephant, confirm readiness, and
-come back to the same elephant through `wake` whenever you need it.
+Use the macOS desktop app when you can. Use CLI + Dashboard when you are on
+Linux, cloud, SSH, or a terminal-first macOS setup.
 
 ## Path overview
 
 ```mermaid
 flowchart LR
-  install["Install"] --> init["elephant init"]
+  start["Start"] --> desktop["macOS desktop app"]
+  start --> cli["CLI + Dashboard"]
+  desktop --> app_setup["create first elephant"]
+  app_setup --> app_wake["Wake"]
+  cli --> init["elephant init"]
   init --> status["elephant status"]
   status --> wake["elephant wake"]
-  wake --> dashboard["optional: elephant dashboard"]
-  wake --> gateway["optional: elephant gateway setup"]
+  wake --> dashboard["elephant dashboard"]
 ```
+
+## macOS desktop app
+
+| Step | Action | Done when... |
+| --- | --- | --- |
+| Download | Get the latest build from [GitHub Releases](https://github.com/agentic-in/elephant-agent/releases/latest). | `Elephant Agent.app` is installed locally. |
+| Create | Open the app and create your first elephant. | The app has a local elephant to return to. |
+| Configure | Choose provider, model, embedding posture, and curiosity effort. | Wake and Personal Model are ready. |
+| Continue | Open **Wake**. | You are back in the same conversation path. |
+
+The desktop app is the primary surface for Wake, Personal Model, providers,
+skills, tools, herd, messaging, reminders, usage, and settings.
+
+## CLI + Dashboard
 
 | Step | Command | Done when... |
 | --- | --- | --- |
@@ -26,12 +42,14 @@ flowchart LR
 | Initialize | `elephant init` | Your first elephant and provider posture exist. |
 | Check readiness | `elephant status` | Provider and embedding readiness are clear. |
 | Continue | `elephant wake` | You are in the durable chat surface. |
+| Inspect | `elephant dashboard` | You can inspect Personal Model, questions, evidence, and runtime state. |
 
 :::tip
-After the first setup, `elephant wake` is the normal daily entrypoint.
+After the first CLI setup, `elephant wake` is the normal daily terminal
+entrypoint.
 :::
 
-## 1. Run init
+### 1. Run init
 
 ```bash
 elephant init
@@ -46,7 +64,7 @@ elephant init
 - prepares the first named elephant so `wake` is the natural next step
 - surfaces the IM handoff so `elephant gateway setup` can open the IM chooser without leaving the main setup flow
 
-## 2. Confirm readiness
+### 2. Confirm readiness
 
 ```bash
 elephant status
@@ -55,7 +73,7 @@ elephant status
 Use `status` before the first durable conversation. It tells you whether the
 active provider and local runtime posture are ready to go.
 
-## 3. Enter `wake`
+### 3. Enter `wake`
 
 ```bash
 elephant wake
@@ -63,6 +81,15 @@ elephant wake
 
 `wake` is the main conversational surface. That is where continuity stays
 alive and your elephant keeps learning.
+
+For remote or cloud use:
+
+```bash
+elephant dashboard --no-open
+```
+
+That prints the local Dashboard URL without trying to open a browser on the
+remote machine.
 
 ## Optional next steps
 

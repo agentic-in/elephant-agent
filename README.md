@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/site/static/assets/screenshots/readme-macos-home.png" alt="Elephant Agent macOS desktop app showing the Personal Model map, current context, and next useful question" width="920" />
+  <img src="apps/site/static/assets/resources/readme-1.png" alt="Elephant Agent follows a personal path with people, places, risks, rhythms, decisions, and a Personal Model" width="920" />
 </p>
 
 <div align="center">
@@ -32,12 +32,42 @@ person should not lose judgment, continuity, or growth in the process.
 
 ## Personal Agent Levels
 
-| Level | Core question | Public examples | Elephant stance |
-|---|---|---|---|
-| **L1 — Do work** | Can AI execute tasks? | Claude Code, Cursor, Devin, Codex-style agents. | Useful capability, not the center. |
-| **L2 — Carry context** | Can the agent stop starting over? | [OpenClaw](https://openclaw.ai/) publicly emphasizes local agents, persistent memory, full system access, skills, plugins, and integrations. | Required foundation; memory supports the Personal Model. |
-| **L3 — Improve procedures** | Can the agent evolve skills and workflows? | [Hermes Agent](https://hermes-ai.net/) publicly positions itself around a self-improving learning loop, skill creation, recall, and user modeling. | Important downstream layer; skills stay visible and governed. |
-| **L4 — Grow the person** | Can personal AI return judgment, evidence, questions, and reflection to the user? | Elephant Agent's product position. | The Personal Model should help the person do more without thinking less. |
+<p align="center">
+  <img src="apps/site/static/assets/brand/agent-levels-positioning.png" alt="Four levels of personal AI with Elephant Agent positioned at L4" width="920" />
+</p>
+
+<table>
+  <tr>
+    <td width="25%">
+      <strong>L1</strong>
+      <br />
+      <strong>Executes tasks.</strong>
+      <br />
+      <sub>Claude Code, Cursor, Devin, and Codex-style agents make execution cheaper and faster.</sub>
+    </td>
+    <td width="25%">
+      <strong>L2</strong>
+      <br />
+      <strong>Carries context.</strong>
+      <br />
+      <sub><a href="https://openclaw.ai/">OpenClaw</a> publicly emphasizes local agents, persistent memory, full system access, skills, plugins, and integrations.</sub>
+    </td>
+    <td width="25%">
+      <strong>L3</strong>
+      <br />
+      <strong>Improves procedures.</strong>
+      <br />
+      <sub><a href="https://hermes-ai.net/">Hermes Agent</a> publicly positions itself around a self-improving learning loop, skill creation, recall, and user modeling.</sub>
+    </td>
+    <td width="25%">
+      <strong>L4</strong>
+      <br />
+      <strong>Elephant Agent's product position.</strong>
+      <br />
+      <sub>Personal AI should help the user keep judgment, evidence, questions, and growth.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Personal Model
 
@@ -53,18 +83,110 @@ person should not lose judgment, continuity, or growth in the process.
 The goal is not to remember everything. The goal is to understand what matters,
 show why it matters, and let you change it.
 
-## What It Does
+## macOS Desktop App
 
-| Capability | What it means |
-|---|---|
-| **Correctable claims** | Remember, correct, forget, dispute, and inspect why a claim exists. |
-| **Evidence-backed recall** | Conversation search and embeddings provide support, but retrieved text does not become truth by itself. |
-| **User-paced curiosity** | Quiet, balanced, or active questions appear only when an answer would improve future help. Silence wins. |
-| **Background reflect** | Episode-close, diary, dream, and manual jobs turn lived Steps into governed Personal Model updates. |
-| **Visible skills and tools** | Skills, tools, models, messaging, and cron jobs remain inspectable capabilities around the Personal Model. |
+The macOS app is the recommended product surface. Wake is where you continue
+the same path; the rest of the app keeps the Personal Model, providers, skills,
+tools, messaging, jobs, and runtime state visible instead of hidden behind a
+chat box.
 
-If Elephant Agent cannot find reliable Personal Model support, `no_match` is a
-feature, not a failure.
+<p align="center">
+  <img src="apps/site/static/assets/screenshots/macos-home.jpg" alt="Elephant Agent macOS Home screen with the Personal Model map, current context, and next useful question" width="920" />
+  <br />
+  <sub><strong>Home</strong> — start from the Personal Model before delegating work.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-onboarding-start.jpg" alt="Elephant Agent onboarding start screen" />
+      <br />
+      <strong>Onboarding</strong>
+      <br />
+      <sub>Create your first elephant before you start delegating work.</sub>
+    </td>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-onboarding-language.jpg" alt="Elephant Agent onboarding language screen" />
+      <br />
+      <strong>Preferences</strong>
+      <br />
+      <sub>Choose language, boundaries, model posture, and curiosity effort.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-wake.jpg" alt="Elephant Agent Wake chat surface" />
+      <br />
+      <strong>Wake</strong>
+      <br />
+      <sub>Return to the same elephant, not a blank prompt.</sub>
+    </td>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-personal-model.jpg" alt="Elephant Agent Personal Model map" />
+      <br />
+      <strong>Personal Model</strong>
+      <br />
+      <sub>Inspect Identity, World, Pulse, and Journey as correctable claims.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-providers.jpg" alt="Elephant Agent model provider settings" />
+      <br />
+      <strong>Providers</strong>
+      <br />
+      <sub>Use local or hosted models without turning the provider into the product.</sub>
+    </td>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-skills.jpg" alt="Elephant Agent skills screen" />
+      <br />
+      <strong>Skills</strong>
+      <br />
+      <sub>See which skills match your Personal Model and active work.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-tools.jpg" alt="Elephant Agent tools screen" />
+      <br />
+      <strong>Tools</strong>
+      <br />
+      <sub>Keep browser, filesystem, MCP, and operator actions explicit.</sub>
+    </td>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-herd.jpg" alt="Elephant Agent herd screen" />
+      <br />
+      <strong>Herd</strong>
+      <br />
+      <sub>Coordinate the mother elephant and local baby agents under one context.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-messaging.jpg" alt="Elephant Agent messaging integrations" />
+      <br />
+      <strong>Messaging</strong>
+      <br />
+      <sub>Connect WeChat, Feishu, Discord, DingDing, or WeCom when you want it.</sub>
+    </td>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/macos-calendar.jpg" alt="Elephant Agent calendar and reminders" />
+      <br />
+      <strong>Calendar</strong>
+      <br />
+      <sub>Keep reminders and scheduled agent work visible in one place.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="apps/site/static/assets/screenshots/macos-usage.jpg" alt="Elephant Agent token usage screen" />
+      <br />
+      <strong>Usage</strong>
+      <br />
+      <sub>Inspect local token flow and runtime events instead of treating cost as a black box.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Quickstart
 
@@ -72,12 +194,9 @@ Elephant Agent has two supported product shapes.
 
 ### 1. macOS desktop app (recommended)
 
-Use this path for the full local desktop workspace: Wake, You, Diary, Reflect,
-Jobs, Skills, Settings, and the Personal Model map in one native app.
-
-<p align="center">
-  <img src="apps/site/static/assets/screenshots/readme-macos-chat.png" alt="Elephant Agent macOS Wake chat surface" width="920" />
-</p>
+Use this path for the full local desktop workspace: Wake, Personal Model,
+providers, skills, tools, herd, messaging, reminders, usage, and settings in
+one native app.
 
 1. Download the latest macOS build from [GitHub Releases](https://github.com/agentic-in/elephant-agent/releases/latest).
 2. Open `Elephant Agent.app`.
@@ -91,13 +210,20 @@ operators. The CLI is the daily work surface; the Dashboard is the visual
 inspection surface for Personal Model, evidence, jobs, skills, and runtime
 state.
 
-<p align="center">
-  <img src="apps/site/static/assets/screenshots/readme-cli.png" alt="Elephant Agent CLI wake session" width="920" />
-</p>
-
-<p align="center">
-  <img src="apps/site/static/assets/screenshots/readme-dashboard.png" alt="Elephant Agent Dashboard Personal Model map" width="920" />
-</p>
+<table>
+  <tr>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/cli-wake.jpg" alt="Elephant Agent CLI wake session" />
+      <br />
+      <strong>CLI</strong>
+    </td>
+    <td width="50%">
+      <img src="apps/site/static/assets/screenshots/dashboard-personal-model.jpg" alt="Elephant Agent Dashboard Personal Model map" />
+      <br />
+      <strong>Dashboard</strong>
+    </td>
+  </tr>
+</table>
 
 Install:
 
@@ -111,7 +237,7 @@ First run:
 elephant init        # choose identity, provider, and curiosity effort
 elephant status      # check provider and local runtime readiness
 elephant wake        # enter the chat TUI
-elephant dashboard   # open You, Questions, and Evidence
+elephant dashboard   # open Personal Model, questions, evidence, and runtime state
 ```
 
 For remote or cloud use, `elephant dashboard --no-open` prints the local URL so
