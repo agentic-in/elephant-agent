@@ -205,7 +205,7 @@ export default function HomePage(): React.JSX.Element {
                   Do more without thinking less.
                 </p>
                 <p>
-                  Agency-first personal AI, built around you.
+                  Make AI for humans, not just agents.
                 </p>
                 <div className="pill-row">
                   <span className="info-pill info-pill-highlight">Personal Model first</span>

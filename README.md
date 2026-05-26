@@ -6,7 +6,7 @@
   <h1>Elephant Agent</h1>
   <p>
     <strong>Do more without thinking less.</strong><br />
-    Agency-first personal AI, built around you.
+    Make AI for humans, not just agents.
   </p>
   <p>
     <a href="https://elephant.agentic-in.ai/">Website</a>
