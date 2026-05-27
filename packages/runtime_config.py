@@ -21,6 +21,10 @@ def default_rtk_config() -> dict[str, Any]:
         "enabled": False,
         "binary": "rtk",
         "rewrite_timeout_seconds": 2,
+        "file_read_optimizer": {
+            "enabled": True,
+            "min_chars": 8_000,
+        },
     }
 
 

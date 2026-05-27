@@ -171,6 +171,7 @@ class RuntimeConfigTest(unittest.TestCase):
                     "enabled": True,
                     "binary": "/usr/local/bin/rtk",
                     "rewrite_timeout_seconds": 5,
+                    "file_read_optimizer": {"enabled": False, "min_chars": 16_000},
                 },
             )
             config = load_global_config(config_path, state_dir=state_dir)
@@ -178,6 +179,8 @@ class RuntimeConfigTest(unittest.TestCase):
             self.assertTrue(rtk["enabled"])
             self.assertEqual(rtk["binary"], "/usr/local/bin/rtk")
             self.assertEqual(rtk["rewrite_timeout_seconds"], 5)
+            self.assertFalse(rtk["file_read_optimizer"]["enabled"])
+            self.assertEqual(rtk["file_read_optimizer"]["min_chars"], 16_000)
 
     def test_save_and_load_extensions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

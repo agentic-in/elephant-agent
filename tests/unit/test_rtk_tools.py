@@ -35,6 +35,9 @@ if len(sys.argv) > 2 and sys.argv[1] == "rewrite":
     if mode == "error":
         print("boom", file=sys.stderr)
         raise SystemExit(9)
+if len(sys.argv) > 2 and sys.argv[1] == "read":
+    print("optimized read for " + sys.argv[2])
+    raise SystemExit(0)
 raise SystemExit(64)
 """,
         encoding="utf-8",
@@ -105,6 +108,60 @@ class RtkCommandRewriterTest(unittest.TestCase):
         self.assertIn("RTK full output tail", summary)
         self.assertIn("ImportError: cannot import name UTC", summary)
 
+    def test_file_read_optimizer_uses_rtk_read_for_large_non_exact_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            binary = _fake_rtk(root)
+            target = root / "large.py"
+            target.write_text("print('hello')\n" * 20, encoding="utf-8")
+            result = RtkCommandRewriter(
+                enabled=True,
+                binary=str(binary),
+                file_read_min_chars=10,
+            ).optimize_file_read(
+                path=target,
+                explicit_offset=False,
+                explicit_limit=False,
+                selected_chars=240,
+                total_lines=20,
+            )
+
+        self.assertTrue(result.optimized)
+        self.assertIn("optimized_by: rtk read", result.summary)
+        self.assertIn("optimized read for", result.summary)
+        self.assertEqual(result.trace_metadata().get("rtk_file_read_optimized"), "true")
+
+    def test_file_read_optimizer_skips_exact_and_small_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            binary = _fake_rtk(root)
+            target = root / "small.py"
+            target.write_text("print('hello')\n", encoding="utf-8")
+            optimizer = RtkCommandRewriter(
+                enabled=True,
+                binary=str(binary),
+                file_read_min_chars=100,
+            )
+            exact = optimizer.optimize_file_read(
+                path=target,
+                explicit_offset=True,
+                explicit_limit=False,
+                selected_chars=200,
+                total_lines=1,
+            )
+            small = optimizer.optimize_file_read(
+                path=target,
+                explicit_offset=False,
+                explicit_limit=False,
+                selected_chars=20,
+                total_lines=1,
+            )
+
+        self.assertFalse(exact.optimized)
+        self.assertEqual(exact.skipped_reason, "exact_read")
+        self.assertFalse(small.optimized)
+        self.assertEqual(small.skipped_reason, "small_read")
+
     def test_factory_loads_enabled_rtk_config_for_terminal_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
@@ -133,6 +190,38 @@ class RtkCommandRewriterTest(unittest.TestCase):
 
         self.assertEqual(result.summary, "rewritten")
         self.assertEqual(result.trace_metadata.get("rtk_rewritten"), "true")
+
+    def test_factory_loads_enabled_rtk_config_for_file_read_optimizer(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            state_dir = root / "state"
+            binary = _fake_rtk(root)
+            target = root / "large.txt"
+            target.write_text("alpha\n" * 100, encoding="utf-8")
+            save_rtk_to_config(
+                global_config_path_for_state_dir(state_dir),
+                state_dir=state_dir,
+                rtk_payload={
+                    "enabled": True,
+                    "binary": str(binary),
+                    "file_read_optimizer": {"enabled": True, "min_chars": 10},
+                },
+            )
+            runtime = build_tool_runtime(
+                enabled_overrides={},
+                dependencies=BuiltinToolDependencies(cwd=root),
+                approval_gateway=CallableApprovalGateway(lambda *_: True),
+                state_dir=state_dir,
+            )
+
+            result = runtime.invoke(
+                "tool.file.read",
+                {"path": "large.txt"},
+                session_id="session-rtk-read-factory",
+            )
+
+        self.assertIn("optimized_by: rtk read", result.summary)
+        self.assertEqual(result.trace_metadata.get("rtk_file_read_optimized"), "true")
 
 
 if __name__ == "__main__":

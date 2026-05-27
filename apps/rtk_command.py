@@ -41,7 +41,7 @@ def run_rtk_doctor(state_dir: Path) -> int:
         print(f"rewrite_output: {probe.rewrite_output}")
     if probe.error:
         print(f"error: {probe.error}")
-    print("coverage: non-sandbox foreground tool.terminal.exec")
+    print("coverage: non-sandbox foreground tool.terminal.exec, large non-exact tool.file.read")
     print("out_of_scope: sandbox terminal exec, background terminal processes")
     return 0 if probe.ok or not enabled else 1
 
@@ -69,7 +69,7 @@ def run_rtk_start(state_dir: Path, *, binary: str | None = None) -> int:
     save_rtk_to_config(config_path, state_dir=state_dir, rtk_payload=payload)
     print("RTK terminal optimizer enabled.")
     print(f"binary: {probe.binary}")
-    print("coverage: non-sandbox foreground tool.terminal.exec")
+    print("coverage: non-sandbox foreground tool.terminal.exec, large non-exact tool.file.read")
     return 0
 
 

@@ -735,11 +735,12 @@ class ToolRuntime(ToolCapability):
                 detail=final.summary,
             )
         )
+        execution_phase = "execution.failed" if final.outcome == "failed" else "execution.completed"
         self._emit_event(
             ToolLifecycleEvent(
-                event_id=f"{invocation.invocation_id}:execution.completed",
+                event_id=f"{invocation.invocation_id}:{execution_phase}",
                 invocation=invocation,
-                phase="execution.completed",
+                phase=execution_phase,
                 detail=final.summary,
                 approval=approval,
                 execution=final,

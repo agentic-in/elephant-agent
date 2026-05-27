@@ -10,10 +10,8 @@ import os
 from pathlib import Path
 import select
 import shutil
-import signal
 import subprocess
 import sys
-import threading
 import time
 from typing import Any
 
@@ -28,7 +26,7 @@ from .handler_support import (
 )
 from .rtk import append_rtk_failure_tail
 from .runtime import ToolInvocation
-from .surfaces import BuiltinToolDependencies, InMemoryProcessManager, ManagedProcess
+from .surfaces import BuiltinToolDependencies
 
 MAX_FILE_READ_LINES = 500
 MAX_FILE_READ_LIMIT = 2_000
@@ -197,50 +195,14 @@ def run_terminal_exec(
     summary = body or f"command exited with status {completed.returncode}"
     if completed.returncode != 0:
         summary = append_rtk_failure_tail(summary, rewrite_result)
-        raise RuntimeError(summary)
-    return tool_summary(invocation, summary, side_effects=("terminal", "filesystem"), trace_metadata=trace_metadata)
-
-
-def run_process_action(invocation: ToolInvocation, *, manager: InMemoryProcessManager) -> Mapping[str, Any]:
-    action = str(invocation.arguments.get("action") or "").strip().lower()
-    if not action:
-        raise ValueError("tool.process.manage requires an 'action' argument")
-    if action in {"list", "ls"}:
-        processes = manager.list()
-        lines = [
-            f"{process.process_id} | {'running' if process.running else f'exited({process.returncode})'} | {process.command}"
-            for process in processes
-        ] or ["<empty>"]
-        return tool_summary(invocation, "\n".join(lines), side_effects=("process",))
-    process_id = optional_string(invocation.arguments.get("process_id"))
-    if process_id is None:
-        raise ValueError(f"tool.process.manage action={action!r} requires 'process_id'")
-    if action in {"poll", "inspect"}:
-        managed = manager.capture_if_finished(process_id)
-        return tool_summary(invocation, _process_summary(managed), side_effects=("process",))
-    if action == "wait":
-        managed = manager.wait(
-            process_id,
-            timeout_seconds=max(1, min(coerce_int(invocation.arguments.get("timeout_seconds"), default=20), 120)),
-        )
-        return tool_summary(invocation, _process_summary(managed), side_effects=("process",))
-    if action == "write":
-        data = str(invocation.arguments.get("input") or "")
-        manager.write(process_id, data)
-        managed = manager.get(process_id)
         return tool_summary(
             invocation,
-            (
-                f"process_id: {managed.process_id}\n"
-                f"status: {'running' if managed.running else 'finished'}\n"
-                f"input_written: {len(data)} bytes"
-            ),
-            side_effects=("process",),
+            summary,
+            outcome="failed",
+            side_effects=("terminal", "filesystem"),
+            trace_metadata=trace_metadata,
         )
-    if action == "kill":
-        managed = manager.kill(process_id)
-        return tool_summary(invocation, _process_summary(managed), side_effects=("process",))
-    raise ValueError(f"tool.process.manage does not support action={action!r}")
+    return tool_summary(invocation, summary, side_effects=("terminal", "filesystem"), trace_metadata=trace_metadata)
 
 
 def run_file_read(
@@ -248,6 +210,7 @@ def run_file_read(
     *,
     cwd: Path,
     allowed_roots: tuple[Path, ...] = (),
+    file_read_optimizer: Any | None = None,
 ) -> Mapping[str, Any]:
     raw_path = optional_string(invocation.arguments.get("path"))
     if raw_path is None:
@@ -259,12 +222,32 @@ def run_file_read(
         _ensure_model_safe_read_path(path)
     _ensure_text_readable(path, raw_path=raw_path)
     content = path.read_text(encoding="utf-8", errors="replace")
+    explicit_offset = "offset" in invocation.arguments and invocation.arguments.get("offset") is not None
+    explicit_limit = "limit" in invocation.arguments and invocation.arguments.get("limit") is not None
     offset = max(1, coerce_int(invocation.arguments.get("offset"), default=1))
     limit = max(1, min(coerce_int(invocation.arguments.get("limit"), default=MAX_FILE_READ_LINES), MAX_FILE_READ_LIMIT))
     lines = content.splitlines()
     end_line = min(len(lines), offset + limit - 1)
     selected = lines[offset - 1 : end_line]
     selected_chars = sum(len(line) + 1 for line in selected)
+    trace_metadata: Mapping[str, Any] = {}
+    if file_read_optimizer is not None:
+        optimization = file_read_optimizer.optimize_file_read(
+            path=path,
+            explicit_offset=explicit_offset,
+            explicit_limit=explicit_limit,
+            selected_chars=selected_chars,
+            total_lines=len(lines),
+            env=invocation.context.env,
+        )
+        trace_metadata = optimization.trace_metadata()
+        if getattr(optimization, "optimized", False) and getattr(optimization, "summary", ""):
+            return tool_summary(
+                invocation,
+                str(optimization.summary),
+                side_effects=("file", "read"),
+                trace_metadata=trace_metadata,
+            )
     if selected_chars > MAX_FILE_READ_CHARS:
         raise ValueError(
             f"tool.file.read selected {selected_chars:,} characters, above the "
@@ -287,6 +270,7 @@ def run_file_read(
         invocation,
         "\n".join(header).strip(),
         side_effects=("file", "read"),
+        trace_metadata=trace_metadata,
     )
 
 
@@ -975,26 +959,10 @@ def _collect_command_lines(
     return lines, returncode, stderr
 
 
-def _process_summary(process: ManagedProcess) -> str:
-    status = "running" if process.running else f"exited({process.returncode})"
-    output = join_parts(process.stdout, process.stderr)
-    lines = [
-        f"process_id: {process.process_id}",
-        f"status: {status}",
-        f"cwd: {process.cwd}",
-        f"command: {process.command}",
-    ]
-    if output:
-        lines.append("output:")
-        lines.append(output)
-    return "\n".join(lines)
-
-
 __all__ = [
     "run_file_patch",
     "run_file_read",
     "run_file_search",
     "run_file_write",
-    "run_process_action",
     "run_terminal_exec",
 ]

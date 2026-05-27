@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 from packages.tools import BuiltinToolDependencies, handlers_code_execution
 from packages.tools.builtins import builtin_tool_definitions
 from packages.tools.local_roots import default_local_allowed_roots
-from packages.tools.rtk import RtkRewriteResult
+from packages.tools.rtk import RtkFileReadOptimizationResult, RtkRewriteResult
 from tests.unit.builtin_tools_test_support import BuiltinToolsTestBase
 
 
@@ -63,6 +63,48 @@ class _FakeTerminalRewriter:
             rewritten=True,
             binary="/tmp/rtk",
             exit_code=3,
+        )
+
+
+class _FakeFileReadOptimizer:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def optimize_file_read(
+        self,
+        *,
+        path: Path,
+        explicit_offset: bool,
+        explicit_limit: bool,
+        selected_chars: int,
+        total_lines: int,
+        env: Mapping[str, str] | None = None,
+    ) -> RtkFileReadOptimizationResult:
+        self.calls.append(
+            {
+                "path": path,
+                "explicit_offset": explicit_offset,
+                "explicit_limit": explicit_limit,
+                "selected_chars": selected_chars,
+                "total_lines": total_lines,
+            }
+        )
+        if explicit_offset or explicit_limit:
+            return RtkFileReadOptimizationResult(
+                enabled=True,
+                optimized=False,
+                skipped_reason="exact_read",
+                total_lines=total_lines,
+            )
+        return RtkFileReadOptimizationResult(
+            summary=f"path: {path}\noptimized_by: rtk read\ncompact view",
+            enabled=True,
+            optimized=True,
+            binary="/tmp/rtk",
+            exit_code=0,
+            input_chars=selected_chars,
+            output_chars=64,
+            total_lines=total_lines,
         )
 
 
@@ -298,12 +340,61 @@ class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
                 ),
             )
 
-            with self.assertRaisesRegex(RuntimeError, "ImportError: cannot import name UTC"):
-                runtime.invoke(
-                    "tool.terminal.exec",
-                    {"command": "pytest tests/unit/test_example.py"},
-                    session_id="session-rtk-failure-tail",
-                )
+            result = runtime.invoke(
+                "tool.terminal.exec",
+                {"command": "pytest tests/unit/test_example.py"},
+                session_id="session-rtk-failure-tail",
+            )
+
+        self.assertEqual(result.outcome, "failed")
+        self.assertIn("ImportError: cannot import name UTC", result.summary)
+        self.assertEqual(result.trace_metadata.get("rtk_rewritten"), "true")
+        self.assertEqual(result.trace_metadata.get("rtk_exit_code"), "3")
+
+    def test_file_read_uses_configured_optimizer_for_non_exact_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            text_file = cwd / "large.txt"
+            text_file.write_text("\n".join(f"line-{index}" for index in range(1, 20)), encoding="utf-8")
+            optimizer = _FakeFileReadOptimizer()
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(cwd=cwd, file_read_optimizer=optimizer),
+            )
+
+            result = runtime.invoke(
+                "tool.file.read",
+                {"path": "large.txt"},
+                session_id="session-file-read-rtk",
+            )
+
+        self.assertEqual(result.outcome, "success")
+        self.assertIn("optimized_by: rtk read", result.summary)
+        self.assertEqual(result.trace_metadata.get("rtk_file_read_optimized"), "true")
+        self.assertEqual(len(optimizer.calls), 1)
+
+    def test_file_read_keeps_explicit_line_windows_raw(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            text_file = cwd / "large.txt"
+            text_file.write_text("\n".join(f"line-{index}" for index in range(1, 20)), encoding="utf-8")
+            optimizer = _FakeFileReadOptimizer()
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(cwd=cwd, file_read_optimizer=optimizer),
+            )
+
+            result = runtime.invoke(
+                "tool.file.read",
+                {"path": "large.txt", "offset": 2, "limit": 2},
+                session_id="session-file-read-rtk-exact",
+            )
+
+        self.assertIn("2|line-2", result.summary)
+        self.assertIn("3|line-3", result.summary)
+        self.assertNotIn("optimized_by: rtk read", result.summary)
+        self.assertEqual(result.trace_metadata.get("rtk_file_read_optimized"), "false")
+        self.assertEqual(result.trace_metadata.get("rtk_skip_reason"), "exact_read")
 
     def test_file_read_is_paginated_and_rejects_binary_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
