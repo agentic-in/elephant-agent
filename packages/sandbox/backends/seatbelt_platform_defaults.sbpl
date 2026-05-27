@@ -1,0 +1,212 @@
+; Elephant Agent — macOS Platform Defaults (Restricted Read-Only)
+;
+; Precise file-read whitelist for macOS system paths.
+; Included when `restrict_file_read=True` to replace the blanket `(allow file-read*)`.
+;
+; Reference: Codex codex-rs/sandboxing/src/restricted_read_only_platform_defaults.sbpl
+; Reference: Chromium sandbox/policy/mac/common.sb
+
+; --- System libraries and frameworks ---
+(allow file-read* file-test-existence
+  (subpath "/Library/Apple")
+  (subpath "/Library/Filesystems/NetFSPlugins")
+  (subpath "/Library/Frameworks")
+  (subpath "/Library/Preferences/Logging")
+  (subpath "/Library/Preferences")
+  (subpath "/usr/lib")
+  (subpath "/usr/share")
+  (subpath "/usr/local/lib")
+  (subpath "/usr/local/share")
+  (subpath "/usr/local/Cellar")
+  (subpath "/usr/local/Frameworks")
+  (subpath "/usr/local/opt"))
+
+; --- Homebrew (Apple Silicon + Intel) ---
+(allow file-read* file-test-existence
+  (subpath "/opt/homebrew"))
+
+; --- System framework and dylib mapping ---
+(allow file-map-executable
+  (subpath "/Library/Apple/System/Library/Frameworks")
+  (subpath "/Library/Apple/System/Library/PrivateFrameworks")
+  (subpath "/Library/Apple/usr/lib")
+  (subpath "/System/Library/Extensions")
+  (subpath "/System/Library/Frameworks")
+  (subpath "/System/Library/PrivateFrameworks")
+  (subpath "/System/Library/SubFrameworks")
+  (subpath "/System/iOSSupport/System/Library/Frameworks")
+  (subpath "/System/iOSSupport/System/Library/PrivateFrameworks")
+  (subpath "/System/iOSSupport/System/Library/SubFrameworks")
+  (subpath "/usr/lib"))
+
+; --- System frameworks read access ---
+(allow file-read* file-test-existence
+  (subpath "/Library/Apple/System/Library/Frameworks")
+  (subpath "/Library/Apple/System/Library/PrivateFrameworks")
+  (subpath "/Library/Apple/usr/lib")
+  (subpath "/System/Library/Frameworks")
+  (subpath "/System/Library/PrivateFrameworks")
+  (subpath "/System/Library/SubFrameworks")
+  (subpath "/System/iOSSupport/System/Library/Frameworks")
+  (subpath "/System/iOSSupport/System/Library/PrivateFrameworks")
+  (subpath "/System/iOSSupport/System/Library/SubFrameworks"))
+
+; --- Executables ---
+(allow file-read-data file-read-metadata
+  (subpath "/bin")
+  (subpath "/sbin")
+  (subpath "/usr/bin")
+  (subpath "/usr/sbin")
+  (subpath "/usr/libexec"))
+
+; --- Configuration ---
+(allow file-read* file-test-existence
+  (subpath "/etc")
+  (subpath "/private/etc"))
+
+; --- Temporary directories ---
+(allow file-read* file-test-existence
+  (subpath "/tmp")
+  (subpath "/private/tmp")
+  (subpath "/var/tmp")
+  (subpath "/private/var/tmp"))
+
+; --- Device files ---
+(allow file-read* file-test-existence
+  (literal "/dev/autofs_nowait")
+  (literal "/dev/random")
+  (literal "/dev/urandom")
+  (literal "/dev/null")
+  (literal "/dev/zero")
+  (literal "/dev/tty"))
+
+; --- File descriptors ---
+(allow file-read-data file-test-existence file-write-data
+  (subpath "/dev/fd"))
+
+; --- Terminal and PTY devices (metadata) ---
+(allow file-read-metadata
+  (literal "/dev")
+  (regex #"^/dev/.*$")
+  (literal "/dev/stdin")
+  (literal "/dev/stdout")
+  (literal "/dev/stderr")
+  (regex #"^/dev/tty[^/]*$")
+  (regex #"^/dev/pty[^/]*$"))
+
+(allow file-read* file-write*
+  (regex #"^/dev/ttys[0-9]+$")
+  (literal "/dev/ptmx")
+  (literal "/dev/null")
+  (literal "/dev/tty"))
+
+; --- System databases and timezone ---
+(allow file-read* file-test-existence
+  (subpath "/private/var/db/timezone")
+  (subpath "/private/var/db/DarwinDirectory/local/recordStore.data")
+  (subpath "/var/db")
+  (subpath "/private/var/db"))
+
+; --- dyld shared cache ---
+(allow file-read* file-test-existence
+  (subpath "/private/var/db/dyld")
+  (subpath "/System/Library/dyld"))
+
+; --- NSTemporaryDirectory / per-user temp (sandbox temp dir is separate) ---
+(allow file-read* file-test-existence
+  (subpath "/private/var/folders"))
+
+; --- CoreServices version info ---
+(allow file-read* file-test-existence
+  (literal "/System/Library/CoreServices")
+  (literal "/System/Library/CoreServices/.SystemVersionPlatform.plist")
+  (literal "/System/Library/CoreServices/SystemVersion.plist"))
+
+; --- Symlink resolution ---
+(allow file-read-metadata file-test-existence
+  (literal "/etc")
+  (literal "/tmp")
+  (literal "/var")
+  (literal "/private/etc/localtime"))
+
+; --- Firmlink parent traversal ---
+(allow file-read-metadata file-test-existence
+  (path-ancestors "/System/Volumes/Data/private"))
+(allow file-read-metadata
+  (literal "/System/Volumes")
+  (literal "/System/Volumes/Data")
+  (literal "/System/Volumes/Data/Users"))
+
+; --- Root directory (getcwd support) ---
+(allow file-read* file-test-existence
+  (literal "/"))
+
+; --- /var metadata ---
+(allow file-read-metadata
+  (subpath "/var")
+  (subpath "/private/var"))
+
+; --- Applications ---
+(allow file-read* file-test-existence
+  (subpath "/Applications"))
+
+; --- Debugger helpers ---
+(allow file-read* file-test-existence file-write-data file-ioctl
+  (literal "/dev/dtracehelper"))
+
+; --- App sandbox extensions ---
+(allow file-read* (extension "com.apple.app-sandbox.read"))
+(allow file-read* file-write* (extension "com.apple.app-sandbox.read-write"))
+
+; --- Regulatory domain ---
+(allow file-read*
+  (literal "/private/var/db/eligibilityd/eligibility.plist"))
+
+; --- Allow guarded vnodes ---
+(allow system-mac-syscall (mac-policy-name "vnguard"))
+
+; --- Container check ---
+(allow system-mac-syscall
+  (require-all
+    (mac-policy-name "Sandbox")
+    (mac-syscall-number 67)))
+
+; --- Alternate chflags ---
+(allow system-fsctl (fsctl-command FSIOC_CAS_BSDFLAGS))
+
+; --- IPC to system agents (logging, analytics, trust) ---
+(allow mach-lookup
+  (global-name "com.apple.analyticsd")
+  (global-name "com.apple.analyticsd.messagetracer")
+  (global-name "com.apple.appsleep")
+  (global-name "com.apple.bsd.dirhelper")
+  (global-name "com.apple.diagnosticd")
+  (global-name "com.apple.dt.automationmode.reader")
+  (global-name "com.apple.espd")
+  (global-name "com.apple.logd")
+  (global-name "com.apple.logd.events")
+  (global-name "com.apple.runningboard")
+  (global-name "com.apple.secinitd")
+  (global-name "com.apple.system.DirectoryService.libinfo_v1")
+  (global-name "com.apple.system.logger")
+  (global-name "com.apple.system.notification_center")
+  (global-name "com.apple.system.opendirectoryd.membership")
+  (global-name "com.apple.trustd")
+  (global-name "com.apple.trustd.agent")
+  (global-name "com.apple.xpc.activity.unmanaged"))
+
+; --- Syslog socket ---
+(allow network-outbound (literal "/private/var/run/syslog"))
+
+; --- macOS Notifications ---
+(allow ipc-posix-shm-read*
+  (ipc-posix-name "apple.shm.notification_center"))
+
+; --- Audio and power management (some tools query these) ---
+(allow mach-lookup
+  (global-name "com.apple.audio.audiohald")
+  (global-name "com.apple.audio.AudioComponentRegistrar"))
+
+; --- IOKit root domain ---
+(allow iokit-open
+  (iokit-registry-entry-class "RootDomainUserClient"))

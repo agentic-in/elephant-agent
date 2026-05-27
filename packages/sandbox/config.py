@@ -38,6 +38,45 @@ class SeatbeltSandboxOptions:
     allow_network_loopback: bool = True
     allow_writable_tmp: bool = True
 
+    # Phase 1: Protected metadata patterns — regex patterns for deny-write
+    # within writable roots. Prevents .git hook injection sandbox escape.
+    protected_paths: tuple[str, ...] = (
+        r"(^|/)\.git(/.*)?$",
+        r"(^|/)\.codex(/.*)?$",
+        r"(^|/)\.claude(/.*)?$",
+    )
+
+    # Phase 1: Block reads to credential directories (~/.ssh, ~/.aws, etc.)
+    deny_read_credentials: bool = True
+
+    # Phase 1: Mach service whitelist — only these services are allowed.
+    # Prevents Keychain access via com.apple.security.keychain.
+    mach_services: tuple[str, ...] = (
+        "com.apple.system.opendirectoryd.libinfo",
+        "com.apple.PowerManagement.control",
+        "com.apple.cfprefsd.daemon",
+        "com.apple.cfprefsd.agent",
+    )
+
+    # Phase 1: Additional writable roots beyond the workspace cwd.
+    extra_writable_roots: tuple[str, ...] = ()
+
+    # Phase 2: Replace (allow file-read*) with precise system path whitelist.
+    # When False, falls back to blanket file-read (legacy/escape hatch).
+    restrict_file_read: bool = True
+
+    # Phase 2: Additional paths to include in the read whitelist.
+    extra_readable_paths: tuple[str, ...] = ()
+
+    # Phase 3: Enable proxy-routed network (extract ports from env vars).
+    network_proxy_mode: bool = False
+
+    # Phase 3: Additional Unix socket paths to allow in proxy mode.
+    extra_unix_sockets: tuple[str, ...] = ()
+
+    # Phase 3: Glob patterns to deny-read (converted to Seatbelt regex).
+    deny_read_globs: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True, slots=True)
 class CloudProfileOptions:
@@ -157,11 +196,57 @@ class SandboxConfig:
         ) if isinstance(ssh_raw, Mapping) else SshSandboxOptions()
 
         seatbelt_raw = section.get("seatbelt", {})
-        seatbelt_options = SeatbeltSandboxOptions(
-            allow_network=bool(seatbelt_raw.get("allow_network", False)),
-            allow_network_loopback=bool(seatbelt_raw.get("allow_network_loopback", True)),
-            allow_writable_tmp=bool(seatbelt_raw.get("allow_writable_tmp", True)),
-        ) if isinstance(seatbelt_raw, Mapping) else SeatbeltSandboxOptions()
+        if isinstance(seatbelt_raw, Mapping):
+            # Defaults must be specified inline because slots=True prevents
+            # class-level attribute access to tuple defaults.
+            _DEFAULT_PROTECTED = (
+                r"(^|/)\.git(/.*)?$",
+                r"(^|/)\.codex(/.*)?$",
+                r"(^|/)\.claude(/.*)?$",
+            )
+            _DEFAULT_MACH = (
+                "com.apple.system.opendirectoryd.libinfo",
+                "com.apple.PowerManagement.control",
+                "com.apple.cfprefsd.daemon",
+                "com.apple.cfprefsd.agent",
+            )
+            protected_raw = seatbelt_raw.get("protected_paths")
+            protected_paths = (
+                tuple(str(p) for p in protected_raw)
+                if isinstance(protected_raw, (list, tuple))
+                else _DEFAULT_PROTECTED
+            )
+            mach_raw = seatbelt_raw.get("mach_services")
+            mach_services = (
+                tuple(str(s) for s in mach_raw)
+                if isinstance(mach_raw, (list, tuple))
+                else _DEFAULT_MACH
+            )
+            extra_writable_raw = seatbelt_raw.get("extra_writable_roots")
+            extra_writable_roots = (
+                tuple(str(p) for p in extra_writable_raw)
+                if isinstance(extra_writable_raw, (list, tuple))
+                else ()
+            )
+            extra_readable_raw = seatbelt_raw.get("extra_readable_paths")
+            extra_readable_paths = (
+                tuple(str(p) for p in extra_readable_raw)
+                if isinstance(extra_readable_raw, (list, tuple))
+                else ()
+            )
+            seatbelt_options = SeatbeltSandboxOptions(
+                allow_network=bool(seatbelt_raw.get("allow_network", False)),
+                allow_network_loopback=bool(seatbelt_raw.get("allow_network_loopback", True)),
+                allow_writable_tmp=bool(seatbelt_raw.get("allow_writable_tmp", True)),
+                protected_paths=protected_paths,
+                deny_read_credentials=bool(seatbelt_raw.get("deny_read_credentials", True)),
+                mach_services=mach_services,
+                extra_writable_roots=extra_writable_roots,
+                restrict_file_read=bool(seatbelt_raw.get("restrict_file_read", True)),
+                extra_readable_paths=extra_readable_paths,
+            )
+        else:
+            seatbelt_options = SeatbeltSandboxOptions()
 
         # Single cloud profile (backward compat)
         cloud_raw = section.get("cloud", {})
@@ -220,6 +305,12 @@ class SandboxConfig:
                 "allow_network": self.seatbelt.allow_network,
                 "allow_network_loopback": self.seatbelt.allow_network_loopback,
                 "allow_writable_tmp": self.seatbelt.allow_writable_tmp,
+                "protected_paths": list(self.seatbelt.protected_paths),
+                "deny_read_credentials": self.seatbelt.deny_read_credentials,
+                "mach_services": list(self.seatbelt.mach_services),
+                "extra_writable_roots": list(self.seatbelt.extra_writable_roots),
+                "restrict_file_read": self.seatbelt.restrict_file_read,
+                "extra_readable_paths": list(self.seatbelt.extra_readable_paths),
             },
             "cloud": _profile_to_dict(self.cloud),
         }

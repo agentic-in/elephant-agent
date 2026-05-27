@@ -1,14 +1,15 @@
 """macOS Seatbelt sandbox backend.
 
-Uses ``/usr/bin/sandbox-exec`` to apply macOS Seatbelt policies that restrict
-filesystem and network access for command execution.  This is the same kernel-
-level sandbox that OpenAI Codex CLI uses on macOS.
+Uses ``/usr/bin/sandbox-exec`` with inline policy (``-p``) and parameterized
+paths (``-D``) to apply macOS Seatbelt policies that restrict filesystem and
+network access for command execution.
 
-Seatbelt provides:
-- Filesystem read/write control per path
-- Network outbound/inbound control
-- Process execution restrictions
-- IPC and Mach restrictions
+Security architecture (inspired by Codex CLI / Chromium sandbox):
+- Policy delivered inline (``-p``) — not via temp file — to prevent tampering
+- Paths passed as ``-D KEY=VALUE`` parameters to prevent policy injection
+- Writable roots have exclusion rules for ``.git``, ``.codex``, ``.claude``
+- mach-lookup restricted to named service whitelist
+- Credential directories (~/.ssh, ~/.aws, etc.) explicitly deny-read
 
 This backend requires macOS.  On other platforms, :meth:`health_check` returns
 ``False`` so the executor can fall back to :class:`LocalBackend`.
@@ -22,6 +23,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from importlib import resources as importlib_resources
 from pathlib import Path
 
 from ..config import SandboxConfig
@@ -33,83 +35,296 @@ _SANDBOX_EXEC_PATH = "/usr/bin/sandbox-exec"
 
 
 # ---------------------------------------------------------------------------
-# Policy generation
+# Policy builder
 # ---------------------------------------------------------------------------
 
-def _seatbelt_policy(
-    *,
-    writable_roots: tuple[Path, ...] = (),
-    readable_roots: tuple[Path, ...] = (),
-    allow_network: bool = False,
-    allow_network_loopback: bool = False,
-) -> str:
-    """Generate a Seatbelt policy string (version 1).
 
-    The policy follows a default-deny model inspired by Codex's base policy:
-    - ``(deny default)`` blocks everything not explicitly allowed
-    - Allow process execution and forking (needed for shell commands)
-    - Allow reading the entire filesystem by default (tools need it)
-    - Restrict writes to only the specified writable roots
-    - Control network based on configuration
+def _load_base_policy() -> str:
+    """Load the static base policy template from the package."""
+    try:
+        ref = importlib_resources.files(__package__) / "seatbelt_base_policy.sbpl"
+        return ref.read_text(encoding="utf-8")
+    except (TypeError, FileNotFoundError, OSError):
+        # Fallback: load relative to this file
+        policy_path = Path(__file__).parent / "seatbelt_base_policy.sbpl"
+        return policy_path.read_text(encoding="utf-8")
 
-    Parameters
-    ----------
-    writable_roots:
-        Paths where the sandboxed process is allowed to write.
-    readable_roots:
-        Additional paths that are explicitly allowed for reading (beyond
-        the default allow-all-read policy).
-    allow_network:
-        Allow all outbound network access.
-    allow_network_loopback:
-        Allow only loopback (127.0.0.1) and Unix domain socket networking.
+
+def _load_platform_defaults() -> str:
+    """Load the platform defaults read-whitelist policy."""
+    try:
+        ref = importlib_resources.files(__package__) / "seatbelt_platform_defaults.sbpl"
+        return ref.read_text(encoding="utf-8")
+    except (TypeError, FileNotFoundError, OSError):
+        policy_path = Path(__file__).parent / "seatbelt_platform_defaults.sbpl"
+        return policy_path.read_text(encoding="utf-8")
+
+
+_BASE_POLICY_CACHE: str | None = None
+_PLATFORM_DEFAULTS_CACHE: str | None = None
+
+
+def _get_base_policy() -> str:
+    global _BASE_POLICY_CACHE
+    if _BASE_POLICY_CACHE is None:
+        _BASE_POLICY_CACHE = _load_base_policy()
+    return _BASE_POLICY_CACHE
+
+
+def _get_platform_defaults() -> str:
+    global _PLATFORM_DEFAULTS_CACHE
+    if _PLATFORM_DEFAULTS_CACHE is None:
+        _PLATFORM_DEFAULTS_CACHE = _load_platform_defaults()
+    return _PLATFORM_DEFAULTS_CACHE
+
+
+class SeatbeltPolicyBuilder:
+    """Builds a Seatbelt policy with parameterized paths.
+
+    Usage::
+
+        builder = SeatbeltPolicyBuilder(config)
+        builder.add_writable_root(cwd, exclusions=[...])
+        policy_text, params = builder.render()
+        # params is a list like ["-DWRITABLE_ROOT_0=/path", "-DHOME_SSH=/path/.ssh", ...]
     """
-    rules: list[str] = ["(version 1)", "(deny default)"]
 
-    # --- Process lifecycle ---
-    rules.append("(allow process-exec)")
-    rules.append("(allow process-fork)")
+    def __init__(self, config: SandboxConfig) -> None:
+        self._config = config
+        self._writable_roots: list[tuple[Path, list[str]]] = []
+        self._params: dict[str, str] = {}
+        self._extra_policy_lines: list[str] = []
+        self._network_lines: list[str] = []
 
-    # --- Filesystem: default allow read ---
-    # Tools need to read system libraries, interpreters, etc.
-    rules.append("(allow file-read*)")
+    def add_writable_root(self, path: Path, exclusions: list[str] | None = None) -> None:
+        """Add a writable root with optional protected-path exclusion patterns.
 
-    # --- Filesystem: writable roots ---
-    for root in writable_roots:
-        resolved = str(root.resolve())
-        rules.append(f'(allow file-write* (subpath "{resolved}"))')
+        *exclusions* are Seatbelt regex patterns that deny writes within the root
+        (e.g. ``r"(^|/)\\.git(/.*)?$"`` to protect ``.git`` directories).
+        """
+        self._writable_roots.append((path.resolve(), exclusions or []))
 
-    # --- /dev/null and /dev/urandom: needed for basic shell ops ---
-    rules.append('(allow file-write* (subpath "/dev/null"))')
-    rules.append('(allow file-write* (subpath "/dev/urandom"))')
+    def add_credential_deny(self, home: Path) -> None:
+        """Add deny-read rules for common credential directories."""
+        credential_dirs = {
+            "HOME_SSH": home / ".ssh",
+            "HOME_AWS": home / ".aws",
+            "HOME_GNUPG": home / ".gnupg",
+            "HOME_KUBE": home / ".kube",
+            "HOME_DOCKER": home / ".docker",
+        }
+        for param_key, dir_path in credential_dirs.items():
+            self._params[param_key] = str(dir_path.resolve())
 
-    # --- macOS /tmp is actually /private/tmp ---
-    # Ensure /tmp writes work even if not in writable_roots
-    rules.append('(allow file-write* (subpath "/private/tmp"))')
+    def add_sandbox_tmpdir(self, tmpdir: Path) -> None:
+        """Set the sandbox temporary directory parameter."""
+        self._params["SANDBOX_TMPDIR"] = str(tmpdir.resolve())
 
-    # --- IPC and Mach: needed for subprocess, pipes, PTY ---
-    rules.append("(allow ipc-sysv*)")
-    rules.append("(allow mach-lookup)")
+    def add_network_rules(self) -> None:
+        """Add network rules based on config."""
+        seatbelt_opts = self._config.seatbelt
+        if seatbelt_opts.allow_network:
+            self._network_lines.extend([
+                "; full network access",
+                "(allow network-outbound)",
+                "(allow network-inbound)",
+            ])
+            # Include network Mach services
+            self._network_lines.append(self._load_network_policy())
+        elif seatbelt_opts.allow_network_loopback:
+            self._network_lines.extend([
+                "; loopback-only network: deny remote, allow unix sockets",
+                "(deny network-outbound)",
+                "(allow network-outbound (remote unix-socket))",
+                "(allow network-inbound (local unix-socket))",
+            ])
+        # else: no network rules → deny default blocks all
 
-    # --- Sysctl: needed for system info queries ---
-    rules.append("(allow sysctl-read)")
+    def add_network_proxy(self, env: dict[str, str] | None = None) -> None:
+        """Add proxy-routed network rules based on environment variables.
 
-    # --- Signal: allow sending signals within the process group ---
-    rules.append("(allow signal (target same-sandbox))")
+        Parses HTTP_PROXY/HTTPS_PROXY/ALL_PROXY to allow only proxy
+        localhost ports and Unix sockets.
+        """
+        from ..proxy import extract_proxy_config
 
-    # --- Network ---
-    if allow_network:
-        rules.append("(allow network-outbound)")
-        rules.append("(allow network-inbound)")
-    elif allow_network_loopback:
-        # Deny all TCP/UDP outbound, then allow Unix domain sockets for IPC
-        # This allows local proxy communication via Unix sockets but blocks
-        # all remote network access (similar to Codex's ProxyRouted mode)
-        rules.append("(deny network-outbound)")
-        rules.append("(allow network-outbound (remote unix-socket))")
-        rules.append("(allow network-inbound (local unix-socket))")
+        seatbelt_opts = self._config.seatbelt
+        proxy_config = extract_proxy_config(
+            env=env,
+            extra_unix_sockets=getattr(seatbelt_opts, "extra_unix_sockets", ()),
+        )
 
-    return "\n".join(rules)
+        if not proxy_config.has_proxy:
+            return
+
+        # If network is fully allowed, proxy rules are redundant
+        if seatbelt_opts.allow_network:
+            return
+
+        # Override simple loopback rules with precise proxy-routed rules
+        self._network_lines.clear()
+        self._network_lines.append("; proxy-routed network mode")
+
+        # Allow connections only to proxy ports on localhost
+        for port in proxy_config.loopback_ports:
+            self._network_lines.append(
+                f'(allow network-outbound (remote ip "localhost:{port}"))'
+            )
+
+        # Allow Unix socket connections for proxy
+        for index, socket_path in enumerate(proxy_config.unix_sockets):
+            param_key = f"UNIX_SOCKET_{index}"
+            self._params[param_key] = socket_path
+            self._network_lines.append(
+                f'(allow network-outbound (remote unix-socket (subpath (param "{param_key}"))))'
+            )
+            # Socket may need file-read/write for connection
+            self._network_lines.append(
+                f'(allow file-read* file-write* (literal (param "{param_key}")))'
+            )
+
+        # Include network Mach services for TLS/DNS
+        self._network_lines.append(self._load_network_policy())
+
+    def add_deny_read_globs(self, globs: tuple[str, ...] | list[str] = ()) -> None:
+        """Add deny-read rules converted from glob patterns.
+
+        Converts each glob pattern to a Seatbelt regex and emits
+        ``(deny file-read* (regex #"..."))`` rules.
+        """
+        from ..glob_to_regex import format_seatbelt_deny_read
+
+        for pattern in globs:
+            rule = format_seatbelt_deny_read(pattern)
+            if rule:
+                self._extra_policy_lines.append(rule)
+
+    @staticmethod
+    def _load_network_policy() -> str:
+        """Load the network policy SBPL fragment."""
+        try:
+            ref = importlib_resources.files(__package__) / "seatbelt_network_policy.sbpl"
+            return ref.read_text(encoding="utf-8")
+        except (TypeError, FileNotFoundError, OSError):
+            policy_path = Path(__file__).parent / "seatbelt_network_policy.sbpl"
+            return policy_path.read_text(encoding="utf-8")
+
+    def render(self) -> tuple[str, list[str]]:
+        """Render the complete policy and -D parameter list.
+
+        Returns:
+            A tuple of (policy_text, params_argv) where params_argv is a list
+            of strings like ["-DWRITABLE_ROOT_0=/path", "-DHOME_SSH=/path", ...].
+        """
+        sections: list[str] = []
+        seatbelt_opts = self._config.seatbelt
+
+        # 1. Base policy (static template — includes sysctl whitelist, PTY, mach)
+        base = _get_base_policy()
+
+        # Phase 2: If restrict_file_read is enabled, remove the blanket
+        # (allow file-read*) from base and replace with platform defaults.
+        if seatbelt_opts.restrict_file_read:
+            # Remove the blanket file-read* line from base policy
+            base_lines = base.splitlines()
+            filtered_lines = []
+            for line in base_lines:
+                stripped = line.strip()
+                # Remove the blanket allow but keep credential deny rules
+                if stripped == "(allow file-read*)" and "credential" not in line.lower():
+                    filtered_lines.append("; (allow file-read*) — REMOVED by restrict_file_read mode")
+                else:
+                    filtered_lines.append(line)
+            sections.append("\n".join(filtered_lines))
+
+            # Add platform defaults (precise read whitelist)
+            sections.append("; --- Platform defaults: precise read whitelist ---")
+            sections.append(_get_platform_defaults())
+
+            # Writable roots are implicitly readable
+            readable_from_writable = self._render_readable_from_writable_roots()
+            if readable_from_writable:
+                sections.append(readable_from_writable)
+
+            # Extra readable paths from config
+            extra_readable = self._render_extra_readable_paths()
+            if extra_readable:
+                sections.append(extra_readable)
+        else:
+            sections.append(base)
+
+        # 2. Dynamic writable-root rules
+        writable_section = self._render_writable_roots()
+        if writable_section:
+            sections.append(writable_section)
+
+        # 3. Network rules
+        if self._network_lines:
+            sections.append("\n".join(self._network_lines))
+
+        # 4. Extra policy lines
+        if self._extra_policy_lines:
+            sections.append("\n".join(self._extra_policy_lines))
+
+        policy_text = "\n\n".join(sections)
+
+        # Build -D parameter list
+        params_argv: list[str] = []
+        for key, value in sorted(self._params.items()):
+            params_argv.append(f"-D{key}={value}")
+
+        return policy_text, params_argv
+
+    def _render_writable_roots(self) -> str:
+        """Render parameterized writable-root rules with exclusions."""
+        if not self._writable_roots:
+            return ""
+
+        lines: list[str] = ["; --- Dynamic writable roots ---"]
+
+        for index, (root_path, exclusions) in enumerate(self._writable_roots):
+            param_key = f"WRITABLE_ROOT_{index}"
+            self._params[param_key] = str(root_path)
+
+            if not exclusions:
+                # Simple case: no exclusions
+                lines.append(f'(allow file-write* (subpath (param "{param_key}")))')
+            else:
+                # Complex case: require-all with require-not exclusions
+                parts = [f'(subpath (param "{param_key}"))']
+                for pattern in exclusions:
+                    # Escape quotes in regex patterns for SBPL
+                    escaped = pattern.replace('"', '\\"')
+                    parts.append(f'(require-not (regex #"{escaped}"))')
+                require_body = " ".join(parts)
+                lines.append(f"(allow file-write* (require-all {require_body}))")
+
+        return "\n".join(lines)
+
+    def _render_readable_from_writable_roots(self) -> str:
+        """Writable roots are implicitly readable (for restrict_file_read mode)."""
+        if not self._writable_roots:
+            return ""
+
+        lines: list[str] = ["; --- Writable roots are implicitly readable ---"]
+        for index, _ in enumerate(self._writable_roots):
+            param_key = f"WRITABLE_ROOT_{index}"
+            lines.append(f'(allow file-read* (subpath (param "{param_key}")))')
+        return "\n".join(lines)
+
+    def _render_extra_readable_paths(self) -> str:
+        """Render extra readable paths from config."""
+        seatbelt_opts = self._config.seatbelt
+        if not seatbelt_opts.extra_readable_paths:
+            return ""
+
+        lines: list[str] = ["; --- Extra readable paths from config ---"]
+        for index, extra_path in enumerate(seatbelt_opts.extra_readable_paths):
+            resolved = str(Path(extra_path).resolve())
+            param_key = f"EXTRA_READABLE_{index}"
+            self._params[param_key] = resolved
+            lines.append(f'(allow file-read* (subpath (param "{param_key}")))')
+        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +334,15 @@ def _seatbelt_policy(
 class SeatbeltBackend:
     """macOS Seatbelt sandbox backend using ``/usr/bin/sandbox-exec``.
 
-    Each session gets a temporary directory and a Seatbelt policy file that
-    restricts the sandboxed process based on the :class:`SandboxConfig`.
+    Each session gets a temporary directory and a dynamically generated Seatbelt
+    policy that is delivered inline via ``-p`` with parameterized paths via ``-D``.
 
-    This backend extends :class:`LocalBackend` semantics but wraps every
-    ``subprocess.Popen`` call with ``sandbox-exec -f <policy> -- <command>``.
+    Security properties:
+    - Policy is inline (not a temp file) — cannot be tampered by child process
+    - Paths are parameterized — prevents policy injection via special characters
+    - Writable roots exclude .git, .codex, .claude — prevents sandbox escape
+    - mach-lookup restricted to essential services — prevents Keychain access
+    - Credential directories denied — ~/.ssh, ~/.aws, ~/.gnupg not readable
     """
 
     BACKEND_ID = "seatbelt"
@@ -146,7 +365,6 @@ class SeatbeltBackend:
         sandbox_root = Path(tempfile.mkdtemp(prefix="elephant-seatbelt-"))
         snapshot_path = sandbox_root / ".snapshot.sh"
         cwd_file = sandbox_root / ".cwd"
-        policy_path = sandbox_root / ".seatbelt.sbpl"
 
         # Write initial snapshot that sources the cwd marker
         snapshot_path.write_text(
@@ -158,15 +376,6 @@ class SeatbeltBackend:
         )
         cwd_file.write_text(str(cwd), encoding="utf-8")
 
-        # Generate Seatbelt policy
-        writable_roots = self._resolve_writable_roots(cwd)
-        policy = _seatbelt_policy(
-            writable_roots=writable_roots,
-            allow_network=self._config.seatbelt.allow_network,
-            allow_network_loopback=self._config.seatbelt.allow_network_loopback,
-        )
-        policy_path.write_text(policy, encoding="utf-8")
-
         handle = SessionHandle(
             session_id=session_id,
             backend_id=self.BACKEND_ID,
@@ -174,7 +383,8 @@ class SeatbeltBackend:
             cwd=cwd,
             snapshot_path=snapshot_path,
             cwd_file=cwd_file,
-            attachments=(str(policy_path),),
+            # No policy file path in attachments — policy is inline now
+            attachments=(),
         )
         self._sessions[session_id] = handle
         return handle
@@ -215,11 +425,17 @@ class SeatbeltBackend:
         sanitized_env["ELEPHANT_SANDBOX_SESSION"] = handle.session_id
         sanitized_env["ELEPHANT_SANDBOX"] = "seatbelt"
 
-        # Retrieve policy path from attachments
-        policy_path = self._policy_path(handle)
+        # Build policy with SeatbeltPolicyBuilder
+        policy_text, policy_params = self._build_policy(effective_cwd, handle.sandbox_root)
 
-        # Wrap with sandbox-exec, running the command through /bin/sh
-        sandbox_argv = [_SANDBOX_EXEC_PATH, "-f", str(policy_path), "--", "/bin/sh", "-c", wrapped_command]
+        # Build sandbox-exec argv with inline policy (-p) and -D params
+        sandbox_argv = [
+            _SANDBOX_EXEC_PATH,
+            "-p", policy_text,
+            *policy_params,
+            "--",
+            "/bin/sh", "-c", wrapped_command,
+        ]
 
         # Output files inside sandbox root
         stdout_path = handle.sandbox_root / "stdout.txt"
@@ -300,33 +516,39 @@ class SeatbeltBackend:
 
     # --- Internal helpers ---
 
-    def _resolve_writable_roots(self, cwd: Path) -> tuple[Path, ...]:
-        """Determine which paths the sandboxed process may write to."""
-        roots: list[Path] = []
+    def _build_policy(self, cwd: Path, sandbox_root: Path) -> tuple[str, list[str]]:
+        """Build the complete Seatbelt policy for a command execution.
 
-        # Always allow writing to the sandbox's own temp directory
-        # (it will be added after creation)
+        Returns (policy_text, ["-DKEY=VALUE", ...]).
+        """
+        builder = SeatbeltPolicyBuilder(self._config)
 
-        # Workspace access determines cwd writability
-        if self._config.workspace_access in ("ro", "rw"):
-            roots.append(cwd.resolve())
+        # Writable root: workspace cwd with protected-path exclusions
+        seatbelt_opts = self._config.seatbelt
+        exclusions = list(seatbelt_opts.protected_paths)
+        builder.add_writable_root(cwd, exclusions=exclusions)
 
-        # Always allow writing to system temp directories
-        roots.append(Path(tempfile.gettempdir()).resolve())
+        # Extra writable roots from config
+        for extra_root in seatbelt_opts.extra_writable_roots:
+            builder.add_writable_root(Path(extra_root).resolve(), exclusions=exclusions)
 
-        # macOS /tmp -> /private/tmp
-        tmp_resolved = Path("/tmp").resolve()
-        if tmp_resolved != Path(tempfile.gettempdir()).resolve():
-            roots.append(tmp_resolved)
+        # Sandbox temp directory
+        builder.add_sandbox_tmpdir(sandbox_root)
 
-        return tuple(dict.fromkeys(roots))  # deduplicate preserving order
+        # Credential deny rules
+        if seatbelt_opts.deny_read_credentials:
+            builder.add_credential_deny(Path.home())
 
-    @staticmethod
-    def _policy_path(handle: SessionHandle) -> Path:
-        """Retrieve the Seatbelt policy file path from session attachments."""
-        for attachment in handle.attachments:
-            path = Path(attachment)
-            if path.suffix == ".sbpl":
-                return path
-        # Fallback: generate on-the-fly (should not happen in normal flow)
-        return handle.sandbox_root / ".seatbelt.sbpl"
+        # Network rules (basic)
+        builder.add_network_rules()
+
+        # Network proxy-routed mode (Phase 3)
+        if getattr(seatbelt_opts, "network_proxy_mode", False):
+            builder.add_network_proxy()
+
+        # Deny-read glob patterns (Phase 3)
+        deny_globs = getattr(seatbelt_opts, "deny_read_globs", ())
+        if deny_globs:
+            builder.add_deny_read_globs(deny_globs)
+
+        return builder.render()
