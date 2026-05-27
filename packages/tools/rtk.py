@@ -16,6 +16,7 @@ from typing import Any
 _FULL_OUTPUT_RE = re.compile(r"\[full output:\s*(?P<path>[^\]]+)\]")
 _TRUTHY = {"1", "true", "yes", "on"}
 _REWRITE_TIMEOUT_DEFAULT = 2
+_FILE_READ_MIN_CHARS_DEFAULT = 8_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +47,41 @@ class RtkRewriteResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RtkFileReadOptimizationResult:
+    summary: str = ""
+    enabled: bool = False
+    optimized: bool = False
+    binary: str = ""
+    exit_code: int | None = None
+    skipped_reason: str = ""
+    error: str = ""
+    input_chars: int = 0
+    output_chars: int = 0
+    total_lines: int = 0
+
+    def trace_metadata(self) -> dict[str, str]:
+        metadata = {
+            "rtk_enabled": "true" if self.enabled else "false",
+            "rtk_file_read_optimized": "true" if self.optimized else "false",
+        }
+        if self.binary:
+            metadata["rtk_binary"] = self.binary
+        if self.exit_code is not None:
+            metadata["rtk_exit_code"] = str(self.exit_code)
+        if self.skipped_reason:
+            metadata["rtk_skip_reason"] = self.skipped_reason
+        if self.error:
+            metadata["rtk_error"] = self.error[:240]
+        if self.input_chars:
+            metadata["rtk_input_chars"] = str(self.input_chars)
+        if self.output_chars:
+            metadata["rtk_output_chars"] = str(self.output_chars)
+        if self.total_lines:
+            metadata["rtk_total_lines"] = str(self.total_lines)
+        return metadata
+
+
+@dataclass(frozen=True, slots=True)
 class RtkProbe:
     ok: bool
     binary: str = ""
@@ -64,17 +100,26 @@ class RtkCommandRewriter:
         enabled: bool,
         binary: str = "rtk",
         rewrite_timeout_seconds: int = _REWRITE_TIMEOUT_DEFAULT,
+        file_read_optimizer_enabled: bool = True,
+        file_read_min_chars: int = _FILE_READ_MIN_CHARS_DEFAULT,
     ) -> None:
         self.enabled = bool(enabled)
         self.binary = str(binary or "rtk")
         self.rewrite_timeout_seconds = max(1, min(int(rewrite_timeout_seconds or _REWRITE_TIMEOUT_DEFAULT), 10))
+        self.file_read_optimizer_enabled = bool(file_read_optimizer_enabled)
+        self.file_read_min_chars = max(1, int(file_read_min_chars or _FILE_READ_MIN_CHARS_DEFAULT))
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "RtkCommandRewriter":
+        file_read_config = config.get("file_read_optimizer")
+        if not isinstance(file_read_config, Mapping):
+            file_read_config = {}
         return cls(
             enabled=bool(config.get("enabled", False)),
             binary=str(config.get("binary") or "rtk"),
             rewrite_timeout_seconds=int(config.get("rewrite_timeout_seconds") or _REWRITE_TIMEOUT_DEFAULT),
+            file_read_optimizer_enabled=bool(file_read_config.get("enabled", True)),
+            file_read_min_chars=int(file_read_config.get("min_chars") or _FILE_READ_MIN_CHARS_DEFAULT),
         )
 
     def rewrite(self, command: str, *, env: Mapping[str, str] | None = None) -> RtkRewriteResult:
@@ -144,6 +189,108 @@ class RtkCommandRewriter:
             exit_code=exit_code,
             skipped_reason=skipped_reason,
             error=error,
+        )
+
+    def optimize_file_read(
+        self,
+        *,
+        path: Path,
+        explicit_offset: bool,
+        explicit_limit: bool,
+        selected_chars: int,
+        total_lines: int,
+        env: Mapping[str, str] | None = None,
+    ) -> RtkFileReadOptimizationResult:
+        if not self.enabled:
+            return self._file_read_passthrough(skipped_reason="disabled", total_lines=total_lines)
+        if not self.file_read_optimizer_enabled:
+            return self._file_read_passthrough(skipped_reason="file_read_optimizer_disabled", total_lines=total_lines)
+        if explicit_offset or explicit_limit:
+            return self._file_read_passthrough(skipped_reason="exact_read", total_lines=total_lines)
+        if selected_chars < self.file_read_min_chars:
+            return self._file_read_passthrough(
+                skipped_reason="small_read",
+                input_chars=selected_chars,
+                total_lines=total_lines,
+            )
+        if _rtk_disabled("", env):
+            return self._file_read_passthrough(skipped_reason="rtk_disabled", total_lines=total_lines)
+
+        binary = resolve_rtk_binary(self.binary, env=env)
+        if not binary:
+            return self._file_read_passthrough(skipped_reason="missing_binary", binary=self.binary, total_lines=total_lines)
+
+        try:
+            completed = subprocess.run(
+                [binary, "read", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=self.rewrite_timeout_seconds,
+                env=_merged_env(env),
+            )
+        except subprocess.TimeoutExpired:
+            return self._file_read_passthrough(skipped_reason="timeout", binary=binary, total_lines=total_lines)
+        except OSError as exc:
+            return self._file_read_passthrough(
+                skipped_reason="error",
+                binary=binary,
+                error=str(exc),
+                total_lines=total_lines,
+            )
+
+        output = completed.stdout.strip()
+        if completed.returncode == 0 and output:
+            summary = "\n".join(
+                (
+                    f"path: {path}",
+                    "optimized_by: rtk read",
+                    f"lines: optimized view of {total_lines}",
+                    "truncated: true",
+                    "hint: pass explicit offset/limit for raw line pagination",
+                    output,
+                )
+            )
+            return RtkFileReadOptimizationResult(
+                summary=summary,
+                enabled=True,
+                optimized=True,
+                binary=binary,
+                exit_code=completed.returncode,
+                input_chars=selected_chars,
+                output_chars=len(summary),
+                total_lines=total_lines,
+            )
+
+        error = completed.stderr.strip() if completed.returncode != 0 else ""
+        reason = "no_output" if completed.returncode == 0 else "error"
+        return self._file_read_passthrough(
+            skipped_reason=reason,
+            binary=binary,
+            exit_code=completed.returncode,
+            error=error,
+            input_chars=selected_chars,
+            total_lines=total_lines,
+        )
+
+    def _file_read_passthrough(
+        self,
+        *,
+        skipped_reason: str,
+        binary: str = "",
+        exit_code: int | None = None,
+        error: str = "",
+        input_chars: int = 0,
+        total_lines: int = 0,
+    ) -> RtkFileReadOptimizationResult:
+        return RtkFileReadOptimizationResult(
+            enabled=self.enabled,
+            optimized=False,
+            binary=binary,
+            exit_code=exit_code,
+            skipped_reason=skipped_reason,
+            error=error,
+            input_chars=input_chars,
+            total_lines=total_lines,
         )
 
 

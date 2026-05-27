@@ -34,9 +34,9 @@ from .handlers_filesystem import (
     run_file_read,
     run_file_search,
     run_file_write,
-    run_process_action,
     run_terminal_exec,
 )
+from .handlers_process import run_process_action
 from .runtime import ToolAudience, ToolAvailability, ToolDefinition, ToolRuntime, ToolSideEffectMetadata
 from .schema_descriptions import enrich_builtin_tool_schema
 from .surfaces import BuiltinToolDependencies
@@ -921,6 +921,7 @@ def _handler_for_tool(
             invocation,
             cwd=dependencies.resolve_cwd(invocation.session_id),
             allowed_roots=(dependencies.cwd, *invocation.context.allowed_roots, *dependencies.additional_allowed_roots),
+            file_read_optimizer=dependencies.file_read_optimizer,
         )
     if tool_id == "tool.file.write":
         return lambda invocation: run_file_write(

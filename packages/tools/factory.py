@@ -85,6 +85,7 @@ def build_tool_runtime(
         effective_dependencies = replace(
             effective_dependencies,
             terminal_command_rewriter=terminal_command_rewriter,
+            file_read_optimizer=terminal_command_rewriter,
         )
 
     if sandbox_config is not None and sandbox_config.is_active:

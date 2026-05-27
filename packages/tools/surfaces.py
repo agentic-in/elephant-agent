@@ -318,6 +318,20 @@ class TerminalCommandRewriter(Protocol):
         """Return a command rewrite result for a foreground terminal command."""
 
 
+class FileReadOptimizer(Protocol):
+    def optimize_file_read(
+        self,
+        *,
+        path: Path,
+        explicit_offset: bool,
+        explicit_limit: bool,
+        selected_chars: int,
+        total_lines: int,
+        env: Mapping[str, str] | None = None,
+    ) -> Any:
+        """Return an optimized model-visible file read result."""
+
+
 @dataclass(frozen=True, slots=True)
 class TodoItem:
     item_id: str
@@ -548,6 +562,7 @@ class BuiltinToolDependencies:
     sub_agents_surface: SubAgentsSurface | None = None
     process_manager: InMemoryProcessManager = field(default_factory=InMemoryProcessManager)
     terminal_command_rewriter: TerminalCommandRewriter | None = None
+    file_read_optimizer: FileReadOptimizer | None = None
     todo_store: InMemorySessionTodoStore = field(default_factory=InMemorySessionTodoStore)
     additional_allowed_roots: tuple[Path, ...] = field(default_factory=default_local_allowed_roots)
     web_user_agent: str = "Elephant Agent/2.0 (+https://github.com/agentic-in/elephant)"
