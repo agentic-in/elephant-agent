@@ -9,9 +9,11 @@ from packages.runtime_config import (
     default_global_config,
     global_config_path_for_state_dir,
     global_config_schema,
+    load_rtk_from_config,
     load_global_config,
     load_provider_from_config,
     save_provider_to_config,
+    save_rtk_to_config,
     load_extensions_from_config,
     save_extensions_to_config,
     parse_global_config_text,
@@ -71,6 +73,7 @@ class RuntimeConfigTest(unittest.TestCase):
             self.assertEqual(loaded["models"]["default_provider_source"], "config")
             self.assertNotIn("state_focus_mode", loaded["models"])
             self.assertEqual(loaded["skills"]["external_dirs"], ["~/.agents/skills"])
+            self.assertEqual(loaded["tools"]["rtk"]["enabled"], False)
 
     def test_default_global_config_from_gateway_state_uses_shared_install_root(self) -> None:
         """Gateway and CLI share the same state_dir.
@@ -95,6 +98,7 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(configured_external_skill_dirs(defaults), ("~/.agents/skills",))
         fields = {field["path"]: field for field in global_config_schema()}
         self.assertEqual(fields["skills.external_dirs"]["type"], "string_list")
+        self.assertEqual(fields["tools.rtk.enabled"]["type"], "boolean")
         self.assertNotIn("models.state_focus_mode", fields)
 
     def test_removed_reset_config_keys_are_not_serialized(self) -> None:
@@ -155,6 +159,25 @@ class RuntimeConfigTest(unittest.TestCase):
             provider = load_provider_from_config(config)
             self.assertIsNotNone(provider)
             self.assertEqual(provider["provider_id"], "openai-compatible")
+
+    def test_save_and_load_rtk_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            config_path = Path(tempdir) / "config.yaml"
+            state_dir = Path(tempdir) / "state"
+            save_rtk_to_config(
+                config_path,
+                state_dir=state_dir,
+                rtk_payload={
+                    "enabled": True,
+                    "binary": "/usr/local/bin/rtk",
+                    "rewrite_timeout_seconds": 5,
+                },
+            )
+            config = load_global_config(config_path, state_dir=state_dir)
+            rtk = load_rtk_from_config(config)
+            self.assertTrue(rtk["enabled"])
+            self.assertEqual(rtk["binary"], "/usr/local/bin/rtk")
+            self.assertEqual(rtk["rewrite_timeout_seconds"], 5)
 
     def test_save_and_load_extensions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

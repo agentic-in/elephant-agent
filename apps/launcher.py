@@ -93,7 +93,7 @@ def build_typer_app() -> typer.Typer:
     app = typer.Typer(
         name="elephant",
         help=(
-            "Elephant Agent launcher with explicit init, wake, dashboard, herd, provider, facts, learn, skills, gateway, cron, and status entrypoints."
+            "Elephant Agent launcher with explicit init, wake, dashboard, herd, provider, facts, learn, rtk, skills, gateway, cron, and status entrypoints."
         ),
         no_args_is_help=False,
         rich_markup_mode="rich",
@@ -142,6 +142,18 @@ def build_typer_app() -> typer.Typer:
         obj = ctx.obj or {}
         raise typer.Exit(
             skills_command_main(
+                list(ctx.args),
+                default_state_dir=obj["state_dir"],
+            )
+        )
+
+    @app.command("rtk", help=CLI_COMMAND_HELP["rtk"], context_settings=passthrough_settings, add_help_option=False)
+    def rtk_command(ctx: typer.Context) -> None:
+        from apps.rtk_command import command_main as rtk_command_main
+
+        obj = ctx.obj or {}
+        raise typer.Exit(
+            rtk_command_main(
                 list(ctx.args),
                 default_state_dir=obj["state_dir"],
             )

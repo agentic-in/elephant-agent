@@ -15,6 +15,15 @@ GLOBAL_CONFIG_FILENAME = "config.yaml"
 DEFAULT_EXTERNAL_SKILL_DIRS: tuple[str, ...] = ("~/.agents/skills",)
 _MISSING = object()
 
+
+def default_rtk_config() -> dict[str, Any]:
+    return {
+        "enabled": False,
+        "binary": "rtk",
+        "rewrite_timeout_seconds": 2,
+    }
+
+
 def default_personal_model_question_config() -> dict[str, Any]:
     return {
         "proactive_ask": {
@@ -63,6 +72,7 @@ def default_global_config(*, state_dir: str | Path) -> dict[str, Any]:
         },
         "tools": {
             "require_approval_for_risky": True,
+            "rtk": default_rtk_config(),
         },
         "gateway": {
             "enabled": False,
@@ -120,6 +130,9 @@ def global_config_schema() -> list[dict[str, Any]]:
         {"path": "skills.enable_profile_overrides", "type": "boolean", "label": "Skill profile overrides", "section": "Skills"},
         {"path": "skills.external_dirs", "type": "string_list", "label": "External skill dirs", "section": "Skills"},
         {"path": "tools.require_approval_for_risky", "type": "boolean", "label": "Approval for risky tools", "section": "Tools"},
+        {"path": "tools.rtk.enabled", "type": "boolean", "label": "RTK terminal optimizer", "section": "Tools"},
+        {"path": "tools.rtk.binary", "type": "string", "label": "RTK binary", "section": "Tools"},
+        {"path": "tools.rtk.rewrite_timeout_seconds", "type": "number", "label": "RTK rewrite timeout", "section": "Tools"},
         {"path": "gateway.enabled", "type": "boolean", "label": "Gateway enabled", "section": "Gateway"},
         {"path": "gateway.state_dir", "type": "string", "label": "Gateway herd directory", "section": "Gateway"},
         {"path": "dashboard.host", "type": "string", "label": "Dashboard host", "section": "Dashboard"},
@@ -227,8 +240,12 @@ def configured_external_skill_dirs(config: Mapping[str, Any] | None) -> tuple[st
 
 
 def _without_removed_reset_keys(config: Mapping[str, Any]) -> dict[str, Any]:
-    """Legacy function for backward compatibility. No longer removes any fields."""
-    return dict(config)
+    """Drop reset-era config keys that should not survive round trips."""
+    cleaned = deepcopy(dict(config))
+    models = cleaned.get("models")
+    if isinstance(models, dict):
+        models.pop("state_focus_mode", None)
+    return cleaned
 
 
 def load_provider_from_config(config: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -256,6 +273,33 @@ def save_provider_to_config(
     models["provider"] = dict(provider_payload)
     models["default_provider_source"] = "config"
     config["models"] = models
+    write_global_config(config_path, config)
+
+
+def load_rtk_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract the RTK terminal optimizer config from the global config."""
+    tools = config.get("tools")
+    if not isinstance(tools, Mapping):
+        return default_rtk_config()
+    rtk = tools.get("rtk")
+    if not isinstance(rtk, Mapping):
+        return default_rtk_config()
+    return _deep_merge(default_rtk_config(), rtk)
+
+
+def save_rtk_to_config(
+    config_path: str | Path,
+    *,
+    state_dir: str | Path,
+    rtk_payload: Mapping[str, Any],
+) -> None:
+    """Write the RTK terminal optimizer config into the global config."""
+    config = load_global_config(config_path, state_dir=state_dir)
+    tools = config.get("tools")
+    if not isinstance(tools, dict):
+        tools = {}
+    tools["rtk"] = _deep_merge(default_rtk_config(), rtk_payload)
+    config["tools"] = tools
     write_global_config(config_path, config)
 
 

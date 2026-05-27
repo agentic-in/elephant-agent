@@ -46,6 +46,7 @@ from .shell import (
     _resolve_elephant_version,
     render_stage_zero_elephant_mark,
 )
+from apps.rtk_command import run_rtk_doctor, run_rtk_start, run_rtk_stop
 from .wizard import (
     WIZARD_BACK,
     WIZARD_CANCEL,
@@ -1244,7 +1245,7 @@ def _print_root_cli_help() -> None:
 def build_typer_app() -> typer.Typer:
     app = typer.Typer(
         name="elephant",
-        help="Elephant Agent CLI with explicit init, wake, dashboard, herd, provider, Personal Model recall, learn, skills, gateway, cron, and status entrypoints.",
+        help="Elephant Agent CLI with explicit init, wake, dashboard, herd, provider, Personal Model recall, learn, rtk, skills, gateway, cron, and status entrypoints.",
         no_args_is_help=False,
         rich_markup_mode="rich",
         add_completion=False,
@@ -1285,11 +1286,18 @@ def build_typer_app() -> typer.Typer:
         rich_markup_mode="rich",
         add_completion=False,
     )
+    rtk_app = typer.Typer(
+        name="rtk",
+        help="Manage RTK terminal output optimization.",
+        rich_markup_mode="rich",
+        add_completion=False,
+    )
 
     app.add_typer(provider_app, name="provider")
     app.add_typer(herd_app, name="herd")
     app.add_typer(facts_app, name="facts")
     app.add_typer(reflect_app, name="reflect")
+    app.add_typer(rtk_app, name="rtk")
     app.add_typer(sandbox_app, name="sandbox")
     provider_app.add_typer(provider_embeddings_app, name="embeddings")
 
@@ -1778,6 +1786,7 @@ def build_typer_app() -> typer.Typer:
         raise typer.Exit(_run_learn(runtime, _namespace(learn_command="kill", elephant_id=None, limit=12)))
 
     # ── Sandbox sub-commands ──────────────────────────────────────────
+    _register_rtk_commands(rtk_app)
     _register_sandbox_commands(sandbox_app)
 
     return app
@@ -1793,6 +1802,38 @@ def build_sandbox_app() -> typer.Typer:
     )
     _register_sandbox_commands(app)
     return app
+
+
+def _register_rtk_commands(rtk_app: typer.Typer) -> None:
+    """Register RTK optimizer sub-commands onto a Typer app."""
+
+    @rtk_app.callback(invoke_without_command=True)
+    def rtk_callback(ctx: typer.Context) -> None:
+        """Run RTK optimizer diagnostics."""
+        if ctx.invoked_subcommand is None:
+            params = ctx.parent.params if ctx.parent is not None else ctx.params
+            raise typer.Exit(run_rtk_doctor(Path(params["state_dir"])))
+
+    @rtk_app.command("doctor")
+    def rtk_doctor_command(ctx: typer.Context) -> None:
+        """Run RTK optimizer diagnostics."""
+        params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
+        raise typer.Exit(run_rtk_doctor(Path(params["state_dir"])))
+
+    @rtk_app.command("start")
+    def rtk_start_command(
+        ctx: typer.Context,
+        binary: str | None = typer.Option(None, "--binary", help="Path or name of the rtk binary."),
+    ) -> None:
+        """Enable RTK rewriting for non-sandbox foreground terminal commands."""
+        params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
+        raise typer.Exit(run_rtk_start(Path(params["state_dir"]), binary=binary))
+
+    @rtk_app.command("stop")
+    def rtk_stop_command(ctx: typer.Context) -> None:
+        """Disable RTK terminal command rewriting."""
+        params = ctx.parent.parent.params if ctx.parent and ctx.parent.parent else ctx.params
+        raise typer.Exit(run_rtk_stop(Path(params["state_dir"])))
 
 
 def _register_sandbox_commands(sandbox_app: typer.Typer) -> None:
