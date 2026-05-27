@@ -25,6 +25,8 @@ Mother understands first. Then she helps shape Paths.
 | **Step** | A concrete action that can move a Path. | Issue, task, ticket. |
 | **Flow** | The visible state board for Steps. | Kanban as the primary user word. |
 | **Checkpoint** | A moment where the user's judgment should return. | Review as a separate workspace. |
+| **Learning Summary** | The completion receipt for a Step: what happened, why, how, what knowledge mattered, and what should be learned. | A passive status update. |
+| **Understanding Check** | The human acknowledgement that they understand the Step enough to keep judgment and learning. | Review as approval only. |
 | **Herd** | The group of baby elephants that can help a Path. | Squad as a default user concept. |
 | **Baby** | A bounded helper with skills, model posture, and runtime limits. | Sub-agent as the user-facing term. |
 
@@ -49,6 +51,31 @@ Flow states should stay simple and map cleanly to an internal state machine.
 
 The board is not separate from chat. Chat can create or move Steps; the board can
 also be dragged manually when state is easier to express visually.
+
+## Learning loop
+
+"Do more without thinking less" needs a product contract, not only a slogan.
+Every baby-completed Step should produce a **Learning Summary** before the loop
+is closed.
+
+A Learning Summary should adapt to the Step type, but it always answers:
+
+- what was done
+- why this approach was chosen
+- how the work was done
+- what knowledge, tools, people, or context mattered
+- what Mother or the baby should retain as a reusable lesson
+- what the human should understand before treating the Step as closed
+
+The human then gets an **Understanding Check**, usually expressed as a checkbox:
+**I understand this Step**. If the user checks it, the Step can move from
+Checking to Done and the useful lessons become candidate updates for Journey,
+Path history, baby skills, or future Mother planning. If the user does not
+understand it, Mother should ask for clarification, request a better summary from
+the baby, or turn the gap into a new Step.
+
+This keeps delegation from becoming cognitive outsourcing. The Herd can move
+more work, but the human still grows with the work.
 
 ## Trust modes
 

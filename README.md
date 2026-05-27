@@ -88,12 +88,21 @@ to the right thread and keep moving.
   stuck, or dropped.
 - **Checkpoint** is where the human judgment returns. Mother can ask first or
   keep moving inside a trusted boundary.
+- **Learning Summary** is the completion receipt for a Step. It explains what
+  happened, why it happened, how it happened, what knowledge mattered, and what
+  should strengthen Mother, the baby, or the user's Journey.
 - **Herd** is the group of baby elephants that can help a Path. Babies do bounded
   work; Mother keeps the whole shape coherent.
 
 The target product loop is simple: chat with Mother, let her organize the Paths
 and Steps, answer Checkpoints when needed, and still be able to drag Steps
 manually when the board is the clearer surface.
+
+Every completed Step should also close an understanding loop. A baby does not
+only say "done"; it returns a Learning Summary and asks the human to check **I
+understand this Step**. That check preserves the "do more without thinking less"
+promise: the work can move faster, while the person still understands what was
+done, why it was done, how it was done, and what should be learned for next time.
 
 ## Personal Model
 

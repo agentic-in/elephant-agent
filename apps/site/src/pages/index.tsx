@@ -11,7 +11,7 @@ const releaseUrl = `${githubRepoUrl}/releases/latest`;
 const pageTitle = "L4 Personal AI for Human Growth";
 const pageTitleWithSite = `${pageTitle} | Elephant Agent`;
 const pageDescription =
-  "Elephant Agent is a Mother Elephant that grows to understand you, then helps shape living Paths across work, health, habits, learning, relationships, and long-term growth.";
+  "Elephant Agent is a Mother Elephant that grows to understand you, then helps shape living Paths with Learning Summaries across work, health, habits, learning, relationships, and long-term growth.";
 const pageKeywords = [
   "human-first personal AI",
   "L4 personal AI",
@@ -20,6 +20,7 @@ const pageKeywords = [
   "agency-first personal AI",
   "personal-model-first AI",
   "personal AI paths",
+  "AI learning loop",
   "personal AI agent",
   "macOS AI app",
   "proactive curiosity",
@@ -151,7 +152,25 @@ const motherLoop = [
   {
     title: "Returns to judgment",
     body:
-      "Checkpoints bring decisions back to the human. Trust can be broad, but direction still belongs to the person.",
+      "Checkpoints and Learning Summaries bring decisions and understanding back to the human.",
+  },
+];
+
+const learningLoopCards = [
+  {
+    title: "The baby explains the work",
+    body:
+      "Every completed Step returns what happened, why that approach was chosen, how it was done, and what context mattered.",
+  },
+  {
+    title: "The human checks understanding",
+    body:
+      "The loop asks for an Understanding Check, so the person can say: I understand this Step before it disappears into Done.",
+  },
+  {
+    title: "Mother learns what should carry forward",
+    body:
+      "Useful lessons become candidates for Journey, Path history, baby skills, and future Mother planning.",
   },
 ];
 
@@ -372,6 +391,33 @@ export default function HomePage(): React.JSX.Element {
                   <span className="mother-loop-index">{String(index + 1).padStart(2, "0")}</span>
                   <h3>{item.title}</h3>
                   <p>{item.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="learning-loop" className="section section-rule">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <span className="label" data-reveal>
+                  Learning loop
+                </span>
+                <h2 data-reveal>Do more without thinking less.</h2>
+              </div>
+              <p data-reveal>
+                A baby does not only mark work as done. It returns a Learning
+                Summary, then asks for the human understanding needed to close
+                the loop.
+              </p>
+            </div>
+
+            <div className="path-card-grid">
+              {learningLoopCards.map((card) => (
+                <article key={card.title} className="path-card" data-reveal>
+                  <h3>{card.title}</h3>
+                  <p>{card.body}</p>
                 </article>
               ))}
             </div>

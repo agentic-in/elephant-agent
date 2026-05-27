@@ -18,6 +18,7 @@ life and work arcs, and inspectable settings for the model and runtime posture.
 | **Home** | Start from what Mother understands and what is alive now. | The person comes before any Step or delegation. |
 | **Chat / Wake** | Talk to Mother and continue the same elephant. | New work should resume from the same path, not a blank prompt. |
 | **Paths** | See ongoing directions, Steps, Flow state, and Checkpoints. | A Path can be work, health, learning, habits, recovery, or any long-running arc. |
+| **Learning Summaries** | Review what each completed Step did, why, how, and what should be learned. | The human can check understanding before the loop closes. |
 | **Personal Model / You** | Inspect Identity, World, Pulse, and Journey claims. | Claims stay correctable and evidence-backed. |
 | **Herd** | Manage Mother and baby elephants. | Babies do bounded work; Mother keeps the Path coherent. |
 | **Skills** | Inspect and enable workflow packages. | Skills help Mother and the Herd move Steps. |
@@ -45,8 +46,10 @@ shape for a macOS user who wants one local workspace.
 2. Check Home if you need orientation.
 3. Use Chat / Wake for the actual conversation.
 4. Use Paths when a direction needs Steps, Flow state, or Checkpoints.
-5. Inspect or correct Personal Model claims when something feels stale.
-6. Adjust providers, skills, tools, messaging, reminders, and usage from visible
+5. When a baby completes a Step, read the Learning Summary and check that you
+   understand what happened before the loop closes.
+6. Inspect or correct Personal Model claims when something feels stale.
+7. Adjust providers, skills, tools, messaging, reminders, and usage from visible
    app surfaces instead of hiding them in prompt text.
 
 The app and CLI both operate on local Elephant Agent state. They are two

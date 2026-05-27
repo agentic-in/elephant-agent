@@ -40,10 +40,23 @@ with the next move without reducing the person to a ticket queue.
 | **Step** | A concrete action inside a Path. | The user should not have to think in "issues" unless the Path is actually a software project. |
 | **Flow** | The visible state board for a Path. | Some moments are clearer as drag-and-drop state, not chat. |
 | **Checkpoint** | A moment that needs human judgment. | Mother can ask first or keep moving inside a trusted boundary, but the user's judgment remains the source of direction. |
+| **Learning Summary** | The completion receipt for a Step. | The user can do more without losing the thread of what happened, why, how, and what should be learned. |
 | **Herd** | The baby elephants available to help. | Babies do bounded work; Mother keeps the full Path coherent. |
 
 That is how L4 becomes product behavior: Elephant Agent uses understanding to
 help design paths for human growth, not only to answer better prompts.
+
+## The understanding loop
+
+Elephant Agent should not make the user more passive. When a baby finishes a
+Step, it should return a Learning Summary that explains the work, the reasoning,
+the knowledge involved, and the lesson that might strengthen Mother, the baby, or
+the user's Journey. The human then gets an Understanding Check: **I understand
+this Step**.
+
+That small checkbox matters. It turns "task complete" into a loop where the
+system did the work, the human can see why and how, and the useful learning has a
+place to land.
 
 ## The gap
 

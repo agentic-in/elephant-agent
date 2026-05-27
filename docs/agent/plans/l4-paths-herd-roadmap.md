@@ -20,6 +20,8 @@ the human.
 - Chat-driven and board-driven Step creation, assignment, and state movement.
 - Mother planning tools that can propose or apply Paths, Steps, Herd changes,
   and Checkpoints according to the user's trust mode.
+- Learning Summary and Understanding Check contracts for every completed Step,
+  so delegation increases output without making the human cognitively passive.
 - Baby execution integrated with bounded run attempts, heartbeats, cancellation,
   event logs, and resumable outputs.
 - Long-running Path support through routines, watchers, and bounded runs rather
@@ -45,6 +47,8 @@ the human.
 | Step | A concrete action inside a Path. | Storage, state machine, run assignment, event log. |
 | Flow | The visible state board for Steps. | UI projection over Step status and ordering. |
 | Checkpoint | A user judgment moment. | Approval/checkpoint queue, chat, board, inbox. |
+| Learning Summary | The Step completion receipt: what happened, why, how, what knowledge mattered, and what should be learned. | Step event log, run result schema, Personal Model / Journey candidate pipeline. |
+| Understanding Check | The user's acknowledgement that they understand the Step before the loop is closed. | Checkpoint queue, Step detail, Path history. |
 | Herd | The available baby elephants around Mother and optionally a Path. | Herd runtime, baby registry, assignment policy. |
 | Baby | A bounded helper with role, skills, model posture, and runtime limits. | Existing sub-agent runtime plus durable run records. |
 
@@ -77,6 +81,11 @@ side effects.
 State transitions must be validated centrally so chat tools, drag-and-drop UI,
 batch updates, and baby execution all share the same rules.
 
+Baby-completed Steps should normally move to Checking with a Learning Summary
+attached. The loop closes when the user marks the Understanding Check or Mother
+records an explicit skip reason. Done without a Learning Summary should be an
+exception path, not the default.
+
 ## Tracks
 
 - Track A: Public Product Surfaces
@@ -89,9 +98,12 @@ batch updates, and baby execution all share the same rules.
 
 - Track B: Storage And API Contracts
   - Add durable tables or records for Paths, Steps, Step events, Checkpoints,
-    Path-Herd links, run attempts, routines, and watchers.
+    Path-Herd links, run attempts, Learning Summaries, Understanding Checks,
+    routines, and watchers.
   - Add typed repository methods and API routes for Path and Step CRUD, Flow
     moves, assignment changes, Checkpoint responses, and event listing.
+  - Add typed Learning Summary schema variants by Step type, with common fields
+    for done, why, how, knowledge involved, reusable lesson, and human learning.
   - Add state-machine validation tests before exposing drag-and-drop updates.
 
 - Track C: Mother Planning Tools
@@ -104,12 +116,16 @@ batch updates, and baby execution all share the same rules.
 - Track D: Baby Execution And Herd Assignment
   - Extend existing sub-agent support into durable Step run attempts.
   - Add heartbeat, cancellation, retry, timeout, and resumable result contracts.
+  - Require every successful baby run to return a Learning Summary, with
+    structured candidate updates for Mother memory, baby skill learning, Path
+    history, and user Journey.
   - Keep baby-to-baby collaboration mediated through Step events and Mother
     routing by default.
 
 - Track E: macOS Product Surfaces
   - Add Paths to the main sidebar.
-  - Build Flow board, Step detail, Checkpoint list, and Path-Herd assignment UI.
+  - Build Flow board, Step detail, Checkpoint list, Learning Summary,
+    Understanding Check, and Path-Herd assignment UI.
   - Update onboarding so multiple babies can be selected or created up front.
   - Add the two trust modes in the chat box and onboarding posture.
 
@@ -149,7 +165,10 @@ batch updates, and baby execution all share the same rules.
 - The user can drag Steps across Flow states and the same transition rules apply
   as chat tool updates.
 - A baby can be assigned to a Step and writes durable events, result, and status.
+- Every baby-completed Step produces a Learning Summary and asks the human for
+  an Understanding Check before the loop is treated as closed.
 - Long-running Paths survive app restarts and do not depend on a single endless
   agent process.
 - Public README, website, docs, and app copy all use the same vocabulary:
-  Mother, Path, Step, Flow, Checkpoint, Herd, Baby.
+  Mother, Path, Step, Flow, Checkpoint, Learning Summary, Understanding Check,
+  Herd, Baby.
