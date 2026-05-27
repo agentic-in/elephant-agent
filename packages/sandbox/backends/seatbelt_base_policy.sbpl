@@ -1,0 +1,151 @@
+; Elephant Agent Seatbelt Base Policy
+; Inspired by Codex/Chromium sandbox policy architecture.
+; Ref: https://source.chromium.org/chromium/chromium/src/+/main:sandbox/policy/mac/common.sb
+;
+; This policy uses parameterized paths (-D flags) to prevent policy injection.
+; Parameters:
+;   WRITABLE_ROOT_0 ... N   — directories the sandbox may write to
+;   HOME_SSH                 — ~/.ssh (deny-read)
+;   HOME_AWS                 — ~/.aws (deny-read)
+;   HOME_GNUPG               — ~/.gnupg (deny-read)
+;   HOME_KUBE                — ~/.kube (deny-read)
+;   HOME_DOCKER              — ~/.docker (deny-read)
+;   SANDBOX_TMPDIR           — sandbox temp directory (writable)
+
+(version 1)
+
+; Start with closed-by-default.
+(deny default)
+
+; --- Process lifecycle ---
+(allow process-exec)
+(allow process-fork)
+(allow signal (target same-sandbox))
+(allow process-info* (target same-sandbox))
+
+; --- Mach IPC: minimal whitelist ---
+; Only services needed for basic process execution and user info lookup.
+(allow mach-lookup
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+  (global-name "com.apple.PowerManagement.control")
+  (global-name "com.apple.cfprefsd.daemon")
+  (global-name "com.apple.cfprefsd.agent")
+  (local-name "com.apple.cfprefsd.agent"))
+
+; --- IPC: POSIX semaphores only ---
+; Needed for Python multiprocessing. System V IPC (ipc-sysv*) deliberately excluded.
+(allow ipc-posix-sem)
+
+; Needed for PyTorch/libomp on macOS to register OpenMP runtimes.
+(allow ipc-posix-shm-read-data
+  ipc-posix-shm-write-create
+  ipc-posix-shm-write-unlink
+  (ipc-posix-name-regex #"^/__KMP_REGISTERED_LIB_[0-9]+$"))
+
+; --- Sysctl: precise whitelist ---
+; Reference: Codex seatbelt_base_policy.sbpl L24-75 (Chromium-inspired)
+(allow sysctl-read
+  (sysctl-name "hw.activecpu")
+  (sysctl-name "hw.busfrequency_compat")
+  (sysctl-name "hw.byteorder")
+  (sysctl-name "hw.cacheconfig")
+  (sysctl-name "hw.cachelinesize_compat")
+  (sysctl-name "hw.cpufamily")
+  (sysctl-name "hw.cpufrequency_compat")
+  (sysctl-name "hw.cpufrequency")
+  (sysctl-name "hw.cputype")
+  (sysctl-name "hw.l1dcachesize_compat")
+  (sysctl-name "hw.l1icachesize_compat")
+  (sysctl-name "hw.l2cachesize_compat")
+  (sysctl-name "hw.l3cachesize_compat")
+  (sysctl-name "hw.logicalcpu_max")
+  (sysctl-name "hw.logicalcpu")
+  (sysctl-name "hw.machine")
+  (sysctl-name "hw.model")
+  (sysctl-name "hw.memsize")
+  (sysctl-name "hw.ncpu")
+  (sysctl-name "hw.nperflevels")
+  (sysctl-name "hw.packages")
+  (sysctl-name "hw.pagesize_compat")
+  (sysctl-name "hw.pagesize")
+  (sysctl-name "hw.physicalcpu")
+  (sysctl-name "hw.physicalcpu_max")
+  (sysctl-name "hw.tbfrequency_compat")
+  (sysctl-name "hw.vectorunit")
+  (sysctl-name-prefix "hw.optional.arm.")
+  (sysctl-name-prefix "hw.optional.armv8_")
+  (sysctl-name-prefix "hw.perflevel")
+  (sysctl-name "machdep.cpu.brand_string")
+  (sysctl-name "kern.argmax")
+  (sysctl-name "kern.hostname")
+  (sysctl-name "kern.maxfilesperproc")
+  (sysctl-name "kern.maxproc")
+  (sysctl-name "kern.osproductversion")
+  (sysctl-name "kern.osrelease")
+  (sysctl-name "kern.ostype")
+  (sysctl-name "kern.osvariant_status")
+  (sysctl-name "kern.osversion")
+  (sysctl-name "kern.secure_kernel")
+  (sysctl-name "kern.usrstack64")
+  (sysctl-name "kern.version")
+  (sysctl-name "sysctl.proc_cputype")
+  (sysctl-name "vm.loadavg")
+  (sysctl-name-prefix "kern.proc.pgrp.")
+  (sysctl-name-prefix "kern.proc.pid.")
+  (sysctl-name-prefix "net.routetable."))
+
+; Allow Java CPU grading (technically a "write" but conceptually a read).
+(allow sysctl-write
+  (sysctl-name "kern.grade_cputype"))
+
+; --- IOKit ---
+(allow iokit-open
+  (iokit-registry-entry-class "RootDomainUserClient"))
+
+; --- PTY support (interactive shells, REPLs) ---
+; Reference: Codex seatbelt_base_policy.sbpl L106-114
+(allow pseudo-tty)
+(allow file-read* file-write* file-ioctl (literal "/dev/ptmx"))
+(allow file-read* file-write*
+  (require-all
+    (regex #"^/dev/ttys[0-9]+")
+    (extension "com.apple.sandbox.pty")))
+; PTYs created before entering seatbelt may lack the extension; allow ioctl
+; on those slave ttys so interactive shells detect a TTY and remain functional.
+(allow file-ioctl (regex #"^/dev/ttys[0-9]+"))
+
+; --- File-read: Phase 1 keeps open (Phase 2 restricts to whitelist) ---
+(allow file-read*)
+
+; --- Credential directories: deny-read ---
+; Even though file-read* is open, these explicit denies take precedence.
+(deny file-read*
+  (subpath (param "HOME_SSH"))
+  (subpath (param "HOME_AWS"))
+  (subpath (param "HOME_GNUPG"))
+  (subpath (param "HOME_KUBE"))
+  (subpath (param "HOME_DOCKER")))
+
+; --- File-write: /dev/null constrained ---
+(allow file-write-data
+  (require-all
+    (path "/dev/null")
+    (vnode-type CHARACTER-DEVICE)))
+
+; --- File-write: /dev/urandom (read-only in practice, but some tools probe) ---
+(allow file-read* (literal "/dev/urandom"))
+
+; --- File-write: sandbox temp directory ---
+(allow file-write* (subpath (param "SANDBOX_TMPDIR")))
+
+; --- File-write: /private/tmp (standard macOS temp) ---
+(allow file-write* (subpath "/private/tmp"))
+
+; --- File-write: writable roots (injected dynamically) ---
+; Writable root rules with protected-path exclusions are appended dynamically
+; by SeatbeltPolicyBuilder.render() using (param "WRITABLE_ROOT_N") syntax.
+; This section is intentionally left empty in the template.
+
+; --- User preferences (read-only) ---
+(allow ipc-posix-shm-read* (ipc-posix-name-prefix "apple.cfprefs."))
+(allow user-preference-read)
