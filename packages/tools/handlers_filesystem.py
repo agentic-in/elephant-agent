@@ -26,6 +26,7 @@ from .handler_support import (
     resolve_allowed_path,
     tool_summary,
 )
+from .rtk import append_rtk_failure_tail
 from .runtime import ToolInvocation
 from .surfaces import BuiltinToolDependencies, InMemoryProcessManager, ManagedProcess
 
@@ -177,8 +178,14 @@ def run_terminal_exec(
             side_effects=("terminal", "process"),
         )
     timeout_seconds = max(1, min(coerce_int(invocation.arguments.get("timeout_seconds"), default=20), 120))
+    rewrite_result = (
+        dependencies.terminal_command_rewriter.rewrite(command, env=env)
+        if dependencies.terminal_command_rewriter is not None else None
+    )
+    run_command = str(getattr(rewrite_result, "command", command) or command)
+    trace_metadata = rewrite_result.trace_metadata() if rewrite_result is not None else {}
     completed = subprocess.run(
-        command,
+        run_command,
         shell=True,
         cwd=cwd,
         env={**os.environ, **env} if env else None,
@@ -189,8 +196,9 @@ def run_terminal_exec(
     body = join_parts(completed.stdout, completed.stderr)
     summary = body or f"command exited with status {completed.returncode}"
     if completed.returncode != 0:
+        summary = append_rtk_failure_tail(summary, rewrite_result)
         raise RuntimeError(summary)
-    return tool_summary(invocation, summary, side_effects=("terminal", "filesystem"))
+    return tool_summary(invocation, summary, side_effects=("terminal", "filesystem"), trace_metadata=trace_metadata)
 
 
 def run_process_action(invocation: ToolInvocation, *, manager: InMemoryProcessManager) -> Mapping[str, Any]:

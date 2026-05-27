@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from email.message import Message
 import json
 import os
@@ -16,6 +17,7 @@ if str(ROOT) not in sys.path:
 from packages.tools import BuiltinToolDependencies, handlers_code_execution
 from packages.tools.builtins import builtin_tool_definitions
 from packages.tools.local_roots import default_local_allowed_roots
+from packages.tools.rtk import RtkRewriteResult
 from tests.unit.builtin_tools_test_support import BuiltinToolsTestBase
 
 
@@ -45,6 +47,23 @@ class _FakeUrlopenResponse:
 
     def geturl(self) -> str:
         return self._url
+
+
+class _FakeTerminalRewriter:
+    def __init__(self, rewritten_command: str) -> None:
+        self.rewritten_command = rewritten_command
+        self.calls: list[str] = []
+
+    def rewrite(self, command: str, *, env: Mapping[str, str] | None = None) -> RtkRewriteResult:
+        self.calls.append(command)
+        return RtkRewriteResult(
+            original_command=command,
+            command=self.rewritten_command,
+            enabled=True,
+            rewritten=True,
+            binary="/tmp/rtk",
+            exit_code=3,
+        )
 
 
 class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
@@ -216,6 +235,75 @@ class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
             self.assertTrue((roots["session-alpha"] / "notes.txt").exists())
             self.assertFalse((fallback / "notes.txt").exists())
             self.assertIn(str(roots["session-beta"]), terminal.summary)
+
+    def test_terminal_exec_uses_configured_foreground_rewriter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            rewriter = _FakeTerminalRewriter("printf rewritten")
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(
+                    cwd=cwd,
+                    terminal_command_rewriter=rewriter,
+                ),
+            )
+
+            result = runtime.invoke(
+                "tool.terminal.exec",
+                {"command": "printf original"},
+                session_id="session-rtk-terminal",
+            )
+
+        self.assertEqual(rewriter.calls, ["printf original"])
+        self.assertEqual(result.summary, "rewritten")
+        self.assertEqual(result.trace_metadata.get("rtk_rewritten"), "true")
+        self.assertEqual(result.trace_metadata.get("rtk_exit_code"), "3")
+
+    def test_terminal_exec_background_does_not_use_rewriter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            rewriter = _FakeTerminalRewriter("printf rewritten")
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(
+                    cwd=cwd,
+                    terminal_command_rewriter=rewriter,
+                ),
+            )
+
+            result = runtime.invoke(
+                "tool.terminal.exec",
+                {"command": "printf original", "background": True},
+                session_id="session-rtk-background",
+            )
+
+        self.assertEqual(rewriter.calls, [])
+        self.assertIn("command: printf original", result.summary)
+
+    def test_terminal_exec_appends_rtk_full_output_tail_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            full_output = cwd / "pytest.log"
+            full_output.write_text("ImportError: cannot import name UTC\n", encoding="utf-8")
+            command = (
+                "printf 'Pytest: No tests collected\\n[full output: "
+                f"{full_output}"
+                "]\\n' >&2; exit 2"
+            )
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(
+                    cwd=cwd,
+                    terminal_command_rewriter=_FakeTerminalRewriter(command),
+                ),
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "ImportError: cannot import name UTC"):
+                runtime.invoke(
+                    "tool.terminal.exec",
+                    {"command": "pytest tests/unit/test_example.py"},
+                    session_id="session-rtk-failure-tail",
+                )
 
     def test_file_read_is_paginated_and_rejects_binary_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

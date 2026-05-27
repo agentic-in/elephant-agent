@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from packages.runtime_config import load_sandbox_from_config, global_config_path_for_state_dir
+from packages.runtime_config import load_rtk_from_config, load_sandbox_from_config, global_config_path_for_state_dir
 from packages.security import SecurityPolicy
 
 from .builtins import register_builtin_tools
@@ -40,6 +40,22 @@ def sandbox_config_from_state_dir(state_dir: str | Path) -> SandboxConfig | None
     return cfg
 
 
+def rtk_command_rewriter_from_state_dir(state_dir: str | Path):
+    """Load the RTK terminal command rewriter from ``config.yaml`` if enabled."""
+    config_path = global_config_path_for_state_dir(state_dir)
+    try:
+        from packages.runtime_config import load_global_config
+        global_config = load_global_config(config_path, state_dir=state_dir)
+    except OSError:
+        return None
+    rtk_config = load_rtk_from_config(global_config)
+    if not bool(rtk_config.get("enabled", False)):
+        return None
+    from .rtk import RtkCommandRewriter
+
+    return RtkCommandRewriter.from_config(rtk_config)
+
+
 def build_tool_runtime(
     *,
     enabled_overrides: Mapping[str, bool],
@@ -62,6 +78,14 @@ def build_tool_runtime(
     import logging as _logging
     _log = _logging.getLogger(__name__)
     effective_dependencies = dependencies
+    terminal_command_rewriter = None
+    if state_dir is not None:
+        terminal_command_rewriter = rtk_command_rewriter_from_state_dir(state_dir)
+    if terminal_command_rewriter is not None:
+        effective_dependencies = replace(
+            effective_dependencies,
+            terminal_command_rewriter=terminal_command_rewriter,
+        )
 
     if sandbox_config is not None and sandbox_config.is_active:
         from packages.sandbox import (
@@ -151,7 +175,7 @@ def build_tool_runtime(
             security_guard=sandbox_guard,
         )
         effective_dependencies = replace(
-            dependencies,
+            effective_dependencies,
             process_manager=sandbox_process_manager,
         )
         executor: InMemoryToolExecutor | SandboxToolExecutor = SandboxToolExecutor(
@@ -224,5 +248,6 @@ def build_secured_tool_runtime(
 __all__ = [
     "build_secured_tool_runtime",
     "build_tool_runtime",
+    "rtk_command_rewriter_from_state_dir",
     "sandbox_config_from_state_dir",
 ]

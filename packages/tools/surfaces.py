@@ -313,6 +313,11 @@ class SkillManagementSurface(Protocol):
         """Delete one installed or authored skill package."""
 
 
+class TerminalCommandRewriter(Protocol):
+    def rewrite(self, command: str, *, env: Mapping[str, str] | None = None) -> Any:
+        """Return a command rewrite result for a foreground terminal command."""
+
+
 @dataclass(frozen=True, slots=True)
 class TodoItem:
     item_id: str
@@ -542,6 +547,7 @@ class BuiltinToolDependencies:
     diary_surface: DiarySurface | None = None
     sub_agents_surface: SubAgentsSurface | None = None
     process_manager: InMemoryProcessManager = field(default_factory=InMemoryProcessManager)
+    terminal_command_rewriter: TerminalCommandRewriter | None = None
     todo_store: InMemorySessionTodoStore = field(default_factory=InMemorySessionTodoStore)
     additional_allowed_roots: tuple[Path, ...] = field(default_factory=default_local_allowed_roots)
     web_user_agent: str = "Elephant Agent/2.0 (+https://github.com/agentic-in/elephant)"
