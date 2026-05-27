@@ -27,6 +27,7 @@ from apps.api.api_runtime_http_methods import (
     _dispatch_operator,
     stream_loop_events,
 )
+from apps.api.api_runtime_paths import _dispatch_paths
 from apps.api.api_runtime_routes import API_HEALTH_ROUTE, API_V1_ROUTE_FAMILY_PATHS
 from apps.api.capabilities import APITelemetrySink
 from packages.context.epoch_store import FileEpochStore
@@ -162,6 +163,7 @@ class APIRouteInventoryTest(unittest.TestCase):
                 "/v1/internal",
                 "/v1/operator",
                 "/v1/herd",
+                "/v1/paths",
                 "/v1/episodes",
                 "/v1/states",
             ),
@@ -322,6 +324,72 @@ class HerdDiscoveryAPITest(unittest.TestCase):
                     ("babies",),
                     json.dumps({"runtime_id": record.runtime_id}).encode("utf-8"),
                 )
+
+
+class PathsAPITest(unittest.TestCase):
+    def test_creates_moves_and_checks_learning_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+
+            create_path = _dispatch_paths(
+                app,
+                "POST",
+                (),
+                json.dumps(
+                    {
+                        "title": "Healthy rhythm",
+                        "description": "Build a durable sleep and gym routine.",
+                        "review_mode": "trusted",
+                        "steps": [
+                            {
+                                "title": "Draft first week plan",
+                                "status": "next",
+                                "assignee_elephant_id": "baby:coach",
+                            }
+                        ],
+                    }
+                ).encode("utf-8"),
+            )
+            path_payload = create_path.payload["path"]
+            path_id = path_payload["path_id"]
+            first_step_id = path_payload["steps"][0]["path_step_id"]
+
+            moved = _dispatch_paths(
+                app,
+                "PATCH",
+                (path_id, "steps", first_step_id),
+                json.dumps({"status": "moving", "order_index": 0}).encode("utf-8"),
+            )
+            summary = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", first_step_id, "learning-summary"),
+                json.dumps(
+                    {
+                        "what_done": "Created a one-week plan.",
+                        "why_it_matters": "Turns intent into a small repeatable loop.",
+                        "how_it_was_done": "Split bedtime and gym into checkable steps.",
+                        "knowledge": "Habit loops need triggers and recovery space.",
+                        "human_takeaway": "Start small and inspect the loop.",
+                    }
+                ).encode("utf-8"),
+            )
+            summary_id = summary.payload["summary"]["summary_id"]
+            checked = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", first_step_id, "understanding-check"),
+                json.dumps({"summary_id": summary_id, "understood": True}).encode("utf-8"),
+            )
+            dashboard = _dispatch_paths(app, "GET", (), b"{}")
+
+        self.assertEqual(create_path.status_code, 201)
+        self.assertEqual(moved.payload["step"]["status"], "moving")
+        self.assertEqual(summary.payload["summary"]["understanding_check"]["status"], "pending")
+        self.assertEqual(checked.payload["check"]["status"], "understood")
+        self.assertEqual(dashboard.payload["paths"]["counts"]["paths"], 1)
+        self.assertEqual(dashboard.payload["paths"]["counts"]["steps"], 1)
+        self.assertEqual(dashboard.payload["paths"]["counts"]["understanding_pending"], 0)
 
 
 class OperatorPersonalModelQuestionDispatchTest(unittest.TestCase):

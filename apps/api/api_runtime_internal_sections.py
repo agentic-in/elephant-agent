@@ -44,6 +44,7 @@ from .api_runtime_internal_triggers import (
     trigger_reflect_job,
 )
 from .api_runtime_herd_local_agents import latest_episode_touch as _latest_episode_touch
+from .api_runtime_paths_section import fill_paths_section
 
 _COUNT_TABLES = {
     "personal_models",
@@ -51,11 +52,11 @@ _COUNT_TABLES = {
     "episodes",
     "loops",
     "steps",
+    "paths",
+    "path_steps",
     "semantic_index_entries",
 }
-_DASHBOARD_CHAT_EPISODE_LIMIT = 30
-_DASHBOARD_RUNTIME_EPISODE_LIMIT = 200
-_DASHBOARD_TRACE_EPISODE_LIMIT = 10
+_DASHBOARD_CHAT_EPISODE_LIMIT, _DASHBOARD_RUNTIME_EPISODE_LIMIT, _DASHBOARD_TRACE_EPISODE_LIMIT = 30, 200, 10
 LOGGER = logging.getLogger(__name__)
 
 
@@ -92,6 +93,7 @@ DASHBOARD_SECTIONS = {
     "overview",
     "personal-models",
     "herd",
+    "paths",
     "runtime",
     "chat",
     "evidence",
@@ -145,6 +147,7 @@ def _empty_dashboard(self, *, section: str, generated_at: str) -> dict[str, Any]
             "note": "Internal dashboard sections are fetched on demand by route.",
         },
         "herd": (),
+        "paths": {"paths": (), "columns": (), "counts": {}},
         "personal_models": (),
         "states": (),
         "runtime": {"episodes": (), "loops": (), "steps": (), "episode_traces": (), "learning_jobs": ()},
@@ -530,6 +533,8 @@ def _fill_overview(dashboard: dict[str, Any], self) -> None:
             "episodes": _count_rows(database_path, "episodes"),
             "loops": _count_rows(database_path, "loops"),
             "steps": _count_rows(database_path, "steps"),
+            "paths": _count_rows(database_path, "paths"),
+            "path_steps": _count_rows(database_path, "path_steps"),
             "semantic_index_entries": semantic_index_count,
             "provider_auth_states": len(provider_auth_states),
             "learning_jobs": learning["summary"]["total"],
@@ -955,6 +960,8 @@ def inspect_internal_dashboard(self, section: str) -> dict[str, Any]:
         _fill_personal_models(dashboard, self)
     elif normalized_section == "herd":
         _fill_states(dashboard, self)
+    elif normalized_section == "paths":
+        fill_paths_section(dashboard, self)
     elif normalized_section == "runtime":
         _fill_runtime(dashboard, self)
     elif normalized_section == "chat":

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RootView: View {
     @EnvironmentObject private var model: ElephantAppModel
@@ -770,6 +771,8 @@ struct DetailView: View {
                 WakeView()
             case .you:
                 YouView()
+            case .paths:
+                PathsView()
             case .diary:
                 DiaryView()
             case .skills:
@@ -2814,6 +2817,31 @@ struct WakeComposerPanel: View {
                             model.removeWakeAttachment(attachment)
                         }
                     }
+
+                    HStack(spacing: 10) {
+                        Label(
+                            localizedYouText(model.appLanguage, en: "Action mode", zh: "执行模式", fr: "Mode d'action", de: "Aktionsmodus"),
+                            systemImage: model.pathTrustMode == "trusted" ? "checkmark.seal" : "hand.raised"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.muted)
+
+                        Picker("", selection: Binding(
+                            get: { model.pathTrustMode },
+                            set: { model.setPathTrustMode($0) }
+                        )) {
+                            Text(localizedYouText(model.appLanguage, en: "Ask First", zh: "先确认", fr: "Confirmer", de: "Nachfragen")).tag("ask_first")
+                            Text(localizedYouText(model.appLanguage, en: "Trust Mother", zh: "信任托管", fr: "Confiance", de: "Vertrauen")).tag("trusted")
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 218)
+                        .help(model.pathTrustMode == "trusted"
+                            ? localizedYouText(model.appLanguage, en: "Mother may organize Paths and Flow within policy.", zh: "Mother 可以在策略内组织路径和推进事项。", fr: "Mother peut organiser les parcours dans les règles.", de: "Mother darf Pfade im Rahmen der Regeln organisieren.")
+                            : localizedYouText(model.appLanguage, en: "Mother proposes durable moves before they happen.", zh: "Mother 会先提案，再做持久化推进。", fr: "Mother propose avant les actions durables.", de: "Mother schlägt dauerhafte Schritte zuerst vor."))
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     ZStack(alignment: .bottomTrailing) {
                         ZStack(alignment: .topLeading) {
@@ -8356,6 +8384,422 @@ struct SkillAffinityPanel: View {
             }
         }
     }
+}
+
+struct PathsView: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var newPathTitle = ""
+    @State private var newStepTitle = ""
+    @State private var selectedAssignee = ""
+
+    private let columns = ["later", "next", "moving", "checking", "done", "stuck", "dropped"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            PageHeader(
+                title: localizedYouText(model.appLanguage, en: "Paths", zh: "路径", fr: "Parcours", de: "Pfade"),
+                subtitle: localizedYouText(
+                    model.appLanguage,
+                    en: "Mother Elephant turns understanding into small Flow steps across life, work, learning, and health.",
+                    zh: "Mother Elephant 把对你的理解变成生活、工作、学习和健康里的小步推进。",
+                    fr: "Mother Elephant transforme la compréhension en petites étapes de vie, travail, apprentissage et santé.",
+                    de: "Mother Elephant macht Verständnis zu kleinen Schritten für Leben, Arbeit, Lernen und Gesundheit."
+                )
+            )
+
+            NativePanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Picker("", selection: Binding(
+                            get: { model.pathTrustMode },
+                            set: { model.setPathTrustMode($0) }
+                        )) {
+                            Text(localizedYouText(model.appLanguage, en: "Ask First", zh: "先确认", fr: "Confirmer", de: "Nachfragen")).tag("ask_first")
+                            Text(localizedYouText(model.appLanguage, en: "Trust Mother", zh: "信任托管", fr: "Confiance", de: "Vertrauen")).tag("trusted")
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+
+                        Text(model.pathTrustMode == "trusted"
+                            ? localizedYouText(model.appLanguage, en: "Mother may create and move Flow items within policy.", zh: "Mother 可以在策略内创建和推进事项。", fr: "Mother peut avancer les items dans les règles.", de: "Mother darf Flow-Items im Rahmen der Regeln bewegen.")
+                            : localizedYouText(model.appLanguage, en: "Elephant proposes, you confirm before durable moves.", zh: "Elephant 先提案，你确认后再落库推进。", fr: "Elephant propose, vous confirmez.", de: "Elephant schlägt vor, du bestätigst."))
+                            .font(.callout)
+                            .foregroundStyle(ElephantTheme.muted)
+                            .lineLimit(2)
+                        Spacer()
+                        if !model.pathActionResult.isEmpty {
+                            Pill(text: model.pathActionResult, symbol: "checkmark.circle", tint: ElephantTheme.green)
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        TextField(localizedYouText(model.appLanguage, en: "New path...", zh: "新的路径...", fr: "Nouveau parcours...", de: "Neuer Pfad..."), text: $newPathTitle)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            let title = newPathTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !title.isEmpty else { return }
+                            newPathTitle = ""
+                            Task { await model.createPath(title: title) }
+                        } label: {
+                            Label(localizedYouText(model.appLanguage, en: "Create", zh: "创建", fr: "Créer", de: "Erstellen"), systemImage: "plus")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+
+            HStack(alignment: .top, spacing: 16) {
+                PathsListPanel()
+                    .frame(width: 260)
+                VStack(alignment: .leading, spacing: 16) {
+                    if let path = model.selectedPath {
+                        PathStepComposer(path: path, newStepTitle: $newStepTitle, selectedAssignee: $selectedAssignee)
+                        ScrollView(.horizontal, showsIndicators: true) {
+                            HStack(alignment: .top, spacing: 12) {
+                                ForEach(columns, id: \.self) { status in
+                                    PathColumn(status: status, steps: path.steps.filter { $0.status == status })
+                                }
+                            }
+                            .padding(.bottom, 4)
+                        }
+                        PathStepDetailPanel(step: model.selectedPathStep)
+                    } else {
+                        NativePanel {
+                            EmptyLine(
+                                symbol: "point.topleft.down.curvedto.point.bottomright.up",
+                                text: localizedYouText(model.appLanguage, en: "No paths yet. Create one or ask Mother Elephant to organize your next direction.", zh: "还没有路径。可以先创建一个，或者让 Mother Elephant 帮你组织下一段方向。", fr: "Aucun parcours pour l'instant.", de: "Noch keine Pfade.")
+                            )
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+    }
+}
+
+private struct PathsListPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        NativePanel {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Directions", zh: "方向", fr: "Directions", de: "Richtungen"),
+                    subtitle: localizedFormat(model.appLanguage, en: "%d paths", zh: "%d 条路径", fr: "%d parcours", de: "%d Pfade", model.snapshot.pathItems.count)
+                )
+                if model.snapshot.pathItems.isEmpty {
+                    EmptyLine(symbol: "leaf", text: localizedYouText(model.appLanguage, en: "Nothing yet.", zh: "暂时没有。", fr: "Rien pour l'instant.", de: "Noch nichts."))
+                } else {
+                    ForEach(model.snapshot.pathItems) { path in
+                        Button {
+                            model.selectPath(path)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                                    .foregroundStyle(path.id == model.selectedPath?.id ? ElephantTheme.accent : ElephantTheme.faint)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(path.title)
+                                        .font(.callout.weight(.semibold))
+                                        .foregroundStyle(ElephantTheme.ink)
+                                        .lineLimit(2)
+                                    Text("\(path.steps.count) flow · \(path.reviewMode == "trusted" ? "trusted" : "ask first")")
+                                        .font(.caption)
+                                        .foregroundStyle(ElephantTheme.muted)
+                                }
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(path.id == model.selectedPath?.id ? ElephantTheme.accent.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(PressablePlainButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct PathStepComposer: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var path: PathItem
+    @Binding var newStepTitle: String
+    @Binding var selectedAssignee: String
+
+    var body: some View {
+        NativePanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(path.title)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(ElephantTheme.ink)
+                        if !path.detail.isEmpty {
+                            Text(path.detail)
+                                .font(.callout)
+                                .foregroundStyle(ElephantTheme.muted)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                    Pill(text: path.reviewMode == "trusted" ? "Trust Mother" : "Ask First", symbol: path.reviewMode == "trusted" ? "checkmark.seal" : "hand.raised", tint: path.reviewMode == "trusted" ? ElephantTheme.green : ElephantTheme.orange)
+                }
+                HStack(spacing: 10) {
+                    TextField(localizedYouText(model.appLanguage, en: "New flow step...", zh: "新的推进事项...", fr: "Nouvelle étape...", de: "Neuer Schritt..."), text: $newStepTitle)
+                        .textFieldStyle(.roundedBorder)
+                    Picker("", selection: $selectedAssignee) {
+                        Text(localizedYouText(model.appLanguage, en: "Unassigned", zh: "不分配", fr: "Non assigné", de: "Nicht zugewiesen")).tag("")
+                        ForEach(model.snapshot.herdItems) { item in
+                            Text(item.title).tag(item.elephantID.isEmpty ? item.id : item.elephantID)
+                        }
+                    }
+                    .frame(width: 170)
+                    Button {
+                        let title = newStepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !title.isEmpty else { return }
+                        newStepTitle = ""
+                        Task { await model.createPathStep(path: path, title: title, assigneeElephantID: selectedAssignee) }
+                    } label: {
+                        Label(localizedYouText(model.appLanguage, en: "Add", zh: "添加", fr: "Ajouter", de: "Hinzufügen"), systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+}
+
+private struct PathColumn: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var status: String
+    var steps: [PathStepItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(pathStatusTitle(status, language: model.appLanguage), systemImage: pathStatusSymbol(status))
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(pathStatusTint(status))
+                Spacer()
+                Text("\(steps.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+            }
+            ForEach(steps) { step in
+                PathStepCard(step: step)
+                    .onDrag { NSItemProvider(object: step.id as NSString) }
+            }
+            if steps.isEmpty {
+                Text(localizedYouText(model.appLanguage, en: "Empty", zh: "空", fr: "Vide", de: "Leer"))
+                    .font(.caption)
+                    .foregroundStyle(ElephantTheme.faint)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            }
+        }
+        .padding(12)
+        .frame(width: 220, alignment: .top)
+        .frame(minHeight: 300, alignment: .top)
+        .background(pathStatusTint(status).opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(pathStatusTint(status).opacity(0.14), lineWidth: 1))
+        .onDrop(of: [UTType.text], isTargeted: nil) { providers in
+            guard let provider = providers.first else { return false }
+            provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
+                let raw: String
+                if let data = item as? Data {
+                    raw = String(data: data, encoding: .utf8) ?? ""
+                } else if let text = item as? String {
+                    raw = text
+                } else if let text = item as? NSString {
+                    raw = text as String
+                } else {
+                    raw = ""
+                }
+                let stepID = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let step = model.snapshot.pathItems.flatMap(\.steps).first(where: { $0.id == stepID }) else { return }
+                Task { @MainActor in
+                    await model.movePathStep(step, to: status)
+                }
+            }
+            return true
+        }
+    }
+}
+
+private struct PathStepCard: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var step: PathStepItem
+
+    var body: some View {
+        Button {
+            model.selectPathStep(step)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(step.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.ink)
+                    .lineLimit(3)
+                if !step.detail.isEmpty {
+                    Text(step.detail)
+                        .font(.caption)
+                        .foregroundStyle(ElephantTheme.muted)
+                        .lineLimit(3)
+                }
+                HStack(spacing: 6) {
+                    if !step.assigneeElephantID.isEmpty {
+                        Label(assigneeName(step.assigneeElephantID, herd: model.snapshot.herdItems), systemImage: "figure.walk")
+                    }
+                    if !step.summaries.isEmpty {
+                        Label("\(step.summaries.count)", systemImage: "checklist.checked")
+                    }
+                    Spacer()
+                }
+                .font(.caption2)
+                .foregroundStyle(ElephantTheme.muted)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.86), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(step.id == model.selectedPathStep?.id ? ElephantTheme.accent.opacity(0.52) : ElephantTheme.line.opacity(0.64), lineWidth: 1))
+        }
+        .buttonStyle(PressablePlainButtonStyle())
+    }
+}
+
+private struct PathStepDetailPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var step: PathStepItem?
+
+    var body: some View {
+        NativePanel {
+            if let step {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(step.title)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(ElephantTheme.ink)
+                            Text(pathStatusTitle(step.status, language: model.appLanguage))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(pathStatusTint(step.status))
+                        }
+                        Spacer()
+                        Menu {
+                            ForEach(["later", "next", "moving", "checking", "done", "stuck", "dropped"], id: \.self) { status in
+                                Button(pathStatusTitle(status, language: model.appLanguage)) {
+                                    Task { await model.movePathStep(step, to: status) }
+                                }
+                            }
+                        } label: {
+                            Label(localizedYouText(model.appLanguage, en: "Move", zh: "移动", fr: "Déplacer", de: "Verschieben"), systemImage: "arrow.right")
+                        }
+                    }
+                    if !step.detail.isEmpty {
+                        Text(step.detail)
+                            .font(.callout)
+                            .foregroundStyle(ElephantTheme.muted)
+                    }
+                    if let summary = step.summaries.first {
+                        LearningSummaryPanel(summary: summary)
+                    } else {
+                        EmptyLine(symbol: "checklist.checked", text: localizedYouText(model.appLanguage, en: "No learning summary yet. Baby elephants will attach one after finishing work.", zh: "还没有学习总结。小象完成任务后会补上这份总结。", fr: "Aucun résumé d'apprentissage.", de: "Noch keine Lernzusammenfassung."))
+                    }
+                }
+            } else {
+                EmptyLine(symbol: "sidebar.left", text: localizedYouText(model.appLanguage, en: "Select a Flow step.", zh: "选择一个推进事项。", fr: "Sélectionnez une étape.", de: "Wähle einen Schritt."))
+            }
+        }
+    }
+}
+
+private struct LearningSummaryPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var summary: LearningSummaryItem
+
+    var understood: Bool {
+        summary.check?.status == "understood"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(
+                title: localizedYouText(model.appLanguage, en: "Learning Loop", zh: "理解闭环", fr: "Boucle d'apprentissage", de: "Lernschleife"),
+                subtitle: summary.createdAt
+            )
+            PathSummaryRow(title: localizedYouText(model.appLanguage, en: "What changed", zh: "做了什么", fr: "Ce qui a changé", de: "Was sich geändert hat"), text: summary.whatDone)
+            PathSummaryRow(title: localizedYouText(model.appLanguage, en: "Why it matters", zh: "为什么重要", fr: "Pourquoi c'est important", de: "Warum es zählt"), text: summary.whyItMatters)
+            PathSummaryRow(title: localizedYouText(model.appLanguage, en: "How it was done", zh: "怎么做的", fr: "Comment c'était fait", de: "Wie es gemacht wurde"), text: summary.howItWasDone)
+            PathSummaryRow(title: localizedYouText(model.appLanguage, en: "Knowledge to absorb", zh: "需要吸收的知识", fr: "Savoir à absorber", de: "Wissen zum Mitnehmen"), text: summary.knowledge)
+            PathSummaryRow(title: localizedYouText(model.appLanguage, en: "Human takeaway", zh: "人的 takeaway", fr: "À retenir", de: "Merksatz"), text: summary.humanTakeaway)
+            Toggle(isOn: Binding(
+                get: { understood },
+                set: { value in Task { await model.markLearningSummary(summary, understood: value) } }
+            )) {
+                Text(localizedYouText(model.appLanguage, en: "I understand what was done and why.", zh: "我理解这件事做了什么、为什么这么做。", fr: "Je comprends ce qui a été fait et pourquoi.", de: "Ich verstehe, was getan wurde und warum."))
+                    .font(.callout.weight(.semibold))
+            }
+            .toggleStyle(.checkbox)
+        }
+    }
+}
+
+private struct PathSummaryRow: View {
+    var title: String
+    var text: String
+
+    var body: some View {
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                Text(text)
+                    .font(.callout)
+                    .foregroundStyle(ElephantTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private func pathStatusTitle(_ status: String, language: AppLanguage) -> String {
+    switch status {
+    case "later": return localizedYouText(language, en: "Later", zh: "稍后", fr: "Plus tard", de: "Später")
+    case "next": return localizedYouText(language, en: "Next", zh: "下一步", fr: "Suivant", de: "Nächster")
+    case "moving": return localizedYouText(language, en: "Moving", zh: "推进中", fr: "En cours", de: "In Bewegung")
+    case "checking": return localizedYouText(language, en: "Checking", zh: "确认中", fr: "Vérification", de: "Prüfung")
+    case "done": return localizedYouText(language, en: "Done", zh: "完成", fr: "Terminé", de: "Fertig")
+    case "stuck": return localizedYouText(language, en: "Stuck", zh: "卡住", fr: "Bloqué", de: "Blockiert")
+    case "dropped": return localizedYouText(language, en: "Dropped", zh: "放下", fr: "Mis de côté", de: "Abgelegt")
+    default: return status.capitalized
+    }
+}
+
+private func pathStatusSymbol(_ status: String) -> String {
+    switch status {
+    case "later": return "clock"
+    case "next": return "circle"
+    case "moving": return "arrow.triangle.2.circlepath"
+    case "checking": return "checkmark.seal"
+    case "done": return "checkmark.circle.fill"
+    case "stuck": return "exclamationmark.octagon"
+    case "dropped": return "minus.circle"
+    default: return "circle"
+    }
+}
+
+private func pathStatusTint(_ status: String) -> Color {
+    switch status {
+    case "later": return ElephantTheme.faint
+    case "next": return ElephantTheme.accent
+    case "moving": return ElephantTheme.orange
+    case "checking": return ElephantTheme.green
+    case "done": return ElephantTheme.green
+    case "stuck", "dropped": return ElephantTheme.ember
+    default: return ElephantTheme.accent
+    }
+}
+
+private func assigneeName(_ elephantID: String, herd: [HerdItem]) -> String {
+    herd.first { $0.elephantID == elephantID || $0.id == elephantID }?.title ?? elephantID
 }
 
 struct DiaryPanel: View {
@@ -20607,8 +21051,8 @@ struct OnboardingHerdDiscoveryStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             OnboardingStepHeader(
-                title: localizedYouText(model.appLanguage, en: "Choose one baby elephant.", zh: "选择第一只小象。", fr: "Choisissez un baby elephant.", de: "Wähle ein Baby Elephant."),
-                subtitle: localizedYouText(model.appLanguage, en: "Use a local CLI when available, or reuse your provider with a different model.", zh: "有本地 CLI 就用 CLI；没有也可以复用刚配置的 provider，并给小象单独选模型。", fr: "Utilisez un CLI local ou réutilisez le provider avec un autre modèle.", de: "Nutze lokale CLI oder denselben Provider mit anderem Modell."),
+                title: localizedYouText(model.appLanguage, en: "Choose baby elephants.", zh: "选择小象。", fr: "Choisissez des baby elephants.", de: "Wähle Baby Elephants."),
+                subtitle: localizedYouText(model.appLanguage, en: "Select several local agents or one provider-backed helper. Elephant will adopt them together.", zh: "可以一次勾选多个本地 agent，也可以添加一个 provider 小象。Elephant 会一起领养。", fr: "Sélectionnez plusieurs agents locaux ou un helper provider.", de: "Wähle mehrere lokale Agents oder einen Provider-Helfer."),
                 symbol: "person.3.sequence"
             )
 
@@ -20616,7 +21060,7 @@ struct OnboardingHerdDiscoveryStep: View {
                 Pill(text: discoveryStatusText, symbol: model.onboardingHerdDiscoveryComplete ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath", tint: model.onboardingHerdDiscoveryComplete ? ElephantTheme.green : ElephantTheme.accent)
                 if selectedCount > 0 {
                     Pill(
-                        text: localizedYouText(model.appLanguage, en: "1 selected", zh: "已选择 1 个", fr: "1 sélectionné", de: "1 ausgewählt"),
+                        text: localizedFormat(model.appLanguage, en: "%d selected", zh: "已选择 %d 个", fr: "%d sélectionnés", de: "%d ausgewählt", selectedCount),
                         symbol: "checkmark.square.fill",
                         tint: ElephantTheme.accent
                     )
@@ -20641,7 +21085,7 @@ struct OnboardingHerdDiscoveryStep: View {
 
                     SectionLabel(
                         title: localizedYouText(model.appLanguage, en: "Baby runtime", zh: "小象运行引擎", fr: "Runtime du baby", de: "Baby-Runtime"),
-                        subtitle: localizedYouText(model.appLanguage, en: "Pick one runtime. Provider and CLI are peers here.", zh: "只选一个运行方式。模型服务和本地 CLI 是同一组选择。", fr: "Choisissez un runtime.", de: "Wähle eine Runtime.")
+                        subtitle: localizedYouText(model.appLanguage, en: "Pick every helper Elephant should adopt now.", zh: "勾选现在就要领养的小象。", fr: "Choisissez les helpers à adopter maintenant.", de: "Wähle alle Helfer für jetzt.")
                     )
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -20651,11 +21095,15 @@ struct OnboardingHerdDiscoveryStep: View {
                                 motherModelID: model.onboardingModelID,
                                 babyModelID: $model.onboardingBabyProviderModelID,
                                 models: providerModels,
-                                selected: model.onboardingSelectedBabyBackend == "provider"
+                                selected: model.onboardingSelectedBabyRuntimeID == "provider:\(selectedProvider.id)"
                             ) {
-                                model.onboardingSelectedBabyBackend = "provider"
-                                model.onboardingSelectedBabyRuntimeID = "provider:\(selectedProvider.id)"
-                                model.onboardingSelectedRuntimeIDs.removeAll()
+                                let providerRuntimeID = "provider:\(selectedProvider.id)"
+                                if model.onboardingSelectedBabyRuntimeID == providerRuntimeID {
+                                    model.onboardingSelectedBabyRuntimeID = ""
+                                } else {
+                                    model.onboardingSelectedBabyRuntimeID = providerRuntimeID
+                                }
+                                model.onboardingSelectedBabyBackend = selectedBackendAfterToggle(providerSelected: model.onboardingSelectedBabyRuntimeID == providerRuntimeID, localCount: model.onboardingSelectedRuntimeIDs.count)
                                 if model.onboardingBabyProviderModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                     model.onboardingBabyProviderModelID = model.onboardingModelID
                                 }
@@ -20665,12 +21113,16 @@ struct OnboardingHerdDiscoveryStep: View {
                         ForEach(candidates) { runtime in
                             OnboardingHerdRuntimeCard(
                                 runtime: runtime,
-                                selected: model.onboardingSelectedBabyBackend == "local_cli" && model.onboardingSelectedBabyRuntimeID == runtime.runtimeID
+                                selected: model.onboardingSelectedRuntimeIDs.contains(runtime.runtimeID)
                             ) {
                                 guard runtime.canExecute else { return }
-                                model.onboardingSelectedBabyBackend = "local_cli"
-                                model.onboardingSelectedBabyRuntimeID = runtime.runtimeID
-                                model.onboardingSelectedRuntimeIDs = [runtime.runtimeID]
+                                if model.onboardingSelectedRuntimeIDs.contains(runtime.runtimeID) {
+                                    model.onboardingSelectedRuntimeIDs.remove(runtime.runtimeID)
+                                } else {
+                                    model.onboardingSelectedRuntimeIDs.insert(runtime.runtimeID)
+                                }
+                                let providerSelected = model.onboardingSelectedBabyRuntimeID.hasPrefix("provider:")
+                                model.onboardingSelectedBabyBackend = selectedBackendAfterToggle(providerSelected: providerSelected, localCount: model.onboardingSelectedRuntimeIDs.count)
                             }
                         }
                     }
@@ -20692,7 +21144,7 @@ struct OnboardingHerdDiscoveryStep: View {
             }
             .frame(height: 352)
 
-            Text(localizedYouText(model.appLanguage, en: "Only one baby is created during onboarding. You can add more later from Herd.", zh: "onboarding 里先只领养一只小象；之后可以在 Herd 里继续添加。", fr: "Un seul baby est créé pendant l'onboarding.", de: "Beim Onboarding wird nur ein Baby erstellt."))
+            Text(localizedYouText(model.appLanguage, en: "You can start with a small herd now and keep adding more from Herd later.", zh: "一开始就可以领养一个小队，之后也能在 Herd 继续添加。", fr: "Vous pouvez commencer avec un petit herd.", de: "Du kannst gleich mit einer kleinen Herd starten."))
                 .font(.caption)
                 .foregroundStyle(ElephantTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -20705,7 +21157,14 @@ struct OnboardingHerdDiscoveryStep: View {
     }
 
     private var selectedCount: Int {
-        model.onboardingSelectedBabyBackend.isEmpty ? 0 : 1
+        model.onboardingSelectedRuntimeIDs.count + (model.onboardingSelectedBabyRuntimeID.hasPrefix("provider:") ? 1 : 0)
+    }
+
+    private func selectedBackendAfterToggle(providerSelected: Bool, localCount: Int) -> String {
+        if providerSelected && localCount > 0 { return "mixed" }
+        if providerSelected { return "provider" }
+        if localCount > 0 { return "local_cli" }
+        return ""
     }
 
     private var discoveryStatusText: String {

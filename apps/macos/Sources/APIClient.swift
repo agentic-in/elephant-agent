@@ -35,6 +35,7 @@ struct APIClient {
         let sections = [
             "overview",
             "chat",
+            "paths",
             "questions",
             "skills",
             "tools",
@@ -63,6 +64,72 @@ struct APIClient {
             return result
         }
         return SnapshotParser.parse(dashboards: dashboards, apiURL: baseURL.absoluteString)
+    }
+
+    func createPath(title: String, description: String, reviewMode: String) async throws -> String {
+        guard baseURL != nil else { return "" }
+        let json = try await request(
+            path: "/v1/paths",
+            method: "POST",
+            body: [
+                "title": title,
+                "description": description,
+                "review_mode": reviewMode
+            ]
+        )
+        let path = SnapshotParser.findDictionary(in: json, keys: ["path"]) ?? [:]
+        return SnapshotParser.findString(in: path, keys: ["path_id", "pathId", "id"]) ?? ""
+    }
+
+    func createPathStep(
+        pathID: String,
+        title: String,
+        description: String,
+        assigneeElephantID: String
+    ) async throws -> String {
+        guard baseURL != nil else { return "" }
+        var body: [String: Any] = [
+            "title": title,
+            "description": description,
+            "status": "next"
+        ]
+        if !assigneeElephantID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            body["assignee_elephant_id"] = assigneeElephantID
+        }
+        let json = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps",
+            method: "POST",
+            body: body
+        )
+        let step = SnapshotParser.findDictionary(in: json, keys: ["step"]) ?? [:]
+        return SnapshotParser.findString(in: step, keys: ["path_step_id", "pathStepId", "id"]) ?? ""
+    }
+
+    func updatePathStep(pathID: String, stepID: String, status: String) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))",
+            method: "PATCH",
+            body: ["status": status]
+        )
+    }
+
+    func markUnderstanding(
+        pathID: String,
+        stepID: String,
+        summaryID: String,
+        understood: Bool
+    ) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))/understanding-check",
+            method: "POST",
+            body: [
+                "summary_id": summaryID,
+                "status": understood ? "understood" : "needs_clarification",
+                "checked_by": "user"
+            ]
+        )
     }
 
     func fetchProviderCatalog() async throws -> [ProviderOption] {
@@ -1098,6 +1165,13 @@ enum SnapshotParser {
             snapshot.elephantName = first
         }
 
+        let pathsRoot = dashboards["paths"] ?? [:]
+        let pathsPayload = pathsRoot["paths"] as? [String: Any] ?? [:]
+        let pathRows = pathsPayload["paths"] as? [[String: Any]]
+            ?? pathsRoot["paths"] as? [[String: Any]]
+            ?? []
+        snapshot.pathItems = pathRows.compactMap { pathItem(from: $0) }
+
         let questionsRoot = dashboards["questions"] ?? [:]
         let questions = questionsRoot["questions"] as? [String: Any] ?? [:]
         let facts = questions["facts"] as? [[String: Any]] ?? []
@@ -1796,6 +1870,91 @@ enum SnapshotParser {
             rolePrompt: string(row["role_prompt"] ?? row["rolePrompt"]),
             detectedAt: string(row["detected_at"] ?? row["detectedAt"]),
             lastError: string(row["last_error"] ?? row["lastError"])
+        )
+    }
+
+    private static func pathItem(from row: [String: Any]) -> PathItem? {
+        let id = string(row["path_id"] ?? row["pathId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        let stepRows = row["steps"] as? [[String: Any]] ?? []
+        return PathItem(
+            id: id,
+            title: string(row["title"], fallback: id),
+            detail: string(row["description"] ?? row["detail"]),
+            status: string(row["status"], fallback: "active"),
+            priority: string(row["priority"], fallback: "normal"),
+            reviewMode: string(row["review_mode"] ?? row["reviewMode"], fallback: "ask_first"),
+            ownerElephantID: string(row["owner_elephant_id"] ?? row["ownerElephantId"]),
+            createdAt: string(row["created_at"] ?? row["createdAt"]),
+            updatedAt: string(row["updated_at"] ?? row["updatedAt"]),
+            steps: stepRows.compactMap { pathStepItem(from: $0, fallbackPathID: id) }
+        )
+    }
+
+    private static func pathStepItem(from row: [String: Any], fallbackPathID: String) -> PathStepItem? {
+        let id = string(row["path_step_id"] ?? row["pathStepId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        let summaryRows = row["learning_summaries"] as? [[String: Any]]
+            ?? row["learningSummaries"] as? [[String: Any]]
+            ?? row["summaries"] as? [[String: Any]]
+            ?? []
+        return PathStepItem(
+            id: id,
+            pathID: string(row["path_id"] ?? row["pathId"], fallback: fallbackPathID),
+            title: string(row["title"], fallback: id),
+            detail: string(row["description"] ?? row["detail"]),
+            status: string(row["status"], fallback: "next"),
+            orderIndex: int(row["order_index"] ?? row["orderIndex"]),
+            assigneeElephantID: string(row["assignee_elephant_id"] ?? row["assigneeElephantId"]),
+            creatorElephantID: string(row["creator_elephant_id"] ?? row["creatorElephantId"]),
+            dueAt: string(row["due_at"] ?? row["dueAt"]),
+            updatedAt: string(row["updated_at"] ?? row["updatedAt"]),
+            completedAt: string(row["completed_at"] ?? row["completedAt"]),
+            summaries: summaryRows.compactMap { learningSummaryItem(from: $0, fallbackPathID: fallbackPathID, fallbackStepID: id) }
+        )
+    }
+
+    private static func learningSummaryItem(
+        from row: [String: Any],
+        fallbackPathID: String,
+        fallbackStepID: String
+    ) -> LearningSummaryItem? {
+        let id = string(row["summary_id"] ?? row["summaryId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        let checkRow = row["understanding_check"] as? [String: Any]
+            ?? row["understandingCheck"] as? [String: Any]
+        return LearningSummaryItem(
+            id: id,
+            stepID: string(row["path_step_id"] ?? row["pathStepId"], fallback: fallbackStepID),
+            pathID: string(row["path_id"] ?? row["pathId"], fallback: fallbackPathID),
+            runID: string(row["run_id"] ?? row["runId"]),
+            summaryType: string(row["summary_type"] ?? row["summaryType"], fallback: "task"),
+            whatDone: string(row["what_done"] ?? row["whatDone"] ?? row["summary"]),
+            whyItMatters: string(row["why_it_matters"] ?? row["whyItMatters"]),
+            howItWasDone: string(row["how_it_was_done"] ?? row["howItWasDone"]),
+            knowledge: string(row["knowledge"]),
+            humanTakeaway: string(row["human_takeaway"] ?? row["humanTakeaway"]),
+            createdByElephantID: string(row["created_by_elephant_id"] ?? row["createdByElephantId"]),
+            createdAt: string(row["created_at"] ?? row["createdAt"]),
+            check: checkRow.flatMap { understandingCheckItem(from: $0, fallbackStepID: fallbackStepID, fallbackSummaryID: id) }
+        )
+    }
+
+    private static func understandingCheckItem(
+        from row: [String: Any],
+        fallbackStepID: String,
+        fallbackSummaryID: String
+    ) -> UnderstandingCheckItem? {
+        let id = string(row["check_id"] ?? row["checkId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        return UnderstandingCheckItem(
+            id: id,
+            stepID: string(row["path_step_id"] ?? row["pathStepId"], fallback: fallbackStepID),
+            summaryID: string(row["summary_id"] ?? row["summaryId"], fallback: fallbackSummaryID),
+            status: string(row["status"], fallback: "pending"),
+            checkedBy: string(row["checked_by"] ?? row["checkedBy"], fallback: "user"),
+            checkedAt: string(row["checked_at"] ?? row["checkedAt"]),
+            note: string(row["note"])
         )
     }
 

@@ -39,6 +39,7 @@ from .api_runtime_routes import (
     API_ROUTE_HERD,
     API_ROUTE_INTERNAL,
     API_ROUTE_OPERATOR,
+    API_ROUTE_PATHS,
     API_ROUTE_PROVIDERS,
     API_ROUTE_STATES,
 )
@@ -67,6 +68,7 @@ from .api_runtime_herd_local_agents import (
     metadata_str_payload as _metadata_str_payload,
     scan_and_persist_local_agents as _scan_and_persist_local_agents,
 )
+from .api_runtime_paths import _dispatch_paths
 
 _STREAM_KEEPALIVE_SECONDS = 15.0
 
@@ -310,6 +312,8 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
             return self._dispatch_operator(method, parts[1:], body)
         if route_family == API_ROUTE_HERD:
             return _dispatch_elephants(self, method, parts[1:], body)
+        if route_family == API_ROUTE_PATHS:
+            return _dispatch_paths(self, method, parts[1:], body)
         if route_family == API_ROUTE_EPISODES:
             return self._dispatch_episodes(method, parts[1:], body)
         if route_family == API_ROUTE_STATES:

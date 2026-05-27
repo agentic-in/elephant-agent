@@ -176,6 +176,11 @@ class LearningResultSurface(Protocol):
         """Persist the explicit final result of one background learning job."""
 
 
+class PathManagementSurface(Protocol):
+    def manage_paths(self, session_id: str, **kwargs: Any) -> Mapping[str, Any]:
+        """Create, move, summarize, and confirm durable user-facing Paths."""
+
+
 class DiarySurface(Protocol):
     def write_diary_entry(
         self,
@@ -539,6 +544,7 @@ class BuiltinToolDependencies:
     message_delivery: MessageDeliverySurface | None = None
     clarify_surface: ClarifySurface | None = None
     learning_result_surface: LearningResultSurface | None = None
+    path_management: PathManagementSurface | None = None
     diary_surface: DiarySurface | None = None
     sub_agents_surface: SubAgentsSurface | None = None
     process_manager: InMemoryProcessManager = field(default_factory=InMemoryProcessManager)

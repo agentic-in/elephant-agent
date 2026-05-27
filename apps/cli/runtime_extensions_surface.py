@@ -25,6 +25,7 @@ from packages.state import (
 )
 from packages.tools import BuiltinToolDependencies, ToolAudience, ToolDefinition, ToolManifestLoadRecord, sync_custom_mcp_tools
 from packages.tools.adapters import StructuredClarifySurface
+from packages.tools.path_management import RepositoryPathManagementSurface
 from packages.understanding import PersonalModelUnderstandingSurface
 
 from .runtime_extensions import CliExtensionManifest, build_skill_runtime, build_tool_runtime, load_extension_manifest, sanitize_extension_manifest_payload, serialize_manifest_path
@@ -770,6 +771,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
                         ),
                         embedding_service=embedding_service,
                     ),
+                    path_management=RepositoryPathManagementSurface(self.repository),
                     skill_management=self,
                     learning_result_surface=self,
                     diary_surface=self,

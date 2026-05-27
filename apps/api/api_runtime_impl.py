@@ -60,6 +60,7 @@ from packages.tools.adapters import DeliveryMessageSurfaceAdapter, StructuredCla
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.tools.browser_backend import create_playwright_browser_backend
 from packages.tools.local_roots import default_local_allowed_roots
+from packages.tools.path_management import RepositoryPathManagementSurface
 
 from .capabilities import (
     APIContextCapability,
@@ -296,6 +297,7 @@ class ElephantAPIApp:
                     semantic_searcher=self.semantic_index_bundle.searcher,
                     embedding_service=_api_embedding_service,
                 ),
+                path_management=RepositoryPathManagementSurface(self.repository),
                 skill_management=RuntimeSkillManagementSurface(
                     skill_runtime=self.skill_runtime,
                     skill_hub=self.skill_hub,

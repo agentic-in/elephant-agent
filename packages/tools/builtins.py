@@ -17,7 +17,9 @@ from .handlers_personal_model import (
     run_personal_model_search,
     run_personal_model_update,
 )
+from .handlers_paths import run_path_action
 from .handlers_diary import run_diary_list, run_diary_write
+from .builtins_paths import path_tool_definitions
 from .builtins_skills import skill_tool_definitions, skill_tool_handler
 from .builtins_sub_agents import sub_agents_tool_definitions, sub_agents_tool_handler
 from .handlers_code_execution import SAFE_CODE_IMPORTS, run_code_execute
@@ -51,6 +53,7 @@ _BUILTIN_TOOL_ORDER = (
     "clarify",
     "cron",
     "personal_model",
+    "paths",
     "learning",
     "code_execution",
     "messaging",
@@ -103,6 +106,9 @@ def builtin_tool_definitions(
     diary_reason = None
     if dependencies is None or dependencies.diary_surface is None:
         diary_reason = "Diary surface is not configured on this Elephant Agent surface."
+    path_reason = None
+    if dependencies is None or dependencies.path_management is None:
+        path_reason = "Path management is not configured on this Elephant Agent surface."
 
     definitions = (
         _builtin_tool(
@@ -621,6 +627,10 @@ def builtin_tool_definitions(
                 notes="Subprocess Python with safe stdlib imports, scrubbed ambient secrets, and separately governed nested tool RPC.",
             ),
         ),
+        *path_tool_definitions(
+            version=_BUILTIN_VERSION,
+            availability=_availability(path_reason is None, path_reason),
+        ),
         _builtin_tool(
             tool_id="tool.message.send",
             display_name="Message Send",
@@ -850,6 +860,7 @@ def _docs_builtin_tool_definitions() -> tuple[ToolDefinition, ...]:
             skill_management=object(),  # type: ignore[arg-type]
             sub_agents_surface=object(),  # type: ignore[arg-type]
             browser_backend=object(),  # type: ignore[arg-type]
+            path_management=object(),  # type: ignore[arg-type]
         ),
     )
 
@@ -960,6 +971,8 @@ def _handler_for_tool(
         return lambda invocation: run_personal_model_update(invocation, surface=dependencies.personal_model_understanding)
     if tool_id == "tool.personal_model.questions":
         return lambda invocation: run_personal_model_questions(invocation, surface=dependencies.personal_model_understanding)
+    if tool_id == "tool.paths.manage":
+        return lambda invocation: run_path_action(invocation, surface=dependencies.path_management)
     if tool_id == "tool.code.execute":
         return lambda invocation: run_code_execute(
             invocation,

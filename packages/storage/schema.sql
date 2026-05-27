@@ -217,6 +217,104 @@ CREATE INDEX idx_learning_jobs_profile_status
 CREATE INDEX idx_learning_jobs_episode_type_created
     ON learning_jobs(job_type, episode_id, created_at DESC);
 
+CREATE TABLE paths (
+    path_id TEXT PRIMARY KEY,
+    personal_model_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active'
+        CHECK(status IN ('active', 'paused', 'completed', 'dropped')),
+    priority TEXT NOT NULL DEFAULT 'normal',
+    review_mode TEXT NOT NULL DEFAULT 'ask_first'
+        CHECK(review_mode IN ('ask_first', 'trusted')),
+    owner_elephant_id TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_paths_pm_status_updated
+    ON paths(personal_model_id, status, updated_at DESC);
+CREATE INDEX idx_paths_owner_updated
+    ON paths(owner_elephant_id, updated_at DESC);
+
+CREATE TABLE path_steps (
+    path_step_id TEXT PRIMARY KEY,
+    path_id TEXT NOT NULL,
+    personal_model_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'next'
+        CHECK(status IN ('later', 'next', 'moving', 'checking', 'done', 'stuck', 'dropped')),
+    order_index INTEGER NOT NULL DEFAULT 0 CHECK(order_index >= 0),
+    assignee_elephant_id TEXT NOT NULL DEFAULT '',
+    creator_elephant_id TEXT NOT NULL DEFAULT '',
+    due_at TEXT,
+    related_episode_id TEXT,
+    related_loop_id TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+    FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+        ON DELETE CASCADE,
+    FOREIGN KEY(related_episode_id) REFERENCES episodes(episode_id) ON DELETE SET NULL,
+    FOREIGN KEY(related_loop_id) REFERENCES loops(loop_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_path_steps_path_status_order
+    ON path_steps(path_id, status, order_index, updated_at DESC);
+CREATE INDEX idx_path_steps_pm_status_updated
+    ON path_steps(personal_model_id, status, updated_at DESC);
+CREATE INDEX idx_path_steps_assignee_status_updated
+    ON path_steps(assignee_elephant_id, status, updated_at DESC);
+
+CREATE TABLE learning_summaries (
+    summary_id TEXT PRIMARY KEY,
+    path_step_id TEXT NOT NULL,
+    path_id TEXT NOT NULL,
+    run_id TEXT NOT NULL DEFAULT '',
+    summary_type TEXT NOT NULL DEFAULT 'task',
+    what_done TEXT NOT NULL DEFAULT '',
+    why_it_matters TEXT NOT NULL DEFAULT '',
+    how_it_was_done TEXT NOT NULL DEFAULT '',
+    knowledge TEXT NOT NULL DEFAULT '',
+    human_takeaway TEXT NOT NULL DEFAULT '',
+    created_by_elephant_id TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+    FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_learning_summaries_step_created
+    ON learning_summaries(path_step_id, created_at DESC);
+CREATE INDEX idx_learning_summaries_path_created
+    ON learning_summaries(path_id, created_at DESC);
+
+CREATE TABLE understanding_checks (
+    check_id TEXT PRIMARY KEY,
+    path_step_id TEXT NOT NULL,
+    summary_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'understood', 'needs_clarification', 'skipped')),
+    checked_by TEXT NOT NULL DEFAULT 'user',
+    checked_at TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+    FOREIGN KEY(summary_id) REFERENCES learning_summaries(summary_id) ON DELETE CASCADE,
+    UNIQUE(summary_id, checked_by)
+);
+
+CREATE INDEX idx_understanding_checks_step_updated
+    ON understanding_checks(path_step_id, updated_at DESC);
+
 CREATE TABLE personal_model_facts (
     fact_id TEXT PRIMARY KEY,
     personal_model_id TEXT NOT NULL,

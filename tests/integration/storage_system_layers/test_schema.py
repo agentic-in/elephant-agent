@@ -24,7 +24,7 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
 
             self.assertEqual(bootstrap.schema_version, SCHEMA_VERSION)
             self.assertEqual(repository.schema_version(), SCHEMA_VERSION)
-            self.assertEqual(SCHEMA_VERSION, 1)
+            self.assertEqual(SCHEMA_VERSION, 2)
             self.assertEqual(SCHEMA_PATH.name, "schema.sql")
 
             with sqlite3.connect(database_path) as connection:
@@ -66,6 +66,18 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
                 } | {
                     str(row[1])
                     for row in connection.execute("PRAGMA index_list(steps)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(paths)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(path_steps)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(learning_summaries)").fetchall()
+                } | {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA index_list(understanding_checks)").fetchall()
                 }
 
         self.assertTrue(
@@ -84,6 +96,10 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
                 "personal_model_growth",
                 "canonical_elephant_identities",
                 "local_agent_runtimes",
+                "paths",
+                "path_steps",
+                "learning_summaries",
+                "understanding_checks",
             }.issubset(table_names)
         )
         self.assertIn("current_context_note", state_columns)
@@ -100,6 +116,10 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
         self.assertIn("idx_loops_episode_started", index_names)
         self.assertIn("idx_loops_checkpoint_scan", index_names)
         self.assertIn("idx_steps_state_pm_created", index_names)
+        self.assertIn("idx_paths_pm_status_updated", index_names)
+        self.assertIn("idx_path_steps_path_status_order", index_names)
+        self.assertIn("idx_learning_summaries_step_created", index_names)
+        self.assertIn("idx_understanding_checks_step_updated", index_names)
         self.assertFalse(LEGACY_STORAGE_TABLES.intersection(table_names))
 
     def test_bootstrap_is_idempotent_for_clean_schema(self) -> None:
@@ -112,6 +132,47 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
 
         self.assertEqual(first.schema_version, SCHEMA_VERSION)
         self.assertEqual(second.schema_version, SCHEMA_VERSION)
+
+    def test_bootstrap_migrates_v1_schema_to_path_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            database_path = Path(tmpdir) / "state" / "elephant.sqlite3"
+            repository = RuntimeStorageRepository(database_path)
+            repository.bootstrap()
+
+            with sqlite3.connect(database_path) as connection:
+                connection.execute("PRAGMA foreign_keys = OFF")
+                connection.execute("DROP TABLE understanding_checks")
+                connection.execute("DROP TABLE learning_summaries")
+                connection.execute("DROP TABLE path_steps")
+                connection.execute("DROP TABLE paths")
+                connection.execute(
+                    "UPDATE storage_metadata SET metadata_value = '1' WHERE metadata_key = 'schema_version'"
+                )
+                connection.commit()
+
+            migrated = repository.bootstrap()
+
+            with sqlite3.connect(database_path) as connection:
+                table_names = {
+                    str(row[0])
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    ).fetchall()
+                }
+                path_step_columns = {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA table_info(path_steps)").fetchall()
+                }
+            schema_version = repository.schema_version()
+
+        self.assertEqual(migrated.schema_version, SCHEMA_VERSION)
+        self.assertEqual(schema_version, SCHEMA_VERSION)
+        self.assertTrue(
+            {"paths", "path_steps", "learning_summaries", "understanding_checks"}.issubset(
+                table_names
+            )
+        )
+        self.assertIn("assignee_elephant_id", path_step_columns)
 
     def test_bootstrap_backfills_runtime_indexes_for_existing_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -216,7 +277,7 @@ class StorageSystemLayerSchemaTest(unittest.TestCase):
                         metadata_value TEXT NOT NULL
                     );
                     INSERT INTO storage_metadata(metadata_key, metadata_value)
-                    VALUES ('schema_version', '1');
+                    VALUES ('schema_version', '2');
                     CREATE TABLE semantic_index_entries (
                         semantic_index_entry_id TEXT PRIMARY KEY,
                         source_record_id TEXT NOT NULL

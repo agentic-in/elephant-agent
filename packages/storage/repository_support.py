@@ -10,10 +10,16 @@ import sqlite3
 from typing import Mapping
 
 from packages.contracts.layers import Episode, Loop, PersonalModel, State, Step
+from packages.contracts.paths import (
+    LearningSummaryRecord,
+    PathRecord,
+    PathStepRecord,
+    UnderstandingCheckRecord,
+)
 from packages.contracts.runtime import LearningJob
 from packages.contracts.support import SemanticIndexEntry
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 DEFAULT_PERSONAL_MODEL_ID = "you"
@@ -234,4 +240,79 @@ def _learning_job_from_row(row: sqlite3.Row) -> LearningJob:
         last_error=str(row["last_error"]),
         metadata=_mapping_text(str(row["metadata_json"])),
         result_json=_row_mapping_object(row, "result_json"),
+    )
+
+
+def _optional_datetime_from_row(row: sqlite3.Row, column_name: str) -> datetime | None:
+    value = row[column_name]
+    return _parse_datetime(str(value)) if value is not None else None
+
+
+def _path_from_row(row: sqlite3.Row) -> PathRecord:
+    return PathRecord(
+        path_id=str(row["path_id"]),
+        personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
+        title=str(row["title"]),
+        description=str(row["description"]),
+        status=str(row["status"]),
+        priority=str(row["priority"]),
+        review_mode=str(row["review_mode"]),
+        owner_elephant_id=str(row["owner_elephant_id"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _path_step_from_row(row: sqlite3.Row) -> PathStepRecord:
+    return PathStepRecord(
+        path_step_id=str(row["path_step_id"]),
+        path_id=str(row["path_id"]),
+        personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
+        title=str(row["title"]),
+        description=str(row["description"]),
+        status=str(row["status"]),
+        order_index=int(row["order_index"]),
+        assignee_elephant_id=str(row["assignee_elephant_id"]),
+        creator_elephant_id=str(row["creator_elephant_id"]),
+        due_at=_optional_datetime_from_row(row, "due_at"),
+        related_episode_id=str(row["related_episode_id"]) if row["related_episode_id"] else None,
+        related_loop_id=str(row["related_loop_id"]) if row["related_loop_id"] else None,
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        completed_at=_optional_datetime_from_row(row, "completed_at"),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _learning_summary_from_row(row: sqlite3.Row) -> LearningSummaryRecord:
+    return LearningSummaryRecord(
+        summary_id=str(row["summary_id"]),
+        path_step_id=str(row["path_step_id"]),
+        path_id=str(row["path_id"]),
+        run_id=str(row["run_id"]),
+        summary_type=str(row["summary_type"]),
+        what_done=str(row["what_done"]),
+        why_it_matters=str(row["why_it_matters"]),
+        how_it_was_done=str(row["how_it_was_done"]),
+        knowledge=str(row["knowledge"]),
+        human_takeaway=str(row["human_takeaway"]),
+        created_by_elephant_id=str(row["created_by_elephant_id"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _understanding_check_from_row(row: sqlite3.Row) -> UnderstandingCheckRecord:
+    return UnderstandingCheckRecord(
+        check_id=str(row["check_id"]),
+        path_step_id=str(row["path_step_id"]),
+        summary_id=str(row["summary_id"]),
+        status=str(row["status"]),
+        checked_by=str(row["checked_by"]),
+        checked_at=_optional_datetime_from_row(row, "checked_at"),
+        note=str(row["note"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
     )

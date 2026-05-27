@@ -14,6 +14,7 @@ This document is generated from [tools/agent/public-contracts.yaml](../../tools/
 | api.v1.operator | * /v1/operator | `apps/api/api_runtime_routes.py` | `/v1/operator` | - | `API_ROUTE_OPERATOR = "operator"` |
 | api.v1.operator.personal-model | * /v1/operator/personal-model | `apps/api/api_runtime_personal_model_methods.py` | `/v1/operator/personal-model` | - | `def _dispatch_personal_model`, `parts[0] == "claims"`, `parts[0] == "questions"` |
 | api.v1.herd | * /v1/herd | `apps/api/api_runtime_routes.py` | `/v1/herd` | - | `API_ROUTE_HERD = "herd"` |
+| api.v1.paths | * /v1/paths | `apps/api/api_runtime_routes.py` | `/v1/paths` | - | `API_ROUTE_PATHS = "paths"` |
 | api.v1.episodes | * /v1/episodes | `apps/api/api_runtime_routes.py` | `/v1/episodes` | - | `API_ROUTE_EPISODES = "episodes"` |
 | api.v1.states | * /v1/states | `apps/api/api_runtime_routes.py` | `/v1/states` | - | `API_ROUTE_STATES = "states"` |
 | api.v1.loop-stream | GET /v1/episodes/{episode_id}/loops/stream | `apps/api/api_runtime_http_io_methods.py` | `/v1/episodes/{episode_id}/loops/stream` | - | `parts[4] == "stream"`, `self.stream_loop_events` |
@@ -91,7 +92,7 @@ This document is generated from [tools/agent/public-contracts.yaml](../../tools/
 | ID | Contract | Owner | Path | Doc | Markers |
 | --- | --- | --- | --- | --- | --- |
 | storage.schema | packages/storage/schema.sql | `packages/storage/repository_bootstrap_methods.py` | `packages/storage/schema.sql` | `docs/agent/release-model.md` | - |
-| storage.schema-version | packages/storage/repository_support.py | `packages/storage/repository_support.py` | `packages/storage/repository_support.py` | `docs/agent/release-model.md` | `SCHEMA_VERSION = 1`, `SCHEMA_PATH = Path(__file__).with_name("schema.sql")` |
+| storage.schema-version | packages/storage/repository_support.py | `packages/storage/repository_support.py` | `packages/storage/repository_support.py` | `docs/agent/release-model.md` | `SCHEMA_VERSION = 2`, `SCHEMA_PATH = Path(__file__).with_name("schema.sql")` |
 
 ## Release Contracts
 

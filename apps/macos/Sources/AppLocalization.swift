@@ -353,6 +353,7 @@ enum AppText {
     case sectionHome
     case sectionChat
     case sectionYou
+    case sectionPaths
     case sectionDiary
     case sectionSkills
     case sectionTools
@@ -366,6 +367,7 @@ enum AppText {
     case subtitleToday
     case subtitleTalk
     case subtitleModel
+    case subtitleFlow
     case subtitleJournal
     case subtitleAffinity
     case subtitleActions
@@ -966,6 +968,8 @@ enum AppText {
             return pick(language, en: "Chat", zh: "聊天", fr: "Chat", de: "Chat")
         case .sectionYou:
             return pick(language, en: "Personal Model", zh: "个人模型", fr: "Personal Model", de: "Personal Model")
+        case .sectionPaths:
+            return pick(language, en: "Paths", zh: "路径", fr: "Parcours", de: "Pfade")
         case .sectionDiary:
             return pick(language, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch")
         case .sectionSkills:
@@ -992,6 +996,8 @@ enum AppText {
             return pick(language, en: "Talk", zh: "对话", fr: "Parler", de: "Sprechen")
         case .subtitleModel:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
+        case .subtitleFlow:
+            return pick(language, en: "Flow", zh: "推进", fr: "Flux", de: "Flow")
         case .subtitleJournal:
             return pick(language, en: "Journal", zh: "记录", fr: "Journal", de: "Journal")
         case .subtitleAffinity:
@@ -1216,6 +1222,7 @@ extension AppSection {
         case .home: return AppText.sectionHome.text(language)
         case .wake: return AppText.sectionChat.text(language)
         case .you: return AppText.sectionYou.text(language)
+        case .paths: return AppText.sectionPaths.text(language)
         case .diary: return AppText.sectionDiary.text(language)
         case .skills: return AppText.sectionSkills.text(language)
         case .tools: return AppText.sectionTools.text(language)
@@ -1234,6 +1241,7 @@ extension AppSection {
         case .home: return AppText.subtitleToday.text(language)
         case .wake: return AppText.subtitleTalk.text(language)
         case .you: return AppText.subtitleModel.text(language)
+        case .paths: return AppText.subtitleFlow.text(language)
         case .diary: return AppText.subtitleJournal.text(language)
         case .skills: return AppText.subtitleAffinity.text(language)
         case .tools: return AppText.subtitleActions.text(language)
