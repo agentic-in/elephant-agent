@@ -6,7 +6,7 @@
   <h1>Elephant Agent</h1>
   <p>
     <strong>Do more without thinking less.</strong><br />
-    A Mother Elephant that grows to understand you, then helps shape the paths you want to move.
+    A Mother Elephant that grows to understand you, then helps shape the paths you are trying to move.
   </p>
   <p>
     <a href="https://elephant.agentic-in.ai/">Website</a>
@@ -20,7 +20,7 @@
 
 ## What It Is
 
-Elephant Agent is L4 personal AI: it starts from the person, not the task.
+Elephant Agent starts from the person, not the task.
 
 The mother elephant grows a correctable **Personal Model** of who you are, what
 surrounds you, what is alive right now, and what your path has taught you. That
@@ -65,44 +65,12 @@ judgment matters.
     <td width="25%">
       <strong>L4</strong>
       <br />
-      <strong>Grows the human.</strong>
+      <strong>Grows with the person.</strong>
       <br />
-      <sub>Elephant Agent's product position: Mother understands the person, shapes Paths, and keeps judgment, evidence, questions, and growth with the human.</sub>
+      <sub>Elephant Agent's product position: Mother understands the person, shapes Paths, and keeps judgment, evidence, questions, and learning close to the person.</sub>
     </td>
   </tr>
 </table>
-
-## From Understanding to Paths
-
-Understanding is not the destination. It is how Elephant Agent helps you return
-to the right thread and keep moving.
-
-- **Mother** is the coordinating elephant. She starts from the Personal Model,
-  proposes Paths, chooses the next Steps, and knows when to ask.
-- **Path** is any ongoing direction you want to move: a codebase, a fitness
-  plan, a habit reset, a research arc, a relationship repair, or a life
-  transition.
-- **Step** is a concrete action inside a Path. It replaces the narrower language
-  of "issue" for the user-facing product.
-- **Flow** is the visible board for a Path: later, next, moving, checking, done,
-  stuck, or dropped.
-- **Checkpoint** is where the human judgment returns. Mother can ask first or
-  keep moving inside a trusted boundary.
-- **Learning Summary** is the completion receipt for a Step. It explains what
-  happened, why it happened, how it happened, what knowledge mattered, and what
-  should strengthen Mother, the baby, or the user's Journey.
-- **Herd** is the group of baby elephants that can help a Path. Babies do bounded
-  work; Mother keeps the whole shape coherent.
-
-The target product loop is simple: chat with Mother, let her organize the Paths
-and Steps, answer Checkpoints when needed, and still be able to drag Steps
-manually when the board is the clearer surface.
-
-Every completed Step should also close an understanding loop. A baby does not
-only say "done"; it returns a Learning Summary and asks the human to check **I
-understand this Step**. That check preserves the "do more without thinking less"
-promise: the work can move faster, while the person still understands what was
-done, why it was done, how it was done, and what should be learned for next time.
 
 ## Personal Model
 

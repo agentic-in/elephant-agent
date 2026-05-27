@@ -1,12 +1,12 @@
 ---
 title: "Overview"
-description: "Elephant Agent is L4 personal AI: Mother grows to understand you, then helps shape Paths across work, health, habits, learning, relationships, and human growth."
+description: "Elephant Agent starts from you: Mother grows to understand you, then helps shape Paths across work, health, habits, learning, relationships, and long-running change."
 slug: /
 ---
 
 # Overview
 
-Elephant Agent is L4 personal AI for human growth.
+Most agents start from the task. Elephant Agent starts from the person.
 
 Mother starts from the person, not the task. She grows a correctable **Personal
 Model** of who you are, what surrounds you, what is alive right now, and what
@@ -17,9 +17,10 @@ Once Elephant Agent understands enough, it can help design living **Paths**:
 work, health, habits, learning, relationships, recovery, research, code, and
 other long-running directions you want to move.
 
-That is the L4 position. L1 agents execute tasks. L2 agents carry context. L3
-agents improve procedures. Elephant Agent's position is L4: personal AI should
-help the person grow over time, not just automate more sessions.
+That is the fourth level Elephant Agent is aiming at. L1 agents execute tasks.
+L2 agents carry context. L3 agents improve procedures. Elephant Agent's L4
+position is that personal AI should help the person grow over time, not just
+automate more sessions.
 
 The mechanism is a correctable **Personal Model**. Memory is the beginning, not
 the product. The center is what Elephant Agent currently understands about your
@@ -42,14 +43,14 @@ return through `elephant wake`.
 | Use the primary product | [macOS app](./user-interface/macos.md) | Chat / Wake, Paths, Personal Model, Herd, skills, messaging, calendar, usage, and settings in one workspace. |
 | Use a terminal or remote machine | [CLI / Chat TUI](./user-interface/cli-tui.md) | How `elephant`, `init`, `wake`, slash commands, and `dashboard --no-open` fit together. |
 | Inspect what it knows | [Dashboard](./user-interface/dashboard.md) | How Personal, Agent, and System pages map to implementation surfaces. |
-| Understand the thesis | [Why Elephant Agent](./philosophy/overview.md) | Why L4 personal AI keeps judgment, evidence, questions, and growth with the person. |
+| Understand the thesis | [Why Elephant Agent](./philosophy/overview.md) | Why Elephant Agent keeps judgment, evidence, questions, and learning close to the person. |
 | Extend what it can do | [Skills](./capacities/skills.md) and [Tools](./capacities/tools.md) | How visible capabilities orbit the Personal Model. |
 
 ## The core idea
 
 | Product bet | What it means | Where to go deeper |
 | --- | --- | --- |
-| **L4 human growth** | Elephant Agent should preserve the user's judgment and growth while agents do more work. | [Why Elephant Agent](./philosophy/overview.md) |
+| **Growth stays human** | Elephant Agent should preserve the user's judgment and learning while agents do more work. | [Why Elephant Agent](./philosophy/overview.md) |
 | **Personal Model first** | Elephant Agent keeps an explicit, inspectable model of what it understands, rather than treating every retrieved memory as truth. | [Personal Model first](./philosophy/design-principles.md) |
 | **Paths after understanding** | Mother uses the Personal Model to shape living Paths across work and life. | [Paths, Steps, and Herds](./philosophy/paths.md) |
 | **Curious by design** | It does not wait for you to explain everything forever. It may ask when a missing or stale answer would change future help. | [Proactive curiosity](./learning/proactive.md) |
@@ -61,7 +62,7 @@ return through `elephant wake`.
 ```mermaid
 flowchart LR
   start["Start: app or CLI"] --> surfaces["Use: macOS app / CLI / Dashboard"]
-  surfaces --> thesis["Understand: why L4 personal AI"]
+  surfaces --> thesis["Understand: why Elephant Agent starts from the person"]
   thesis --> paths["Shape: Paths / Steps / Checkpoints"]
   surfaces --> capacity["Extend: skills, tools, messaging"]
   capacity --> learning["Deepen: curiosity + background learning"]

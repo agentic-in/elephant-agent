@@ -1,6 +1,6 @@
 ---
 title: "Why Elephant Agent"
-description: "Elephant Agent is L4 personal AI: Mother understands the human, shapes living Paths, and keeps judgment, evidence, questions, and growth with the person."
+description: "Mother understands the person, shapes living Paths, and keeps judgment, evidence, questions, and learning close to the person."
 ---
 
 # Why Elephant Agent
@@ -22,7 +22,7 @@ person is trying to move.
 | **L1** | Task execution. | Claude Code, Cursor, Devin, Codex-style agents. | Each task still needs human steering and review. |
 | **L2** | Context continuity. | OpenClaw publicly emphasizes local agents, persistent memory, full system access, skills, plugins, and integrations. | Memory can carry context without improving the person's judgment. |
 | **L3** | Procedures and skills. | Hermes Agent publicly positions itself around a self-improving learning loop, skill creation, recall, and user modeling. | Better procedures can still leave the user cognitively passive. |
-| **L4** | The person. | Elephant Agent's product position. | Mother understands the human, shapes Paths, and keeps judgment, evidence, questions, and growth with the user. |
+| **L4** | The person. | Elephant Agent's product position. | Mother understands the person, shapes Paths, and keeps judgment, evidence, questions, and learning close to the user. |
 
 Most agent systems still lose the thread in predictable ways. They can have a
 long transcript, many tools, and even a memory feature, yet still fail to answer:
@@ -43,8 +43,9 @@ with the next move without reducing the person to a ticket queue.
 | **Learning Summary** | The completion receipt for a Step. | The user can do more without losing the thread of what happened, why, how, and what should be learned. |
 | **Herd** | The baby elephants available to help. | Babies do bounded work; Mother keeps the full Path coherent. |
 
-That is how L4 becomes product behavior: Elephant Agent uses understanding to
-help design paths for human growth, not only to answer better prompts.
+That is how the L4 idea becomes product behavior: Elephant Agent uses
+understanding to help design paths for the person, not only to answer better
+prompts.
 
 ## The understanding loop
 

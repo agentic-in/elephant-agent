@@ -8,14 +8,14 @@ import {useLandingEffects} from "../components/useLandingEffects";
 
 const installCommand = "curl -fsSL https://elephant.agentic-in.ai/install.sh | bash";
 const releaseUrl = `${githubRepoUrl}/releases/latest`;
-const pageTitle = "L4 Personal AI for Human Growth";
+const pageTitle = "Personal AI That Starts From You";
 const pageTitleWithSite = `${pageTitle} | Elephant Agent`;
 const pageDescription =
-  "Elephant Agent is a Mother Elephant that grows to understand you, then helps shape living Paths with Learning Summaries across work, health, habits, learning, relationships, and long-term growth.";
+  "Elephant Agent is a Mother Elephant that grows to understand who you are, what surrounds you, what is alive now, and what your path has taught you, then helps shape living Paths across work and life.";
 const pageKeywords = [
   "human-first personal AI",
-  "L4 personal AI",
-  "human growth AI",
+  "personal AI for life paths",
+  "AI for personal growth",
   "AI for humans",
   "agency-first personal AI",
   "personal-model-first AI",
@@ -133,6 +133,44 @@ const pathCards = [
   },
 ];
 
+const pathLanguage = [
+  {
+    title: "Mother",
+    body:
+      "The coordinating elephant. She starts from the Personal Model, proposes Paths, chooses the next Steps, and knows when to ask.",
+  },
+  {
+    title: "Path",
+    body:
+      "Any ongoing direction you want to move: a codebase, fitness plan, habit reset, research arc, relationship repair, or life transition.",
+  },
+  {
+    title: "Step",
+    body:
+      "A concrete action inside a Path. It replaces issue and ticket language when the user's life is broader than work.",
+  },
+  {
+    title: "Flow",
+    body:
+      "The visible board for a Path: later, next, moving, checking, done, stuck, or dropped.",
+  },
+  {
+    title: "Checkpoint",
+    body:
+      "The moment where human judgment returns. Mother can ask first or keep moving inside a trusted boundary.",
+  },
+  {
+    title: "Learning Summary",
+    body:
+      "The completion receipt for a Step: what happened, why, how, what knowledge mattered, and what should be learned.",
+  },
+  {
+    title: "Herd",
+    body:
+      "The baby elephants that can help a Path. Babies do bounded work; Mother keeps the whole shape coherent.",
+  },
+];
+
 const motherLoop = [
   {
     title: "Understands",
@@ -197,9 +235,9 @@ const levelCards = [
   },
   {
     level: "L4",
-    title: "Grows the human.",
+    title: "Grows with the person.",
     body:
-      "Mother understands the person, shapes Paths, and keeps judgment, evidence, questions, and growth with the human.",
+      "Mother understands the person, shapes Paths, and keeps judgment, evidence, questions, and learning close to the person.",
     product: "Elephant Agent",
     featured: true,
   },
@@ -275,15 +313,18 @@ export default function HomePage(): React.JSX.Element {
 
               <div className="manifesto-copy" data-reveal>
                 <p className="manifesto-hook">
-                  L4 personal AI for human growth.
+                  Personal AI that starts from you.
                 </p>
                 <p>
-                  Mother grows to understand you, then helps shape the Paths you want to move.
+                  Mother grows to understand who you are, what surrounds you,
+                  what is alive now, and what your path has taught you. Then she
+                  helps shape the next Paths across work, health, learning,
+                  relationships, and the parts of life you are trying to move.
                 </p>
                 <div className="pill-row">
-                  <span className="info-pill info-pill-highlight">Mother understands</span>
+                  <span className="info-pill info-pill-highlight">Starts from you</span>
                   <span className="info-pill info-pill-highlight">Paths after understanding</span>
-                  <span className="info-pill info-pill-highlight">Judgment stays yours</span>
+                  <span className="info-pill info-pill-highlight">Judgment stays close</span>
                 </div>
                 <div className="cta-row">
                   <a className="btn-pill btn-pill-strong" href="#quickstart">
@@ -313,8 +354,10 @@ export default function HomePage(): React.JSX.Element {
                 <h2 data-reveal>Where Elephant Agent sits.</h2>
               </div>
               <p data-reveal>
-                The four levels stay central: L1 executes, L2 carries context,
-                L3 improves procedures, and L4 helps the human grow.
+                The four levels stay central, but L4 is an internal position
+                more than a homepage slogan: L1 executes, L2 carries context,
+                L3 improves procedures, and L4 keeps the person's judgment and
+                growth inside the loop.
               </p>
             </div>
 
@@ -363,6 +406,15 @@ export default function HomePage(): React.JSX.Element {
               {pathCards.map((card) => (
                 <article key={card.title} className="path-card" data-reveal>
                   <h3>{card.title}</h3>
+                  <p>{card.body}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="path-card-grid path-language-grid">
+              {pathLanguage.map((card) => (
+                <article key={card.title} className="path-card" data-reveal>
+                  <span className="card-kicker">{card.title}</span>
                   <p>{card.body}</p>
                 </article>
               ))}

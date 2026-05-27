@@ -956,6 +956,10 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.path-language-grid {
+  margin-top: 1rem;
+}
+
 .mother-loop-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
