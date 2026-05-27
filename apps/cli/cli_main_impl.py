@@ -46,7 +46,7 @@ from .shell import (
     _resolve_elephant_version,
     render_stage_zero_elephant_mark,
 )
-from .rtk_support import run_rtk_doctor, run_rtk_start, run_rtk_stop
+from apps.rtk_command import run_rtk_doctor, run_rtk_start, run_rtk_stop
 from .wizard import (
     WIZARD_BACK,
     WIZARD_CANCEL,
