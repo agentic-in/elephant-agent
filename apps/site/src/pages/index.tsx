@@ -8,11 +8,13 @@ import {useLandingEffects} from "../components/useLandingEffects";
 
 const installCommand = "curl -fsSL https://elephant.agentic-in.ai/install.sh | bash";
 const releaseUrl = `${githubRepoUrl}/releases/latest`;
-const pageTitle = "Agency-First Personal AI";
+const pageTitle = "Make AI for Humans, Not Just Agents";
 const pageTitleWithSite = `${pageTitle} | Elephant Agent`;
 const pageDescription =
   "Elephant Agent helps you hand work to agents without handing over judgment, using a correctable Personal Model and visible local runtime surfaces.";
 const pageKeywords = [
+  "human-first personal AI",
+  "AI for humans",
   "agency-first personal AI",
   "personal-model-first AI",
   "personal AI agent",

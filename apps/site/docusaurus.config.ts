@@ -5,8 +5,9 @@ import type * as Preset from "@docusaurus/preset-classic";
 const githubRepoUrl = "https://github.com/agentic-in/elephant-agent";
 const githubReadmeUrl = `${githubRepoUrl}/blob/main/README.md`;
 const siteDescription =
-  "Agency-first personal AI that keeps judgment, evidence, questions, and growth with the person.";
+  "Human-first personal AI that keeps judgment, evidence, questions, and growth with the person.";
 const siteKeywords = [
+  "human-first personal AI",
   "agency-first personal AI",
   "personal-model-first AI",
   "personal AI",
@@ -193,7 +194,7 @@ const config: Config = {
           className: "footer-col-brand",
           items: [
             {
-              html: '<span class="footer-description">Agency-first personal AI that keeps judgment, evidence, questions, and growth with the person.</span>',
+              html: '<span class="footer-description">Make AI for humans, not just agents.</span>',
             },
           ],
         },
