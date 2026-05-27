@@ -68,7 +68,7 @@ class PreviewDeploySmokeTest(unittest.TestCase):
             index_text,
         )
         self.assertIn(
-            '<meta data-rh="true" name="description" content="Elephant Agent starts from you, grows a correctable Personal Model, and self-evolves through curiosity and reflection."',
+            '<meta data-rh="true" name="description" content="Elephant Agent is a Mother Elephant that grows to understand you, then helps shape living Paths with Learning Summaries across work, health, habits, learning, relationships, and long-term growth."',
             index_text,
         )
         self.assertIn(
