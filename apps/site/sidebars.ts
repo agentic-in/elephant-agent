@@ -32,6 +32,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         "philosophy/overview",
+        "philosophy/paths",
         "philosophy/design-principles",
         "philosophy/system-model",
         "learning/correctable",

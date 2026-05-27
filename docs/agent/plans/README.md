@@ -9,6 +9,9 @@ Current active planning set:
   - scoring and prioritization entrypoint for full-repo architecture quality
 - [Architecture And Harness Cleanup Roadmap](architecture-harness-cleanup.md)
   - active execution roadmap for architecture and harness cleanup tracks
+- [L4 Paths And Herd Roadmap](l4-paths-herd-roadmap.md)
+  - active product and runtime roadmap for Mother-led Paths, Steps,
+    Checkpoints, Herds, and long-running work
 
 Rules:
 

@@ -1,6 +1,6 @@
 ---
 title: "Why Elephant Agent"
-description: "Elephant Agent is agency-first personal AI: an L4 product position built around judgment, evidence, questions, and human growth."
+description: "Elephant Agent is L4 personal AI: Mother understands the human, shapes living Paths, and keeps judgment, evidence, questions, and growth with the person."
 ---
 
 # Why Elephant Agent
@@ -11,7 +11,9 @@ Elephant Agent begins from a simple belief:
 
 That is the agency-first position. The agent can execute more work, carry more
 context, and improve more procedures, but the person should keep judgment,
-evidence, questions, and growth.
+evidence, questions, and growth. Elephant Agent's answer is the Mother Elephant:
+an AI that starts by understanding the person, then helps shape the Paths that
+person is trying to move.
 
 ## The level Elephant Agent is aiming at
 
@@ -20,11 +22,28 @@ evidence, questions, and growth.
 | **L1** | Task execution. | Claude Code, Cursor, Devin, Codex-style agents. | Each task still needs human steering and review. |
 | **L2** | Context continuity. | OpenClaw publicly emphasizes local agents, persistent memory, full system access, skills, plugins, and integrations. | Memory can carry context without improving the person's judgment. |
 | **L3** | Procedures and skills. | Hermes Agent publicly positions itself around a self-improving learning loop, skill creation, recall, and user modeling. | Better procedures can still leave the user cognitively passive. |
-| **L4** | The person. | Elephant Agent's product position. | Personal AI should keep judgment, evidence, questions, and growth with the user. |
+| **L4** | The person. | Elephant Agent's product position. | Mother understands the human, shapes Paths, and keeps judgment, evidence, questions, and growth with the user. |
 
 Most agent systems still lose the thread in predictable ways. They can have a
 long transcript, many tools, and even a memory feature, yet still fail to answer:
 what should this agent reliably understand about the person it helps?
+
+## From understanding to Paths
+
+The Personal Model is not the destination. It is what lets Elephant Agent help
+with the next move without reducing the person to a ticket queue.
+
+| Product object | What it means | Why it exists |
+| --- | --- | --- |
+| **Mother** | The coordinating elephant. | Starts from understanding, proposes Paths, chooses Steps, and knows when to ask. |
+| **Path** | A long-running direction across work or life. | A codebase, fitness plan, habit reset, learning arc, research line, relationship repair, or recovery plan needs continuity. |
+| **Step** | A concrete action inside a Path. | The user should not have to think in "issues" unless the Path is actually a software project. |
+| **Flow** | The visible state board for a Path. | Some moments are clearer as drag-and-drop state, not chat. |
+| **Checkpoint** | A moment that needs human judgment. | Mother can ask first or keep moving inside a trusted boundary, but the user's judgment remains the source of direction. |
+| **Herd** | The baby elephants available to help. | Babies do bounded work; Mother keeps the full Path coherent. |
+
+That is how L4 becomes product behavior: Elephant Agent uses understanding to
+help design paths for human growth, not only to answer better prompts.
 
 ## The gap
 
@@ -34,7 +53,7 @@ what should this agent reliably understand about the person it helps?
 | Transcript memory | The system stores more text but understands less. | Active Personal Model claims with provenance. |
 | Skill-first agent | Capability grows, but the person stays vague. | Skills orbit understanding instead of replacing it. |
 | Hidden personalization | The user cannot see or correct what changed. | Claims, questions, and evidence stay inspectable. |
-| Pushy autonomy | Proactive behavior becomes interruption. | Curiosity is visible, optional, and user-paced. |
+| Pushy autonomy | Proactive behavior becomes interruption. | Curiosity and Checkpoints are visible, optional, and user-paced. |
 
 ## The core mechanism
 

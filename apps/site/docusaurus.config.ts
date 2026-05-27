@@ -5,11 +5,14 @@ import type * as Preset from "@docusaurus/preset-classic";
 const githubRepoUrl = "https://github.com/agentic-in/elephant-agent";
 const githubReadmeUrl = `${githubRepoUrl}/blob/main/README.md`;
 const siteDescription =
-  "Human-first personal AI that keeps judgment, evidence, questions, and growth with the person.";
+  "L4 personal AI where Mother grows to understand you, then helps shape living Paths across work, life, and long-term growth.";
 const siteKeywords = [
   "human-first personal AI",
+  "L4 personal AI",
+  "human growth AI",
   "agency-first personal AI",
   "personal-model-first AI",
+  "personal AI paths",
   "personal AI",
   "proactive curiosity",
   "AI agent",
@@ -90,7 +93,7 @@ if (isPreviewDeploy) {
 
 const config: Config = {
   title: "Elephant Agent",
-  tagline: "Understands first. Gets curious at your pace.",
+  tagline: "Mother understands first, then helps shape the path.",
   favicon: "assets/brand/favicon.png",
   url: canonicalSiteUrl,
   baseUrl: process.env.DOCUSAURUS_BASE_URL || "/",
@@ -194,12 +197,12 @@ const config: Config = {
           className: "footer-col-brand",
           items: [
             {
-              html: '<span class="footer-description">Make AI for humans, not just agents.</span>',
+              html: '<span class="footer-description">L4 personal AI for human growth.</span>',
             },
           ],
         },
         {
-          title: "Project",
+          title: "Product",
           items: [
             {label: "Docs", to: "/docs/"},
             {label: "Paper", to: "/paper/"},

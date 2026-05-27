@@ -8,15 +8,18 @@ import {useLandingEffects} from "../components/useLandingEffects";
 
 const installCommand = "curl -fsSL https://elephant.agentic-in.ai/install.sh | bash";
 const releaseUrl = `${githubRepoUrl}/releases/latest`;
-const pageTitle = "Make AI for Humans, Not Just Agents";
+const pageTitle = "L4 Personal AI for Human Growth";
 const pageTitleWithSite = `${pageTitle} | Elephant Agent`;
 const pageDescription =
-  "Elephant Agent helps you hand work to agents without handing over judgment, using a correctable Personal Model and visible local runtime surfaces.";
+  "Elephant Agent is a Mother Elephant that grows to understand you, then helps shape living Paths across work, health, habits, learning, relationships, and long-term growth.";
 const pageKeywords = [
   "human-first personal AI",
+  "L4 personal AI",
+  "human growth AI",
   "AI for humans",
   "agency-first personal AI",
   "personal-model-first AI",
+  "personal AI paths",
   "personal AI agent",
   "macOS AI app",
   "proactive curiosity",
@@ -47,49 +50,57 @@ const structuredData = JSON.stringify({
 const productSlides = [
   {
     eyebrow: "macOS desktop app",
-    title: "Home starts from the Personal Model",
+    title: "Home starts from the person",
     body:
-      "The recommended surface shows the map, current context, and next useful question before it asks you to delegate work.",
+      "The recommended surface starts with what Mother understands, what is alive now, and what might deserve the next Path.",
     image: "/assets/screenshots/macos-home.jpg",
     alt: "Elephant Agent macOS Home screen with Personal Model map",
   },
   {
     eyebrow: "Wake",
-    title: "Return to the same path",
+    title: "Talk to Mother",
     body:
-      "Wake is the daily chat surface. It carries the same elephant forward instead of starting every session from a blank prompt.",
+      "Wake is the daily chat surface. It carries the same Mother Elephant forward instead of starting every session from a blank prompt.",
     image: "/assets/screenshots/macos-wake.jpg",
     alt: "Elephant Agent Wake chat surface",
   },
   {
-    eyebrow: "Personal Model",
-    title: "Correctable claims, not hidden memory",
+    eyebrow: "Paths",
+    title: "Long-running arcs become visible",
     body:
-      "Identity, World, Pulse, and Journey stay visible so the user can inspect what Elephant Agent thinks it knows.",
+      "A Path can be a codebase, fitness plan, habit reset, learning arc, relationship repair, or any direction you want to keep moving.",
+    image: "/assets/screenshots/macos-home.jpg",
+    alt: "Elephant Agent macOS Home screen as the entry to living Paths",
+  },
+  {
+    eyebrow: "Personal Model",
+    title: "Understanding stays correctable",
+    body:
+      "Identity, World, Pulse, and Journey stay visible so the user can inspect what Mother thinks she understands.",
     image: "/assets/screenshots/macos-personal-model.jpg",
     alt: "Elephant Agent Personal Model map",
   },
   {
-    eyebrow: "Providers",
-    title: "Model choice stays explicit",
+    eyebrow: "Herd",
+    title: "Baby elephants help with bounded Steps",
     body:
-      "OpenAI, Ollama, Claude, Gemini, local embeddings, and other providers are visible settings, not hidden routing magic.",
-    image: "/assets/screenshots/macos-providers.jpg",
-    alt: "Elephant Agent model provider settings",
+      "Mother can bring in babies when useful, while the user still sees the assignments, limits, and results.",
+    image: "/assets/screenshots/macos-herd.jpg",
+    alt: "Elephant Agent Herd screen",
   },
   {
-    eyebrow: "Skills and tools",
-    title: "Capabilities stay governed",
+    eyebrow: "Calendar",
+    title: "Routines and long-running work stay inspectable",
     body:
-      "Skills and operator tools sit around the Personal Model. Providers, MCP servers, and local actions remain inspectable.",
-    image: "/assets/screenshots/macos-skills.jpg",
-    alt: "Elephant Agent Skills screen",
+      "Reminders, routines, and scheduled agent work remain visible instead of becoming hidden background automation.",
+    image: "/assets/screenshots/macos-calendar.jpg",
+    alt: "Elephant Agent Calendar screen",
   },
   {
     eyebrow: "CLI",
     title: "Wake also works from the terminal",
     body:
-      "Linux, cloud, SSH, and terminal-first macOS users can use the CLI as the daily work surface.",
+      "Linux, cloud, SSH, and terminal-first macOS users can use the CLI as the daily terminal surface.",
     image: "/assets/screenshots/cli-wake.jpg",
     alt: "Elephant Agent CLI Wake session",
   },
@@ -100,6 +111,47 @@ const productSlides = [
       "Dashboard keeps Personal Model, evidence, jobs, skills, and runtime state visible outside the native app.",
     image: "/assets/screenshots/dashboard-personal-model.jpg",
     alt: "Elephant Agent Dashboard Personal Model map",
+  },
+];
+
+const pathCards = [
+  {
+    title: "Work paths",
+    body:
+      "Repositories, research, writing, launches, and maintenance can still look like projects when that is useful.",
+  },
+  {
+    title: "Life paths",
+    body:
+      "Fitness, weight loss, habits, learning, relationships, recovery, and personal resets should not be forced into issue language.",
+  },
+  {
+    title: "Growth paths",
+    body:
+      "Mother can notice lessons, risks, pressure patterns, and stale directions, then help shape the next move.",
+  },
+];
+
+const motherLoop = [
+  {
+    title: "Understands",
+    body:
+      "Mother starts from Identity, World, Pulse, and Journey instead of a blank prompt or a task queue.",
+  },
+  {
+    title: "Shapes Paths",
+    body:
+      "She proposes living Paths and breaks them into Steps only after the direction is clear enough.",
+  },
+  {
+    title: "Brings the Herd",
+    body:
+      "Baby elephants can take bounded Steps with explicit skills, runtime posture, and visible event trails.",
+  },
+  {
+    title: "Returns to judgment",
+    body:
+      "Checkpoints bring decisions back to the human. Trust can be broad, but direction still belongs to the person.",
   },
 ];
 
@@ -126,9 +178,9 @@ const levelCards = [
   },
   {
     level: "L4",
-    title: "Elephant Agent's product position.",
+    title: "Grows the human.",
     body:
-      "Personal AI should help the user keep judgment, evidence, questions, and growth.",
+      "Mother understands the person, shapes Paths, and keeps judgment, evidence, questions, and growth with the human.",
     product: "Elephant Agent",
     featured: true,
   },
@@ -204,15 +256,15 @@ export default function HomePage(): React.JSX.Element {
 
               <div className="manifesto-copy" data-reveal>
                 <p className="manifesto-hook">
-                  Do more without thinking less.
+                  L4 personal AI for human growth.
                 </p>
                 <p>
-                  Make AI for humans, not just agents.
+                  Mother grows to understand you, then helps shape the Paths you want to move.
                 </p>
                 <div className="pill-row">
-                  <span className="info-pill info-pill-highlight">Personal Model first</span>
+                  <span className="info-pill info-pill-highlight">Mother understands</span>
+                  <span className="info-pill info-pill-highlight">Paths after understanding</span>
                   <span className="info-pill info-pill-highlight">Judgment stays yours</span>
-                  <span className="info-pill info-pill-highlight">Curiosity at your pace</span>
                 </div>
                 <div className="cta-row">
                   <a className="btn-pill btn-pill-strong" href="#quickstart">
@@ -242,8 +294,8 @@ export default function HomePage(): React.JSX.Element {
                 <h2 data-reveal>Where Elephant Agent sits.</h2>
               </div>
               <p data-reveal>
-                The cards state the product distinction. The image keeps the
-                map easy to scan.
+                The four levels stay central: L1 executes, L2 carries context,
+                L3 improves procedures, and L4 helps the human grow.
               </p>
             </div>
 
@@ -272,6 +324,96 @@ export default function HomePage(): React.JSX.Element {
           </div>
         </section>
 
+        <section id="paths" className="section section-rule">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <span className="label" data-reveal>
+                  From understanding to Paths
+                </span>
+                <h2 data-reveal>Not just projects. Paths for life.</h2>
+              </div>
+              <p data-reveal>
+                Once Mother understands enough, she can help turn work, health,
+                learning, habits, relationships, research, and recovery into
+                living Paths with visible Steps and Checkpoints.
+              </p>
+            </div>
+
+            <div className="path-card-grid">
+              {pathCards.map((card) => (
+                <article key={card.title} className="path-card" data-reveal>
+                  <h3>{card.title}</h3>
+                  <p>{card.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="mother-loop" className="section section-rule">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <span className="label" data-reveal>
+                  Mother loop
+                </span>
+                <h2 data-reveal>Chat stays simple. The shape stays visible.</h2>
+              </div>
+              <p data-reveal>
+                You can talk to Mother in chat, answer Checkpoints when judgment
+                matters, or drag Steps directly when Flow is the clearer surface.
+              </p>
+            </div>
+
+            <div className="mother-loop-grid">
+              {motherLoop.map((item, index) => (
+                <article key={item.title} className="mother-loop-card" data-reveal>
+                  <span className="mother-loop-index">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="trust" className="section section-rule">
+          <div className="container">
+            <div className="section-head install-head">
+              <div>
+                <span className="label" data-reveal>
+                  Trust modes
+                </span>
+                <h2 data-reveal>Two simple postures.</h2>
+              </div>
+              <p data-reveal>
+                The product should feel clear at the chat box: Mother can ask
+                first, or keep moving inside a trusted boundary.
+              </p>
+            </div>
+
+            <div className="trust-grid" data-reveal>
+              <article className="trust-card">
+                <span className="card-kicker">Ask First</span>
+                <h3>Mother plans, then asks.</h3>
+                <p>
+                  She can draft Paths, Steps, and Herd assignments, but waits
+                  before applying important changes or taking external action.
+                </p>
+              </article>
+              <article className="trust-card trust-card-strong">
+                <span className="card-kicker">Trust Mother</span>
+                <h3>Mother keeps moving within your boundaries.</h3>
+                <p>
+                  She can create Steps, move Flow state, and assign babies inside
+                  trusted limits while risky choices still become Checkpoints.
+                </p>
+              </article>
+            </div>
+          </div>
+        </section>
+
         <section id="product" className="section section-rule">
           <div className="container">
             <div className="section-head">
@@ -279,11 +421,12 @@ export default function HomePage(): React.JSX.Element {
                 <span className="label" data-reveal>
                   Product surfaces
                 </span>
-                <h2 data-reveal>Desktop first. Terminal when you need it.</h2>
+                <h2 data-reveal>Mother in chat. Paths in view.</h2>
               </div>
               <p data-reveal>
                 The macOS app is the default experience. CLI and Dashboard keep
-                Linux, cloud, SSH, and terminal-first workflows supported.
+                Linux, cloud, SSH, and terminal-first workflows supported without
+                turning runtime controls into the product center.
               </p>
             </div>
 
@@ -325,7 +468,7 @@ export default function HomePage(): React.JSX.Element {
                 <span className="label" data-reveal>
                   Install
                 </span>
-                <h2 data-reveal>Start where you work.</h2>
+                <h2 data-reveal>Start where your path is.</h2>
               </div>
               <p data-reveal>
                 Use the macOS app for the full desktop workspace. Use CLI plus
@@ -337,7 +480,7 @@ export default function HomePage(): React.JSX.Element {
               <div className="install-strip-primary">
                 <span className="card-kicker">Recommended</span>
                 <strong>macOS desktop app</strong>
-                <p>Wake, Personal Model, providers, skills, tools, herd, messaging, reminders, and usage in one native workspace.</p>
+                <p>Wake, Paths, Personal Model, Herd, skills, messaging, calendar, usage, and settings in one native workspace.</p>
                 <a
                   className="btn-pill btn-pill-strong"
                   href={releaseUrl}
@@ -358,6 +501,7 @@ export default function HomePage(): React.JSX.Element {
             <div className="quickstart-links" data-reveal>
               <Link to="/docs/getting-started/installation/">Install guide</Link>
               <Link to="/docs/getting-started/quickstart/">Quickstart</Link>
+              <Link to="/docs/philosophy/paths/">Paths</Link>
               <Link to="/docs/getting-started/providers/">Provider setup</Link>
               <Link to="/docs/reference/cli/">CLI reference</Link>
             </div>
@@ -376,8 +520,8 @@ export default function HomePage(): React.JSX.Element {
               <div className="closing-copy" data-reveal>
                 <p>
                   Elephant Agent keeps the personal layer visible: claims,
-                  questions, evidence, providers, reminders, logs, tools,
-                  skills, local agents, and semantic recall.
+                  questions, evidence, Paths, Steps, Checkpoints, skills, baby
+                  elephants, local agents, and semantic recall.
                 </p>
                 <div className="cta-row">
                   <a className="btn-pill" href="#quickstart">
