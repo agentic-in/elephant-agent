@@ -106,6 +106,24 @@ class DreamFeatureTest(unittest.TestCase):
         self.assertNotIn("tool.personal_model.update call MUST", prompt)
         self.assertNotIn("Never store system artifacts as PM facts", prompt)
 
+    def test_onboarding_paths_resolves_to_path_planning_tool(self) -> None:
+        features = resolve_features("onboarding_paths")
+
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("path_planning",))
+        self.assertIn("tool.paths.manage", _compose_tools(features))
+        prompt = _assemble_system_prompt(features, conservatism="medium")
+        self.assertIn("create 1-4 Paths", prompt)
+        self.assertIn("living directions", prompt)
+
+    def test_paths_learn_resolves_to_path_planning_tool(self) -> None:
+        features = resolve_features("paths_learn")
+
+        self.assertEqual(tuple(feature.feature_id for feature in features), ("path_planning",))
+        self.assertIn("tool.paths.manage", _compose_tools(features))
+        prompt = _assemble_system_prompt(features, conservatism="medium")
+        self.assertIn("create_baby", prompt)
+        self.assertIn("compact study note", prompt)
+
     def test_init_profile_alias_from_macos_resolves_to_link_learning_bundle(self) -> None:
         features = resolve_features("init", explicit_features=("profile",))
 

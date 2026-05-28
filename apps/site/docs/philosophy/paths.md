@@ -1,6 +1,6 @@
 ---
 title: "Paths, Steps, and Herds"
-description: "How Elephant Agent turns understanding into living Paths across work, health, habits, learning, relationships, and long-term human growth."
+description: "How Elephant Agent turns understanding into living Paths across work, health, habits, learning, relationships, and long-running change."
 ---
 
 # Paths, Steps, and Herds

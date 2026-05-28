@@ -83,6 +83,12 @@ final class CoreRunner {
         for (key, value) in pythonRuntime.environment {
             environment[key] = value
         }
+        let pythonBin = pythonRuntime.executableURL.deletingLastPathComponent()
+        let existingPath = environment["PATH"]?.isEmpty == false
+            ? environment["PATH"]!
+            : "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        environment["PATH"] = "\(pythonBin.path):\(existingPath)"
+        environment["ELEPHANT_MAC_PYTHON_BIN"] = pythonBin.path
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         environment["ELEPHANT_HOME"] = data.home.path
         environment["ELEPHANT_HERD_DIR"] = data.herd.path

@@ -18,8 +18,9 @@ the human.
 - Public positioning across README, site, docs, app copy, and onboarding.
 - Path and Step persistence with state-machine semantics.
 - Chat-driven and board-driven Step creation, assignment, and state movement.
-- Mother planning tools that can propose or apply Paths, Steps, Herd changes,
-  and Checkpoints according to the user's trust mode.
+- Mother planning tools that apply Paths, Steps, Herd changes, and Checkpoints
+  by default, while leaving every created object easy for the user to inspect,
+  edit, move, or delete.
 - Learning Summary and Understanding Check contracts for every completed Step,
   so delegation increases output without making the human cognitively passive.
 - Baby execution integrated with bounded run attempts, heartbeats, cancellation,
@@ -52,19 +53,17 @@ the human.
 | Herd | The available baby elephants around Mother and optionally a Path. | Herd runtime, baby registry, assignment policy. |
 | Baby | A bounded helper with role, skills, model posture, and runtime limits. | Existing sub-agent runtime plus durable run records. |
 
-## Trust Modes
+## Default Control Posture
 
-Keep the user-facing product to two modes:
+Mother is trusted by default for Path and Step orchestration inside the current
+user boundaries. She can create living directions, add Flow steps, move status,
+and assign babies without surfacing a mode switch. The user's control stays in
+the objects themselves: every Path and Step can be opened, edited, moved,
+reassigned, dropped, or deleted after creation.
 
-- **Ask First**: Mother can draft Paths, Steps, Herd assignments, and state moves,
-  but asks before applying important changes or taking external action.
-- **Trust Mother**: Mother can create Steps, move Flow state, and assign babies
-  inside current user boundaries. Risky, destructive, identity-shaping, external,
-  or costly moves still become Checkpoints.
-
-Tool permission policy remains separate from these modes. Trust mode controls
-planning and product-level orchestration posture; tool policy controls concrete
-side effects.
+Tool permission policy remains separate. Risky, destructive, identity-shaping,
+external, or costly moves still become Checkpoints because those are concrete
+side effects, not product-planning posture.
 
 ## Flow State Machine
 
@@ -108,8 +107,9 @@ exception path, not the default.
 
 - Track C: Mother Planning Tools
   - Add tools for searching, planning, previewing, and applying Path changes.
-  - Add proposal objects that can be rendered as one Checkpoint or applied
-    directly under Trust Mother mode.
+  - Add proposal objects that can be rendered as one Checkpoint when concrete
+    side effects require judgment; ordinary Path and Step orchestration applies
+    directly.
   - Make tools explain which Personal Model claims or questions shaped a Path
     proposal.
 
@@ -127,7 +127,8 @@ exception path, not the default.
   - Build Flow board, Step detail, Checkpoint list, Learning Summary,
     Understanding Check, and Path-Herd assignment UI.
   - Update onboarding so multiple babies can be selected or created up front.
-  - Add the two trust modes in the chat box and onboarding posture.
+  - Keep chat and Paths free of mode toggles; default to trusted orchestration
+    and make correction cheap through direct object editing.
 
 - Track F: Long-Term Paths
   - Model routines and watchers as scheduled bounded runs.

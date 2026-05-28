@@ -725,6 +725,32 @@ class BuiltinToolsV2Test(BuiltinToolsTestBase):
         self.assertEqual(stub.batch["tasks"][0]["baby_id"], "codex-baby")
         self.assertEqual(stub.batch["tasks"][0]["role"], "coding implementer")
 
+    def test_sub_agents_provider_single_task_routes_through_task_batch(self) -> None:
+        stub = _SubAgentsStub()
+        runtime = self._make_builtin_runtime(
+            cwd=Path("/tmp"),
+            dependencies=BuiltinToolDependencies(cwd=Path("/tmp"), sub_agents_surface=stub),
+        )
+
+        result = runtime.invoke(
+            "tool.sub_agents",
+            {
+                "task": "run provider-backed research",
+                "name": "Provider Baby",
+                "backend": "provider",
+                "baby_id": "provider-baby",
+                "role": "research runner",
+            },
+            session_id="session-sub-agent",
+        )
+
+        self.assertEqual(result.summary, "sub-agent pool finished")
+        self.assertIsNone(stub.single)
+        self.assertEqual(stub.batch["max_concurrency"], 1)
+        self.assertEqual(stub.batch["tasks"][0]["backend"], "provider")
+        self.assertEqual(stub.batch["tasks"][0]["baby_id"], "provider-baby")
+        self.assertEqual(stub.batch["tasks"][0]["role"], "research runner")
+
     def test_sub_agents_failed_result_sets_error_outcome(self) -> None:
         runtime = self._make_builtin_runtime(
             cwd=Path("/tmp"),

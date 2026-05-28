@@ -58,6 +58,15 @@
       ]
     },
     {
+      "id": "api.v1.paths",
+      "method": "*",
+      "path": "/v1/paths",
+      "owner": "apps/api/api_runtime_routes.py",
+      "contains": [
+        "API_ROUTE_PATHS = \"paths\""
+      ]
+    },
+    {
       "id": "api.v1.episodes",
       "method": "*",
       "path": "/v1/episodes",
@@ -493,7 +502,7 @@
       "owner": "packages/storage/repository_support.py",
       "doc": "docs/agent/release-model.md",
       "contains": [
-        "SCHEMA_VERSION = 1",
+        "SCHEMA_VERSION = 3",
         "SCHEMA_PATH = Path(__file__).with_name(\"schema.sql\")"
       ]
     }

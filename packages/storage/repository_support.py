@@ -10,10 +10,18 @@ import sqlite3
 from typing import Mapping
 
 from packages.contracts.layers import Episode, Loop, PersonalModel, State, Step
+from packages.contracts.paths import (
+    LearningSummaryRecord,
+    PathRecord,
+    PathStepCommentRecord,
+    PathStepRecord,
+    PathStepRunRecord,
+    UnderstandingCheckRecord,
+)
 from packages.contracts.runtime import LearningJob
 from packages.contracts.support import SemanticIndexEntry
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 DEFAULT_PERSONAL_MODEL_ID = "you"
@@ -234,4 +242,126 @@ def _learning_job_from_row(row: sqlite3.Row) -> LearningJob:
         last_error=str(row["last_error"]),
         metadata=_mapping_text(str(row["metadata_json"])),
         result_json=_row_mapping_object(row, "result_json"),
+    )
+
+
+def _optional_datetime_from_row(row: sqlite3.Row, column_name: str) -> datetime | None:
+    value = row[column_name]
+    return _parse_datetime(str(value)) if value is not None else None
+
+
+def _path_from_row(row: sqlite3.Row) -> PathRecord:
+    return PathRecord(
+        path_id=str(row["path_id"]),
+        personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
+        title=str(row["title"]),
+        description=str(row["description"]),
+        status=str(row["status"]),
+        priority=str(row["priority"]),
+        review_mode=str(row["review_mode"]),
+        owner_elephant_id=str(row["owner_elephant_id"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _path_step_from_row(row: sqlite3.Row) -> PathStepRecord:
+    return PathStepRecord(
+        path_step_id=str(row["path_step_id"]),
+        path_id=str(row["path_id"]),
+        personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
+        title=str(row["title"]),
+        description=str(row["description"]),
+        status=str(row["status"]),
+        order_index=int(row["order_index"]),
+        assignee_elephant_id=str(row["assignee_elephant_id"]),
+        creator_elephant_id=str(row["creator_elephant_id"]),
+        due_at=_optional_datetime_from_row(row, "due_at"),
+        related_episode_id=str(row["related_episode_id"]) if row["related_episode_id"] else None,
+        related_loop_id=str(row["related_loop_id"]) if row["related_loop_id"] else None,
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        completed_at=_optional_datetime_from_row(row, "completed_at"),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _path_step_run_from_row(row: sqlite3.Row) -> PathStepRunRecord:
+    return PathStepRunRecord(
+        run_id=str(row["run_id"]),
+        path_step_id=str(row["path_step_id"]),
+        path_id=str(row["path_id"]),
+        personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
+        status=str(row["status"]),
+        attempt=int(row["attempt"]),
+        max_attempts=int(row["max_attempts"]),
+        parent_run_id=str(row["parent_run_id"]),
+        assignee_elephant_id=str(row["assignee_elephant_id"]),
+        runtime_id=str(row["runtime_id"]),
+        claim_token=str(row["claim_token"]),
+        session_id=str(row["session_id"]),
+        work_dir=str(row["work_dir"]),
+        progress_stage=str(row["progress_stage"]),
+        progress_detail=str(row["progress_detail"]),
+        progress_current=int(row["progress_current"]),
+        progress_total=int(row["progress_total"]),
+        failure_reason=str(row["failure_reason"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        started_at=_optional_datetime_from_row(row, "started_at"),
+        heartbeat_at=_optional_datetime_from_row(row, "heartbeat_at"),
+        lease_expires_at=_optional_datetime_from_row(row, "lease_expires_at"),
+        finished_at=_optional_datetime_from_row(row, "finished_at"),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _path_step_comment_from_row(row: sqlite3.Row) -> PathStepCommentRecord:
+    return PathStepCommentRecord(
+        comment_id=str(row["comment_id"]),
+        path_step_id=str(row["path_step_id"]),
+        path_id=str(row["path_id"]),
+        personal_model_id=canonical_personal_model_id(str(row["personal_model_id"])),
+        body=str(row["body"]),
+        author_kind=str(row["author_kind"]),
+        author_id=str(row["author_id"]),
+        comment_type=str(row["comment_type"]),
+        run_id=str(row["run_id"]),
+        parent_comment_id=str(row["parent_comment_id"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _learning_summary_from_row(row: sqlite3.Row) -> LearningSummaryRecord:
+    return LearningSummaryRecord(
+        summary_id=str(row["summary_id"]),
+        path_step_id=str(row["path_step_id"]),
+        path_id=str(row["path_id"]),
+        run_id=str(row["run_id"]),
+        summary_type=str(row["summary_type"]),
+        what_done=str(row["what_done"]),
+        why_it_matters=str(row["why_it_matters"]),
+        how_it_was_done=str(row["how_it_was_done"]),
+        knowledge=str(row["knowledge"]),
+        human_takeaway=str(row["human_takeaway"]),
+        created_by_elephant_id=str(row["created_by_elephant_id"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
+    )
+
+
+def _understanding_check_from_row(row: sqlite3.Row) -> UnderstandingCheckRecord:
+    return UnderstandingCheckRecord(
+        check_id=str(row["check_id"]),
+        path_step_id=str(row["path_step_id"]),
+        summary_id=str(row["summary_id"]),
+        status=str(row["status"]),
+        checked_by=str(row["checked_by"]),
+        checked_at=_optional_datetime_from_row(row, "checked_at"),
+        note=str(row["note"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        metadata=_mapping_text(str(row["metadata_json"])),
     )

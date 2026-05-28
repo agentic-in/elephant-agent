@@ -108,6 +108,8 @@ def trigger_reflect_job(self, *, trigger: str, features: str | None = None) -> d
         metadata["target_date"] = date_type.today().isoformat()
         metadata["letter_kind"] = "onboarding_letter"
         metadata["source"] = "onboarding_letter"
+    if normalized_trigger == "onboarding_paths":
+        metadata["source"] = "onboarding_paths"
     summary_features = ",".join(resolved_feature_ids) or "default"
     job = self.repository.enqueue_learning_job(
         job_type="episode_boundary_learning",

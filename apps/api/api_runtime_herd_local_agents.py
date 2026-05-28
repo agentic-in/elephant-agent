@@ -10,12 +10,16 @@ from packages.operator.local_agents import LocalAgentRuntimeRecord, scan_local_a
 
 def metadata_str_payload(payload: Mapping[str, Any], *keys: str) -> str | None:
     for key in keys:
+        if key not in payload:
+            continue
         value = payload.get(key)
         if value is None:
             continue
-        text = str(value).strip()
-        if text:
-            return text
+        if isinstance(value, (list, tuple)):
+            text = ", ".join(str(item).strip() for item in value if str(item).strip())
+        else:
+            text = str(value).strip()
+        return text
     return None
 
 
@@ -44,6 +48,10 @@ def herd_metadata_from_payload(payload: Mapping[str, Any], *, current: Mapping[s
         "runtime_id": ("runtime_id", "runtimeId"),
         "provider_id": ("provider_id", "providerId"),
         "provider_model": ("provider_model", "providerModel", "runtime_model", "runtimeModel", "model_id", "modelId"),
+        "engine_id": ("engine_id", "engineId", "engine", "runtime_engine", "runtimeEngine"),
+        "tool_ids": ("tool_ids", "toolIds", "allowed_tools", "allowedTools", "allowed_tool_ids", "allowedToolIds"),
+        "skill_ids": ("skill_ids", "skillIds", "skills"),
+        "instruction": ("instruction", "instructions", "system_prompt", "systemPrompt"),
         "backend": ("backend", "execution_backend", "executionBackend"),
         "max_concurrency": ("max_concurrency", "maxConcurrency"),
     }

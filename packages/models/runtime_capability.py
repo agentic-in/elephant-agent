@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime, timezone
 import logging
 import os
-import re
 from pathlib import Path
 import shutil
 from typing import Any
@@ -53,55 +53,20 @@ from packages.models.runtime_describe import embedding_bootstrap_summary_fields,
 from packages.storage import RuntimeStorageRepository
 from packages.tools import ToolDefinition, ToolRuntime, build_tool_fallback_prompt
 
-from .ephemeral_injection import TurnScopedPrefixCache, ephemeral_blocks_as_user_suffix, recall_block_contents, strip_recall_blocks
+from .ephemeral_injection import TurnScopedPrefixCache, ephemeral_blocks_as_user_suffix, strip_recall_blocks
+from .runtime_recall import _hot_recall_query_allowed, _surfaced_recall_stats
 from .runtime import ModelRequest
 
 LOGGER = logging.getLogger(__name__)
 
 RequestJsonCallable = Callable[..., dict[str, Any]]
 
-# Signature every per-turn context block builder must satisfy.
-# Returns a support block (str) or "" to no-op. Runs once per kernel turn
-# (result is cached by `TurnScopedPrefixCache` across all `generate()` calls
-# that share the same user message). Must not mutate `messages`.
+# Signature every per-turn context block builder must satisfy. The result is
+# cached once per kernel turn and must not mutate `messages`.
 EphemeralPrefixBuilder = Callable[
     [PersonalModelRuntimeState, Episode, ContextBundle, str, str],
     str,
 ]
-
-_RECALL_CONTEXT_MARKER = "Current-turn recall support:"
-_MAX_SESSION_RECALL_BYTES = 60 * 1024
-_MIN_RECALL_QUERY_CHARS = 4
-_MIN_RECALL_QUERY_WORDS = 2
-_RECALL_WORD_RE = re.compile(r"[A-Za-z0-9_./:-]+")
-_RECALL_CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
-
-
-def _hot_recall_query_allowed(query: str) -> bool:
-    normalized = " ".join(str(query or "").split()).strip()
-    if len(normalized) < _MIN_RECALL_QUERY_CHARS:
-        return False
-    words = _RECALL_WORD_RE.findall(normalized)
-    cjk_chars = _RECALL_CJK_RE.findall(normalized)
-    if len(words) < _MIN_RECALL_QUERY_WORDS and len(cjk_chars) < _MIN_RECALL_QUERY_CHARS:
-        return False
-    return True
-
-
-def _recall_message_contents(message: PromptMessage) -> tuple[str, ...]:
-    content = str(message.content or "").strip()
-    if not content:
-        return ()
-    if str(message.metadata.get("elephant_context") or "").strip() == "recall":
-        return (content,)
-    if content.startswith(_RECALL_CONTEXT_MARKER):
-        return (content,)
-    return recall_block_contents(content)
-
-
-def _surfaced_recall_stats(messages: tuple[PromptMessage, ...]) -> tuple[int, frozenset[str]]:
-    contents = tuple(content for message in messages for content in _recall_message_contents(message))
-    return sum(len(content.encode("utf-8")) for content in contents), frozenset(contents)
 
 
 def _normalize_base_url(base_url: str | None) -> str:
@@ -323,6 +288,44 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
                 raise LookupError("no active provider profile is configured")
             return profile
         raise ValueError(f"unsupported model_role: {model_role}")
+
+    def _profile_for_session(self, session: Episode) -> AuthProfile | None:
+        state_id = str(getattr(session, "state_id", "") or "").strip()
+        if not state_id:
+            return None
+        try:
+            state = self.repository.load_state(state_id)
+        except Exception:
+            LOGGER.debug("Failed to load session state while resolving model provider.", exc_info=True)
+            return None
+        if state is None:
+            return None
+        metadata = dict(getattr(state, "metadata", {}) or {})
+        provider_id = str(metadata.get("provider_id") or "").strip()
+        provider_model = str(metadata.get("provider_model") or metadata.get("runtime_model") or "").strip()
+        backend = str(metadata.get("backend") or "").strip().lower()
+        herd_kind = str(metadata.get("herd_kind") or "").strip().lower()
+        if not provider_id or not provider_model:
+            return None
+        if backend and backend != "provider":
+            return None
+        if not backend and herd_kind != "baby":
+            return None
+        profile = self.repository.select_auth_profile(provider_id)
+        if provider_model != str(profile.default_model or ""):
+            profile = replace(
+                profile,
+                profile_id=f"{profile.profile_id}:session:{session.episode_id}",
+                default_model=provider_model,
+                metadata={
+                    **dict(profile.metadata),
+                    "session_state_id": state_id,
+                    "session_elephant_id": str(getattr(state, "elephant_id", "") or ""),
+                    "session_provider_model": provider_model,
+                },
+            )
+            self.repository.upsert_auth_profile(profile)
+        return profile
 
     def selection_state(self) -> RuntimeModelChoice:
         try:
@@ -881,15 +884,28 @@ class SurfaceModelProviderCapability(ModelProviderCapability):
         model_role: str = "strong",
     ) -> ExecutionResult:
         try:
-            active_profile = self._profile_for_role(model_role)
-        except LookupError:
-            return self.fallback.generate(
-                profile=profile,
-                session=session,
-                context=context,
-                prompt=prompt,
-                model_role=model_role,
+            session_profile = self._profile_for_session(session)
+        except LookupError as error:
+            return ExecutionResult(
+                execution_id=f"{session.episode_id}:model:{model_role}",
+                episode_id=session.episode_id,
+                outcome="failed",
+                summary=str(error),
+                side_effects=("model_provider", "session_provider_profile_missing"),
             )
+        if session_profile is not None:
+            active_profile = session_profile
+        else:
+            try:
+                active_profile = self._profile_for_role(model_role)
+            except LookupError:
+                return self.fallback.generate(
+                    profile=profile,
+                    session=session,
+                    context=context,
+                    prompt=prompt,
+                    model_role=model_role,
+                )
         resolution = self.runtime_resolver.resolve(
             active_profile.provider_id,
             model_id=active_profile.default_model or None,

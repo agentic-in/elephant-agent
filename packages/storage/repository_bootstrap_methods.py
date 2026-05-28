@@ -39,15 +39,52 @@ def bootstrap(self) -> StorageBootstrapState:
             _drop_legacy_storage_tables(connection)
             _require_empty_database(connection)
             _install_clean_schema(connection)
+            _ensure_path_step_run_queue_columns(connection)
+            _ensure_path_step_comments_table(connection)
             _ensure_runtime_indexes(connection)
             _validate_clean_schema(connection)
             connection.commit()
         elif version == SCHEMA_VERSION:
             _drop_legacy_storage_tables(connection)
             try:
+                _ensure_path_step_run_queue_columns(connection)
+                _ensure_path_step_comments_table(connection)
                 _validate_clean_schema(connection)
             except RuntimeError:
                 _reset_storage_schema(connection)
+                _ensure_path_step_run_queue_columns(connection)
+                _ensure_path_step_comments_table(connection)
+                _validate_clean_schema(connection)
+            _ensure_runtime_indexes(connection)
+            connection.commit()
+        elif version == 1 and SCHEMA_VERSION == 3:
+            _drop_legacy_storage_tables(connection)
+            try:
+                _validate_clean_schema(connection, require_path_tables=False)
+                _migrate_schema_1_to_2(connection)
+                _migrate_schema_2_to_3(connection)
+                _ensure_path_step_run_queue_columns(connection)
+                _ensure_path_step_comments_table(connection)
+                _validate_clean_schema(connection)
+            except RuntimeError:
+                _reset_storage_schema(connection)
+                _ensure_path_step_run_queue_columns(connection)
+                _ensure_path_step_comments_table(connection)
+                _validate_clean_schema(connection)
+            _ensure_runtime_indexes(connection)
+            connection.commit()
+        elif version == 2 and SCHEMA_VERSION == 3:
+            _drop_legacy_storage_tables(connection)
+            try:
+                _validate_clean_schema(connection, require_path_run_tables=False)
+                _migrate_schema_2_to_3(connection)
+                _ensure_path_step_run_queue_columns(connection)
+                _ensure_path_step_comments_table(connection)
+                _validate_clean_schema(connection)
+            except RuntimeError:
+                _reset_storage_schema(connection)
+                _ensure_path_step_run_queue_columns(connection)
+                _ensure_path_step_comments_table(connection)
                 _validate_clean_schema(connection)
             _ensure_runtime_indexes(connection)
             connection.commit()
@@ -116,11 +153,87 @@ def _ensure_runtime_indexes(connection: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_steps_state_pm_created "
             "ON steps(state_id, personal_model_id, created_at)"
         ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_paths_pm_status_updated "
+            "ON paths(personal_model_id, status, updated_at DESC)"
+        ),
+        "CREATE INDEX IF NOT EXISTS idx_paths_owner_updated ON paths(owner_elephant_id, updated_at DESC)",
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_steps_path_status_order "
+            "ON path_steps(path_id, status, order_index, updated_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_steps_pm_status_updated "
+            "ON path_steps(personal_model_id, status, updated_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_steps_assignee_status_updated "
+            "ON path_steps(assignee_elephant_id, status, updated_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_runs_step_status_created "
+            "ON path_step_runs(path_step_id, status, created_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_runs_path_status_created "
+            "ON path_step_runs(path_id, status, created_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_runs_runtime_status_heartbeat "
+            "ON path_step_runs(runtime_id, status, heartbeat_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_runs_claim_queue "
+            "ON path_step_runs(status, assignee_elephant_id, created_at)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_runs_lease "
+            "ON path_step_runs(status, lease_expires_at)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_runs_parent "
+            "ON path_step_runs(parent_run_id)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_comments_step_created "
+            "ON path_step_comments(path_step_id, created_at ASC, comment_id ASC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_comments_run_created "
+            "ON path_step_comments(run_id, created_at ASC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_path_step_comments_parent "
+            "ON path_step_comments(parent_comment_id)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_learning_summaries_step_created "
+            "ON learning_summaries(path_step_id, created_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_learning_summaries_path_created "
+            "ON learning_summaries(path_id, created_at DESC)"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS idx_understanding_checks_step_updated "
+            "ON understanding_checks(path_step_id, updated_at DESC)"
+        ),
     ):
-        connection.execute(statement)
+        try:
+            connection.execute(statement)
+        except sqlite3.OperationalError:
+            # Older in-place schemas may not have v2 Path tables yet. Migration
+            # creates them before final validation; clean v2 databases will
+            # apply these indexes normally.
+            pass
 
 
-def _validate_clean_schema(connection: sqlite3.Connection) -> None:
+def _validate_clean_schema(
+    connection: sqlite3.Connection,
+    *,
+    require_path_tables: bool = True,
+    require_path_run_tables: bool = True,
+) -> None:
     table_names = _table_names(connection)
     leaked_tables = LEGACY_STORAGE_TABLES.intersection(table_names)
     if leaked_tables:
@@ -143,6 +256,18 @@ def _validate_clean_schema(connection: sqlite3.Connection) -> None:
         "personal_model_growth",
         "canonical_elephant_identities",
     }
+    if require_path_tables:
+        required_tables.update(
+            {
+                "paths",
+                "path_steps",
+                "path_step_comments",
+                "understanding_checks",
+                "learning_summaries",
+            }
+        )
+        if require_path_run_tables:
+            required_tables.add("path_step_runs")
     missing_tables = required_tables.difference(table_names)
     if missing_tables:
         joined = ", ".join(sorted(missing_tables))
@@ -182,6 +307,296 @@ def _validate_clean_schema(connection: sqlite3.Connection) -> None:
         connection,
         "semantic_index_entries",
         {"source_id"},
+    )
+    if require_path_tables:
+        _require_columns(
+            connection,
+            "paths",
+            {"review_mode", "owner_elephant_id", "metadata_json"},
+        )
+        _require_columns(
+            connection,
+            "path_steps",
+            {
+                "assignee_elephant_id",
+                "creator_elephant_id",
+                "related_episode_id",
+                "related_loop_id",
+                "completed_at",
+            },
+        )
+        if require_path_run_tables:
+            _require_columns(
+                connection,
+                "path_step_runs",
+                {
+                    "attempt",
+                    "max_attempts",
+                    "parent_run_id",
+                    "assignee_elephant_id",
+                    "runtime_id",
+                    "claim_token",
+                    "session_id",
+                    "work_dir",
+                    "progress_stage",
+                    "progress_detail",
+                    "progress_current",
+                    "progress_total",
+                    "failure_reason",
+                    "heartbeat_at",
+                    "lease_expires_at",
+                    "finished_at",
+                },
+            )
+        _require_columns(
+            connection,
+            "path_step_comments",
+            {
+                "body",
+                "author_kind",
+                "author_id",
+                "comment_type",
+                "run_id",
+                "parent_comment_id",
+                "metadata_json",
+                "updated_at",
+            },
+        )
+        _require_columns(
+            connection,
+            "learning_summaries",
+            {"what_done", "why_it_matters", "how_it_was_done", "knowledge", "human_takeaway"},
+        )
+        _require_columns(
+            connection,
+            "understanding_checks",
+            {"summary_id", "status", "checked_at"},
+        )
+
+
+def _migrate_schema_1_to_2(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS paths (
+            path_id TEXT PRIMARY KEY,
+            personal_model_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active'
+                CHECK(status IN ('active', 'paused', 'completed', 'dropped')),
+            priority TEXT NOT NULL DEFAULT 'normal',
+            review_mode TEXT NOT NULL DEFAULT 'trusted'
+                CHECK(review_mode IN ('ask_first', 'trusted')),
+            owner_elephant_id TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_paths_pm_status_updated
+            ON paths(personal_model_id, status, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_paths_owner_updated
+            ON paths(owner_elephant_id, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS path_steps (
+            path_step_id TEXT PRIMARY KEY,
+            path_id TEXT NOT NULL,
+            personal_model_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'next'
+                CHECK(status IN ('later', 'next', 'moving', 'checking', 'done', 'stuck', 'dropped')),
+            order_index INTEGER NOT NULL DEFAULT 0 CHECK(order_index >= 0),
+            assignee_elephant_id TEXT NOT NULL DEFAULT '',
+            creator_elephant_id TEXT NOT NULL DEFAULT '',
+            due_at TEXT,
+            related_episode_id TEXT,
+            related_loop_id TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT,
+            FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+            FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+                ON DELETE CASCADE,
+            FOREIGN KEY(related_episode_id) REFERENCES episodes(episode_id) ON DELETE SET NULL,
+            FOREIGN KEY(related_loop_id) REFERENCES loops(loop_id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_path_steps_path_status_order
+            ON path_steps(path_id, status, order_index, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_path_steps_pm_status_updated
+            ON path_steps(personal_model_id, status, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_path_steps_assignee_status_updated
+            ON path_steps(assignee_elephant_id, status, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS learning_summaries (
+            summary_id TEXT PRIMARY KEY,
+            path_step_id TEXT NOT NULL,
+            path_id TEXT NOT NULL,
+            run_id TEXT NOT NULL DEFAULT '',
+            summary_type TEXT NOT NULL DEFAULT 'task',
+            what_done TEXT NOT NULL DEFAULT '',
+            why_it_matters TEXT NOT NULL DEFAULT '',
+            how_it_was_done TEXT NOT NULL DEFAULT '',
+            knowledge TEXT NOT NULL DEFAULT '',
+            human_takeaway TEXT NOT NULL DEFAULT '',
+            created_by_elephant_id TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+            FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_learning_summaries_step_created
+            ON learning_summaries(path_step_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_learning_summaries_path_created
+            ON learning_summaries(path_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS understanding_checks (
+            check_id TEXT PRIMARY KEY,
+            path_step_id TEXT NOT NULL,
+            summary_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(status IN ('pending', 'understood', 'needs_clarification', 'skipped')),
+            checked_by TEXT NOT NULL DEFAULT 'user',
+            checked_at TEXT,
+            note TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+            FOREIGN KEY(summary_id) REFERENCES learning_summaries(summary_id) ON DELETE CASCADE,
+            UNIQUE(summary_id, checked_by)
+        );
+        CREATE INDEX IF NOT EXISTS idx_understanding_checks_step_updated
+            ON understanding_checks(path_step_id, updated_at DESC);
+        """
+    )
+    _write_schema_version(connection, SCHEMA_VERSION)
+
+
+def _migrate_schema_2_to_3(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS path_step_runs (
+            run_id TEXT PRIMARY KEY,
+            path_step_id TEXT NOT NULL,
+            path_id TEXT NOT NULL,
+            personal_model_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'queued'
+                CHECK(status IN ('queued', 'dispatched', 'running', 'completed', 'failed', 'cancelled')),
+            attempt INTEGER NOT NULL DEFAULT 1 CHECK(attempt >= 1),
+            max_attempts INTEGER NOT NULL DEFAULT 3 CHECK(max_attempts >= 1),
+            parent_run_id TEXT NOT NULL DEFAULT '',
+            assignee_elephant_id TEXT NOT NULL DEFAULT '',
+            runtime_id TEXT NOT NULL DEFAULT '',
+            claim_token TEXT NOT NULL DEFAULT '',
+            session_id TEXT NOT NULL DEFAULT '',
+            work_dir TEXT NOT NULL DEFAULT '',
+            progress_stage TEXT NOT NULL DEFAULT '',
+            progress_detail TEXT NOT NULL DEFAULT '',
+            progress_current INTEGER NOT NULL DEFAULT 0 CHECK(progress_current >= 0),
+            progress_total INTEGER NOT NULL DEFAULT 0 CHECK(progress_total >= 0),
+            failure_reason TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            heartbeat_at TEXT,
+            lease_expires_at TEXT,
+            finished_at TEXT,
+            FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+            FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+            FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_path_step_runs_step_status_created
+            ON path_step_runs(path_step_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_runs_path_status_created
+            ON path_step_runs(path_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_runs_runtime_status_heartbeat
+            ON path_step_runs(runtime_id, status, heartbeat_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_runs_claim_queue
+            ON path_step_runs(status, assignee_elephant_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_path_step_runs_lease
+            ON path_step_runs(status, lease_expires_at);
+        CREATE INDEX IF NOT EXISTS idx_path_step_runs_parent
+            ON path_step_runs(parent_run_id);
+        CREATE TABLE IF NOT EXISTS path_step_comments (
+            comment_id TEXT PRIMARY KEY,
+            path_step_id TEXT NOT NULL,
+            path_id TEXT NOT NULL,
+            personal_model_id TEXT NOT NULL,
+            body TEXT NOT NULL,
+            author_kind TEXT NOT NULL DEFAULT 'user'
+                CHECK(author_kind IN ('user', 'elephant', 'system')),
+            author_id TEXT NOT NULL DEFAULT '',
+            comment_type TEXT NOT NULL DEFAULT 'comment'
+                CHECK(comment_type IN ('comment', 'run_output', 'status', 'system')),
+            run_id TEXT NOT NULL DEFAULT '',
+            parent_comment_id TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+            FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+            FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_path_step_comments_step_created
+            ON path_step_comments(path_step_id, created_at ASC, comment_id ASC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_comments_run_created
+            ON path_step_comments(run_id, created_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_comments_parent
+            ON path_step_comments(parent_comment_id);
+        """
+    )
+    _write_schema_version(connection, SCHEMA_VERSION)
+
+
+def _ensure_path_step_run_queue_columns(connection: sqlite3.Connection) -> None:
+    if "path_step_runs" not in _table_names(connection):
+        return
+    existing = set(_table_columns(connection, "path_step_runs"))
+    for name, ddl in (
+        ("parent_run_id", "parent_run_id TEXT NOT NULL DEFAULT ''"),
+        ("claim_token", "claim_token TEXT NOT NULL DEFAULT ''"),
+        ("lease_expires_at", "lease_expires_at TEXT"),
+    ):
+        if name not in existing:
+            connection.execute(f"ALTER TABLE path_step_runs ADD COLUMN {ddl}")
+
+
+def _ensure_path_step_comments_table(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS path_step_comments (
+            comment_id TEXT PRIMARY KEY,
+            path_step_id TEXT NOT NULL,
+            path_id TEXT NOT NULL,
+            personal_model_id TEXT NOT NULL,
+            body TEXT NOT NULL,
+            author_kind TEXT NOT NULL DEFAULT 'user'
+                CHECK(author_kind IN ('user', 'elephant', 'system')),
+            author_id TEXT NOT NULL DEFAULT '',
+            comment_type TEXT NOT NULL DEFAULT 'comment'
+                CHECK(comment_type IN ('comment', 'run_output', 'status', 'system')),
+            run_id TEXT NOT NULL DEFAULT '',
+            parent_comment_id TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+            FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+            FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_path_step_comments_step_created
+            ON path_step_comments(path_step_id, created_at ASC, comment_id ASC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_comments_run_created
+            ON path_step_comments(run_id, created_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_path_step_comments_parent
+            ON path_step_comments(parent_comment_id);
+        """
     )
 
 

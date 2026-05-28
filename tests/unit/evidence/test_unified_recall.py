@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 
 from packages.contracts.layers import Step
 from packages.evidence.unified_recall import UnifiedRecallRequest, unified_recall
+from packages.storage import RuntimeStorageRepository
 
 
 class UnifiedRecallFallbackTests(unittest.TestCase):
@@ -208,6 +211,47 @@ class UnifiedRecallFallbackTests(unittest.TestCase):
 
         self.assertEqual(hits, ())
         self.assertIn("Failed to embed unified recall query", "\n".join(logs.output))
+
+    def test_conversation_recall_includes_path_learning_summaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repository = RuntimeStorageRepository(Path(tmpdir) / "state" / "elephant.sqlite3")
+            repository.bootstrap()
+            path = repository.create_path(title="Strength learning")
+            step = repository.create_path_step(
+                path_id=path.path_id,
+                title="Explain progressive overload",
+            )
+            repository.write_learning_summary(
+                path_step_id=step.path_step_id,
+                what_done="Explained progressive overload with a simple training loop.",
+                knowledge="Progressive overload needs small measurable increments and recovery.",
+                human_takeaway="Increase one lift only after the baseline feels stable.",
+            )
+            repository.create_path_step_run(
+                path_step_id=step.path_step_id,
+                status="running",
+                progress_stage="working",
+                progress_detail="progressive overload draft in progress",
+            )
+
+            hits = unified_recall(
+                UnifiedRecallRequest(
+                    query="progressive overload recovery",
+                    scopes=("steps",),
+                    personal_model_id="you",
+                    state_id="state:you",
+                    limit=3,
+                ),
+                repository=repository,
+                searcher=None,
+            )
+
+        self.assertTrue(hits)
+        self.assertEqual(hits[0].kind, "path:learning_summary")
+        self.assertIn("Progressive overload", hits[0].content)
+        self.assertEqual(hits[0].extra_metadata["recall_source"], "path_learning_summary")
+        self.assertNotIn("path:step", {hit.kind for hit in hits})
+        self.assertNotIn("path:run", {hit.kind for hit in hits})
 
 
 if __name__ == "__main__":

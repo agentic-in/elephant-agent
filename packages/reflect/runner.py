@@ -454,7 +454,14 @@ def _reflect_result_payload(
     features: tuple[str, ...],
 ) -> dict[str, object]:
     has_writes = any(
-        name in ("tool.personal_model.update", "tool.personal_model.questions", "tool.diary.write", "tool.skill.draft")
+        name
+        in (
+            "tool.personal_model.update",
+            "tool.personal_model.questions",
+            "tool.diary.write",
+            "tool.skill.draft",
+            "tool.paths.manage",
+        )
         for name in tool_names
     )
     status = "completed" if has_writes else "no_op"

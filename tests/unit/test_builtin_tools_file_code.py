@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from packages.tools import BuiltinToolDependencies, handlers_code_execution
+from packages.tools import BuiltinToolDependencies, handlers_code_execution, handlers_filesystem
 from packages.tools.builtins import builtin_tool_definitions
 from packages.tools.local_roots import default_local_allowed_roots
 from packages.tools.rtk import RtkFileReadOptimizationResult, RtkRewriteResult
@@ -237,6 +237,8 @@ class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
             self.assertIn("1|outside root", read.summary)
             self.assertIn("shared.txt:1:outside root", searched.summary)
             self.assertEqual(written.outcome, "success")
+            self.assertIn("diff:", written.summary)
+            self.assertIn("+draft", written.summary)
             self.assertEqual(patched.outcome, "success")
             self.assertEqual((external / "notes.txt").read_text(encoding="utf-8"), "final\n")
             self.assertIn(str(external), terminal.summary)
@@ -631,6 +633,24 @@ class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
             self.assertIn("TestmemoryRecall", result.summary)
             self.assertNotIn("TestmemoryRecallIgnored", result.summary)
 
+    def test_file_search_falls_back_when_rg_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            (cwd / "notes").mkdir()
+            (cwd / "notes" / "plan.txt").write_text("alpha\nfallback needle\n", encoding="utf-8")
+            (cwd / "notes" / "ignore.md").write_text("fallback needle\n", encoding="utf-8")
+            runtime = self._make_builtin_runtime(cwd=cwd)
+
+            with mock.patch.object(handlers_filesystem.shutil, "which", return_value=None):
+                result = runtime.invoke(
+                    "tool.file.search",
+                    {"query": "fallback needle", "glob": "**/*.txt"},
+                    session_id="session-search-python-fallback",
+                )
+
+            self.assertIn("plan.txt:2:fallback needle", result.summary)
+            self.assertNotIn("ignore.md", result.summary)
+
     def test_file_search_allows_glob_only_file_listing_and_blocks_vcs_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cwd = Path(tmpdir)
@@ -693,6 +713,29 @@ class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
             self.assertIn(process_id, listed.summary)
             self.assertIn("status: exited(0)", waited.summary)
             self.assertIn("bg-finished", waited.summary)
+
+    def test_terminal_exec_exposes_python_alias_for_background_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runtime = self._make_builtin_runtime(cwd=Path(tmpdir))
+
+            started = runtime.invoke(
+                "tool.terminal.exec",
+                {
+                    "command": "python -u -c \"print('python-alias-ok')\"",
+                    "background": True,
+                    "env": {"PATH": "/nonexistent"},
+                },
+                session_id="session-process-python-alias",
+            )
+            process_id = started.summary.splitlines()[0].split(": ", 1)[1]
+            waited = runtime.invoke(
+                "tool.process.manage",
+                {"action": "wait", "process_id": process_id, "timeout_seconds": 2},
+                session_id="session-process-python-alias",
+            )
+
+            self.assertIn("status: exited(0)", waited.summary)
+            self.assertIn("python-alias-ok", waited.summary)
 
     def test_process_manage_poll_drains_running_process_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

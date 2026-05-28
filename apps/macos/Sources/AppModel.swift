@@ -8,6 +8,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case home
     case wake
     case you
+    case paths
     case diary
     case skills
     case tools
@@ -25,6 +26,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         .home,
         .wake,
         .you,
+        .paths,
         .diary,
         .skills,
         .tools,
@@ -40,6 +42,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: return "Home"
         case .wake: return "Chat"
         case .you: return "You"
+        case .paths: return "Paths"
         case .diary: return "Diary"
         case .skills: return "Skills"
         case .tools: return "Tools"
@@ -58,6 +61,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: return "Today"
         case .wake: return "Talk"
         case .you: return "Model"
+        case .paths: return "Flow"
         case .diary: return "Journal"
         case .skills: return "For you"
         case .tools: return "Actions"
@@ -76,6 +80,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: return "house"
         case .wake: return "bubble.left.and.bubble.right"
         case .you: return "person.crop.circle"
+        case .paths: return "point.topleft.down.curvedto.point.bottomright.up"
         case .diary: return "book.closed"
         case .skills: return "wand.and.stars"
         case .tools: return "wrench.and.screwdriver"
@@ -94,8 +99,9 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: return "1"
         case .wake: return "2"
         case .you: return "3"
-        case .diary: return "4"
-        case .skills: return "5"
+        case .paths: return "4"
+        case .diary: return "5"
+        case .skills: return nil
         case .tools: return nil
         case .messaging: return "6"
         case .herd: return "7"
@@ -144,6 +150,10 @@ struct ToolUseEvent: Identifiable, Equatable {
     var runtimeModel: String = ""
     var childEpisodeID: String = ""
     var task: String = ""
+    var clarifyID: String = ""
+    var clarifyQuestion: String = ""
+    var clarifyMode: String = ""
+    var clarifyChoices: [String] = []
 
     var isChildAgentRun: Bool {
         backend == "local_cli"
@@ -165,6 +175,135 @@ struct ToolUseEvent: Identifiable, Equatable {
         return normalized.contains("tool.diary.")
             || normalized.contains("diary.write")
             || normalized.contains("diary.list")
+    }
+}
+
+struct ClarifyToolRequest: Identifiable, Equatable {
+    var id: String
+    var question: String
+    var mode: String
+    var choices: [String]
+    var answered: Bool
+    var canSubmit: Bool
+
+    init?(event: ToolUseEvent) {
+        let normalizedName = event.name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: ".")
+        guard normalizedName.contains("clarify") else { return nil }
+
+        let arguments = Self.jsonObject(event.arguments)
+        let result = event.result.trimmingCharacters(in: .whitespacesAndNewlines)
+        let combinedText = [event.arguments, result, event.detail]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        let parsedQuestion = event.clarifyQuestion
+            .nilIfBlank
+            ?? Self.string(arguments["question"])
+            ?? Self.lineValue("question", in: combinedText)
+            ?? Self.lineValue("prompt", in: combinedText)
+            ?? ""
+        guard !parsedQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+
+        let parsedChoices = event.clarifyChoices.isEmpty
+            ? (Self.stringArray(arguments["choices"]) + Self.choicesFromLines(combinedText))
+            : event.clarifyChoices
+        let uniqueChoices = parsedChoices.reduce(into: [String]()) { result, choice in
+            let trimmed = choice.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !result.contains(trimmed) else { return }
+            result.append(trimmed)
+        }
+        let parsedMode = event.clarifyMode
+            .nilIfBlank
+            ?? Self.string(arguments["mode"])
+            ?? Self.lineValue("mode", in: combinedText)
+            ?? (uniqueChoices.isEmpty ? "open" : "choice")
+        let clarifyID = event.clarifyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackID = [
+            event.sourceID,
+            event.invocationID,
+            parsedQuestion,
+        ]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .first { !$0.isEmpty } ?? UUID().uuidString
+        self.id = clarifyID.isEmpty ? fallbackID : clarifyID
+        self.question = parsedQuestion
+        self.mode = parsedMode
+        self.choices = uniqueChoices
+        let parsedAnswered = Self.lineValue("user_response", in: combinedText) != nil
+            || Self.lineValue("answer", in: combinedText) != nil
+            || event.status.lowercased().contains("complete")
+            || event.status.lowercased().contains("success")
+        self.answered = parsedAnswered
+        self.canSubmit = !clarifyID.isEmpty && !parsedAnswered
+    }
+
+    private static func jsonObject(_ text: String) -> [String: Any] {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any] else {
+            return [:]
+        }
+        return dictionary
+    }
+
+    private static func string(_ value: Any?) -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        let text = String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private static func stringArray(_ value: Any?) -> [String] {
+        if let values = value as? [String] {
+            return values
+        }
+        if let values = value as? [Any] {
+            return values.compactMap { string($0) }
+        }
+        return []
+    }
+
+    private static func lineValue(_ key: String, in text: String) -> String? {
+        let normalizedKey = key.lowercased()
+        for line in text.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let separator = trimmed.firstIndex(of: ":") else { continue }
+            let name = String(trimmed[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard name == normalizedKey else { continue }
+            let value = String(trimmed[trimmed.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    private static func choicesFromLines(_ text: String) -> [String] {
+        var collecting = false
+        var result: [String] = []
+        for line in text.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.lowercased() == "choices:" {
+                collecting = true
+                continue
+            }
+            guard collecting else { continue }
+            if trimmed.hasPrefix("- ") {
+                result.append(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines))
+                continue
+            }
+            if trimmed.contains(":") {
+                break
+            }
+        }
+        return result
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -853,6 +992,10 @@ struct HerdItem: Identifiable, Equatable {
     var rolePrompt: String
     var runtimeID: String
     var providerID: String
+    var providerModel: String
+    var engineID: String
+    var toolIDs: String
+    var skillIDs: String
     var runtimeStatus: String
     var authStatus: String
     var canExecute: Bool
@@ -957,6 +1100,119 @@ struct LearningJobItem: Identifiable, Equatable {
     var toolProgress: LearningToolCallProgress
     var modelProgress: LearningModelProgress
     var markdown: String
+}
+
+struct PathItem: Identifiable, Equatable {
+    var id: String
+    var title: String
+    var detail: String
+    var status: String
+    var priority: String
+    var reviewMode: String
+    var ownerElephantID: String
+    var createdAt: String
+    var updatedAt: String
+    var steps: [PathStepItem]
+}
+
+struct PathStepItem: Identifiable, Equatable {
+    var id: String
+    var pathID: String
+    var title: String
+    var detail: String
+    var status: String
+    var orderIndex: Int
+    var assigneeElephantID: String
+    var creatorElephantID: String
+    var dueAt: String
+    var updatedAt: String
+    var completedAt: String
+    var summaries: [LearningSummaryItem]
+    var comments: [PathStepCommentItem]
+    var activeRun: PathStepRunItem?
+    var runs: [PathStepRunItem]
+}
+
+struct PathStepCommentItem: Identifiable, Equatable {
+    var id: String
+    var stepID: String
+    var pathID: String
+    var body: String
+    var authorKind: String
+    var authorID: String
+    var commentType: String
+    var runID: String
+    var parentCommentID: String
+    var createdAt: String
+    var updatedAt: String
+
+    var isAgentOutput: Bool {
+        authorKind == "elephant" || commentType == "run_output"
+    }
+}
+
+struct PathStepRunItem: Identifiable, Equatable {
+    var id: String
+    var stepID: String
+    var pathID: String
+    var status: String
+    var attempt: Int
+    var maxAttempts: Int
+    var parentRunID: String
+    var assigneeElephantID: String
+    var runtimeID: String
+    var sessionID: String
+    var workDir: String
+    var progressStage: String
+    var progressDetail: String
+    var progressCurrent: Int
+    var progressTotal: Int
+    var failureReason: String
+    var createdAt: String
+    var startedAt: String
+    var heartbeatAt: String
+    var leaseExpiresAt: String
+    var finishedAt: String
+
+    var isActive: Bool {
+        ["queued", "dispatched", "running"].contains(status)
+    }
+
+    var canRetry: Bool {
+        ["failed", "cancelled"].contains(status) && attempt < maxAttempts
+    }
+
+    var progressFraction: Double? {
+        if status == "completed" { return 1 }
+        guard progressTotal > 0 else { return nil }
+        return min(1, max(0, Double(progressCurrent) / Double(progressTotal)))
+    }
+}
+
+struct LearningSummaryItem: Identifiable, Equatable {
+    var id: String
+    var stepID: String
+    var pathID: String
+    var runID: String
+    var summaryType: String
+    var whatDone: String
+    var whyItMatters: String
+    var howItWasDone: String
+    var knowledge: String
+    var humanTakeaway: String
+    var createdByElephantID: String
+    var createdAt: String
+    var check: UnderstandingCheckItem?
+}
+
+struct UnderstandingCheckItem: Identifiable, Equatable {
+    var id: String
+    var stepID: String
+    var summaryID: String
+    var status: String
+    var checkedBy: String
+    var checkedAt: String
+    var note: String
 }
 
 struct PersonalModelQuestionItem: Identifiable, Equatable {
@@ -1093,6 +1349,7 @@ struct DashboardSnapshot: Equatable {
     var usageItems: [UsageEventItem] = []
     var usageTrend: [UsageTrendPoint] = []
     var learningItems: [LearningJobItem] = []
+    var pathItems: [PathItem] = []
     var stateNames: [String] = []
     var herdItems: [HerdItem] = []
 
@@ -1145,6 +1402,9 @@ final class ElephantAppModel: ObservableObject {
     @Published var wakeAttachments: [WakeAttachment] = []
     @Published var wakeQueue: [WakeQueuedPrompt] = []
     @Published var pendingQuestionReply: PersonalModelQuestionItem?
+    @Published var answeredClarificationIDs: Set<String> = []
+    @Published var todoStatusOverrides: [String: String] = [:]
+    @Published var updatingTodoItemIDs: Set<String> = []
     @Published var onboardingName = "Elephant"
     @Published var onboardingPurpose = ElephantAppModel.persistedAppLanguage().defaultElephantVibe
     @Published var onboardingPreferredName = ""
@@ -1224,6 +1484,10 @@ final class ElephantAppModel: ObservableObject {
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
     @Published var gatewayQR = GatewayQRState()
     @Published var cronActionResult = ""
+    @Published var pathActionResult = ""
+    @Published var selectedPathID = ""
+    @Published var selectedPathStepID = ""
+    @Published var pathTrustModeRaw = UserDefaults.standard.string(forKey: ElephantAppModel.pathTrustModeKey) ?? "trusted"
     @Published var diaryActionResult = ""
     @Published var factActionResult = ""
     @Published var configActionResult = ""
@@ -1267,6 +1531,7 @@ final class ElephantAppModel: ObservableObject {
     private var onboardingLetterPollTask: Task<Void, Never>?
     private var sleepIdleMonitorTask: Task<Void, Never>?
     private var weixinQRPollTask: Task<Void, Never>?
+    private var launchSleepUnlockAccepted = false
     private var onboardingCreatedStateID = ""
     private static let onboardingCompleteKey = "elephant.mac.onboardingComplete"
     private static let onboardingLetterSeenEntryIDKey = "elephant.mac.onboardingLetterSeenEntryID"
@@ -1274,6 +1539,7 @@ final class ElephantAppModel: ObservableObject {
     private static let userAvatarPathKey = "elephant.mac.userAvatarImagePath"
     private static let herdAvatarPathsKey = "elephant.mac.herdAvatarImagePaths"
     private static let hiddenEpisodeIDsKey = "elephant.mac.hiddenEpisodeIDs"
+    private static let pathTrustModeKey = "elephant.mac.pathTrustMode"
     static let appLanguageKey = "elephant.mac.appLanguage"
     private static let voiceRepliesEnabledKey = "elephant.mac.voiceRepliesEnabled"
     private static let voiceRepliesAutoPlayKey = "elephant.mac.voiceRepliesAutoPlay"
@@ -1391,6 +1657,33 @@ final class ElephantAppModel: ObservableObject {
         """
     }
 
+    var selectedPath: PathItem? {
+        if let selected = snapshot.pathItems.first(where: { $0.id == selectedPathID }) {
+            return selected
+        }
+        return snapshot.pathItems.first
+    }
+
+    var selectedPathStep: PathStepItem? {
+        if let selectedPath,
+           let selected = selectedPath.steps.first(where: { $0.id == selectedPathStepID }) {
+            return selected
+        }
+        if let selected = snapshot.pathItems.flatMap(\.steps).first(where: { $0.id == selectedPathStepID }) {
+            return selected
+        }
+        return selectedPath?.steps.first
+    }
+
+    var pathTrustMode: String {
+        "trusted"
+    }
+
+    func setPathTrustMode(_ mode: String) {
+        pathTrustModeRaw = "trusted"
+        UserDefaults.standard.set("trusted", forKey: Self.pathTrustModeKey)
+    }
+
     func launch() async {
         startSleepIdleMonitorIfNeeded()
         guard corePhase != .ready && corePhase != .starting else { return }
@@ -1412,7 +1705,7 @@ final class ElephantAppModel: ObservableObject {
                 showingOnboarding = true
             } else if hasAppLockPassword {
                 UserDefaults.standard.set(true, forKey: Self.onboardingCompleteKey)
-                beginSleepDisplay(reason: "launch")
+                presentLaunchSleepDisplayIfNeeded()
             }
             if UserDefaults.standard.bool(forKey: Self.onboardingLetterPendingKey) {
                 startOnboardingLetterPollingIfNeeded()
@@ -1434,12 +1727,231 @@ final class ElephantAppModel: ObservableObject {
         next.episodeThreads.removeAll { hiddenEpisodeIDs.contains($0.id) }
         syncAppLanguageFromSnapshot(next)
         snapshot = next
+        syncPathSelection()
         syncOnboardingLetterState(from: next)
         if snapshot.readyForInteraction {
             readinessPollTask?.cancel()
             readinessPollTask = nil
         } else if corePhase == .ready {
             startReadinessPollingIfNeeded()
+        }
+    }
+
+    private func syncPathSelection() {
+        if selectedPathID.isEmpty || !snapshot.pathItems.contains(where: { $0.id == selectedPathID }) {
+            selectedPathID = snapshot.pathItems.first?.id ?? ""
+        }
+        let availableSteps = snapshot.pathItems.flatMap(\.steps)
+        if selectedPathStepID.isEmpty || !availableSteps.contains(where: { $0.id == selectedPathStepID }) {
+            selectedPathStepID = selectedPath?.steps.first?.id ?? availableSteps.first?.id ?? ""
+        }
+    }
+
+    func selectPath(_ path: PathItem) {
+        selectedPathID = path.id
+        selectedPathStepID = path.steps.first?.id ?? ""
+    }
+
+    func selectPathStep(_ step: PathStepItem) {
+        selectedPathID = step.pathID
+        selectedPathStepID = step.id
+    }
+
+    func createPath(title: String, description: String = "", reviewMode: String? = nil) async {
+        do {
+            let pathID = try await client.createPath(
+                title: title,
+                description: description,
+                reviewMode: reviewMode ?? pathTrustMode
+            )
+            pathActionResult = pathID.isEmpty ? "Path created" : "Path created: \(pathID)"
+            try await refreshDashboard()
+            if !pathID.isEmpty {
+                selectedPathID = pathID
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func updatePath(_ path: PathItem, title: String, description: String, reviewMode: String, status: String? = nil) async {
+        do {
+            try await client.updatePath(
+                pathID: path.id,
+                title: title,
+                description: description,
+                reviewMode: reviewMode,
+                status: status
+            )
+            pathActionResult = "Path updated"
+            try await refreshDashboard()
+            selectedPathID = path.id
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func deletePath(_ path: PathItem) async {
+        do {
+            try await client.deletePath(pathID: path.id)
+            pathActionResult = "Path deleted"
+            if selectedPathID == path.id {
+                selectedPathID = ""
+                selectedPathStepID = ""
+            }
+            try await refreshDashboard()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func createPathStep(path: PathItem, title: String, description: String = "", assigneeElephantID: String = "", status: String = "next") async {
+        do {
+            let stepID = try await client.createPathStep(
+                pathID: path.id,
+                title: title,
+                description: description,
+                assigneeElephantID: assigneeElephantID,
+                status: status
+            )
+            pathActionResult = stepID.isEmpty ? "Step created" : "Step created: \(stepID)"
+            try await refreshDashboard()
+            if !stepID.isEmpty {
+                selectedPathID = path.id
+                selectedPathStepID = stepID
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func movePathStep(_ step: PathStepItem, to status: String) async {
+        do {
+            try await client.updatePathStep(pathID: step.pathID, stepID: step.id, status: status)
+            pathActionResult = "\(step.title) -> \(status)"
+            try await refreshDashboard()
+            selectedPathID = step.pathID
+            selectedPathStepID = step.id
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func updatePathStep(
+        _ step: PathStepItem,
+        title: String,
+        description: String,
+        status: String,
+        assigneeElephantID: String
+    ) async {
+        do {
+            try await client.updatePathStep(
+                pathID: step.pathID,
+                stepID: step.id,
+                title: title,
+                description: description,
+                status: status,
+                assigneeElephantID: assigneeElephantID
+            )
+            pathActionResult = "Step updated"
+            try await refreshDashboard()
+            selectedPathID = step.pathID
+            selectedPathStepID = step.id
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func deletePathStep(_ step: PathStepItem) async {
+        do {
+            try await client.deletePathStep(pathID: step.pathID, stepID: step.id)
+            pathActionResult = "Step deleted"
+            if selectedPathStepID == step.id {
+                selectedPathStepID = ""
+            }
+            try await refreshDashboard()
+            if let path = snapshot.pathItems.first(where: { $0.id == step.pathID }) {
+                selectedPathID = path.id
+                if selectedPathStepID.isEmpty || !path.steps.contains(where: { $0.id == selectedPathStepID }) {
+                    selectedPathStepID = path.steps.first?.id ?? ""
+                }
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func startPathStepRun(_ step: PathStepItem) async {
+        do {
+            let runID = try await client.createPathStepRun(
+                pathID: step.pathID,
+                stepID: step.id,
+                status: "queued",
+                assigneeElephantID: step.assigneeElephantID,
+                progressStage: "queued",
+                progressDetail: "Waiting for a baby elephant runtime.",
+                autoExecute: true
+            )
+            pathActionResult = runID.isEmpty ? "Run queued" : "Run queued: \(runID)"
+            try await refreshDashboard()
+            selectedPathID = step.pathID
+            selectedPathStepID = step.id
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func retryPathStepRun(_ run: PathStepRunItem) async {
+        do {
+            let nextRunID = try await client.retryPathStepRun(
+                pathID: run.pathID,
+                stepID: run.stepID,
+                runID: run.id,
+                reason: "manual_retry",
+                autoExecute: true
+            )
+            pathActionResult = nextRunID.isEmpty ? "Run retried" : "Run retried: \(nextRunID)"
+            try await refreshDashboard()
+            selectedPathID = run.pathID
+            selectedPathStepID = run.stepID
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func addPathStepComment(_ step: PathStepItem, body: String) async {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            let commentID = try await client.createPathStepComment(
+                pathID: step.pathID,
+                stepID: step.id,
+                body: trimmed,
+                autoRun: !step.assigneeElephantID.isEmpty
+            )
+            pathActionResult = commentID.isEmpty ? "Comment added" : "Comment added: \(commentID)"
+            try await refreshDashboard()
+            selectedPathID = step.pathID
+            selectedPathStepID = step.id
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func markLearningSummary(_ summary: LearningSummaryItem, understood: Bool) async {
+        do {
+            try await client.markUnderstanding(
+                pathID: summary.pathID,
+                stepID: summary.stepID,
+                summaryID: summary.id,
+                understood: understood
+            )
+            pathActionResult = understood ? "Understanding checked" : "Marked for clarification"
+            try await refreshDashboard()
+            selectedPathID = summary.pathID
+            selectedPathStepID = summary.stepID
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
@@ -1777,6 +2289,9 @@ final class ElephantAppModel: ObservableObject {
         speechOutput.stop()
         activeEpisodeID = ""
         pendingQuestionReply = nil
+        answeredClarificationIDs.removeAll()
+        todoStatusOverrides.removeAll()
+        updatingTodoItemIDs.removeAll()
         wakeDraft = ""
         wakeAttachments = []
         messages = [
@@ -1789,6 +2304,9 @@ final class ElephantAppModel: ObservableObject {
     func openEpisodeThread(_ thread: EpisodeThread) {
         speechOutput.stop()
         activeEpisodeID = thread.id
+        answeredClarificationIDs.removeAll()
+        todoStatusOverrides.removeAll()
+        updatingTodoItemIDs.removeAll()
         if thread.messages.isEmpty {
             messages = [
                 ChatMessage(role: .system, text: thread.summary.isEmpty ? text(.noRenderedMessagesYet) : thread.summary)
@@ -2007,10 +2525,22 @@ final class ElephantAppModel: ObservableObject {
             return
         }
         if Self.password(sleepUnlockPassword, matches: Self.storedAppLockPasswordRecord()) {
+            if sleepDisplayReason == "launch" {
+                launchSleepUnlockAccepted = true
+            }
             dismissSleepDisplay()
         } else {
             sleepUnlockError = text(.sleepPasswordWrong)
         }
+    }
+
+    private func presentLaunchSleepDisplayIfNeeded() {
+        guard !launchSleepUnlockAccepted else { return }
+        if isSleepDisplayPresented {
+            sleepDisplayReason = "launch"
+            return
+        }
+        beginSleepDisplay(reason: "launch")
     }
 
     func pickUserAvatar() {
@@ -2695,12 +3225,34 @@ final class ElephantAppModel: ObservableObject {
     func createHerdElephant(
         name: String,
         identityText: String,
-        avatarURL: URL? = nil
+        avatarURL: URL? = nil,
+        herdKind: String = "baby",
+        roleTitle: String = "",
+        rolePrompt: String = "",
+        backend: String = "",
+        runtimeID: String = "",
+        providerID: String = "",
+        engineID: String = "",
+        providerModel: String = "",
+        toolIDs: String = "",
+        skillIDs: String = "",
+        enabled: Bool = true
     ) async {
         do {
             let createdID = try await client.createHerdElephant(
                 name: name,
-                identityText: identityText
+                identityText: identityText,
+                herdKind: herdKind,
+                roleTitle: roleTitle,
+                rolePrompt: rolePrompt,
+                backend: backend,
+                runtimeID: runtimeID,
+                providerID: providerID,
+                engineID: engineID,
+                providerModel: providerModel,
+                toolIDs: toolIDs,
+                skillIDs: skillIDs,
+                enabled: enabled
             )
             try await refreshDashboard()
             if let avatarURL {
@@ -2723,6 +3275,13 @@ final class ElephantAppModel: ObservableObject {
         identityText: String,
         roleTitle: String? = nil,
         rolePrompt: String? = nil,
+        backend: String? = nil,
+        runtimeID: String? = nil,
+        providerID: String? = nil,
+        engineID: String? = nil,
+        providerModel: String? = nil,
+        toolIDs: String? = nil,
+        skillIDs: String? = nil,
         enabled: Bool? = nil
     ) async {
         do {
@@ -2732,6 +3291,13 @@ final class ElephantAppModel: ObservableObject {
                 identityText: identityText,
                 roleTitle: roleTitle,
                 rolePrompt: rolePrompt,
+                backend: backend,
+                runtimeID: runtimeID,
+                providerID: providerID,
+                engineID: engineID,
+                providerModel: providerModel,
+                toolIDs: toolIDs,
+                skillIDs: skillIDs,
                 enabled: enabled
             )
             try await refreshDashboard()
@@ -2756,9 +3322,14 @@ final class ElephantAppModel: ObservableObject {
                 onboardingBabyProviderModelID = onboardingModelID
             }
             onboardingHerdDiscoveryComplete = true
+            let hasProviderEngine = !onboardingProviderID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             onboardingHerdDiscoveryStatus = latest.isEmpty
-                ? Self.localizedText(appLanguage, en: "No local agents found yet.", zh: "还没有找到本地 agent。", fr: "Aucun agent local trouvé.", de: "Noch keine lokalen Agents gefunden.")
-                : Self.localizedText(appLanguage, en: "Choose which agents should become baby elephants.", zh: "选择哪些 agent 要成为小象。", fr: "Choisissez les agents à adopter.", de: "Wähle Agents als Baby Elephants.")
+                ? (
+                    hasProviderEngine
+                    ? Self.localizedText(appLanguage, en: "Provider engine is ready; no local engines found yet.", zh: "模型 engine 已可用；还没有找到本地 engine。", fr: "Le moteur provider est prêt ; aucun moteur local trouvé.", de: "Provider-Engine ist bereit; keine lokalen Engines gefunden.")
+                    : Self.localizedText(appLanguage, en: "No local engines found yet.", zh: "还没有找到本地 engine。", fr: "Aucun moteur local trouvé.", de: "Noch keine lokalen Engines gefunden.")
+                )
+                : Self.localizedText(appLanguage, en: "Choose the engine Mother can use first.", zh: "选择 Mother 首先可用的 engine。", fr: "Choisissez le moteur initial de Mother.", de: "Wähle Mothers erstes Engine.")
             return latest
         } catch {
             lastError = error.localizedDescription
@@ -2773,7 +3344,9 @@ final class ElephantAppModel: ObservableObject {
         displayName: String,
         roleTitle: String,
         rolePrompt: String,
-        enabled: Bool
+        enabled: Bool,
+        toolIDs: String = "",
+        skillIDs: String = ""
     ) async {
         do {
             _ = try await client.adoptLocalAgent(
@@ -2781,7 +3354,9 @@ final class ElephantAppModel: ObservableObject {
                 displayName: displayName,
                 roleTitle: roleTitle,
                 rolePrompt: rolePrompt,
-                enabled: enabled
+                enabled: enabled,
+                toolIDs: toolIDs,
+                skillIDs: skillIDs
             )
             try await refreshDashboard()
         } catch {
@@ -2793,11 +3368,13 @@ final class ElephantAppModel: ObservableObject {
         guard !onboardingHerdAdoptionInFlight else { return }
         onboardingHerdAdoptionInFlight = true
         defer { onboardingHerdAdoptionInFlight = false }
-        let backend = onboardingSelectedBabyBackend.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !backend.isEmpty else { return }
+        let providerRuntimeID = "provider:\(onboardingProviderID)"
+        let providerSelected = onboardingSelectedBabyRuntimeID == providerRuntimeID
+        let selectedRuntimeIDs = onboardingSelectedRuntimeIDs
+        guard providerSelected || !selectedRuntimeIDs.isEmpty else { return }
         do {
             let template = onboardingSelectedBabyTemplate
-            if backend == "provider" {
+            if providerSelected {
                 try await client.adoptProviderAgent(
                     providerID: onboardingProviderID,
                     providerName: onboardingProviderDisplayName,
@@ -2807,7 +3384,11 @@ final class ElephantAppModel: ObservableObject {
                     rolePrompt: template.prompt,
                     enabled: true
                 )
-            } else if let runtime = snapshot.localAgentRuntimes.first(where: { $0.runtimeID == onboardingSelectedBabyRuntimeID && $0.canExecute }) {
+            }
+            let selectedRuntimes = snapshot.localAgentRuntimes.filter {
+                selectedRuntimeIDs.contains($0.runtimeID) && $0.canExecute
+            }
+            for runtime in selectedRuntimes {
                 _ = try await client.adoptLocalAgent(
                     runtime: runtime,
                     displayName: onboardingBabyDisplayName(for: runtime, template: template),
@@ -3119,6 +3700,59 @@ final class ElephantAppModel: ObservableObject {
             return
         }
         await enqueueWakeMessage(inputModality: .text, voiceDuration: nil)
+    }
+
+    func submitClarifyResponse(_ request: ClarifyToolRequest, answer: String) async {
+        let cleaned = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        guard request.canSubmit, !activeEpisodeID.isEmpty else {
+            wakeDraft = cleaned
+            focusComposer()
+            return
+        }
+        answeredClarificationIDs.insert(request.id)
+        messages.append(ChatMessage(role: .user, text: cleaned))
+        chatScrollRevision += 1
+        do {
+            try await client.submitClarification(
+                episodeID: activeEpisodeID,
+                clarifyID: request.id,
+                answer: cleaned
+            )
+        } catch {
+            answeredClarificationIDs.remove(request.id)
+            lastError = error.localizedDescription
+            messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(error)))
+            chatScrollRevision += 1
+        }
+        focusComposer()
+    }
+
+    func setTodoItemDone(itemID: String, done: Bool) async {
+        let cleaned = itemID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        let nextStatus = done ? "done" : "open"
+        let previousStatus = todoStatusOverrides[cleaned]
+        todoStatusOverrides[cleaned] = nextStatus
+        guard !activeEpisodeID.isEmpty else { return }
+        updatingTodoItemIDs.insert(cleaned)
+        defer {
+            updatingTodoItemIDs.remove(cleaned)
+        }
+        do {
+            try await client.updateTodoItem(
+                episodeID: activeEpisodeID,
+                itemID: cleaned,
+                done: done
+            )
+        } catch {
+            if let previousStatus {
+                todoStatusOverrides[cleaned] = previousStatus
+            } else {
+                todoStatusOverrides.removeValue(forKey: cleaned)
+            }
+            lastError = error.localizedDescription
+        }
     }
 
     private func sendPendingQuestionReply(_ question: PersonalModelQuestionItem) async {
@@ -3743,13 +4377,19 @@ final class ElephantAppModel: ObservableObject {
                     $0.babyID,
                     $0.providerID,
                     $0.runtimeID,
-                    $0.childEpisodeID
+                    $0.childEpisodeID,
+                    $0.clarifyID,
+                    $0.clarifyQuestion,
+                    $0.clarifyChoices.joined(separator: ",")
                 ].joined(separator: "|")
             }
             .joined(separator: "\n")
     }
 
     private static func toolEventKey(_ event: ToolUseEvent) -> String {
+        if let clarifyRequest = ClarifyToolRequest(event: event), !clarifyRequest.question.isEmpty {
+            return "tool.clarify|\(clarifyRequest.question)"
+        }
         let invocationID = event.invocationID.trimmingCharacters(in: .whitespacesAndNewlines)
         if !invocationID.isEmpty {
             return invocationID
@@ -3810,7 +4450,11 @@ final class ElephantAppModel: ObservableObject {
             runtimePath: incoming.runtimePath.isEmpty ? existing.runtimePath : incoming.runtimePath,
             runtimeModel: incoming.runtimeModel.isEmpty ? existing.runtimeModel : incoming.runtimeModel,
             childEpisodeID: incoming.childEpisodeID.isEmpty ? existing.childEpisodeID : incoming.childEpisodeID,
-            task: incoming.task.isEmpty ? existing.task : incoming.task
+            task: incoming.task.isEmpty ? existing.task : incoming.task,
+            clarifyID: incoming.clarifyID.isEmpty ? existing.clarifyID : incoming.clarifyID,
+            clarifyQuestion: incoming.clarifyQuestion.isEmpty ? existing.clarifyQuestion : incoming.clarifyQuestion,
+            clarifyMode: incoming.clarifyMode.isEmpty ? existing.clarifyMode : incoming.clarifyMode,
+            clarifyChoices: incoming.clarifyChoices.isEmpty ? existing.clarifyChoices : incoming.clarifyChoices
         )
     }
 
@@ -3885,6 +4529,9 @@ final class ElephantAppModel: ObservableObject {
 
         wakeDraft = ""
         pendingQuestionReply = nil
+        answeredClarificationIDs.removeAll()
+        todoStatusOverrides.removeAll()
+        updatingTodoItemIDs.removeAll()
         providerTestResult = ""
         providerActionFailed = false
         providerActionInFlight = false
@@ -3905,6 +4552,7 @@ final class ElephantAppModel: ObservableObject {
         isWakeRunning = false
         isSleepDisplayPresented = false
         sleepDisplayReason = "manual"
+        launchSleepUnlockAccepted = false
         sleepUnlockPassword = ""
         sleepUnlockError = ""
         sleepIdleMinutes = Self.defaultSleepIdleMinutes

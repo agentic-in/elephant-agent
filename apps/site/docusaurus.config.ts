@@ -5,11 +5,11 @@ import type * as Preset from "@docusaurus/preset-classic";
 const githubRepoUrl = "https://github.com/agentic-in/elephant-agent";
 const githubReadmeUrl = `${githubRepoUrl}/blob/main/README.md`;
 const siteDescription =
-  "L4 personal AI where Mother grows to understand you, then helps shape living Paths across work, life, and long-term growth.";
+  "Personal AI that starts from you: Mother grows to understand you, then helps shape living Paths across work, life, and long-running change.";
 const siteKeywords = [
   "human-first personal AI",
-  "L4 personal AI",
-  "human growth AI",
+  "personal AI for life paths",
+  "AI for personal growth",
   "agency-first personal AI",
   "personal-model-first AI",
   "personal AI paths",
@@ -197,7 +197,7 @@ const config: Config = {
           className: "footer-col-brand",
           items: [
             {
-              html: '<span class="footer-description">L4 personal AI for human growth.</span>',
+              html: '<span class="footer-description">Personal AI that starts from you.</span>',
             },
           ],
         },

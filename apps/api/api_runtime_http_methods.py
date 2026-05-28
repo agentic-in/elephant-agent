@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import replace
 import json
 from queue import Empty, Queue
-import shutil
 from threading import Lock, Thread
 from typing import Any, Mapping
 from urllib.parse import unquote
@@ -16,12 +14,10 @@ from packages.context import (
     next_session_context_epoch,
 )
 from packages.context.epoch_store import FileEpochStore
-from packages.contracts import EventEnvelope
+from packages.contracts import EventEnvelope, ExecutionResult
 from packages.kernel import KernelSourceRequest, ReconciliationPipeline, StateReconciler
 from packages.models.reasoning_parser import split_reasoning_and_content
 from packages.operator.runtime import RecallEvidenceOperatorDetail
-from packages.runtime_layout import elephant_file_path
-from packages.state import render_default_elephant_identity, write_elephant_identity_file
 
 from .api_runtime_support import (
     APILoopRecord,
@@ -39,12 +35,12 @@ from .api_runtime_routes import (
     API_ROUTE_HERD,
     API_ROUTE_INTERNAL,
     API_ROUTE_OPERATOR,
+    API_ROUTE_PATHS,
     API_ROUTE_PROVIDERS,
     API_ROUTE_STATES,
 )
 from .api_runtime_http_dispatch_helpers import (
     _cron_job_system_kind,
-    _elephant_id_from_name,
     _cron_payload,
     _cron_skill_ids,
     _cron_job_record,
@@ -57,18 +53,158 @@ from .api_runtime_personal_model_methods import (
 from .api_runtime_context_compression import (
     compact_context_after_usage as _compact_context_after_usage,
 )
-from .api_runtime_herd_local_agents import (
-    baby_identity_text as _baby_identity_text,
-    default_baby_display_name as _default_baby_display_name,
-    herd_metadata_from_payload as _herd_metadata_from_payload,
-    list_persisted_local_agents as _list_persisted_local_agents,
-    local_agent_payload as _local_agent_payload,
-    metadata_bool_payload as _metadata_bool_payload,
-    metadata_str_payload as _metadata_str_payload,
-    scan_and_persist_local_agents as _scan_and_persist_local_agents,
-)
+from .api_runtime_elephants import _dispatch_elephants
+from .api_runtime_paths import _dispatch_paths
 
 _STREAM_KEEPALIVE_SECONDS = 15.0
+_STREAM_CLARIFY_TIMEOUT_SECONDS = 600.0
+
+
+class _StreamingClarifySurface:
+    """Clarify surface that lets HTTP stream clients answer inline."""
+
+    def __init__(
+        self,
+        *,
+        episode_id: str,
+        enqueue,
+        pending: dict[str, tuple[str, Queue[str]]],
+        pending_lock: Lock,
+        timeout_seconds: float = _STREAM_CLARIFY_TIMEOUT_SECONDS,
+    ) -> None:
+        self.episode_id = episode_id
+        self.enqueue = enqueue
+        self.pending = pending
+        self.pending_lock = pending_lock
+        self.timeout_seconds = timeout_seconds
+
+    def request_clarification(
+        self,
+        *,
+        session_id: str,
+        question: str,
+        mode: str,
+        choices: tuple[str, ...] = (),
+    ) -> ExecutionResult:
+        clarify_id = f"clarify-{uuid4().hex[:12]}"
+        response_queue: Queue[str] = Queue(maxsize=1)
+        with self.pending_lock:
+            self.pending[clarify_id] = (self.episode_id, response_queue)
+        self.enqueue(
+            {
+                "type": "clarify.requested",
+                "event_type": "tool_execute",
+                "id": clarify_id,
+                "clarify_id": clarify_id,
+                "name": "tool.clarify",
+                "tool_name": "tool.clarify",
+                "status": "needs_input",
+                "question": question,
+                "mode": mode,
+                "choices": list(choices),
+                "arguments": {
+                    "question": question,
+                    "mode": mode,
+                    "choices": list(choices),
+                },
+                "tool_arguments": {
+                    "question": question,
+                    "mode": mode,
+                    "choices": list(choices),
+                },
+                "result": "",
+                "tool_result": "",
+            }
+        )
+        try:
+            try:
+                answer = response_queue.get(timeout=self.timeout_seconds)
+            except Empty:
+                answer = (
+                    "The user did not provide a response within the time limit. "
+                    "Use your best judgement to make the choice and proceed."
+                )
+                self.enqueue(
+                    {
+                        "type": "clarify.expired",
+                        "event_type": "tool_execute",
+                        "id": clarify_id,
+                        "clarify_id": clarify_id,
+                        "name": "tool.clarify",
+                        "tool_name": "tool.clarify",
+                        "status": "timed_out",
+                        "question": question,
+                        "mode": mode,
+                        "choices": list(choices),
+                    }
+                )
+            return ExecutionResult(
+                execution_id=f"clarify:{session_id}:{uuid4().hex[:8]}",
+                episode_id=session_id,
+                outcome="success",
+                summary="\n".join(
+                    [
+                        f"question: {question}",
+                        f"mode: {mode}",
+                        f"user_response: {answer}",
+                    ]
+                ),
+                side_effects=("clarify",),
+            )
+        finally:
+            with self.pending_lock:
+                self.pending.pop(clarify_id, None)
+
+
+def _clarify_pending_state(self) -> tuple[dict[str, tuple[str, Queue[str]]], Lock]:
+    pending = getattr(self, "_clarify_pending", None)
+    pending_lock = getattr(self, "_clarify_pending_lock", None)
+    if not isinstance(pending, dict) or pending_lock is None:
+        pending = {}
+        pending_lock = Lock()
+        self._clarify_pending = pending
+        self._clarify_pending_lock = pending_lock
+    return pending, pending_lock
+
+
+def _submit_stream_clarification(self, *, episode_id: str, clarify_id: str, answer: str) -> dict[str, str]:
+    cleaned = answer.strip()
+    if not cleaned:
+        raise ValueError("clarification answer is required")
+    pending, pending_lock = _clarify_pending_state(self)
+    with pending_lock:
+        entry = pending.get(clarify_id)
+    if entry is None:
+        raise KeyError(clarify_id)
+    pending_episode_id, response_queue = entry
+    if pending_episode_id != episode_id:
+        raise KeyError(clarify_id)
+    try:
+        response_queue.put_nowait(cleaned)
+    except Exception as error:
+        raise ValueError("clarification was already answered") from error
+    return {"episode_id": episode_id, "clarify_id": clarify_id, "status": "submitted"}
+
+
+def _update_episode_todo(self, *, episode_id: str, item_id: str, status: str) -> dict[str, Any]:
+    cleaned_item_id = item_id.strip()
+    if not cleaned_item_id:
+        raise ValueError("todo item_id is required")
+    normalized_status = status.strip().lower()
+    if normalized_status not in {"open", "done"}:
+        raise ValueError("todo status must be open or done")
+    action = "complete" if normalized_status == "done" else "reopen"
+    result = self.tool_runtime.invoke(
+        "tool.todo.manage",
+        {"action": action, "item_id": cleaned_item_id},
+        session_id=episode_id,
+        requester="operator",
+    )
+    return {
+        "episode_id": episode_id,
+        "todo": {"item_id": cleaned_item_id, "status": normalized_status},
+        "execution": _jsonable(result),
+    }
 
 def run_loop(
     self,
@@ -79,6 +215,7 @@ def run_loop(
     tool_name: str | None = None,
     tool_arguments: Mapping[str, Any] | None = None,
     delivery_payload: Mapping[str, Any] | None = None,
+    source_event_type: str = "loop.received",
 ) -> APILoopResult:
     episode = self.repository.load_episode_state(episode_id)
     if episode is None:
@@ -92,7 +229,7 @@ def run_loop(
     route_state = self.repository.load_state(stored_episode.state_id) if stored_episode is not None else None
     event = EventEnvelope(
         event_id=f"api:{episode_id}:loop:{uuid4().hex}",
-        event_type="loop.received",
+        event_type=source_event_type,
         episode_id=episode_id,
         source="api",
         payload={
@@ -108,7 +245,7 @@ def run_loop(
             route_id=episode_id,
             prompt=prompt,
             surface="api",
-            source_event_type="loop.received",
+            source_event_type=source_event_type,
             source_payload=dict(event.payload),
             source_event_id=event.event_id,
             route_profile_id=episode.personal_model_id,
@@ -251,6 +388,9 @@ def stream_loop_events(
         stream_lock = getattr(self, "_loop_stream_lock", None)
         set_stream_observer = getattr(self.model_provider, "set_stream_observer", None)
         previous_stream_observer = getattr(self.model_provider, "_stream_observer", None)
+        clarify_surface = getattr(self, "_api_clarify_surface", None)
+        set_clarify_delegate = getattr(clarify_surface, "set_delegate", None)
+        previous_clarify_delegate = getattr(clarify_surface, "delegate", None)
         unsubscribe_tool = self.tool_runtime.subscribe(tool_observer)
         unsubscribe_telemetry = self.telemetry.subscribe(telemetry_observer)
         acquired_stream_lock = False
@@ -261,6 +401,16 @@ def stream_loop_events(
                 acquired_stream_lock = True
             if callable(set_stream_observer):
                 set_stream_observer(stream_observer)
+            if callable(set_clarify_delegate):
+                pending, pending_lock = _clarify_pending_state(self)
+                set_clarify_delegate(
+                    _StreamingClarifySurface(
+                        episode_id=episode_id,
+                        enqueue=enqueue,
+                        pending=pending,
+                        pending_lock=pending_lock,
+                    )
+                )
             result = self.run_loop(
                 episode_id,
                 prompt=prompt,
@@ -275,6 +425,8 @@ def stream_loop_events(
         finally:
             if callable(set_stream_observer):
                 set_stream_observer(previous_stream_observer)
+            if callable(set_clarify_delegate):
+                set_clarify_delegate(previous_clarify_delegate)
             unsubscribe_tool()
             unsubscribe_telemetry()
             if acquired_stream_lock and stream_lock is not None:
@@ -310,6 +462,8 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
             return self._dispatch_operator(method, parts[1:], body)
         if route_family == API_ROUTE_HERD:
             return _dispatch_elephants(self, method, parts[1:], body)
+        if route_family == API_ROUTE_PATHS:
+            return _dispatch_paths(self, method, parts[1:], body)
         if route_family == API_ROUTE_EPISODES:
             return self._dispatch_episodes(method, parts[1:], body)
         if route_family == API_ROUTE_STATES:
@@ -323,217 +477,6 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
         return APIResponse(422, {"error": "configuration_required", "detail": str(error)})
     except Exception as error:
         return APIResponse(500, {"error": "internal_error", "detail": str(error)})
-def _unique_elephant_id(self, base_elephant_id: str) -> str:
-    root = _elephant_id_from_name(base_elephant_id)
-    elephant_id = root
-    suffix = 2
-    while _elephant_state_for_id(self, elephant_id) is not None:
-        elephant_id = f"{root}-{suffix}"
-        suffix += 1
-    return elephant_id
-def _elephant_state_for_id(self, elephant_id: str):
-    target = elephant_id.strip()
-    if not target:
-        return None
-    direct = self.repository.load_state(f"state:{target}")
-    if direct is not None:
-        return direct
-    try:
-        states = self.repository.list_states(elephant_id=target)
-    except TypeError:
-        states = self.repository.list_states()
-    return next((state for state in states if state.elephant_id == target), None)
-def _default_elephant_identity_text(*, elephant_id: str, display_name: str) -> str:
-    """Seed identity text when none is supplied via the API.
-
-    Mirrors the CLI's first-person self-introduction template so a
-    companion created through the API reads the same way a CLI-created
-    companion does. Internal metadata lives in an HTML comment so it stays
-    out of the prompt.
-    """
-    charter = render_default_elephant_identity(display_name=display_name)
-    return "\n".join(
-        (
-            f"<!-- Internal metadata (not shown to the model). id: {elephant_id}. "
-            f"Edit the paragraphs below to reshape how {display_name} introduces themselves. -->",
-            "",
-            charter,
-        )
-    )
-def _elephant_identity_text_from_payload(payload: Mapping[str, Any], *, elephant_id: str, display_name: str) -> str:
-    return (
-        _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
-        or _default_elephant_identity_text(elephant_id=elephant_id, display_name=display_name)
-    )
-
-def _write_elephant_identity_file(self, *, elephant_id: str, text: str) -> str:
-    path = write_elephant_identity_file(
-        elephant_file_path(elephant_id, install_root=self.config.install_root),
-        text,
-    )
-    return str(path)
-def _dispatch_elephants(self, method: str, parts: tuple[str, ...], body: bytes | None) -> APIResponse:
-    normalized_method = method.upper()
-    if normalized_method == "POST" and parts == ("discovery", "scan"):
-        records = _scan_and_persist_local_agents(self)
-        return APIResponse(
-            200,
-            _jsonable(
-                {
-                    "status": "ok",
-                    "discovery": [_local_agent_payload(record) for record in records],
-                    "local_agent_runtimes": [_local_agent_payload(record) for record in records],
-                }
-            ),
-        )
-    if normalized_method == "GET" and parts == ("discovery",):
-        records = _list_persisted_local_agents(self)
-        return APIResponse(
-            200,
-            _jsonable(
-                {
-                    "status": "ok",
-                    "discovery": [_local_agent_payload(record) for record in records],
-                    "local_agent_runtimes": [_local_agent_payload(record) for record in records],
-                }
-            ),
-        )
-    if normalized_method == "POST" and parts == ("babies",):
-        payload = _read_json_bytes(body)
-        runtime_id = str(payload.get("runtime_id") or payload.get("runtimeId") or "").strip()
-        if not runtime_id:
-            raise ValueError("runtime_id is required")
-        load_runtime = getattr(self.repository, "load_local_agent_runtime", None)
-        record = load_runtime(runtime_id) if callable(load_runtime) else None
-        if record is None:
-            raise KeyError(runtime_id)
-        if not record.can_execute:
-            raise ValueError(f"runtime is not executable yet: {runtime_id}")
-        role_title = _metadata_str_payload(payload, "role_title", "roleTitle") or record.role_title
-        role_prompt = _metadata_str_payload(payload, "role_prompt", "rolePrompt") or record.role_prompt
-        display_name = str(payload.get("display_name") or payload.get("name") or "").strip()
-        if not display_name:
-            display_name = _default_baby_display_name(record, role_title)
-        raw_elephant_id = str(payload.get("elephant_id") or payload.get("elephantId") or "").strip()
-        if raw_elephant_id and _elephant_state_for_id(self, raw_elephant_id) is not None:
-            raise ValueError(f"elephant already exists: {raw_elephant_id}")
-        elephant_id = raw_elephant_id or _unique_elephant_id(self, display_name)
-        mother = _elephant_state_for_id(self, "mother-elephant")
-        personal_model_id = str(
-            payload.get("personal_model_id")
-            or payload.get("profile_id")
-            or (mother.personal_model_id if mother is not None else self.repository.ensure_default_personal_model().personal_model_id)
-        ).strip()
-        enabled = _metadata_bool_payload(payload, "enabled", "isEnabled") or "false"
-        metadata = _herd_metadata_from_payload(
-            {
-                **dict(payload),
-                "herd_kind": "baby",
-                "parent_elephant_id": str(payload.get("parent_elephant_id") or payload.get("parentElephantId") or "mother-elephant"),
-                "runtime_id": record.runtime_id,
-                "provider_id": record.provider_id,
-                "role_title": role_title,
-                "role_prompt": role_prompt,
-                "enabled": enabled,
-                "max_concurrency": str(payload.get("max_concurrency") or payload.get("maxConcurrency") or "1"),
-            },
-            current={"profile_id": personal_model_id},
-        )
-        identity_text = (
-            _optional_str(payload.get("elephant_identity_text") or payload.get("text") or payload.get("content"))
-            or _baby_identity_text(
-                display_name=display_name,
-                role_title=role_title,
-                role_prompt=role_prompt,
-                provider_name=record.display_name,
-            )
-        )
-        state = self.repository.create_state(
-            personal_model_id=personal_model_id,
-            state_id=f"state:{elephant_id}",
-            state_anchor=f"elephant:{elephant_id}",
-            elephant_id=elephant_id,
-            elephant_name=display_name,
-            identity_mode="baby",
-            initiative="delegated",
-            working_style="local_agent",
-            surface_bindings=("api", "dashboard", "local-agent"),
-            elephant_identity_text=identity_text,
-            summary=f"{display_name} is available as a baby elephant for {role_title}.",
-            metadata=metadata,
-        )
-        elephant_identity_path = _write_elephant_identity_file(self, elephant_id=elephant_id, text=identity_text)
-        return APIResponse(201, _jsonable({"elephant": state, "eggIdentityPath": elephant_identity_path}))
-    if normalized_method == "POST" and not parts:
-        payload = _read_json_bytes(body)
-        display_name = str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name") or "").strip()
-        if not display_name:
-            raise ValueError("display_name is required")
-        raw_elephant_id = str(payload.get("elephant_id") or payload.get("eggId") or "").strip()
-        if raw_elephant_id and _elephant_state_for_id(self, raw_elephant_id) is not None:
-            raise ValueError(f"elephant already exists: {raw_elephant_id}")
-        elephant_id = raw_elephant_id or _unique_elephant_id(self, display_name)
-        personal_model_id = str(
-            payload.get("personal_model_id")
-            or payload.get("profile_id")
-            or self.repository.ensure_default_personal_model().personal_model_id
-        ).strip()
-        identity_text = _elephant_identity_text_from_payload(payload, elephant_id=elephant_id, display_name=display_name)
-        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode")) or "companion"
-        initiative = _optional_str(payload.get("initiative")) or "gentle"
-        working_style = _optional_str(payload.get("personality_preset") or payload.get("working_style")) or "companion"
-        state = self.repository.create_state(
-            personal_model_id=personal_model_id,
-            state_id=f"state:{elephant_id}",
-            state_anchor=f"elephant:{elephant_id}",
-            elephant_id=elephant_id,
-            elephant_name=display_name,
-            identity_mode=identity_mode,
-            initiative=initiative,
-            working_style=working_style,
-            surface_bindings=("api", "dashboard"),
-            elephant_identity_text=identity_text,
-            summary=f"{display_name} is ready to continue this elephant line.",
-            metadata=_herd_metadata_from_payload(payload, current={"profile_id": personal_model_id}),
-        )
-        elephant_identity_path = _write_elephant_identity_file(self, elephant_id=elephant_id, text=identity_text)
-        return APIResponse(201, _jsonable({"elephant": state, "eggIdentityPath": elephant_identity_path}))
-    if len(parts) != 1:
-        return APIResponse(404, {"error": "not_found"})
-    elephant_id = unquote(parts[0]).strip()
-    state = _elephant_state_for_id(self, elephant_id)
-    if state is None:
-        raise KeyError(elephant_id)
-    if normalized_method in {"PATCH", "POST"}:
-        payload = _read_json_bytes(body)
-        display_name = _optional_str(payload.get("elephant_name") or payload.get("display_name") or payload.get("name"))
-        mode = _optional_str(payload.get("mode"))
-        identity_text = _optional_str(payload.get("elephant_identity_text") or payload.get("eggIdentityText") or payload.get("text") or payload.get("content"))
-        personality_preset = _optional_str(payload.get("personality_preset") or payload.get("working_style"))
-        initiative = _optional_str(payload.get("initiative"))
-        identity_mode = _optional_str(payload.get("mode") or payload.get("identity_mode"))
-        updated = replace(
-            state,
-            elephant_name=display_name or state.elephant_name,
-            identity_mode=identity_mode if identity_mode is not None else state.identity_mode or "companion",
-            initiative=initiative if initiative is not None else state.initiative,
-            working_style=personality_preset if personality_preset is not None else state.working_style,
-            elephant_identity_text=identity_text if identity_text is not None else state.elephant_identity_text,
-            summary=f"{display_name or state.elephant_name} is ready to continue this elephant line.",
-            metadata=_herd_metadata_from_payload(payload, current={**dict(state.metadata), "profile_id": state.personal_model_id}),
-        )
-        self.repository.upsert_state(updated)
-        elephant_identity_path = ""
-        if identity_text is not None:
-            elephant_identity_path = _write_elephant_identity_file(self, elephant_id=updated.elephant_id, text=identity_text)
-        return APIResponse(200, _jsonable({"elephant": updated, "eggIdentityPath": elephant_identity_path}))
-    if normalized_method == "DELETE":
-        episode_ids = tuple(episode.episode_id for episode in self.repository.list_episodes(state_id=state.state_id))
-        deleted_sessions = self.repository.delete_episodes(episode_ids, delete_orphaned_profiles=False)
-        self.repository.delete_state(state.state_id)
-        shutil.rmtree(elephant_file_path(state.elephant_id, install_root=self.config.install_root), ignore_errors=True)
-        return APIResponse(200, _jsonable({"elephant_id": state.elephant_id, "deleted": True, "deleted_sessions": deleted_sessions}))
-    return APIResponse(404, {"error": "not_found"})
 
 def _tool_lifecycle_stream_event(event: Any) -> dict[str, Any]:
     invocation = getattr(event, "invocation", None)
@@ -680,6 +623,24 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
             delivery_payload=payload.get("delivery_payload"),
         )
         return APIResponse(200, _jsonable(result.to_record()))
+    if method.upper() == "POST" and len(parts) == 3 and parts[1] == "clarifications":
+        payload = _read_json_bytes(body)
+        result = _submit_stream_clarification(
+            self,
+            episode_id=episode_id,
+            clarify_id=unquote(parts[2]).strip(),
+            answer=str(payload.get("answer") or payload.get("response") or payload.get("user_response") or ""),
+        )
+        return APIResponse(202, _jsonable(result))
+    if method.upper() == "PATCH" and len(parts) == 3 and parts[1] == "todos":
+        payload = _read_json_bytes(body)
+        result = _update_episode_todo(
+            self,
+            episode_id=episode_id,
+            item_id=unquote(parts[2]).strip(),
+            status=str(payload.get("status") or ("done" if payload.get("done") else "open")),
+        )
+        return APIResponse(200, _jsonable(result))
     if method.upper() == "GET" and len(parts) == 2 and parts[1] == "profile":
         inspection = self.inspect_episode(episode_id)
         return APIResponse(200, _jsonable({"personal_model": inspection.personal_model}))

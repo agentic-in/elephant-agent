@@ -53,6 +53,19 @@ find_python_in_root() {
   return 1
 }
 
+ensure_python_command_aliases() {
+  local python="$1"
+  local bin_dir
+  local python_name
+  bin_dir="$(dirname "${python}")"
+  python_name="$(basename "${python}")"
+  for alias in python python3; do
+    if [[ ! -e "${bin_dir}/${alias}" ]]; then
+      ln -s "${python_name}" "${bin_dir}/${alias}"
+    fi
+  done
+}
+
 copy_tree_without_metadata() {
   local source="$1"
   local destination="$2"
@@ -208,6 +221,16 @@ rm -rf "${RUNTIME_ROOT}"
 copy_tree_without_metadata "${source_python_root}" "${PYTHON_ROOT}"
 
 bundled_python="$(find_python_in_root "${PYTHON_ROOT}")"
+ensure_python_command_aliases "${bundled_python}"
+"${bundled_python}" - <<'PY'
+import os
+import sys
+
+for alias in ("python", "python3"):
+    path = os.path.join(os.path.dirname(sys.executable), alias)
+    if not os.path.exists(path):
+        raise SystemExit(f"missing bundled Python command alias: {path}")
+PY
 "${bundled_python}" - <<'PY'
 import sys
 if sys.version_info < (3, 12):

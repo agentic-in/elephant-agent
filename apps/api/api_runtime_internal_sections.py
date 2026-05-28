@@ -44,6 +44,7 @@ from .api_runtime_internal_triggers import (
     trigger_reflect_job,
 )
 from .api_runtime_herd_local_agents import latest_episode_touch as _latest_episode_touch
+from .api_runtime_paths_section import fill_paths_section
 
 _COUNT_TABLES = {
     "personal_models",
@@ -51,13 +52,12 @@ _COUNT_TABLES = {
     "episodes",
     "loops",
     "steps",
+    "paths",
+    "path_steps",
     "semantic_index_entries",
 }
-_DASHBOARD_CHAT_EPISODE_LIMIT = 30
-_DASHBOARD_RUNTIME_EPISODE_LIMIT = 200
-_DASHBOARD_TRACE_EPISODE_LIMIT = 10
+_DASHBOARD_CHAT_EPISODE_LIMIT, _DASHBOARD_RUNTIME_EPISODE_LIMIT, _DASHBOARD_TRACE_EPISODE_LIMIT = 30, 200, 10
 LOGGER = logging.getLogger(__name__)
-
 
 def _count_rows(database_path: Path, table: str) -> int:
     if table not in _COUNT_TABLES:
@@ -87,11 +87,11 @@ def _elephant_identity_file(elephant_id: str, *, install_root: Path | None, fall
         "text": _read_optional_text(path) or fallback_text.strip(),
     }
 
-
 DASHBOARD_SECTIONS = {
     "overview",
     "personal-models",
     "herd",
+    "paths",
     "runtime",
     "chat",
     "evidence",
@@ -109,7 +109,6 @@ DASHBOARD_SECTIONS = {
     "diary",
 }
 
-
 def _empty_learning() -> dict[str, Any]:
     return {
         "worker": {},
@@ -125,7 +124,6 @@ def _empty_learning() -> dict[str, Any]:
         },
         "jobs": (),
     }
-
 
 def _empty_dashboard(self, *, section: str, generated_at: str) -> dict[str, Any]:
     return {
@@ -145,6 +143,7 @@ def _empty_dashboard(self, *, section: str, generated_at: str) -> dict[str, Any]
             "note": "Internal dashboard sections are fetched on demand by route.",
         },
         "herd": (),
+        "paths": {"paths": (), "columns": (), "counts": {}},
         "personal_models": (),
         "states": (),
         "runtime": {"episodes": (), "loops": (), "steps": (), "episode_traces": (), "learning_jobs": ()},
@@ -189,11 +188,9 @@ def _empty_dashboard(self, *, section: str, generated_at: str) -> dict[str, Any]
         },
     }
 
-
 def _state_collections(self) -> tuple[tuple[Any, ...], Any]:
     states = _sort_items(self.repository.list_states(), id_field="state_id", time_field="updated_at")
     return states, self.repository.current_state()
-
 
 def _state_projection_rows(
     states: tuple[Any, ...],
@@ -261,6 +258,10 @@ def _state_projection_rows(
             "role_prompt": state_metadata.get("role_prompt", ""),
             "runtime_id": runtime_id,
             "provider_id": state_metadata.get("provider_id", runtime_payload.get("provider_id", "")),
+            "provider_model": state_metadata.get("provider_model", runtime_payload.get("default_model", "")),
+            "engine_id": state_metadata.get("engine_id", runtime_payload.get("provider_id", "")),
+            "tool_ids": state_metadata.get("tool_ids", ""),
+            "skill_ids": state_metadata.get("skill_ids", ""),
             "runtime_status": "ready" if provider_backed else runtime_payload.get("status", ""),
             "auth_status": runtime_payload.get("auth_status", ""),
             "can_execute": bool(runtime_payload.get("can_execute", False)) or (provider_backed and bool(state_metadata.get("provider_id")) and bool(state_metadata.get("provider_model"))),
@@ -287,7 +288,6 @@ def _state_projection_rows(
         })
     return elephant_rows, state_rows
 
-
 def _personal_model_dashboard_row(model: Any, repository: Any) -> dict[str, Any]:
     row = dict(_serialize(model))
     personal_model_id = str(model.personal_model_id)
@@ -302,7 +302,6 @@ def _personal_model_dashboard_row(model: Any, repository: Any) -> dict[str, Any]
             row["user_preferred_name"] = preferred_name
     return row
 
-
 def _personal_model_facts(repository: Any, personal_model_id: str, status: str | tuple[str, ...]) -> tuple[Any, ...]:
     list_facts = getattr(repository, "list_personal_model_facts", None)
     if not callable(list_facts):
@@ -313,10 +312,8 @@ def _personal_model_facts(repository: Any, personal_model_id: str, status: str |
         LOGGER.debug("Failed to load Personal Model facts for dashboard projection.", exc_info=True)
         return ()
 
-
 def _active_personal_model_facts(repository: Any, personal_model_id: str) -> tuple[Any, ...]:
     return _personal_model_facts(repository, personal_model_id, "active")
-
 
 def _personal_model_rows(
     *,
@@ -530,6 +527,8 @@ def _fill_overview(dashboard: dict[str, Any], self) -> None:
             "episodes": _count_rows(database_path, "episodes"),
             "loops": _count_rows(database_path, "loops"),
             "steps": _count_rows(database_path, "steps"),
+            "paths": _count_rows(database_path, "paths"),
+            "path_steps": _count_rows(database_path, "path_steps"),
             "semantic_index_entries": semantic_index_count,
             "provider_auth_states": len(provider_auth_states),
             "learning_jobs": learning["summary"]["total"],
@@ -955,6 +954,8 @@ def inspect_internal_dashboard(self, section: str) -> dict[str, Any]:
         _fill_personal_models(dashboard, self)
     elif normalized_section == "herd":
         _fill_states(dashboard, self)
+    elif normalized_section == "paths":
+        fill_paths_section(dashboard, self)
     elif normalized_section == "runtime":
         _fill_runtime(dashboard, self)
     elif normalized_section == "chat":

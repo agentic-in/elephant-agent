@@ -33,6 +33,7 @@ from typing import Any
 from uuid import uuid4
 
 from packages.contracts import Episode, Fact, Step
+from packages.contracts.paths import LearningSummaryRecord
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ LOGGER = logging.getLogger(__name__)
 __all__ = [
     "SemanticSummaryIndexer",
     "build_episode_summary_text",
+    "build_learning_summary_recall_text",
     "build_personal_model_claim_text",
     "build_step_recall_text",
 ]
@@ -145,6 +147,34 @@ def build_step_recall_text(step: Step) -> str:
     if _is_filtered_step(action, metadata, text=text):
         return ""
     return text
+
+
+def build_learning_summary_recall_text(
+    summary: LearningSummaryRecord,
+    *,
+    path_step: Any | None = None,
+    path: Any | None = None,
+) -> str:
+    """Flatten a Path learning summary into a compact recall document.
+
+    Learning summaries are the durable human-learning artifact for a Path
+    step. Raw run rows are operational, so the indexed text deliberately
+    favors the human takeaway and knowledge to absorb.
+    """
+    path_title = str(getattr(path, "title", "") or "").strip()
+    step_title = str(getattr(path_step, "title", "") or "").strip()
+    step_description = str(getattr(path_step, "description", "") or "").strip()
+    pieces = [
+        f"path: {path_title}" if path_title else "",
+        f"step: {step_title}" if step_title else "",
+        step_description,
+        f"takeaway: {summary.human_takeaway}" if summary.human_takeaway else "",
+        f"knowledge: {summary.knowledge}" if summary.knowledge else "",
+        f"what changed: {summary.what_done}" if summary.what_done else "",
+        f"why it matters: {summary.why_it_matters}" if summary.why_it_matters else "",
+        f"how it was done: {summary.how_it_was_done}" if summary.how_it_was_done else "",
+    ]
+    return _truncate(" | ".join(part for part in pieces if part.strip()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,3 +346,65 @@ class SemanticSummaryIndexer:
                 "retention_lifecycle": "preference",
             },
         )
+
+    def index_learning_summary(
+        self,
+        summary: LearningSummaryRecord,
+        *,
+        path_step: Any | None = None,
+        path: Any | None = None,
+    ) -> object | None:
+        """Index one Path learning summary as user-visible recall material."""
+        if summary is None:
+            return None
+        resolved_step = path_step or self._load_path_step(summary.path_step_id)
+        resolved_path = path or self._load_path(summary.path_id)
+        text = build_learning_summary_recall_text(
+            summary,
+            path_step=resolved_step,
+            path=resolved_path,
+        )
+        if not text:
+            return None
+        personal_model_id = (
+            str(getattr(resolved_step, "personal_model_id", "") or "").strip()
+            or str(getattr(resolved_path, "personal_model_id", "") or "").strip()
+            or None
+        )
+        return self._index(
+            text=text,
+            source_id=f"path:learning_summary:{summary.summary_id}",
+            owner_scope="state",
+            personal_model_id=personal_model_id,
+            state_id=None,
+            metadata={
+                "kind": "path_learning_summary",
+                "layer_type": "path_learning_summary",
+                "path_id": summary.path_id,
+                "path_step_id": summary.path_step_id,
+                "summary_id": summary.summary_id,
+                "run_id": summary.run_id,
+                "summary_type": summary.summary_type,
+                "retention_lifecycle": "path",
+            },
+        )
+
+    def _load_path_step(self, path_step_id: str) -> Any | None:
+        load_path_step = getattr(self.repository, "load_path_step", None)
+        if not callable(load_path_step) or not path_step_id:
+            return None
+        try:
+            return load_path_step(path_step_id)
+        except Exception:
+            LOGGER.debug("Failed to load Path step for semantic summary indexing.", exc_info=True)
+            return None
+
+    def _load_path(self, path_id: str) -> Any | None:
+        load_path = getattr(self.repository, "load_path", None)
+        if not callable(load_path) or not path_id:
+            return None
+        try:
+            return load_path(path_id)
+        except Exception:
+            LOGGER.debug("Failed to load Path for semantic summary indexing.", exc_info=True)
+            return None

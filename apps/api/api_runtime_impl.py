@@ -56,10 +56,11 @@ from packages.tools import (
     build_tool_runtime,
     sync_custom_mcp_tools,
 )
-from packages.tools.adapters import DeliveryMessageSurfaceAdapter, StructuredClarifySurface
+from packages.tools.adapters import DeliveryMessageSurfaceAdapter, DelegatingClarifySurface, StructuredClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.tools.browser_backend import create_playwright_browser_backend
 from packages.tools.local_roots import default_local_allowed_roots
+from packages.tools.path_management import RepositoryPathManagementSurface
 
 from .capabilities import (
     APIContextCapability,
@@ -285,6 +286,16 @@ class ElephantAPIApp:
                 elephant_id=elephant_id,
                 episode_id=episode.episode_id,
             )
+        structured_clarify_surface = StructuredClarifySurface(
+            surface_label="api",
+            extra_metadata={"transport": "http"},
+        )
+        self._api_clarify_surface = DelegatingClarifySurface(
+            delegate=structured_clarify_surface,
+            fallback_surface=structured_clarify_surface,
+        )
+        self._clarify_pending = {}
+        self._clarify_pending_lock = Lock()
         self.tool_runtime = build_tool_runtime(
             enabled_overrides=_enabled_overrides(runtime_state_dir, "tool_overrides"),
             dependencies=BuiltinToolDependencies(
@@ -295,6 +306,10 @@ class ElephantAPIApp:
                     semantic_summary_indexer=self.semantic_summary_indexer,
                     semantic_searcher=self.semantic_index_bundle.searcher,
                     embedding_service=_api_embedding_service,
+                ),
+                path_management=RepositoryPathManagementSurface(
+                    self.repository,
+                    semantic_summary_indexer=self.semantic_summary_indexer,
                 ),
                 skill_management=RuntimeSkillManagementSurface(
                     skill_runtime=self.skill_runtime,
@@ -311,10 +326,7 @@ class ElephantAPIApp:
                     surface_label="api",
                     default_target="api",
                 ),
-                clarify_surface=StructuredClarifySurface(
-                    surface_label="api",
-                    extra_metadata={"transport": "http"},
-                ),
+                clarify_surface=self._api_clarify_surface,
             ),
             context_resolver=_tool_context_for_session,
             state_dir=runtime_state_dir,

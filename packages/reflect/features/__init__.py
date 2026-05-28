@@ -15,12 +15,25 @@ from .compress import FEATURE as COMPRESS
 from .dream import FEATURE as DREAM
 from .init_links import FEATURE as INIT_LINKS
 from .onboarding_letter import FEATURE as ONBOARDING_LETTER
+from .path_planning import FEATURE as PATH_PLANNING
 from .skill_optimization import FEATURE as SKILL_EVOLUTION
 
 
 ALL_FEATURES: dict[str, Feature] = {
     f.feature_id: f
-    for f in (PM, QUESTIONS, RECALL, DIARY, SKILLS, COMPRESS, DREAM, INIT_LINKS, ONBOARDING_LETTER, SKILL_EVOLUTION)
+    for f in (
+        PM,
+        QUESTIONS,
+        RECALL,
+        DIARY,
+        SKILLS,
+        COMPRESS,
+        DREAM,
+        INIT_LINKS,
+        ONBOARDING_LETTER,
+        PATH_PLANNING,
+        SKILL_EVOLUTION,
+    )
 }
 
 # Canonical trigger → default feature set mapping. Keep this small: triggers
@@ -34,6 +47,8 @@ TRIGGER_FEATURES: dict[str, tuple[str, ...]] = {
     "init": ("init_links", "pm", "questions", "skill_affinity"),
     "init_profile": ("init_links", "pm", "questions", "skill_affinity"),
     "onboarding_letter": ("onboarding_letter",),
+    "onboarding_paths": ("path_planning",),
+    "paths_learn": ("path_planning",),
     "context_compaction": ("compress",),
 }
 
@@ -45,6 +60,8 @@ FEATURE_ALIASES: dict[str, tuple[str, ...]] = {
     "profile": ("init_links", "pm", "questions", "skill_affinity"),
     "init_profile": ("init_links", "pm", "questions", "skill_affinity"),
     "letter": ("onboarding_letter",),
+    "paths": ("path_planning",),
+    "path_planning": ("path_planning",),
 }
 
 # Conservatism levels per trigger (affects system prompt tone)
@@ -57,6 +74,8 @@ TRIGGER_CONSERVATISM: dict[str, str] = {
     "init": "low",
     "init_profile": "low",
     "onboarding_letter": "creative",
+    "onboarding_paths": "medium",
+    "paths_learn": "medium",
     "context_compaction": "high",
 }
 

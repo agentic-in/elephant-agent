@@ -40,9 +40,6 @@ dependencies = [
   "tiktoken>=0.7,<1",
 ]
 
-[project.optional-dependencies]
-cloud = ["e2b>=1.0,<2"]
-
 [project.scripts]
 elephant = "apps.launcher:main"
 

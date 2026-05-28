@@ -237,7 +237,7 @@ def _print_elephant_paused() -> None:
     )
 
 def _print_herd(runtime: CliRuntime) -> None:
-    herd = runtime.list_herd(limit=24)
+    herd = tuple(elephant for elephant in runtime.list_herd(limit=24) if elephant.elephant_id != "default")
     current_state = runtime.current_elephant_state()
     current_elephant_id = str(getattr(current_state, "elephant_id", "") or "").strip() or None
     if current_elephant_id is None:

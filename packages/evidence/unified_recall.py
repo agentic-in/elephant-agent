@@ -40,6 +40,7 @@ from .recall_support import (
     RecallHit,
     rank_recall_candidates,
 )
+from .path_recall import documents_from_path_records
 from .recall_time_range import RecallTimeRange, recall_time_range_from_payload
 from .recall_planning import plan_recall_query
 from .recall_rerank import rerank_recall_hits
@@ -412,6 +413,13 @@ def _collect_recall_documents(
                 if (not state_id or document.state_id in {None, "", state_id})
                 and (not personal_model_id or document.personal_model_id in {None, "", personal_model_id})
                 and not _is_excluded_episode(document.episode_id, excluded)
+            )
+            documents.extend(
+                documents_from_path_records(
+                    repository,
+                    personal_model_id=personal_model_id,
+                    limit=_fallback_step_cap(episodes_cap),
+                )
             )
         # Legacy scopes (personal_model, state, sources) are no longer supported.
         # Steps + episodes + semantic index are the canonical search path.

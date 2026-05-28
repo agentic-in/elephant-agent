@@ -27,6 +27,13 @@ from apps.api.api_runtime_http_methods import (
     _dispatch_operator,
     stream_loop_events,
 )
+from apps.api.api_runtime_paths import (
+    PATH_STEP_RUNNER_RUNTIME_ID,
+    _dispatch_paths,
+    _execute_claimed_path_step_run,
+    _execute_path_step_run,
+    _path_step_run_worker_tick,
+)
 from apps.api.api_runtime_routes import API_HEALTH_ROUTE, API_V1_ROUTE_FAMILY_PATHS
 from apps.api.capabilities import APITelemetrySink
 from packages.context.epoch_store import FileEpochStore
@@ -34,6 +41,7 @@ from packages.context.session_projection import SessionContextEpoch
 from packages.contracts import OpenQuestion
 from packages.contracts.runtime import PromptMessage
 from packages.operator.local_agents import LocalAgentRuntimeRecord
+from packages.operator.local_agent_adapters import LocalAgentExecutionResult
 from packages.storage import RuntimeStorageRepository
 from packages.tools.runtime import ToolInvocation, ToolLifecycleEvent, ToolRuntimeContext
 
@@ -162,6 +170,7 @@ class APIRouteInventoryTest(unittest.TestCase):
                 "/v1/internal",
                 "/v1/operator",
                 "/v1/herd",
+                "/v1/paths",
                 "/v1/episodes",
                 "/v1/states",
             ),
@@ -302,8 +311,49 @@ class HerdDiscoveryAPITest(unittest.TestCase):
         self.assertEqual(state.metadata["parent_elephant_id"], "mother-elephant")
         self.assertEqual(state.metadata["runtime_id"], record.runtime_id)
         self.assertEqual(state.metadata["provider_id"], "codex")
+        self.assertEqual(state.metadata["backend"], "local_cli")
+        self.assertEqual(state.metadata["engine_id"], "codex")
         self.assertEqual(state.metadata["role_title"], "implementation runner")
         self.assertEqual(state.metadata["enabled"], "true")
+
+    def test_create_provider_baby_elephant_with_provider_engine_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+
+            response = _dispatch_elephants(
+                app,
+                "POST",
+                (),
+                json.dumps(
+                    {
+                        "elephant_id": "provider-baby",
+                        "display_name": "Provider Baby",
+                        "herd_kind": "baby",
+                        "parent_elephant_id": "mother-elephant",
+                        "backend": "provider",
+                        "provider_id": "openai",
+                        "provider_model": "gpt-5.4",
+                        "engine_id": "openai",
+                        "role_title": "research runner",
+                        "role_prompt": "Run provider-backed research tasks.",
+                        "tool_ids": ["tool.paths.manage"],
+                        "skill_ids": ["research"],
+                        "enabled": True,
+                    }
+                ).encode("utf-8"),
+            )
+            state = app.repository.load_state("state:provider-baby")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state.metadata["herd_kind"], "baby")
+        self.assertEqual(state.metadata["backend"], "provider")
+        self.assertEqual(state.metadata["provider_id"], "openai")
+        self.assertEqual(state.metadata["provider_model"], "gpt-5.4")
+        self.assertEqual(state.metadata["engine_id"], "openai")
+        self.assertEqual(state.metadata["tool_ids"], "tool.paths.manage")
+        self.assertEqual(state.metadata["skill_ids"], "research")
 
     def test_adopt_rejects_discovered_runtime_without_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -322,6 +372,335 @@ class HerdDiscoveryAPITest(unittest.TestCase):
                     ("babies",),
                     json.dumps({"runtime_id": record.runtime_id}).encode("utf-8"),
                 )
+
+
+class PathsAPITest(unittest.TestCase):
+    def test_local_cli_baby_path_run_uses_local_agent_engine(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            runtime = _local_runtime(runtime_id="local-agent:codex:path")
+            app.repository.upsert_local_agent_runtime(runtime)
+            app.repository.create_state(
+                personal_model_id="you",
+                state_id="state:codex-baby",
+                state_anchor="elephant:codex-baby",
+                elephant_id="codex-baby",
+                elephant_name="Codex Baby",
+                identity_mode="baby",
+                metadata={
+                    "herd_kind": "baby",
+                    "runtime_id": runtime.runtime_id,
+                    "provider_id": runtime.provider_id,
+                    "provider_model": runtime.default_model,
+                    "engine_id": runtime.provider_id,
+                    "enabled": "true",
+                    "role_title": "implementation runner",
+                    "role_prompt": "Run focused implementation checks.",
+                },
+            )
+            path = app.repository.create_path(
+                personal_model_id="you",
+                title="CLI path",
+                owner_elephant_id="mother-elephant",
+            )
+            step = app.repository.create_path_step(
+                path_id=path.path_id,
+                title="Run CLI validation",
+                description="Use the local baby engine.",
+                assignee_elephant_id="codex-baby",
+            )
+            run = app.repository.create_path_step_run(path_step_id=step.path_step_id)
+
+            with mock.patch(
+                "apps.api.api_runtime_paths.run_local_agent_cli",
+                return_value=LocalAgentExecutionResult(
+                    status="completed",
+                    summary="CLI baby completed validation.",
+                    stdout="CLI baby completed validation.",
+                    stderr="",
+                    exit_code=0,
+                    provider_id="codex",
+                    runtime_id=runtime.runtime_id,
+                ),
+            ) as run_cli:
+                _execute_path_step_run(app, run.run_id)
+
+            completed = app.repository.load_path_step_run(run.run_id)
+            comments = app.repository.list_path_step_comments(path_step_id=step.path_step_id)
+            summaries = app.repository.list_learning_summaries(path_step_id=step.path_step_id)
+
+        run_cli.assert_called_once()
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.status, "completed")
+        self.assertEqual(completed.assignee_elephant_id, "codex-baby")
+        self.assertEqual(completed.progress_stage, "completed")
+        self.assertEqual(Path(completed.work_dir).name, "codex-baby")
+        self.assertEqual(completed.metadata["execution_backend"], "local_cli")
+        self.assertEqual(completed.metadata["engine_runtime_id"], runtime.runtime_id)
+        self.assertEqual(comments[0].comment_type, "run_output")
+        self.assertIn("CLI baby completed validation", comments[0].body)
+        self.assertEqual(summaries[0].created_by_elephant_id, "codex-baby")
+
+    def test_creates_moves_and_checks_learning_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+
+            create_path = _dispatch_paths(
+                app,
+                "POST",
+                (),
+                json.dumps(
+                    {
+                        "title": "Healthy rhythm",
+                        "description": "Build a durable sleep and gym routine.",
+                        "review_mode": "trusted",
+                        "steps": [
+                            {
+                                "title": "Draft first week plan",
+                                "status": "next",
+                                "assignee_elephant_id": "baby:coach",
+                            }
+                        ],
+                    }
+                ).encode("utf-8"),
+            )
+            path_payload = create_path.payload["path"]
+            path_id = path_payload["path_id"]
+            first_step_id = path_payload["steps"][0]["path_step_id"]
+
+            moved = _dispatch_paths(
+                app,
+                "PATCH",
+                (path_id, "steps", first_step_id),
+                json.dumps({"status": "moving", "order_index": 0}).encode("utf-8"),
+            )
+            created_run = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", first_step_id, "runs"),
+                json.dumps({"run_id": "run:http:first", "max_attempts": 2}).encode("utf-8"),
+            )
+            running_run = _dispatch_paths(
+                app,
+                "PATCH",
+                (path_id, "steps", first_step_id, "runs", "run:http:first"),
+                json.dumps(
+                    {
+                        "status": "running",
+                        "progress_stage": "build",
+                        "progress_detail": "Adding controls",
+                        "progress_current": 1,
+                        "progress_total": 2,
+                    }
+                ).encode("utf-8"),
+            )
+            summary = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", first_step_id, "learning-summary"),
+                json.dumps(
+                    {
+                        "what_done": "Created a one-week plan.",
+                        "why_it_matters": "Turns intent into a small repeatable loop.",
+                        "how_it_was_done": "Split bedtime and gym into checkable steps.",
+                        "knowledge": "Habit loops need triggers and recovery space.",
+                        "human_takeaway": "Start small and inspect the loop.",
+                        "run_id": "run:http:first",
+                    }
+                ).encode("utf-8"),
+            )
+            summary_id = summary.payload["summary"]["summary_id"]
+            checked = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", first_step_id, "understanding-check"),
+                json.dumps({"summary_id": summary_id, "understood": True}).encode("utf-8"),
+            )
+            dashboard = _dispatch_paths(app, "GET", (), b"{}")
+
+        self.assertEqual(create_path.status_code, 201)
+        self.assertEqual(moved.payload["step"]["status"], "moving")
+        self.assertEqual(created_run.status_code, 201)
+        self.assertEqual(created_run.payload["run"]["status"], "queued")
+        self.assertEqual(created_run.payload["step"]["active_run"]["run_id"], "run:http:first")
+        self.assertEqual(running_run.payload["run"]["progress_stage"], "build")
+        self.assertEqual(running_run.payload["run"]["progress_current"], 1)
+        self.assertEqual(summary.payload["summary"]["understanding_check"]["status"], "pending")
+        self.assertEqual(summary.payload["summary"]["run_id"], "run:http:first")
+        self.assertEqual(summary.payload["step"]["status"], "checking")
+        self.assertEqual(summary.payload["step"]["runs"][0]["status"], "completed")
+        self.assertEqual(checked.payload["check"]["status"], "understood")
+        self.assertEqual(checked.payload["step"]["status"], "done")
+        self.assertEqual(dashboard.payload["paths"]["counts"]["paths"], 1)
+        self.assertEqual(dashboard.payload["paths"]["counts"]["steps"], 1)
+        self.assertEqual(dashboard.payload["paths"]["counts"]["understanding_pending"], 0)
+
+    def test_deletes_path_and_step(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            create_path = _dispatch_paths(
+                app,
+                "POST",
+                (),
+                json.dumps(
+                    {
+                        "title": "Temporary path",
+                        "steps": [{"title": "Temporary step"}],
+                    }
+                ).encode("utf-8"),
+            )
+            path_id = create_path.payload["path"]["path_id"]
+            step_id = create_path.payload["path"]["steps"][0]["path_step_id"]
+
+            deleted_step = _dispatch_paths(app, "DELETE", (path_id, "steps", step_id), b"{}")
+            second_step = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps"),
+                json.dumps({"title": "Second temporary step"}).encode("utf-8"),
+            )
+            deleted_path = _dispatch_paths(app, "DELETE", (path_id,), b"{}")
+            dashboard = _dispatch_paths(app, "GET", (), b"{}")
+
+        self.assertEqual(deleted_step.status_code, 200)
+        self.assertTrue(deleted_step.payload["deleted"])
+        self.assertEqual(deleted_step.payload["path_step_id"], step_id)
+        self.assertEqual(second_step.status_code, 201)
+        self.assertTrue(deleted_path.payload["deleted"])
+        self.assertEqual(dashboard.payload["paths"]["counts"]["paths"], 0)
+
+    def test_path_run_executor_writes_summary_and_advances_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            create_path = _dispatch_paths(
+                app,
+                "POST",
+                (),
+                json.dumps(
+                    {
+                        "title": "Research rhythm",
+                        "steps": [
+                            {
+                                "title": "Condense one useful finding",
+                                "description": "Read the note and extract the core idea.",
+                                "assignee_elephant_id": "research-baby",
+                            }
+                        ],
+                    }
+                ).encode("utf-8"),
+            )
+            path_id = create_path.payload["path"]["path_id"]
+            step_id = create_path.payload["path"]["steps"][0]["path_step_id"]
+            _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", step_id, "comments"),
+                json.dumps({"body": "Please keep the takeaway concise.", "auto_run": False}).encode("utf-8"),
+            )
+            captured_prompt = {}
+
+            def run_loop(_episode_id: str, **kwargs):
+                captured_prompt["episode_id"] = _episode_id
+                captured_prompt["prompt"] = kwargs.get("prompt", "")
+                captured_prompt["source_event_type"] = kwargs.get("source_event_type", "")
+                return SimpleNamespace(
+                    outcome=SimpleNamespace(
+                        execution=SimpleNamespace(
+                            outcome="ok",
+                            summary="Extracted the core finding and turned it into a reusable takeaway.",
+                        )
+                    )
+                )
+
+            _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", step_id, "runs"),
+                json.dumps({"run_id": "run:http:auto"}).encode("utf-8"),
+            )
+            app.run_loop = run_loop
+
+            did_work = _path_step_run_worker_tick(app)
+            run = app.repository.load_path_step_run("run:http:auto")
+            step = app.repository.load_path_step(step_id)
+            summaries = app.repository.list_learning_summaries(path_step_id=step_id)
+            comments = app.repository.list_path_step_comments(path_step_id=step_id)
+            epoch = FileEpochStore(app.repository.database_path.parent).load(captured_prompt["episode_id"])
+            followup = _dispatch_paths(
+                app,
+                "POST",
+                (path_id, "steps", step_id, "comments"),
+                json.dumps({"body": "Follow up after the run.", "auto_run": False}).encode("utf-8"),
+            )
+            epoch_after_followup = FileEpochStore(app.repository.database_path.parent).load(captured_prompt["episode_id"])
+
+        self.assertTrue(did_work)
+        self.assertIn("Please keep the takeaway concise.", captured_prompt["prompt"])
+        self.assertEqual(captured_prompt["source_event_type"], "turn.internal")
+        self.assertIsNotNone(run)
+        self.assertEqual(run.status, "completed")
+        self.assertEqual(run.progress_current, 4)
+        self.assertEqual(run.progress_total, 4)
+        self.assertEqual(run.runtime_id, "api.path-runner")
+        self.assertTrue(run.claim_token)
+        self.assertEqual(run.session_id, captured_prompt["episode_id"])
+        self.assertIsNone(run.lease_expires_at)
+        self.assertIsNotNone(step)
+        self.assertEqual(step.status, "checking")
+        self.assertEqual(step.related_episode_id, captured_prompt["episode_id"])
+        self.assertEqual(len(summaries), 1)
+        self.assertEqual(summaries[0].run_id, "run:http:auto")
+        self.assertIn("core finding", summaries[0].human_takeaway)
+        self.assertEqual(len(comments), 2)
+        self.assertEqual(comments[0].author_kind, "user")
+        self.assertEqual(comments[1].author_kind, "elephant")
+        self.assertEqual(comments[1].comment_type, "run_output")
+        self.assertEqual(comments[1].run_id, "run:http:auto")
+        self.assertIsNotNone(epoch)
+        self.assertEqual([message.role for message in epoch.history_messages], ["user", "assistant"])
+        self.assertEqual(epoch.history_messages[0].content, "Please keep the takeaway concise.")
+        self.assertIn("core finding", epoch.history_messages[1].content)
+        self.assertEqual(followup.status_code, 201)
+        self.assertIsNotNone(epoch_after_followup)
+        assert epoch_after_followup is not None
+        self.assertEqual(
+            [message.role for message in epoch_after_followup.history_messages],
+            ["user", "assistant", "user"],
+        )
+        self.assertEqual(epoch_after_followup.history_messages[2].content, "Follow up after the run.")
+
+    def test_stale_claimed_path_run_does_not_become_user_visible_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _herd_app(Path(tmpdir))
+            path = app.repository.create_path(title="Lease race path")
+            step = app.repository.create_path_step(
+                path_id=path.path_id,
+                title="Run only once",
+                assignee_elephant_id="baby-runner",
+            )
+            queued = app.repository.create_path_step_run(path_step_id=step.path_step_id, run_id="run:lease-race")
+            claimed = app.repository.claim_path_step_run(
+                runtime_id=PATH_STEP_RUNNER_RUNTIME_ID,
+                lease_seconds=60,
+            )
+            assert claimed is not None
+            running = app.repository.start_path_step_run(
+                queued.run_id,
+                runtime_id=PATH_STEP_RUNNER_RUNTIME_ID,
+                claim_token=claimed.claim_token,
+                lease_seconds=60,
+            )
+            app.run_loop = mock.Mock(side_effect=AssertionError("stale worker should not execute"))
+
+            _execute_claimed_path_step_run(app, claimed)
+            reloaded = app.repository.load_path_step_run(queued.run_id)
+
+        self.assertIsNotNone(reloaded)
+        assert reloaded is not None
+        self.assertEqual(reloaded.status, "running")
+        self.assertEqual(reloaded.failure_reason, "")
+        self.assertEqual(reloaded.claim_token, running.claim_token)
 
 
 class OperatorPersonalModelQuestionDispatchTest(unittest.TestCase):

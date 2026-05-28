@@ -35,6 +35,7 @@ struct APIClient {
         let sections = [
             "overview",
             "chat",
+            "paths",
             "questions",
             "skills",
             "tools",
@@ -63,6 +64,198 @@ struct APIClient {
             return result
         }
         return SnapshotParser.parse(dashboards: dashboards, apiURL: baseURL.absoluteString)
+    }
+
+    func createPath(title: String, description: String, reviewMode: String) async throws -> String {
+        guard baseURL != nil else { return "" }
+        let json = try await request(
+            path: "/v1/paths",
+            method: "POST",
+            body: [
+                "title": title,
+                "description": description,
+                "review_mode": reviewMode
+            ]
+        )
+        let path = SnapshotParser.findDictionary(in: json, keys: ["path"]) ?? [:]
+        return SnapshotParser.findString(in: path, keys: ["path_id", "pathId", "id"]) ?? ""
+    }
+
+    func updatePath(
+        pathID: String,
+        title: String? = nil,
+        description: String? = nil,
+        reviewMode: String? = nil,
+        status: String? = nil
+    ) async throws {
+        guard baseURL != nil else { return }
+        var body: [String: Any] = [:]
+        if let title { body["title"] = title }
+        if let description { body["description"] = description }
+        if let reviewMode { body["review_mode"] = reviewMode }
+        if let status { body["status"] = status }
+        guard !body.isEmpty else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))",
+            method: "PATCH",
+            body: body
+        )
+    }
+
+    func deletePath(pathID: String) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))",
+            method: "DELETE"
+        )
+    }
+
+    func createPathStep(
+        pathID: String,
+        title: String,
+        description: String,
+        assigneeElephantID: String,
+        status: String = "next"
+    ) async throws -> String {
+        guard baseURL != nil else { return "" }
+        var body: [String: Any] = [
+            "title": title,
+            "description": description,
+            "status": status
+        ]
+        if !assigneeElephantID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            body["assignee_elephant_id"] = assigneeElephantID
+        }
+        let json = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps",
+            method: "POST",
+            body: body
+        )
+        let step = SnapshotParser.findDictionary(in: json, keys: ["step"]) ?? [:]
+        return SnapshotParser.findString(in: step, keys: ["path_step_id", "pathStepId", "id"]) ?? ""
+    }
+
+    func updatePathStep(
+        pathID: String,
+        stepID: String,
+        title: String? = nil,
+        description: String? = nil,
+        status: String? = nil,
+        assigneeElephantID: String? = nil
+    ) async throws {
+        guard baseURL != nil else { return }
+        var body: [String: Any] = [:]
+        if let title { body["title"] = title }
+        if let description { body["description"] = description }
+        if let status { body["status"] = status }
+        if let assigneeElephantID { body["assignee_elephant_id"] = assigneeElephantID }
+        guard !body.isEmpty else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))",
+            method: "PATCH",
+            body: body
+        )
+    }
+
+    func deletePathStep(pathID: String, stepID: String) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))",
+            method: "DELETE"
+        )
+    }
+
+    func createPathStepRun(
+        pathID: String,
+        stepID: String,
+        status: String = "queued",
+        assigneeElephantID: String = "",
+        progressStage: String = "",
+        progressDetail: String = "",
+        autoExecute: Bool = false
+    ) async throws -> String {
+        guard baseURL != nil else { return "" }
+        var body: [String: Any] = [
+            "status": status,
+            "progress_stage": progressStage,
+            "progress_detail": progressDetail
+        ]
+        if autoExecute {
+            body["auto_execute"] = true
+        }
+        if !assigneeElephantID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            body["assignee_elephant_id"] = assigneeElephantID
+        }
+        let json = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))/runs",
+            method: "POST",
+            body: body
+        )
+        let run = SnapshotParser.findDictionary(in: json, keys: ["run"]) ?? [:]
+        return SnapshotParser.findString(in: run, keys: ["run_id", "runId", "id"]) ?? ""
+    }
+
+    func retryPathStepRun(
+        pathID: String,
+        stepID: String,
+        runID: String,
+        reason: String,
+        autoExecute: Bool = false
+    ) async throws -> String {
+        guard baseURL != nil else { return "" }
+        var body: [String: Any] = ["reason": reason]
+        if autoExecute {
+            body["auto_execute"] = true
+        }
+        let json = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))/runs/\(Self.pathSegment(runID))/retry",
+            method: "POST",
+            body: body
+        )
+        let run = SnapshotParser.findDictionary(in: json, keys: ["run"]) ?? [:]
+        return SnapshotParser.findString(in: run, keys: ["run_id", "runId", "id"]) ?? ""
+    }
+
+    func createPathStepComment(
+        pathID: String,
+        stepID: String,
+        body: String,
+        autoRun: Bool = true
+    ) async throws -> String {
+        guard baseURL != nil else { return "" }
+        var payload: [String: Any] = [
+            "body": body,
+            "author_kind": "user",
+            "author_id": "user"
+        ]
+        if autoRun {
+            payload["auto_run"] = true
+        }
+        let json = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))/comments",
+            method: "POST",
+            body: payload
+        )
+        let comment = SnapshotParser.findDictionary(in: json, keys: ["comment"]) ?? [:]
+        return SnapshotParser.findString(in: comment, keys: ["comment_id", "commentId", "id"]) ?? ""
+    }
+
+    func markUnderstanding(
+        pathID: String,
+        stepID: String,
+        summaryID: String,
+        understood: Bool
+    ) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/paths/\(Self.pathSegment(pathID))/steps/\(Self.pathSegment(stepID))/understanding-check",
+            method: "POST",
+            body: [
+                "summary_id": summaryID,
+                "status": understood ? "understood" : "needs_clarification",
+                "checked_by": "user"
+            ]
+        )
     }
 
     func fetchProviderCatalog() async throws -> [ProviderOption] {
@@ -188,17 +381,48 @@ struct APIClient {
 
     func createHerdElephant(
         name: String,
-        identityText: String
+        identityText: String,
+        herdKind: String = "baby",
+        roleTitle: String = "",
+        rolePrompt: String = "",
+        backend: String = "",
+        runtimeID: String = "",
+        providerID: String = "",
+        engineID: String = "",
+        providerModel: String = "",
+        toolIDs: String = "",
+        skillIDs: String = "",
+        enabled: Bool = true
     ) async throws -> String {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return "" }
         var body: [String: Any] = [
-            "display_name": trimmedName
+            "display_name": trimmedName,
+            "herd_kind": herdKind,
+            "enabled": enabled
         ]
         let identity = identityText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !identity.isEmpty {
             body["elephant_identity_text"] = identity
         }
+        let role = roleTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !role.isEmpty { body["role_title"] = role }
+        let instruction = rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !instruction.isEmpty { body["role_prompt"] = instruction }
+        let backendValue = backend.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !backendValue.isEmpty { body["backend"] = backendValue }
+        let runtime = runtimeID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !runtime.isEmpty { body["runtime_id"] = runtime }
+        let provider = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !provider.isEmpty { body["provider_id"] = provider }
+        let engine = engineID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !engine.isEmpty { body["engine_id"] = engine }
+        let model = providerModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !model.isEmpty { body["provider_model"] = model }
+        let tools = toolIDs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tools.isEmpty { body["tool_ids"] = tools }
+        let skills = skillIDs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !skills.isEmpty { body["skill_ids"] = skills }
         let json = try await request(path: "/v1/herd", method: "POST", body: body)
         let elephant = SnapshotParser.findDictionary(in: json, keys: ["elephant", "state", "item"]) ?? [:]
         return SnapshotParser.findString(in: elephant, keys: ["state_id", "stateId", "elephant_id", "elephantId"])
@@ -212,6 +436,13 @@ struct APIClient {
         identityText: String,
         roleTitle: String? = nil,
         rolePrompt: String? = nil,
+        backend: String? = nil,
+        runtimeID: String? = nil,
+        providerID: String? = nil,
+        engineID: String? = nil,
+        providerModel: String? = nil,
+        toolIDs: String? = nil,
+        skillIDs: String? = nil,
         enabled: Bool? = nil
     ) async throws {
         let elephantID = item.elephantID.isEmpty ? item.id.replacingOccurrences(of: "state:", with: "") : item.elephantID
@@ -225,6 +456,27 @@ struct APIClient {
         }
         if let rolePrompt {
             body["role_prompt"] = rolePrompt
+        }
+        if let backend {
+            body["backend"] = backend
+        }
+        if let runtimeID {
+            body["runtime_id"] = runtimeID
+        }
+        if let providerID {
+            body["provider_id"] = providerID
+        }
+        if let engineID {
+            body["engine_id"] = engineID
+        }
+        if let providerModel {
+            body["provider_model"] = providerModel
+        }
+        if let toolIDs {
+            body["tool_ids"] = toolIDs
+        }
+        if let skillIDs {
+            body["skill_ids"] = skillIDs
         }
         if let enabled {
             body["enabled"] = enabled
@@ -252,18 +504,28 @@ struct APIClient {
         displayName: String,
         roleTitle: String,
         rolePrompt: String,
-        enabled: Bool
+        enabled: Bool,
+        toolIDs: String = "",
+        skillIDs: String = ""
     ) async throws -> String {
+        var body: [String: Any] = [
+            "runtime_id": runtime.runtimeID,
+            "display_name": displayName,
+            "role_title": roleTitle,
+            "role_prompt": rolePrompt,
+            "provider_model": runtime.defaultModel,
+            "engine_id": runtime.providerID,
+            "backend": "local_cli",
+            "enabled": enabled
+        ]
+        let tools = toolIDs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tools.isEmpty { body["tool_ids"] = tools }
+        let skills = skillIDs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !skills.isEmpty { body["skill_ids"] = skills }
         let json = try await request(
             path: "/v1/herd/babies",
             method: "POST",
-            body: [
-                "runtime_id": runtime.runtimeID,
-                "display_name": displayName,
-                "role_title": roleTitle,
-                "role_prompt": rolePrompt,
-                "enabled": enabled
-            ]
+            body: body
         )
         let elephant = SnapshotParser.findDictionary(in: json, keys: ["elephant", "state", "item"]) ?? [:]
         return SnapshotParser.findString(in: elephant, keys: ["state_id", "stateId", "elephant_id", "elephantId"])
@@ -303,6 +565,7 @@ struct APIClient {
                 "backend": "provider",
                 "provider_id": resolvedProvider,
                 "provider_model": resolvedModel,
+                "engine_id": resolvedProvider,
                 "role_title": roleTitle,
                 "role_prompt": rolePrompt,
                 "enabled": enabled,
@@ -769,6 +1032,24 @@ struct APIClient {
         return WakeReply(episodeID: episodeID, text: reply, toolEvents: toolEvents)
     }
 
+    func submitClarification(episodeID: String, clarifyID: String, answer: String) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/episodes/\(Self.pathSegment(episodeID))/clarifications/\(Self.pathSegment(clarifyID))",
+            method: "POST",
+            body: ["answer": answer]
+        )
+    }
+
+    func updateTodoItem(episodeID: String, itemID: String, done: Bool) async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/episodes/\(Self.pathSegment(episodeID))/todos/\(Self.pathSegment(itemID))",
+            method: "PATCH",
+            body: ["status": done ? "done" : "open"]
+        )
+    }
+
     func streamWakeLoop(_ text: String, episodeID: String) -> AsyncThrowingStream<WakeStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let client = self
@@ -893,6 +1174,30 @@ struct APIClient {
                     result: ""
                 ),
                 detail: message
+            )
+        }
+        if type == "clarify.requested" || type == "clarify.expired" {
+            let choices = (object["choices"] as? [Any])?.compactMap { value -> String? in
+                let text = String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+                return text.isEmpty ? nil : text
+            } ?? []
+            return WakeStreamEvent(
+                type: type,
+                toolEvent: ToolUseEvent(
+                    sourceID: object["id"] as? String ?? object["clarify_id"] as? String ?? "",
+                    name: object["tool_name"] as? String ?? object["name"] as? String ?? "tool.clarify",
+                    status: object["status"] as? String ?? (type == "clarify.expired" ? "timed_out" : "needs_input"),
+                    arguments: SnapshotParser.compactToolText([
+                        "question": object["question"] as? String ?? "",
+                        "mode": object["mode"] as? String ?? "",
+                        "choices": choices,
+                    ]),
+                    result: "",
+                    clarifyID: object["clarify_id"] as? String ?? "",
+                    clarifyQuestion: object["question"] as? String ?? "",
+                    clarifyMode: object["mode"] as? String ?? "",
+                    clarifyChoices: choices
+                )
             )
         }
         if type == "tool.lifecycle" {
@@ -1080,6 +1385,10 @@ enum SnapshotParser {
                 rolePrompt: string(row["role_prompt"] ?? row["rolePrompt"] ?? metadata["role_prompt"]),
                 runtimeID: string(row["runtime_id"] ?? row["runtimeId"] ?? metadata["runtime_id"]),
                 providerID: string(row["provider_id"] ?? row["providerId"] ?? metadata["provider_id"]),
+                providerModel: string(row["provider_model"] ?? row["providerModel"] ?? metadata["provider_model"]),
+                engineID: string(row["engine_id"] ?? row["engineId"] ?? metadata["engine_id"]),
+                toolIDs: string(row["tool_ids"] ?? row["toolIds"] ?? metadata["tool_ids"]),
+                skillIDs: string(row["skill_ids"] ?? row["skillIds"] ?? metadata["skill_ids"]),
                 runtimeStatus: string(row["runtime_status"] ?? row["runtimeStatus"]),
                 authStatus: string(row["auth_status"] ?? row["authStatus"]),
                 canExecute: bool(row["can_execute"] ?? row["canExecute"], fallback: false),
@@ -1097,6 +1406,13 @@ enum SnapshotParser {
         if let first = snapshot.stateNames.first, !first.isEmpty {
             snapshot.elephantName = first
         }
+
+        let pathsRoot = dashboards["paths"] ?? [:]
+        let pathsPayload = pathsRoot["paths"] as? [String: Any] ?? [:]
+        let pathRows = pathsPayload["paths"] as? [[String: Any]]
+            ?? pathsRoot["paths"] as? [[String: Any]]
+            ?? []
+        snapshot.pathItems = pathRows.compactMap { pathItem(from: $0) }
 
         let questionsRoot = dashboards["questions"] ?? [:]
         let questions = questionsRoot["questions"] as? [String: Any] ?? [:]
@@ -1799,6 +2115,159 @@ enum SnapshotParser {
         )
     }
 
+    private static func pathItem(from row: [String: Any]) -> PathItem? {
+        let id = string(row["path_id"] ?? row["pathId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        let stepRows = row["steps"] as? [[String: Any]] ?? []
+        return PathItem(
+            id: id,
+            title: string(row["title"], fallback: id),
+            detail: string(row["description"] ?? row["detail"]),
+            status: string(row["status"], fallback: "active"),
+            priority: string(row["priority"], fallback: "normal"),
+            reviewMode: string(row["review_mode"] ?? row["reviewMode"], fallback: "trusted"),
+            ownerElephantID: string(row["owner_elephant_id"] ?? row["ownerElephantId"]),
+            createdAt: string(row["created_at"] ?? row["createdAt"]),
+            updatedAt: string(row["updated_at"] ?? row["updatedAt"]),
+            steps: stepRows.compactMap { pathStepItem(from: $0, fallbackPathID: id) }
+        )
+    }
+
+    private static func pathStepItem(from row: [String: Any], fallbackPathID: String) -> PathStepItem? {
+        let id = string(row["path_step_id"] ?? row["pathStepId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        let summaryRows = row["learning_summaries"] as? [[String: Any]]
+            ?? row["learningSummaries"] as? [[String: Any]]
+            ?? row["summaries"] as? [[String: Any]]
+            ?? []
+        let runRows = row["runs"] as? [[String: Any]]
+            ?? row["runItems"] as? [[String: Any]]
+            ?? []
+        let commentRows = row["comments"] as? [[String: Any]]
+            ?? row["commentItems"] as? [[String: Any]]
+            ?? []
+        let runs = runRows.compactMap { pathStepRunItem(from: $0, fallbackPathID: fallbackPathID, fallbackStepID: id) }
+        let activeRunRow = row["active_run"] as? [String: Any]
+            ?? row["activeRun"] as? [String: Any]
+        let activeRun = activeRunRow.flatMap { pathStepRunItem(from: $0, fallbackPathID: fallbackPathID, fallbackStepID: id) }
+            ?? runs.first(where: { $0.isActive })
+        return PathStepItem(
+            id: id,
+            pathID: string(row["path_id"] ?? row["pathId"], fallback: fallbackPathID),
+            title: string(row["title"], fallback: id),
+            detail: string(row["description"] ?? row["detail"]),
+            status: string(row["status"], fallback: "next"),
+            orderIndex: int(row["order_index"] ?? row["orderIndex"]),
+            assigneeElephantID: string(row["assignee_elephant_id"] ?? row["assigneeElephantId"]),
+            creatorElephantID: string(row["creator_elephant_id"] ?? row["creatorElephantId"]),
+            dueAt: string(row["due_at"] ?? row["dueAt"]),
+            updatedAt: string(row["updated_at"] ?? row["updatedAt"]),
+            completedAt: string(row["completed_at"] ?? row["completedAt"]),
+            summaries: summaryRows.compactMap { learningSummaryItem(from: $0, fallbackPathID: fallbackPathID, fallbackStepID: id) },
+            comments: commentRows.compactMap { pathStepCommentItem(from: $0, fallbackPathID: fallbackPathID, fallbackStepID: id) },
+            activeRun: activeRun,
+            runs: runs
+        )
+    }
+
+    private static func pathStepCommentItem(
+        from row: [String: Any],
+        fallbackPathID: String,
+        fallbackStepID: String
+    ) -> PathStepCommentItem? {
+        let id = string(row["comment_id"] ?? row["commentId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        return PathStepCommentItem(
+            id: id,
+            stepID: string(row["path_step_id"] ?? row["pathStepId"], fallback: fallbackStepID),
+            pathID: string(row["path_id"] ?? row["pathId"], fallback: fallbackPathID),
+            body: string(row["body"] ?? row["content"] ?? row["text"]),
+            authorKind: string(row["author_kind"] ?? row["authorKind"], fallback: "user"),
+            authorID: string(row["author_id"] ?? row["authorId"]),
+            commentType: string(row["comment_type"] ?? row["commentType"], fallback: "comment"),
+            runID: string(row["run_id"] ?? row["runId"]),
+            parentCommentID: string(row["parent_comment_id"] ?? row["parentCommentId"]),
+            createdAt: string(row["created_at"] ?? row["createdAt"]),
+            updatedAt: string(row["updated_at"] ?? row["updatedAt"])
+        )
+    }
+
+    private static func pathStepRunItem(
+        from row: [String: Any],
+        fallbackPathID: String,
+        fallbackStepID: String
+    ) -> PathStepRunItem? {
+        let id = string(row["run_id"] ?? row["runId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        return PathStepRunItem(
+            id: id,
+            stepID: string(row["path_step_id"] ?? row["pathStepId"], fallback: fallbackStepID),
+            pathID: string(row["path_id"] ?? row["pathId"], fallback: fallbackPathID),
+            status: string(row["status"], fallback: "queued"),
+            attempt: int(row["attempt"], fallback: 1),
+            maxAttempts: int(row["max_attempts"] ?? row["maxAttempts"], fallback: 1),
+            parentRunID: string(row["parent_run_id"] ?? row["parentRunId"]),
+            assigneeElephantID: string(row["assignee_elephant_id"] ?? row["assigneeElephantId"]),
+            runtimeID: string(row["runtime_id"] ?? row["runtimeId"]),
+            sessionID: string(row["session_id"] ?? row["sessionId"]),
+            workDir: string(row["work_dir"] ?? row["workDir"]),
+            progressStage: string(row["progress_stage"] ?? row["progressStage"]),
+            progressDetail: string(row["progress_detail"] ?? row["progressDetail"]),
+            progressCurrent: int(row["progress_current"] ?? row["progressCurrent"]),
+            progressTotal: int(row["progress_total"] ?? row["progressTotal"]),
+            failureReason: string(row["failure_reason"] ?? row["failureReason"]),
+            createdAt: string(row["created_at"] ?? row["createdAt"]),
+            startedAt: string(row["started_at"] ?? row["startedAt"]),
+            heartbeatAt: string(row["heartbeat_at"] ?? row["heartbeatAt"]),
+            leaseExpiresAt: string(row["lease_expires_at"] ?? row["leaseExpiresAt"]),
+            finishedAt: string(row["finished_at"] ?? row["finishedAt"])
+        )
+    }
+
+    private static func learningSummaryItem(
+        from row: [String: Any],
+        fallbackPathID: String,
+        fallbackStepID: String
+    ) -> LearningSummaryItem? {
+        let id = string(row["summary_id"] ?? row["summaryId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        let checkRow = row["understanding_check"] as? [String: Any]
+            ?? row["understandingCheck"] as? [String: Any]
+        return LearningSummaryItem(
+            id: id,
+            stepID: string(row["path_step_id"] ?? row["pathStepId"], fallback: fallbackStepID),
+            pathID: string(row["path_id"] ?? row["pathId"], fallback: fallbackPathID),
+            runID: string(row["run_id"] ?? row["runId"]),
+            summaryType: string(row["summary_type"] ?? row["summaryType"], fallback: "task"),
+            whatDone: string(row["what_done"] ?? row["whatDone"] ?? row["summary"]),
+            whyItMatters: string(row["why_it_matters"] ?? row["whyItMatters"]),
+            howItWasDone: string(row["how_it_was_done"] ?? row["howItWasDone"]),
+            knowledge: string(row["knowledge"]),
+            humanTakeaway: string(row["human_takeaway"] ?? row["humanTakeaway"]),
+            createdByElephantID: string(row["created_by_elephant_id"] ?? row["createdByElephantId"]),
+            createdAt: string(row["created_at"] ?? row["createdAt"]),
+            check: checkRow.flatMap { understandingCheckItem(from: $0, fallbackStepID: fallbackStepID, fallbackSummaryID: id) }
+        )
+    }
+
+    private static func understandingCheckItem(
+        from row: [String: Any],
+        fallbackStepID: String,
+        fallbackSummaryID: String
+    ) -> UnderstandingCheckItem? {
+        let id = string(row["check_id"] ?? row["checkId"] ?? row["id"])
+        guard !id.isEmpty else { return nil }
+        return UnderstandingCheckItem(
+            id: id,
+            stepID: string(row["path_step_id"] ?? row["pathStepId"], fallback: fallbackStepID),
+            summaryID: string(row["summary_id"] ?? row["summaryId"], fallback: fallbackSummaryID),
+            status: string(row["status"], fallback: "pending"),
+            checkedBy: string(row["checked_by"] ?? row["checkedBy"], fallback: "user"),
+            checkedAt: string(row["checked_at"] ?? row["checkedAt"]),
+            note: string(row["note"])
+        )
+    }
+
     static func findDictionary(in json: [String: Any], keys: [String]) -> [String: Any]? {
         for key in keys {
             if let value = json[key] as? [String: Any] {
@@ -2088,6 +2557,7 @@ enum SnapshotParser {
         }
         let phase = field(["phase"])
         let detailText = compactToolText(rawDetail is [String: Any] ? argumentObject["detail"] : rawDetail ?? argumentObject["detail"])
+        let clarifyChoices = stringArray(argumentObject["choices"])
         events.append(
             ToolUseEvent(
                 sourceID: sourceID,
@@ -2108,12 +2578,16 @@ enum SnapshotParser {
                 runtimePath: field(["runtime_path", "runtimePath", "resolved_path", "resolvedPath"]),
                 runtimeModel: field(["runtime_model", "runtimeModel", "provider_model", "providerModel", "default_model", "defaultModel", "model"]),
                 childEpisodeID: field(["child_episode_id", "childEpisodeId", "session_id", "sessionId"]),
-                task: field(["task", "prompt"])
+                task: field(["task", "prompt"]),
+                clarifyID: field(["clarify_id", "clarifyId"]),
+                clarifyQuestion: field(["question"]),
+                clarifyMode: field(["mode"]),
+                clarifyChoices: clarifyChoices
             )
         )
     }
 
-    private static func compactToolText(_ value: Any?) -> String {
+    static func compactToolText(_ value: Any?) -> String {
         guard let value else { return "" }
         if value is NSNull { return "" }
         if let string = value as? String {
@@ -2410,6 +2884,8 @@ enum SnapshotParser {
             return ["diary"]
         case "onboarding_letter":
             return ["onboarding_letter"]
+        case "onboarding_paths", "path_planning", "paths_learn":
+            return ["path_planning"]
         case "context_compaction":
             return ["compress"]
         default:
@@ -2437,6 +2913,8 @@ enum SnapshotParser {
             return ["tool.personal_model.search", "tool.personal_model.update", "tool.conversation.search"]
         case "onboarding_letter":
             return ["tool.diary.write"]
+        case "path_planning", "onboarding_paths", "paths_learn":
+            return ["tool.personal_model.search", "tool.skill.list", "tool.paths.manage"]
         default:
             return []
         }
@@ -2862,6 +3340,19 @@ enum SnapshotParser {
         }
     }
 
+    private static func stringArray(_ value: Any?) -> [String] {
+        if let values = value as? [String] {
+            return values
+        }
+        if let values = value as? [Any] {
+            return values.compactMap {
+                let text = string($0)
+                return text.isEmpty ? nil : text
+            }
+        }
+        return []
+    }
+
     private static func string(_ value: Any?, fallback: String = "") -> String {
         if value == nil || value is NSNull { return fallback }
         if let value = value as? String {
@@ -2954,6 +3445,14 @@ enum SnapshotParser {
         if let value = value as? NSNumber { return value.intValue }
         if let value = value as? String { return Int(value) ?? 0 }
         return 0
+    }
+
+    private static func int(_ value: Any?, fallback: Int) -> Int {
+        if value == nil || value is NSNull { return fallback }
+        if let value = value as? String, value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return fallback
+        }
+        return int(value)
     }
 
     private static func double(_ value: Any?) -> Double {

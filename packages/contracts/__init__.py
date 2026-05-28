@@ -19,6 +19,12 @@ from .personal_model import (
     Fact,
     OpenQuestion,
 )
+from .paths import (
+    LearningSummaryRecord,
+    PathRecord,
+    PathStepRecord,
+    UnderstandingCheckRecord,
+)
 from .providers import (
     ActiveProviderSelection,
     GenerationProviderConfig,
@@ -86,9 +92,12 @@ __all__ = [
     "Fact",
     "GenerationProviderConfig",
     "LearningJob",
+    "LearningSummaryRecord",
     "Loop",
     "LoopStep",
     "OpenQuestion",
+    "PathRecord",
+    "PathStepRecord",
     "PersonalModel",
     "PersonalModelGrowthState",
     "PersonalModelRuntimeState",
@@ -111,4 +120,5 @@ __all__ = [
     "StateFocusReason",
     "Step",
     "StructuredTurnSlot",
+    "UnderstandingCheckRecord",
 ]

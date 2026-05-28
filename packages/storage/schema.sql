@@ -217,6 +217,178 @@ CREATE INDEX idx_learning_jobs_profile_status
 CREATE INDEX idx_learning_jobs_episode_type_created
     ON learning_jobs(job_type, episode_id, created_at DESC);
 
+CREATE TABLE paths (
+    path_id TEXT PRIMARY KEY,
+    personal_model_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active'
+        CHECK(status IN ('active', 'paused', 'completed', 'dropped')),
+    priority TEXT NOT NULL DEFAULT 'normal',
+    review_mode TEXT NOT NULL DEFAULT 'trusted'
+        CHECK(review_mode IN ('ask_first', 'trusted')),
+    owner_elephant_id TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_paths_pm_status_updated
+    ON paths(personal_model_id, status, updated_at DESC);
+CREATE INDEX idx_paths_owner_updated
+    ON paths(owner_elephant_id, updated_at DESC);
+
+CREATE TABLE path_steps (
+    path_step_id TEXT PRIMARY KEY,
+    path_id TEXT NOT NULL,
+    personal_model_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'next'
+        CHECK(status IN ('later', 'next', 'moving', 'checking', 'done', 'stuck', 'dropped')),
+    order_index INTEGER NOT NULL DEFAULT 0 CHECK(order_index >= 0),
+    assignee_elephant_id TEXT NOT NULL DEFAULT '',
+    creator_elephant_id TEXT NOT NULL DEFAULT '',
+    due_at TEXT,
+    related_episode_id TEXT,
+    related_loop_id TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+    FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+        ON DELETE CASCADE,
+    FOREIGN KEY(related_episode_id) REFERENCES episodes(episode_id) ON DELETE SET NULL,
+    FOREIGN KEY(related_loop_id) REFERENCES loops(loop_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_path_steps_path_status_order
+    ON path_steps(path_id, status, order_index, updated_at DESC);
+CREATE INDEX idx_path_steps_pm_status_updated
+    ON path_steps(personal_model_id, status, updated_at DESC);
+CREATE INDEX idx_path_steps_assignee_status_updated
+    ON path_steps(assignee_elephant_id, status, updated_at DESC);
+
+CREATE TABLE path_step_runs (
+    run_id TEXT PRIMARY KEY,
+    path_step_id TEXT NOT NULL,
+    path_id TEXT NOT NULL,
+    personal_model_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued'
+        CHECK(status IN ('queued', 'dispatched', 'running', 'completed', 'failed', 'cancelled')),
+    attempt INTEGER NOT NULL DEFAULT 1 CHECK(attempt >= 1),
+    max_attempts INTEGER NOT NULL DEFAULT 3 CHECK(max_attempts >= 1),
+    parent_run_id TEXT NOT NULL DEFAULT '',
+    assignee_elephant_id TEXT NOT NULL DEFAULT '',
+    runtime_id TEXT NOT NULL DEFAULT '',
+    claim_token TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL DEFAULT '',
+    work_dir TEXT NOT NULL DEFAULT '',
+    progress_stage TEXT NOT NULL DEFAULT '',
+    progress_detail TEXT NOT NULL DEFAULT '',
+    progress_current INTEGER NOT NULL DEFAULT 0 CHECK(progress_current >= 0),
+    progress_total INTEGER NOT NULL DEFAULT 0 CHECK(progress_total >= 0),
+    failure_reason TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    heartbeat_at TEXT,
+    lease_expires_at TEXT,
+    finished_at TEXT,
+    FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+    FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+    FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_path_step_runs_step_status_created
+    ON path_step_runs(path_step_id, status, created_at DESC);
+CREATE INDEX idx_path_step_runs_path_status_created
+    ON path_step_runs(path_id, status, created_at DESC);
+CREATE INDEX idx_path_step_runs_runtime_status_heartbeat
+    ON path_step_runs(runtime_id, status, heartbeat_at DESC);
+CREATE INDEX idx_path_step_runs_claim_queue
+    ON path_step_runs(status, assignee_elephant_id, created_at);
+CREATE INDEX idx_path_step_runs_lease
+    ON path_step_runs(status, lease_expires_at);
+CREATE INDEX idx_path_step_runs_parent
+    ON path_step_runs(parent_run_id);
+
+CREATE TABLE path_step_comments (
+    comment_id TEXT PRIMARY KEY,
+    path_step_id TEXT NOT NULL,
+    path_id TEXT NOT NULL,
+    personal_model_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    author_kind TEXT NOT NULL DEFAULT 'user'
+        CHECK(author_kind IN ('user', 'elephant', 'system')),
+    author_id TEXT NOT NULL DEFAULT '',
+    comment_type TEXT NOT NULL DEFAULT 'comment'
+        CHECK(comment_type IN ('comment', 'run_output', 'status', 'system')),
+    run_id TEXT NOT NULL DEFAULT '',
+    parent_comment_id TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+    FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE,
+    FOREIGN KEY(personal_model_id) REFERENCES personal_models(personal_model_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_path_step_comments_step_created
+    ON path_step_comments(path_step_id, created_at ASC, comment_id ASC);
+CREATE INDEX idx_path_step_comments_run_created
+    ON path_step_comments(run_id, created_at ASC);
+CREATE INDEX idx_path_step_comments_parent
+    ON path_step_comments(parent_comment_id);
+
+CREATE TABLE learning_summaries (
+    summary_id TEXT PRIMARY KEY,
+    path_step_id TEXT NOT NULL,
+    path_id TEXT NOT NULL,
+    run_id TEXT NOT NULL DEFAULT '',
+    summary_type TEXT NOT NULL DEFAULT 'task',
+    what_done TEXT NOT NULL DEFAULT '',
+    why_it_matters TEXT NOT NULL DEFAULT '',
+    how_it_was_done TEXT NOT NULL DEFAULT '',
+    knowledge TEXT NOT NULL DEFAULT '',
+    human_takeaway TEXT NOT NULL DEFAULT '',
+    created_by_elephant_id TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+    FOREIGN KEY(path_id) REFERENCES paths(path_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_learning_summaries_step_created
+    ON learning_summaries(path_step_id, created_at DESC);
+CREATE INDEX idx_learning_summaries_path_created
+    ON learning_summaries(path_id, created_at DESC);
+
+CREATE TABLE understanding_checks (
+    check_id TEXT PRIMARY KEY,
+    path_step_id TEXT NOT NULL,
+    summary_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'understood', 'needs_clarification', 'skipped')),
+    checked_by TEXT NOT NULL DEFAULT 'user',
+    checked_at TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(path_step_id) REFERENCES path_steps(path_step_id) ON DELETE CASCADE,
+    FOREIGN KEY(summary_id) REFERENCES learning_summaries(summary_id) ON DELETE CASCADE,
+    UNIQUE(summary_id, checked_by)
+);
+
+CREATE INDEX idx_understanding_checks_step_updated
+    ON understanding_checks(path_step_id, updated_at DESC);
+
 CREATE TABLE personal_model_facts (
     fact_id TEXT PRIMARY KEY,
     personal_model_id TEXT NOT NULL,

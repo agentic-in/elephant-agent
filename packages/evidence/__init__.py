@@ -5,6 +5,7 @@ from .recall_runtime import RecallRuntime
 from .episode_summary_indexer import (
     SemanticSummaryIndexer,
     build_episode_summary_text,
+    build_learning_summary_recall_text,
     build_personal_model_claim_text,
     build_step_recall_text,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "UnifiedRecallRequest",
     "build_embedding_index_policy",
     "build_episode_summary_text",
+    "build_learning_summary_recall_text",
     "build_personal_model_claim_text",
     "build_resume_packet",
     "build_step_recall_text",

@@ -54,6 +54,49 @@ from packages.tools import ToolRuntime
 LOGGER = logging.getLogger(__name__)
 
 
+def _agent_runtime_prefix_lines(
+    repository: RuntimeStorageRepository | None,
+    session: Episode,
+) -> tuple[str, ...]:
+    if repository is None:
+        return ()
+    try:
+        state = repository.load_state(session.state_id)
+    except Exception:
+        return ()
+    if state is None:
+        return ()
+    metadata = dict(getattr(state, "metadata", {}) or {})
+    fields = {
+        "role": str(metadata.get("role_title") or "").strip(),
+        "runtime": str(metadata.get("runtime_id") or "").strip(),
+        "engine": str(metadata.get("engine_id") or "").strip(),
+        "provider": str(metadata.get("provider_id") or "").strip(),
+        "model": str(metadata.get("provider_model") or "").strip(),
+        "tools": str(metadata.get("tool_ids") or "").strip(),
+        "skills": str(metadata.get("skill_ids") or "").strip(),
+    }
+    role_prompt = str(metadata.get("role_prompt") or metadata.get("instruction") or "").strip()
+    if not any(fields.values()) and not role_prompt:
+        return ()
+    lines = [
+        "# Agent Runtime Binding",
+        "This episode is running as a configured Elephant agent. Keep this binding stable across the episode.",
+    ]
+    if fields["role"]:
+        lines.append(f"- role: {fields['role']}")
+    runtime_parts = [part for part in (fields["runtime"], fields["engine"], fields["provider"], fields["model"]) if part]
+    if runtime_parts:
+        lines.append("- engine: " + " / ".join(runtime_parts))
+    if fields["tools"]:
+        lines.append(f"- allowed tools: {fields['tools']}")
+    if fields["skills"]:
+        lines.append(f"- assigned skills: {fields['skills']}")
+    if role_prompt:
+        lines.extend(("- instruction:", role_prompt))
+    return tuple(lines)
+
+
 class APITelemetrySink(TelemetrySinkCapability):
     def __init__(self) -> None:
         self.descriptor = CapabilityDescriptor(
@@ -167,13 +210,16 @@ class APIContextCapability(ContextCapability):
     ) -> ContextBundle:
         self._last_session_id = session.episode_id
         runtime = self._runtime_for_session(session)
+        extra_prefix_lines: tuple[str, ...] = ()
         if self.skill_prompt_context is not None:
             skill_lines = self.skill_prompt_context.stable_prefix_lines(session)
-            if skill_lines:
-                runtime = ContextRuntime(
-                    instruction_refs=(*runtime.instruction_refs, *skill_lines),
-                    total_tokens=self.runtime.total_tokens,
-                )
+            extra_prefix_lines = (*extra_prefix_lines, *skill_lines)
+        extra_prefix_lines = (*extra_prefix_lines, *_agent_runtime_prefix_lines(self.repository, session))
+        if extra_prefix_lines:
+            runtime = ContextRuntime(
+                instruction_refs=(*runtime.instruction_refs, *extra_prefix_lines),
+                total_tokens=self.runtime.total_tokens,
+            )
         bundle = runtime.assemble(session, work_items, recall_items, state_focus=state_focus)
         bundle = replace(bundle, instruction_refs=runtime.instruction_refs)
         _epoch_store = FileEpochStore(self.repository.database_path.parent) if self.repository is not None else None

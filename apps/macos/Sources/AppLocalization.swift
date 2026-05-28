@@ -353,6 +353,7 @@ enum AppText {
     case sectionHome
     case sectionChat
     case sectionYou
+    case sectionPaths
     case sectionDiary
     case sectionSkills
     case sectionTools
@@ -366,6 +367,7 @@ enum AppText {
     case subtitleToday
     case subtitleTalk
     case subtitleModel
+    case subtitleFlow
     case subtitleJournal
     case subtitleAffinity
     case subtitleActions
@@ -549,19 +551,19 @@ enum AppText {
         case .vibeSuggestionThree:
             return pick(language, en: "Curious, questioning, concise", zh: "好奇、会追问、少废话", fr: "Curieux, questionnant, concis", de: "Neugierig, nachfragend, knapp")
         case .providerTitle:
-            return pick(language, en: "Model Provider", zh: "模型服务", fr: "Provider de modèle", de: "Modell-Provider")
+            return pick(language, en: "Model Provider", zh: "模型服务", fr: "Fournisseur de modèle", de: "Modellanbieter")
         case .providerSubtitle:
-            return pick(language, en: "Uses the same provider catalog and model picker as Settings.", zh: "这里和设置里使用同一套模型服务与模型列表。", fr: "Utilise le même catalogue de providers et le même choix de modèle que Settings.", de: "Nutzt denselben Provider-Katalog und Modellwähler wie Settings.")
+            return pick(language, en: "Uses the same provider catalog and model picker as Settings.", zh: "这里和设置里使用同一套模型服务与模型列表。", fr: "Utilise le même catalogue de fournisseurs et le même sélecteur de modèle que les réglages.", de: "Nutzt denselben Anbieter-Katalog und Modellwähler wie die Einstellungen.")
         case .providerFactory:
-            return pick(language, en: "Provider factory", zh: "模型服务", fr: "Catalogue provider", de: "Provider-Katalog")
+            return pick(language, en: "Provider factory", zh: "模型服务", fr: "Catalogue des fournisseurs", de: "Anbieterkatalog")
         case .providerFactorySubtitle:
-            return pick(language, en: "providers · connected first", zh: "个服务 · 已连接优先", fr: "providers · connectés d'abord", de: "Provider · verbundene zuerst")
+            return pick(language, en: "providers · connected first", zh: "个服务 · 已连接优先", fr: "fournisseurs · connectés d'abord", de: "Anbieter · verbundene zuerst")
         case .providerSearchPlaceholder:
-            return pick(language, en: "Search provider, model, or source", zh: "搜索服务、模型或来源", fr: "Rechercher provider, modèle ou source", de: "Provider, Modell oder Quelle suchen")
+            return pick(language, en: "Search provider, model, or source", zh: "搜索服务、模型或来源", fr: "Rechercher fournisseur, modèle ou source", de: "Anbieter, Modell oder Quelle suchen")
         case .modelSection:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
         case .activeModelSubtitle:
-            return pick(language, en: "Active model for the current provider", zh: "当前正在使用的模型", fr: "Modèle actif pour le provider actuel", de: "Aktives Modell für den aktuellen Provider")
+            return pick(language, en: "Active model for the current provider", zh: "当前正在使用的模型", fr: "Modèle actif pour le fournisseur actuel", de: "Aktives Modell des aktuellen Anbieters")
         case .modelPickerSubtitle:
             return pick(language, en: "Choose a catalog hint, live-discovered model, or custom ID.", zh: "从推荐模型、在线拉取的模型里选，也可以手动填写模型 ID。", fr: "Choisissez un indice du catalogue, un modèle découvert en direct ou un ID personnalisé.", de: "Wähle Kataloghinweis, live gefundenes Modell oder eigene ID.")
         case .fetching:
@@ -577,9 +579,9 @@ enum AppText {
         case .customModelID:
             return pick(language, en: "Custom model ID", zh: "自定义模型 ID", fr: "ID de modèle personnalisé", de: "Eigene Modell-ID")
         case .endpointTitle:
-            return pick(language, en: "Endpoint and Credentials", zh: "接口与凭证", fr: "Endpoint et identifiants", de: "Endpoint und Zugangsdaten")
+            return pick(language, en: "Endpoint and Credentials", zh: "接口与凭证", fr: "Adresse et identifiants", de: "Adresse und Zugangsdaten")
         case .endpointSubtitle:
-            return pick(language, en: "Matches the Model Provider settings inside the app.", zh: "和应用设置里的模型服务配置一致。", fr: "Correspond aux réglages Model Provider dans l'app.", de: "Entspricht den Model-Provider-Einstellungen in der App.")
+            return pick(language, en: "Matches the Model Provider settings inside the app.", zh: "和应用设置里的模型服务配置一致。", fr: "Correspond aux réglages du fournisseur de modèle dans l'app.", de: "Entspricht den Modellanbieter-Einstellungen in der App.")
         case .contextWindowTokens:
             return pick(language, en: "Context window tokens", zh: "上下文窗口", fr: "Tokens de fenêtre de contexte", de: "Kontextfenster-Tokens")
         case .apiKey:
@@ -587,23 +589,23 @@ enum AppText {
         case .apiKeyPlaceholder:
             return pick(language, en: "Leave empty to reuse existing configuration", zh: "可留空以复用已有配置", fr: "Laisser vide pour réutiliser la configuration existante", de: "Leer lassen, um bestehende Konfiguration zu verwenden")
         case .providerReady:
-            return pick(language, en: "Provider details are ready.", zh: "模型服务已经配置好，可以继续。", fr: "Les informations du provider sont prêtes.", de: "Provider-Daten sind bereit.")
+            return pick(language, en: "Provider details are ready.", zh: "模型服务已经配置好，可以继续。", fr: "Les informations du fournisseur sont prêtes.", de: "Anbieterdaten sind bereit.")
         case .providerNeedsDetails:
-            return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "请选择模型服务并填写模型 ID；OpenAI Compatible 通常还需要 Base URL，除非复用已有配置。", fr: "Provider et ID de modèle sont requis ; OpenAI Compatible nécessite aussi une Base URL sauf si vous réutilisez une configuration.", de: "Provider und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
+            return pick(language, en: "Provider and model ID are required; OpenAI Compatible also needs Base URL unless reusing an existing setup.", zh: "请选择模型服务并填写模型 ID；OpenAI Compatible 通常还需要 Base URL，除非复用已有配置。", fr: "Le fournisseur et l'ID du modèle sont requis ; OpenAI Compatible demande aussi une Base URL sauf réutilisation d'une configuration existante.", de: "Anbieter und Modell-ID sind erforderlich; OpenAI Compatible braucht zusätzlich eine Base URL, außer du nutzt eine bestehende Konfiguration.")
         case .learningTitle:
-            return pick(language, en: "Building your Personal Model", zh: "正在深度构建你的个人模型", fr: "Construction de votre Personal Model", de: "Dein Personal Model wird aufgebaut")
+            return pick(language, en: "Building your Personal Model", zh: "正在深度构建你的个人模型", fr: "Construction de votre modèle personnel", de: "Dein persönliches Modell wird aufgebaut")
         case .learningPreparing:
             return pick(language, en: "Preparing your first learning pass", zh: "准备第一次学习", fr: "Préparation du premier apprentissage", de: "Ersten Lernlauf vorbereiten")
         case .learningCreateModel:
-            return pick(language, en: "Creating your local Personal Model", zh: "正在创建你的本地 Personal Model", fr: "Création de votre Personal Model local", de: "Dein lokales Personal Model wird erstellt")
+            return pick(language, en: "Creating your local Personal Model", zh: "正在创建你的本地个人模型", fr: "Création de votre modèle personnel local", de: "Dein lokales persönliches Modell wird erstellt")
         case .learningOpenEpisode:
             return pick(language, en: "Opening the first local episode", zh: "正在打开第一个本地 episode", fr: "Ouverture du premier épisode local", de: "Erste lokale Episode öffnen")
         case .learningStartReflect:
             return pick(language, en: "Starting the first learning pass", zh: "正在启动第一次学习", fr: "Lancement du premier apprentissage", de: "Ersten Lernlauf starten")
         case .learningFromAnswers:
-            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
+            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre modèle personnel. Merci de patienter...", de: "Dein persönliches Modell wird aufgebaut. Bitte warten...")
         case .learningFinishing:
-            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre Personal Model. Merci de patienter...", de: "Dein Personal Model wird aufgebaut. Bitte warten...")
+            return pick(language, en: "Building your Personal Model. Please wait...", zh: "正在构建你的个人模型，请耐心等待...", fr: "Construction de votre modèle personnel. Merci de patienter...", de: "Dein persönliches Modell wird aufgebaut. Bitte warten...")
         case .learningReady:
             return pick(language, en: "Everything is ready", zh: "全部准备好了", fr: "Tout est prêt", de: "Alles ist bereit")
         case .learningNeedsAttention:
@@ -633,7 +635,7 @@ enum AppText {
         case .curiosity:
             return pick(language, en: "Curiosity", zh: "好奇心", fr: "Curiosité", de: "Neugier")
         case .curiositySubtitle:
-            return pick(language, en: "open Personal Model questions", zh: "个待回答 Personal Model 问题", fr: "questions Personal Model ouvertes", de: "offene Personal-Model-Fragen")
+            return pick(language, en: "open Personal Model questions", zh: "个待回答的个人模型问题", fr: "questions ouvertes du modèle personnel", de: "offene Fragen zum persönlichen Modell")
         case .history:
             return pick(language, en: "History", zh: "历史", fr: "Historique", de: "Verlauf")
         case .sleepDisplay:
@@ -717,7 +719,7 @@ enum AppText {
         case .lastError:
             return pick(language, en: "Last Error", zh: "最近错误", fr: "Dernière erreur", de: "Letzter Fehler")
         case .providerSetupNeeded:
-            return pick(language, en: "Provider setup needed", zh: "需要设置 Provider", fr: "Configuration provider requise", de: "Provider-Einrichtung erforderlich")
+            return pick(language, en: "Provider setup needed", zh: "需要配置模型服务", fr: "Fournisseur à configurer", de: "Anbieter einrichten")
         case .notConfigured:
             return pick(language, en: "not configured", zh: "未配置", fr: "non configuré", de: "nicht konfiguriert")
         case .refresh:
@@ -745,7 +747,7 @@ enum AppText {
         case .deleteConversationPrompt:
             return pick(language, en: "Delete %@?", zh: "删除 %@？", fr: "Supprimer %@ ?", de: "%@ löschen?")
         case .deleteConversationMessage:
-            return pick(language, en: "This only removes the chat from desktop history. Personal Model facts and evidence stay in place.", zh: "只会从这里的历史里移除，不会删掉 Personal Model 的事实和证据。", fr: "Cela retire seulement le chat de l'historique du bureau. Les facts et preuves du Personal Model restent en place.", de: "Das entfernt den Chat nur aus dem Desktop-Verlauf. Personal-Model-Facts und Belege bleiben erhalten.")
+            return pick(language, en: "This only removes the chat from desktop history. Personal Model facts and evidence stay in place.", zh: "只会从这里的历史里移除，不会删掉个人模型里的事实和证据。", fr: "Cela retire seulement le chat de l'historique du bureau. Les faits et preuves du modèle personnel restent en place.", de: "Das entfernt den Chat nur aus dem Desktop-Verlauf. Fakten und Belege des persönlichen Modells bleiben erhalten.")
         case .noSavedChatsYet:
             return pick(language, en: "No chat history yet.", zh: "还没有对话历史。", fr: "Aucun historique de chat pour l'instant.", de: "Noch kein Chatverlauf.")
         case .showChatHistory:
@@ -767,7 +769,7 @@ enum AppText {
         case .send:
             return pick(language, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden")
         case .providerSetup:
-            return pick(language, en: "provider setup", zh: "配置模型服务", fr: "configuration provider", de: "Provider einrichten")
+            return pick(language, en: "provider setup", zh: "配置模型服务", fr: "configuration du fournisseur", de: "Anbieter einrichten")
         case .askElephant:
             return pick(language, en: "What's on your mind?", zh: "今天想聊什么？", fr: "De quoi voulez-vous parler ?", de: "Worum geht es gerade?")
         case .chatEmptySubtitle:
@@ -809,7 +811,7 @@ enum AppText {
         case .liveConnectionStopped:
             return pick(language, en: "The live connection stopped before the reply finished.", zh: "实时连接中断，回复还没完成。", fr: "La connexion en direct s'est arrêtée avant la fin de la réponse.", de: "Die Live-Verbindung stoppte, bevor die Antwort fertig war.")
         case .chatLoopFailureGeneric:
-            return pick(language, en: "I could not run the full chat loop. Check provider and Personal Model settings, then send again.", zh: "这次没跑完整。检查一下模型和 Personal Model 设置，然后再发一次。", fr: "Je n'ai pas pu terminer la boucle de chat. Vérifiez le provider et le Personal Model, puis renvoyez.", de: "Ich konnte den Chatlauf nicht abschließen. Prüfe Provider und Personal Model und sende erneut.")
+            return pick(language, en: "I could not run the full chat loop. Check provider and Personal Model settings, then send again.", zh: "这次没跑完整。检查一下模型服务和个人模型设置，然后再发一次。", fr: "Je n'ai pas pu terminer la boucle de chat. Vérifiez le fournisseur et le modèle personnel, puis renvoyez.", de: "Ich konnte den Chatlauf nicht abschließen. Prüfe Anbieter und persönliches Modell und sende erneut.")
         case .chatLoopFailureDetail:
             return pick(language, en: "I could not run the full chat loop: %@", zh: "这次没跑完整：%@", fr: "Je n'ai pas pu terminer la boucle de chat : %@", de: "Ich konnte den Chatlauf nicht abschließen: %@")
         case .untitledChat:
@@ -829,19 +831,19 @@ enum AppText {
         case .writing:
             return pick(language, en: "Writing", zh: "写入中", fr: "Écriture", de: "Schreibt")
         case .skillsPageSubtitle:
-            return pick(language, en: "What Elephant can do, and when your Personal Model tends to need each skill.", zh: "Elephant 能做什么，以及你的 Personal Model 什么时候会需要这些 skills。", fr: "Ce qu'Elephant peut faire et quand votre Personal Model a besoin de chaque skill.", de: "Was Elephant kann und wann dein Personal Model welche Skills braucht.")
+            return pick(language, en: "What Elephant can do, and when your Personal Model tends to need each skill.", zh: "Elephant 能做什么，以及你的个人模型什么时候会用到这些技能。", fr: "Ce qu'Elephant sait faire, et quand votre modèle personnel peut avoir besoin de chaque compétence.", de: "Was Elephant kann und wann dein persönliches Modell welche Fähigkeit braucht.")
         case .toolsPageSubtitle:
-            return pick(language, en: "Operator actions Elephant can call from local agent loops.", zh: "Elephant 在本地 agent loops 中可调用的操作。", fr: "Actions opérateur qu'Elephant peut appeler depuis les boucles locales.", de: "Operator-Aktionen, die Elephant aus lokalen Agent-Loops aufrufen kann.")
+            return pick(language, en: "Operator actions Elephant can call from local agent loops.", zh: "Elephant 在本地智能体循环里可以调用的工具动作。", fr: "Actions qu'Elephant peut appeler depuis les boucles d'agents locales.", de: "Aktionen, die Elephant aus lokalen Agentenläufen aufrufen kann.")
         case .messagingPageSubtitle:
             return pick(language, en: "Messaging connections for WeChat, Feishu, Discord, DingDing, and WeCom.", zh: "连接微信、飞书、Discord、钉钉和企业微信等聊天服务。", fr: "Connexions de messagerie pour WeChat, Feishu, Discord, DingDing et WeCom.", de: "Chat-Verbindungen für WeChat, Feishu, Discord, DingDing und WeCom.")
         case .herdPageSubtitle:
-            return pick(language, en: "Manage the local elephants that share this desktop runtime.", zh: "管理共享这个桌面 runtime 的本地 elephants。", fr: "Gérez les elephants locaux qui partagent ce runtime desktop.", de: "Lokale Elephants verwalten, die diese Desktop-Runtime teilen.")
+            return pick(language, en: "Manage the local elephants that share this desktop runtime.", zh: "管理共享这个桌面运行时的本地象群。", fr: "Gérer les elephants locaux qui partagent ce runtime de bureau.", de: "Lokale Elephants verwalten, die diese Desktop-Runtime teilen.")
         case .newElephant:
-            return pick(language, en: "New Elephant", zh: "新 Elephant", fr: "Nouvel Elephant", de: "Neuer Elephant")
+            return pick(language, en: "New Elephant", zh: "新小象", fr: "Nouvel Elephant", de: "Neuer Elephant")
         case .usagePageSubtitle:
-            return pick(language, en: "Token usage details from local runtime steps.", zh: "来自本地 runtime steps 的 token 使用情况。", fr: "Détails d'usage des tokens depuis les steps du runtime local.", de: "Token-Nutzung aus lokalen Runtime-Schritten.")
+            return pick(language, en: "Token usage details from local runtime steps.", zh: "查看本地运行步骤产生的 token 用量。", fr: "Détails des tokens utilisés par les étapes locales.", de: "Token-Nutzung aus lokalen Runtime-Schritten.")
         case .calendarPageSubtitle:
-            return pick(language, en: "Reminders from Elephant, agents, and this app in one native calendar.", zh: "把 Elephant、agents 和本 app 的提醒放进一个原生日历。", fr: "Rappels d'Elephant, des agents et de l'app dans un calendrier natif.", de: "Erinnerungen von Elephant, Agents und App in einem nativen Kalender.")
+            return pick(language, en: "Reminders from Elephant, agents, and this app in one native calendar.", zh: "把 Elephant、智能体和这个 app 的提醒集中到一个原生日历里。", fr: "Les rappels d'Elephant, des agents et de l'app dans un calendrier natif.", de: "Erinnerungen von Elephant, Agenten und App in einem nativen Kalender.")
         case .learnPageSubtitle:
             return pick(language, en: "Background self-evolution jobs, diary reflection, and memory consolidation.", zh: "后台自我进化、日记反思和记忆巩固。", fr: "Jobs d'auto-évolution en arrière-plan, réflexion du journal et consolidation mémoire.", de: "Hintergrund-Selbstentwicklung, Tagebuchreflexion und Gedächtniskonsolidierung.")
         case .learning:
@@ -859,7 +861,7 @@ enum AppText {
         case .chooseModel:
             return pick(language, en: "choose a model", zh: "选择一个模型", fr: "choisir un modèle", de: "Modell wählen")
         case .memorySummaryFormat:
-            return pick(language, en: "%@ facts · %@ evidence", zh: "%@ 个 facts · %@ 条证据", fr: "%@ facts · %@ preuves", de: "%@ Facts · %@ Belege")
+            return pick(language, en: "%@ facts · %@ evidence", zh: "%@ 条事实 · %@ 条证据", fr: "%@ faits · %@ preuves", de: "%@ Fakten · %@ Belege")
         case .messagingSummaryFormat:
             return pick(language, en: "%@ live · %@/%@ configured", zh: "%@ 个在线 · %@/%@ 已配置", fr: "%@ actifs · %@/%@ configurés", de: "%@ live · %@/%@ konfiguriert")
         case .activeJobsFormat:
@@ -903,7 +905,7 @@ enum AppText {
         case .reviewQuestions:
             return pick(language, en: "About you", zh: "关于你", fr: "À propos de vous", de: "Über dich")
         case .personalModelMapTitle:
-            return pick(language, en: "Personal Model Map", zh: "Personal Model 图谱", fr: "Carte du Personal Model", de: "Personal-Model-Karte")
+            return pick(language, en: "Personal Model Map", zh: "个人模型图谱", fr: "Carte du modèle personnel", de: "Karte des persönlichen Modells")
         case .homeMapSubtitle:
             return pick(language, en: "What Elephant currently understands about you.", zh: "这里是 Elephant 目前了解的内容。", fr: "Ce qu'Elephant comprend de vous pour l'instant.", de: "Was Elephant gerade über dich versteht.")
         case .mapNodeCountFormat:
@@ -959,23 +961,25 @@ enum AppText {
         case .requirementElephantIdentity:
             return pick(language, en: "Complete Elephant name and vibe.", zh: "填写 Elephant 名字和默认 vibe。", fr: "Complétez le nom et le style d'Elephant.", de: "Vervollständige Elephant-Name und Vibe.")
         case .requirementProviderDetails:
-            return pick(language, en: "Finish provider and model details.", zh: "完成 provider 和模型设置。", fr: "Terminez les détails du provider et du modèle.", de: "Provider- und Modellangaben fertigstellen.")
+            return pick(language, en: "Finish provider and model details.", zh: "完成模型服务和模型设置。", fr: "Terminez les détails du fournisseur et du modèle.", de: "Anbieter- und Modellangaben fertigstellen.")
         case .sectionHome:
             return pick(language, en: "Home", zh: "首页", fr: "Accueil", de: "Start")
         case .sectionChat:
             return pick(language, en: "Chat", zh: "聊天", fr: "Chat", de: "Chat")
         case .sectionYou:
-            return pick(language, en: "Personal Model", zh: "个人模型", fr: "Personal Model", de: "Personal Model")
+            return pick(language, en: "Personal Model", zh: "个人模型", fr: "Modèle personnel", de: "Persönliches Modell")
+        case .sectionPaths:
+            return pick(language, en: "Paths", zh: "路径", fr: "Parcours", de: "Pfade")
         case .sectionDiary:
             return pick(language, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch")
         case .sectionSkills:
-            return pick(language, en: "Skills", zh: "技能", fr: "Skills", de: "Skills")
+            return pick(language, en: "Skills", zh: "技能", fr: "Compétences", de: "Fähigkeiten")
         case .sectionTools:
-            return pick(language, en: "Tools", zh: "工具", fr: "Outils", de: "Tools")
+            return pick(language, en: "Tools", zh: "工具", fr: "Outils", de: "Werkzeuge")
         case .sectionMessaging:
             return pick(language, en: "Messaging", zh: "消息", fr: "Messagerie", de: "Nachrichten")
         case .sectionHerd:
-            return pick(language, en: "Herd", zh: "Herd", fr: "Herd", de: "Herd")
+            return pick(language, en: "Herd", zh: "象群", fr: "Herd", de: "Herd")
         case .sectionUsage:
             return pick(language, en: "Usage", zh: "用量", fr: "Usage", de: "Nutzung")
         case .sectionCalendar:
@@ -983,7 +987,7 @@ enum AppText {
         case .sectionLearn:
             return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
         case .sectionProvider:
-            return pick(language, en: "Provider", zh: "Provider", fr: "Provider", de: "Provider")
+            return pick(language, en: "Provider", zh: "模型服务", fr: "Fournisseur", de: "Anbieter")
         case .sectionSettings:
             return pick(language, en: "Settings", zh: "设置", fr: "Réglages", de: "Einstellungen")
         case .subtitleToday:
@@ -992,6 +996,8 @@ enum AppText {
             return pick(language, en: "Talk", zh: "对话", fr: "Parler", de: "Sprechen")
         case .subtitleModel:
             return pick(language, en: "Model", zh: "模型", fr: "Modèle", de: "Modell")
+        case .subtitleFlow:
+            return pick(language, en: "Flow", zh: "推进", fr: "Flux", de: "Flow")
         case .subtitleJournal:
             return pick(language, en: "Journal", zh: "记录", fr: "Journal", de: "Journal")
         case .subtitleAffinity:
@@ -1001,7 +1007,7 @@ enum AppText {
         case .subtitleIM:
             return pick(language, en: "IM", zh: "IM", fr: "IM", de: "IM")
         case .subtitleElephants:
-            return pick(language, en: "Elephants", zh: "Elephants", fr: "Elephants", de: "Elephants")
+            return pick(language, en: "Elephants", zh: "象群", fr: "Elephants", de: "Elephants")
         case .subtitleTokens:
             return pick(language, en: "Tokens", zh: "Tokens", fr: "Tokens", de: "Tokens")
         case .subtitleReminders:
@@ -1104,13 +1110,22 @@ extension AppLanguage {
         defaultElephantVibe
     }
 
+    private var defaultElephantVibeHeading: String {
+        switch self {
+        case .en: return "Vibe"
+        case .zh: return "气质"
+        case .fr: return "Style"
+        case .de: return "Stil"
+        }
+    }
+
     func defaultElephantMarkdown(name: String) -> String {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? "Elephant" : trimmedName
         return """
         # \(resolvedName)
 
-        ## Vibe
+        ## \(defaultElephantVibeHeading)
 
         \(defaultElephantVibe)
         """
@@ -1122,7 +1137,7 @@ extension AppLanguage {
         return """
         # \(resolvedName)
 
-        ## Vibe
+        ## \(defaultElephantVibeHeading)
 
         \(defaultElephantVibe)
         """
@@ -1216,6 +1231,7 @@ extension AppSection {
         case .home: return AppText.sectionHome.text(language)
         case .wake: return AppText.sectionChat.text(language)
         case .you: return AppText.sectionYou.text(language)
+        case .paths: return AppText.sectionPaths.text(language)
         case .diary: return AppText.sectionDiary.text(language)
         case .skills: return AppText.sectionSkills.text(language)
         case .tools: return AppText.sectionTools.text(language)
@@ -1234,6 +1250,7 @@ extension AppSection {
         case .home: return AppText.subtitleToday.text(language)
         case .wake: return AppText.subtitleTalk.text(language)
         case .you: return AppText.subtitleModel.text(language)
+        case .paths: return AppText.subtitleFlow.text(language)
         case .diary: return AppText.subtitleJournal.text(language)
         case .skills: return AppText.subtitleAffinity.text(language)
         case .tools: return AppText.subtitleActions.text(language)

@@ -49,6 +49,7 @@ from packages.storage import RuntimeStorageRepository
 from packages.tools import BuiltinToolDependencies, InMemorySessionTodoStore, ToolRuntime
 from packages.tools.adapters import DelegatingClarifySurface, StructuredClarifySurface
 from packages.tools.browser_backend import create_playwright_browser_backend
+from packages.tools.path_management import RepositoryPathManagementSurface
 from packages.tools.surfaces import BrowserToolBackend, ClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
 
@@ -275,6 +276,10 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
                     semantic_summary_indexer=semantic_summary_indexer,
                     semantic_searcher=semantic_index_bundle.searcher if semantic_index_bundle is not None else None,
                     embedding_service=_embedding_service,
+                ),
+                path_management=RepositoryPathManagementSurface(
+                    repository,
+                    semantic_summary_indexer=semantic_summary_indexer,
                 ),
                 todo_store=todo_store,
                 learning_result_surface=None,

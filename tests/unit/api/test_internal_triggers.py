@@ -133,6 +133,18 @@ class InternalReflectTriggerTest(unittest.TestCase):
         self.assertEqual(metadata["target_date"], date_type.today().isoformat())
         self.assertEqual(repository.enqueued_summary, "reflect job (features=onboarding_letter)")
 
+    def test_reflect_onboarding_paths_sets_path_metadata(self) -> None:
+        repository = _RepositoryStub()
+        app = SimpleNamespace(repository=repository)
+
+        with patch("apps.learning_worker_runtime.ensure_learning_worker_running", lambda **_: None):
+            result = trigger_reflect_job(app, trigger="onboarding_paths", features=None)
+
+        self.assertEqual(result["features"], "path_planning")
+        metadata = repository.enqueued_metadata or {}
+        self.assertEqual(metadata["source"], "onboarding_paths")
+        self.assertEqual(repository.enqueued_summary, "reflect job (features=path_planning)")
+
     def test_reflect_trigger_loads_latest_episode_with_bounded_query(self) -> None:
         repository = _BoundedEpisodeRepositoryStub()
         app = SimpleNamespace(repository=repository)
@@ -176,6 +188,13 @@ class InternalReflectTriggerTest(unittest.TestCase):
         self.assertIn("tool.diary.write", tools)
         self.assertNotIn("tool.diary.list", tools)
         self.assertNotIn("tool.personal_model.search", tools)
+
+    def test_learning_job_runtime_contract_exposes_onboarding_paths_tools(self) -> None:
+        features, tools = _learning_job_runtime_contract("onboarding_paths", metadata={})
+
+        self.assertEqual(features, ("path_planning",))
+        self.assertIn("tool.paths.manage", tools)
+        self.assertIn("tool.personal_model.search", tools)
 
 
 if __name__ == "__main__":

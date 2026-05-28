@@ -285,6 +285,45 @@ def _enqueue_onboarding_letter_after_init(runtime: CliRuntime, job: LearningJob)
         return
 
 
+def _enqueue_onboarding_paths_after_init(runtime: CliRuntime, job: LearningJob) -> None:
+    if str(job.trigger or "").strip().lower() not in {"init", "init_profile"}:
+        return
+    try:
+        existing_paths = runtime.repository.list_paths(personal_model_id=job.personal_model_id, limit=5)
+    except Exception:
+        existing_paths = ()
+    if existing_paths:
+        return
+    try:
+        existing_jobs = runtime.repository.list_learning_jobs(
+            personal_model_id=job.personal_model_id,
+            episode_id=job.episode_id,
+            limit=30,
+        )
+    except Exception:
+        existing_jobs = ()
+    for existing in existing_jobs:
+        if str(getattr(existing, "trigger", "") or "").strip().lower() == "onboarding_paths":
+            return
+    try:
+        runtime.repository.enqueue_learning_job(
+            job_type=LEARNING_JOB_TYPE,
+            trigger="onboarding_paths",
+            personal_model_id=job.personal_model_id,
+            state_id=job.state_id,
+            episode_id=job.episode_id,
+            loop_id=None,
+            summary="first Path planning",
+            metadata={
+                "source": "onboarding_paths",
+                "parent_learning_job_id": job.job_id,
+            },
+            force_new=True,
+        )
+    except Exception:
+        return
+
+
 def run_background_learning_agent(runtime: CliRuntime, job: LearningJob):
     """Run the current background learning agent implementation.
 
@@ -323,6 +362,7 @@ def run_learning_job(runtime: CliRuntime, job: LearningJob, *, worker_id: str) -
         progress_detail=f"{result.status}: {result.summary} (result={result.result_source_id})",
     )
     _enqueue_onboarding_letter_after_init(runtime, job)
+    _enqueue_onboarding_paths_after_init(runtime, job)
 
 
 def run_learning_worker(

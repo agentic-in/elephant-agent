@@ -8,9 +8,11 @@ import logging
 from typing import Any
 
 from packages.contracts import Episode, Fact
+from packages.contracts.paths import LearningSummaryRecord, PathRecord, PathStepRecord
 from packages.evidence import (
     SemanticSummaryIndexer,
     build_episode_summary_text,
+    build_learning_summary_recall_text,
     build_personal_model_claim_text,
 )
 
@@ -75,6 +77,44 @@ def _fact(**kwargs: Any) -> Fact:
     return Fact(**defaults)
 
 
+def _path(**kwargs: Any) -> PathRecord:
+    defaults: dict[str, Any] = dict(
+        path_id="path:learn",
+        personal_model_id="pm:1",
+        title="Research operating loop",
+    )
+    defaults.update(kwargs)
+    return PathRecord(**defaults)
+
+
+def _path_step(**kwargs: Any) -> PathStepRecord:
+    defaults: dict[str, Any] = dict(
+        path_step_id="path-step:summary",
+        path_id="path:learn",
+        personal_model_id="pm:1",
+        title="Extract the core lesson",
+        description="Keep the durable user takeaway small.",
+    )
+    defaults.update(kwargs)
+    return PathStepRecord(**defaults)
+
+
+def _learning_summary(**kwargs: Any) -> LearningSummaryRecord:
+    defaults: dict[str, Any] = dict(
+        summary_id="learning-summary:1",
+        path_step_id="path-step:summary",
+        path_id="path:learn",
+        run_id="run:1",
+        what_done="Condensed the raw run into a durable study note.",
+        why_it_matters="The user can recall the useful lesson without reading logs.",
+        how_it_was_done="Kept plan details out and preserved the takeaway.",
+        knowledge="Path runs should be summarized before they become memory.",
+        human_takeaway="Index the core essence, not every progress event.",
+    )
+    defaults.update(kwargs)
+    return LearningSummaryRecord(**defaults)
+
+
 def test_build_episode_summary_joins_entry_exit_and_metadata() -> None:
     ep = _episode(
         entry_surface="cli",
@@ -94,6 +134,18 @@ def test_build_personal_model_claim_text_collects_lens_topic_claim() -> None:
     assert "lens: identity" in text
     assert "topic: identity.communication.verbosity" in text
     assert "I prefer concise answers" in text
+
+
+def test_build_learning_summary_recall_text_prioritizes_takeaway_and_knowledge() -> None:
+    text = build_learning_summary_recall_text(
+        _learning_summary(),
+        path_step=_path_step(),
+        path=_path(),
+    )
+    assert "Research operating loop" in text
+    assert "Extract the core lesson" in text
+    assert "Index the core essence" in text
+    assert "Path runs should be summarized" in text
 
 
 def test_indexer_noop_without_semantic_index_or_embedding() -> None:
@@ -137,6 +189,29 @@ def test_indexer_writes_document_for_committed_personal_model_claim() -> None:
     assert doc.owner_scope == "personal_model"
     assert doc.personal_model_id == "pm:1"
     assert doc.source_id == "fact:pm:1"
+
+
+def test_indexer_writes_document_for_path_learning_summary() -> None:
+    emb = _StubEmbeddingService()
+    idx = _StubSemanticIndex()
+    indexer = SemanticSummaryIndexer(
+        semantic_index=idx,
+        embedding_service=emb,
+        provider_id="stub-provider",
+        model_id="stub-model",
+    )
+    indexer.index_learning_summary(
+        _learning_summary(),
+        path_step=_path_step(),
+        path=_path(),
+    )
+    assert len(idx.documents) == 1
+    doc = idx.documents[0]
+    assert doc.owner_scope == "state"
+    assert doc.personal_model_id == "pm:1"
+    assert doc.source_id == "path:learning_summary:learning-summary:1"
+    assert doc.metadata["kind"] == "path_learning_summary"
+    assert "core essence" in doc.text
 
 
 def test_indexer_swallows_embedding_exception(caplog) -> None:

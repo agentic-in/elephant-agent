@@ -234,7 +234,7 @@ class CliRuntimeLearningTest(unittest.TestCase):
             self.assertEqual(loaded.result_json["status"], "no_op")
             self.assertIn("No durable facts found", str(loaded.result_json["summary"]))
 
-    def test_init_profile_completion_queues_onboarding_letter(self) -> None:
+    def test_init_profile_completion_queues_onboarding_followups(self) -> None:
         from apps.learning_worker_runtime import run_learning_job
 
         with tempfile.TemporaryDirectory() as tempdir:
@@ -263,6 +263,9 @@ class CliRuntimeLearningTest(unittest.TestCase):
             letter_jobs = [item for item in jobs if item.trigger == "onboarding_letter"]
             self.assertEqual(len(letter_jobs), 1)
             self.assertEqual(letter_jobs[0].metadata["letter_kind"], "onboarding_letter")
+            path_jobs = [item for item in jobs if item.trigger == "onboarding_paths"]
+            self.assertEqual(len(path_jobs), 1)
+            self.assertEqual(path_jobs[0].metadata["source"], "onboarding_paths")
 
     def test_once_learning_worker_processes_only_one_queued_job(self) -> None:
         from apps.learning_worker_runtime import run_learning_worker

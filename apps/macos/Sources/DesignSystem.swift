@@ -375,6 +375,7 @@ struct ProviderLogoView: View {
         if normalized.contains("cursor") { return "cursor" }
         if normalized.contains("openclaw") { return "openclaw" }
         if normalized.contains("opencode") { return "opencode" }
+        if normalized.contains("hermes") { return "hermes" }
         if normalized.contains("kimi") || normalized.contains("moonshot") { return "kimi" }
         if normalized.contains("minimax") { return "minimax" }
         if normalized == "pi" || normalized.contains("inflection") { return "pi" }
@@ -383,7 +384,10 @@ struct ProviderLogoView: View {
     }
 
     private var normalizedProvider: String {
-        let raw = providerID.isEmpty ? displayName : providerID
+        let raw = [providerID, displayName]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
         return raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()

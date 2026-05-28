@@ -38,6 +38,7 @@ struct WindowConfigurator: NSViewRepresentable {
 
     private static func configure(_ window: NSWindow, language: AppLanguage, showTitlebarActions: Bool) {
         let windowID = ObjectIdentifier(window)
+        window.isMovableByWindowBackground = false
         if !configuredWindowIDs.contains(windowID) {
             window.title = "Elephant Agent"
             window.titleVisibility = .hidden
@@ -48,7 +49,6 @@ struct WindowConfigurator: NSViewRepresentable {
             if #available(macOS 11.0, *) {
                 window.titlebarSeparatorStyle = .none
             }
-            window.isMovableByWindowBackground = true
             window.backgroundColor = .windowBackgroundColor
             window.appearance = NSAppearance(named: .aqua)
             window.minSize = NSSize(width: 980, height: 700)

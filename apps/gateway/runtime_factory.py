@@ -99,6 +99,7 @@ from packages.tools.adapters import StructuredClarifySurface
 from packages.understanding import PersonalModelUnderstandingSurface
 from packages.tools.browser_backend import create_playwright_browser_backend
 from packages.tools.local_roots import default_local_allowed_roots
+from packages.tools.path_management import RepositoryPathManagementSurface
 from .platforms import BUILTIN_GATEWAY_PLATFORMS
 from .plugins import GatewayPluginRegistry
 from .runtime_adapters import ChatBotMessagingAdapter, WebhookMessagingAdapter
@@ -419,6 +420,10 @@ def build_gateway_app(
                 semantic_summary_indexer=semantic_summary_indexer,
                 semantic_searcher=semantic_index_bundle.searcher,
                 embedding_service=_gateway_embedding_service,
+            ),
+            path_management=RepositoryPathManagementSurface(
+                runtime_repository,
+                semantic_summary_indexer=semantic_summary_indexer,
             ),
             skill_management=RuntimeSkillManagementSurface(
                 skill_runtime=skill_runtime,
