@@ -524,9 +524,11 @@ class SeatbeltBackend:
         builder = SeatbeltPolicyBuilder(self._config)
 
         # Writable root: workspace cwd with protected-path exclusions
+        # Only add cwd as writable if workspace_access allows writes
         seatbelt_opts = self._config.seatbelt
         exclusions = list(seatbelt_opts.protected_paths)
-        builder.add_writable_root(cwd, exclusions=exclusions)
+        if self._config.workspace_access == "rw":
+            builder.add_writable_root(cwd, exclusions=exclusions)
 
         # Extra writable roots from config
         for extra_root in seatbelt_opts.extra_writable_roots:

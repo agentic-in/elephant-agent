@@ -7,10 +7,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-SandboxMode = Literal["off", "all", "non-main"]
+# Legacy mode values (backward compat)
+LegacySandboxMode = Literal["off", "all", "non-main"]
+# New mode values introduced in sandbox-ux
+NewSandboxMode = Literal["readonly", "safe", "dev", "open"]
+# Combined type for the mode field
+SandboxModeStr = Literal["off", "all", "non-main", "readonly", "safe", "dev", "open"]
+
 SandboxBackend = Literal["local", "docker", "ssh", "seatbelt", "cloud"]
 SandboxScope = Literal["session", "agent", "shared"]
 WorkspaceAccess = Literal["none", "ro", "rw"]
+
+# New mode values that trigger the new code path
+_NEW_MODE_VALUES = frozenset({"readonly", "safe", "dev", "open"})
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,12 +48,19 @@ class SeatbeltSandboxOptions:
     allow_network_loopback: bool = True
     allow_writable_tmp: bool = True
 
-    # Phase 1: Protected metadata patterns — regex patterns for deny-write
-    # within writable roots. Prevents .git hook injection sandbox escape.
+    # Protected metadata patterns — regex patterns for deny-write within
+    # writable roots.  Only .git/hooks is blocked (not the entire .git dir)
+    # so that git commit/checkout works normally.
     protected_paths: tuple[str, ...] = (
-        r"(^|/)\.git(/.*)?$",
-        r"(^|/)\.codex(/.*)?$",
-        r"(^|/)\.claude(/.*)?$",
+        # Git hook injection — sandbox escape vector
+        r"(^|/)\.git/hooks(/.*)?$",
+        # Configuration tampering
+        r"(^|/)\.claude/settings[^/]*$",
+        r"(^|/)\.claude/settings\.local[^/]*$",
+        # Code injection via skills/commands/agents
+        r"(^|/)\.claude/skills(/.*)?$",
+        r"(^|/)\.claude/commands(/.*)?$",
+        r"(^|/)\.claude/agents(/.*)?$",
     )
 
     # Phase 1: Block reads to credential directories (~/.ssh, ~/.aws, etc.)
@@ -141,7 +158,7 @@ def _parse_cloud_profile(raw: Mapping[str, Any]) -> CloudProfileOptions:
 class SandboxConfig:
     """Top-level sandbox configuration."""
 
-    mode: SandboxMode = "off"
+    mode: SandboxModeStr = "off"
     backend: SandboxBackend = "local"
     scope: SandboxScope = "session"
     workspace_access: WorkspaceAccess = "none"
@@ -153,9 +170,19 @@ class SandboxConfig:
     clouds: dict[str, CloudProfileOptions] = field(default_factory=dict)
     cloud_profile: str = ""
 
+    # --- New-style fields (Phase 1: sandbox-ux) ---
+    # These are populated when mode is one of: readonly, safe, dev, open
+    allow_delta: dict[str, Any] = field(default_factory=dict)
+    deny_delta: dict[str, Any] = field(default_factory=dict)
+
     @property
     def is_active(self) -> bool:
         return self.mode != "off"
+
+    @property
+    def is_new_mode(self) -> bool:
+        """True if using the new mode abstraction (readonly/safe/dev/open)."""
+        return self.mode in _NEW_MODE_VALUES
 
     def effective_cloud(self) -> CloudProfileOptions:
         """Resolve the active cloud profile.
@@ -200,9 +227,12 @@ class SandboxConfig:
             # Defaults must be specified inline because slots=True prevents
             # class-level attribute access to tuple defaults.
             _DEFAULT_PROTECTED = (
-                r"(^|/)\.git(/.*)?$",
-                r"(^|/)\.codex(/.*)?$",
-                r"(^|/)\.claude(/.*)?$",
+                r"(^|/)\.git/hooks(/.*)?$",
+                r"(^|/)\.claude/settings[^/]*$",
+                r"(^|/)\.claude/settings\.local[^/]*$",
+                r"(^|/)\.claude/skills(/.*)?$",
+                r"(^|/)\.claude/commands(/.*)?$",
+                r"(^|/)\.claude/agents(/.*)?$",
             )
             _DEFAULT_MACH = (
                 "com.apple.system.opendirectoryd.libinfo",
@@ -265,11 +295,76 @@ class SandboxConfig:
 
         cloud_profile = str(section.get("cloud_profile", ""))
 
+        # --- New-style allow/deny delta (sandbox-ux) ---
+        mode_str = str(section.get("mode", "off"))
+        allow_raw = section.get("allow", {})
+        deny_raw = section.get("deny", {})
+        allow_delta = dict(allow_raw) if isinstance(allow_raw, Mapping) else {}
+        deny_delta = dict(deny_raw) if isinstance(deny_raw, Mapping) else {}
+
+        # If using new mode (readonly/safe/dev/open), auto-configure backend
+        # and workspace_access based on mode semantics.
+        resolved_backend = str(section.get("backend", "local"))
+        resolved_workspace_access = str(section.get("workspace_access", "none"))
+
+        if mode_str in _NEW_MODE_VALUES:
+            # New mode always uses seatbelt on macOS
+            if resolved_backend == "local":
+                resolved_backend = "seatbelt"
+            # Set workspace_access based on mode
+            if mode_str == "readonly":
+                resolved_workspace_access = "ro"
+            else:
+                resolved_workspace_access = "rw"
+
+            # --- Translate mode + allow/deny delta into seatbelt options ---
+            # Base network settings per mode
+            if mode_str in ("dev", "open"):
+                mode_allow_network = True
+                mode_allow_loopback = True
+            elif mode_str == "safe":
+                mode_allow_network = False
+                mode_allow_loopback = True
+            else:  # readonly
+                mode_allow_network = False
+                mode_allow_loopback = False
+
+            # Apply allow/deny delta for network
+            if allow_delta.get("network"):
+                mode_allow_network = True
+                mode_allow_loopback = True
+            if deny_delta.get("network"):
+                mode_allow_network = False
+                mode_allow_loopback = False
+
+            # restrict_file_read: open mode allows all, others use whitelist
+            mode_restrict_file_read = (mode_str != "open")
+
+            # Extra readable/writable paths from delta
+            extra_readable = tuple(str(p) for p in (allow_delta.get("read") or []))
+            extra_writable = tuple(str(p) for p in (allow_delta.get("write") or []))
+            deny_read_globs = tuple(str(p) for p in (deny_delta.get("read") or []))
+
+            # Build the seatbelt options from mode derivation
+            # (override whatever was parsed from the seatbelt section)
+            seatbelt_options = SeatbeltSandboxOptions(
+                allow_network=mode_allow_network,
+                allow_network_loopback=mode_allow_loopback,
+                allow_writable_tmp=True,
+                protected_paths=seatbelt_options.protected_paths,
+                deny_read_credentials=True,
+                mach_services=seatbelt_options.mach_services,
+                extra_writable_roots=extra_writable,
+                restrict_file_read=mode_restrict_file_read,
+                extra_readable_paths=extra_readable,
+                deny_read_globs=deny_read_globs,
+            )
+
         return cls(
-            mode=str(section.get("mode", "off")),
-            backend=str(section.get("backend", "local")),
+            mode=mode_str,
+            backend=resolved_backend,
             scope=str(section.get("scope", "session")),
-            workspace_access=str(section.get("workspace_access", "none")),
+            workspace_access=resolved_workspace_access,
             resource_limits=resource_limits,
             docker=docker_options,
             ssh=ssh_options,
@@ -277,10 +372,35 @@ class SandboxConfig:
             cloud=cloud_options,
             clouds=clouds,
             cloud_profile=cloud_profile,
+            allow_delta=allow_delta,
+            deny_delta=deny_delta,
         )
 
     def to_config_section(self) -> dict[str, Any]:
-        """Serialize to a dict suitable for the ``sandbox:`` YAML section."""
+        """Serialize to a dict suitable for the ``sandbox:`` YAML section.
+
+        For new-style modes (readonly/safe/dev/open), produces a compact format
+        with just mode + allow/deny. For legacy modes, produces the full format.
+        """
+        if self.is_new_mode:
+            # New compact format
+            result: dict[str, Any] = {"mode": self.mode}
+            if self.allow_delta:
+                result["allow"] = dict(self.allow_delta)
+            if self.deny_delta:
+                result["deny"] = dict(self.deny_delta)
+            # Include resource_limits if non-default
+            rl = self.resource_limits
+            if rl.max_wall_seconds != 120 or rl.max_memory_mb != 512:
+                result["resource_limits"] = {
+                    "max_wall_seconds": rl.max_wall_seconds,
+                    "max_memory_mb": rl.max_memory_mb,
+                    "max_processes": rl.max_processes,
+                    "max_file_size_mb": rl.max_file_size_mb,
+                }
+            return result
+
+        # Legacy full format
         result: dict[str, Any] = {
             "mode": self.mode,
             "backend": self.backend,

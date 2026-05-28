@@ -20,11 +20,13 @@ from .executor import SandboxToolExecutor
 from .path_mapper import SandboxPathMapper
 from .process_manager import SandboxManagedProcess, SandboxProcessManager
 from .resource_governor import ResourceGovernor
+from .sandbox_mode import AllowDenyDelta, PolicySpec, SandboxMode, mode_to_policy, PROTECTED_WRITE_PATTERNS
 from .scope_manager import SandboxScopeManager, SessionInfo
 from .security_guard import SecurityGuard
 from .types import EnvironmentBackend, SandboxOutput, SessionHandle
 
 __all__ = [
+    "AllowDenyDelta",
     "CodeExecutionLauncher",
     "CloudProfileOptions",
     "CloudSandboxOptions",
@@ -34,6 +36,9 @@ __all__ = [
     "get_cloud_backend",
     "LocalBackend",
     "LocalCodeLauncher",
+    "mode_to_policy",
+    "PolicySpec",
+    "PROTECTED_WRITE_PATTERNS",
     "register_cloud_backend",
     "registered_providers",
     "ResourceGovernor",
@@ -43,6 +48,7 @@ __all__ = [
     "SandboxConfig",
     "SandboxEnvironment",
     "SandboxManagedProcess",
+    "SandboxMode",
     "SandboxOutput",
     "SandboxPathMapper",
     "SandboxProcessManager",

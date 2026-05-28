@@ -91,9 +91,9 @@ class TestSeatbeltPolicyBuilder(unittest.TestCase):
 
         policy_text, _ = builder.render()
 
-        self.assertIn(r"\.git", policy_text)
-        self.assertIn(r"\.codex", policy_text)
-        self.assertIn(r"\.claude", policy_text)
+        self.assertIn(r"\.git/hooks", policy_text)
+        self.assertIn(r"\.claude/settings", policy_text)
+        self.assertIn(r"\.claude/skills", policy_text)
 
     def test_multiple_writable_roots(self):
         """Multiple writable roots get indexed parameters."""
@@ -302,7 +302,7 @@ class TestSeatbeltBackend(unittest.TestCase):
 
     def test_build_policy_uses_inline_params(self):
         """_build_policy returns policy text and -D params, not a file."""
-        config = SandboxConfig(mode="all", backend="seatbelt")
+        config = SandboxConfig(mode="all", backend="seatbelt", workspace_access="rw")
         backend = SeatbeltBackend(config)
         with tempfile.TemporaryDirectory() as tmpdir:
             cwd = Path(tmpdir).resolve()
@@ -403,9 +403,11 @@ class TestSeatbeltConfigOptions(unittest.TestCase):
 
     def test_default_protected_paths(self):
         opts = SeatbeltSandboxOptions()
-        self.assertIn(r"(^|/)\.git(/.*)?$", opts.protected_paths)
-        self.assertIn(r"(^|/)\.codex(/.*)?$", opts.protected_paths)
-        self.assertIn(r"(^|/)\.claude(/.*)?$", opts.protected_paths)
+        self.assertIn(r"(^|/)\.git/hooks(/.*)?$", opts.protected_paths)
+        self.assertIn(r"(^|/)\.claude/settings[^/]*$", opts.protected_paths)
+        self.assertIn(r"(^|/)\.claude/skills(/.*)?$", opts.protected_paths)
+        self.assertIn(r"(^|/)\.claude/commands(/.*)?$", opts.protected_paths)
+        self.assertIn(r"(^|/)\.claude/agents(/.*)?$", opts.protected_paths)
 
     def test_default_mach_services(self):
         opts = SeatbeltSandboxOptions()
