@@ -30,6 +30,7 @@
   (subpath "/Library/Apple/System/Library/Frameworks")
   (subpath "/Library/Apple/System/Library/PrivateFrameworks")
   (subpath "/Library/Apple/usr/lib")
+  (subpath "/Library/Frameworks")
   (subpath "/System/Library/Extensions")
   (subpath "/System/Library/Frameworks")
   (subpath "/System/Library/PrivateFrameworks")
@@ -127,11 +128,14 @@
   (literal "/etc")
   (literal "/tmp")
   (literal "/var")
+  (literal "/Library")
   (literal "/private/etc/localtime"))
 
 ; --- Firmlink parent traversal ---
 (allow file-read-metadata file-test-existence
-  (path-ancestors "/System/Volumes/Data/private"))
+  (path-ancestors "/System/Volumes/Data/private")
+  (path-ancestors "/Library/Frameworks")
+  (path-ancestors "/usr/local/lib"))
 (allow file-read-metadata
   (literal "/System/Volumes")
   (literal "/System/Volumes/Data")
