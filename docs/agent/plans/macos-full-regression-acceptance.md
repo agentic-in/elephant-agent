@@ -246,6 +246,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   healthy, and no newer Elephant Agent crash report appeared. Visual sidebar
   collapse/restore under unlocked content remains part of the broader design
   pass.
+- Personal Model claim lifecycle was exercised through the real packaged app's
+  managed API and kernel tool runtime while Sleep Display remained locked. A
+  temporary `world.projects.*.status` QA claim was created with
+  `tool.personal_model.update`, found through `tool.personal_model.search`,
+  corrected into a superseding claim, retired, restored, and deleted. Cleanup
+  deleted both the original and superseding refs, marked their Personal Model
+  semantic-index entries deleted, and a recall search for the temporary marker
+  returned zero hits. The app and managed API stayed alive throughout.
 
 ## Open Acceptance Matrix
 
@@ -254,7 +262,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, and managed-API recall search verified after restart |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
-| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, and managed-API recall query verified |
+| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
