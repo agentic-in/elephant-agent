@@ -226,8 +226,9 @@ def test_indexer_writes_document_for_path_learning_summary() -> None:
     )
     assert len(idx.documents) == 1
     doc = idx.documents[0]
-    assert doc.owner_scope == "state"
+    assert doc.owner_scope == "personal_model"
     assert doc.personal_model_id == "pm:1"
+    assert doc.state_id is None
     assert doc.source_id == "path:learning_summary:learning-summary:1"
     assert doc.metadata["kind"] == "path_learning_summary"
     assert "core essence" in doc.text
@@ -262,16 +263,27 @@ def test_backfill_existing_semantic_summaries_indexes_missing_records() -> None:
         def list_steps(self, **_kwargs: Any):
             return (_step(), _step(step_id="step:tool", action="call_tool", metadata={"tool_name": "noop"}))
 
+        def list_learning_summaries(self, **_kwargs: Any):
+            return (_learning_summary(),)
+
+        def load_path_step(self, path_step_id: str):
+            return _path_step(path_step_id=path_step_id)
+
+        def load_path(self, path_id: str):
+            return _path(path_id=path_id)
+
     result = backfill_existing_semantic_summaries(repository=_Repository(), indexer=indexer)
 
     assert result.facts_indexed == 1
     assert result.episodes_indexed == 1
     assert result.steps_indexed == 1
-    assert result.total_indexed == 3
+    assert result.learning_summaries_indexed == 1
+    assert result.total_indexed == 4
     assert [doc.source_id for doc in idx.documents] == [
         "fact:pm:1",
         "episode:session:1",
         "step:step:1",
+        "path:learning_summary:learning-summary:1",
     ]
 
 

@@ -9,6 +9,7 @@ import subprocess
 from threading import Event, Lock, Thread
 import time
 from typing import Any, Mapping
+from urllib.parse import unquote
 from uuid import uuid4
 
 from packages.context.epoch_store import FileEpochStore
@@ -24,6 +25,18 @@ from packages.contracts.paths import (
 from packages.contracts.runtime import PromptMessage
 from packages.operator.local_agent_adapters import run_local_agent_cli
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
+
+from .api_runtime_path_payloads import (
+    _path_step_comment_payload,
+    _path_step_payload,
+    _path_step_run_payload,
+    _payload_bool,
+    _payload_mapping,
+    _payload_optional_int,
+    _payload_text,
+    _required_payload_text,
+)
+from .api_runtime_support import APIResponse, _read_json_bytes
 
 PATH_STEP_RUNNER_RUNTIME_ID = "api.path-runner"
 PATH_STEP_RUNNER_LEASE_SECONDS = 600

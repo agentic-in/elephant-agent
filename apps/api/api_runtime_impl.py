@@ -149,10 +149,11 @@ def _backfill_semantic_summaries_async(repository: Any, indexer: Any) -> bool:
         if result.total_indexed:
             LOGGER.info(
                 "Backfilled existing semantic summaries into the recall index: "
-                "facts=%s episodes=%s steps=%s",
+                "facts=%s episodes=%s steps=%s path_learning_summaries=%s",
                 result.facts_indexed,
                 result.episodes_indexed,
                 result.steps_indexed,
+                result.learning_summaries_indexed,
             )
 
     Thread(

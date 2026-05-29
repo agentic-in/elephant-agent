@@ -322,10 +322,11 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
                     return
                 if result.total_indexed:
                     LOGGER.info(
-                        "backfilled existing semantic summaries into the recall index: facts=%s episodes=%s steps=%s",
+                        "backfilled existing semantic summaries into the recall index: facts=%s episodes=%s steps=%s path_learning_summaries=%s",
                         result.facts_indexed,
                         result.episodes_indexed,
                         result.steps_indexed,
+                        result.learning_summaries_indexed,
                     )
 
             threading.Thread(

@@ -412,7 +412,7 @@ class PathsAPITest(unittest.TestCase):
             run = app.repository.create_path_step_run(path_step_id=step.path_step_id)
 
             with mock.patch(
-                "apps.api.api_runtime_paths.run_local_agent_cli",
+                "apps.api.api_runtime_path_execution.run_local_agent_cli",
                 return_value=LocalAgentExecutionResult(
                     status="completed",
                     summary="CLI baby completed validation.",

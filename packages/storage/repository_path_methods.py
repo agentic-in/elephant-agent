@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Sequence
 from uuid import uuid4
 
@@ -18,6 +18,7 @@ from .repository_support import (
     _json_mapping,
     _path_from_row,
     _path_step_from_row,
+    _semantic_index_entry_from_row,
     canonical_personal_model_id,
 )
 
@@ -155,6 +156,7 @@ def list_paths(
 
 
 def delete_path(self, path_id: str) -> bool:
+    _mark_path_learning_summary_index_deleted(self, path_id=path_id, deleted_by="path_delete")
     with self.connection() as connection:
         cursor = connection.execute(
             "DELETE FROM paths WHERE path_id = ?",
@@ -335,6 +337,11 @@ def delete_path_step(self, path_step_id: str) -> bool:
     existing = self.load_path_step(path_step_id)
     if existing is None:
         return False
+    _mark_path_learning_summary_index_deleted(
+        self,
+        path_step_id=path_step_id,
+        deleted_by="path_step_delete",
+    )
     with self.connection() as connection:
         cursor = connection.execute(
             "DELETE FROM path_steps WHERE path_step_id = ?",
@@ -346,6 +353,60 @@ def delete_path_step(self, path_step_id: str) -> bool:
         )
         connection.commit()
     return cursor.rowcount > 0
+
+
+def _mark_path_learning_summary_index_deleted(
+    self,
+    *,
+    path_id: str | None = None,
+    path_step_id: str | None = None,
+    deleted_by: str,
+) -> int:
+    clauses: list[str] = []
+    params: list[object] = []
+    if path_id:
+        clauses.append("path_id = ?")
+        params.append(path_id)
+    if path_step_id:
+        clauses.append("path_step_id = ?")
+        params.append(path_step_id)
+    if not clauses:
+        return 0
+    with self.connection() as connection:
+        summary_rows = connection.execute(
+            "SELECT summary_id FROM learning_summaries WHERE " + " AND ".join(clauses),
+            tuple(params),
+        ).fetchall()
+    source_ids = tuple(
+        f"path:learning_summary:{row['summary_id']}"
+        for row in summary_rows
+        if str(row["summary_id"] or "").strip()
+    )
+    if not source_ids:
+        return 0
+    placeholders = ", ".join("?" for _ in source_ids)
+    with self.connection() as connection:
+        rows = connection.execute(
+            "SELECT * FROM semantic_index_entries "
+            f"WHERE source_id IN ({placeholders}) AND status != 'deleted'",
+            source_ids,
+        ).fetchall()
+    entries = tuple(_semantic_index_entry_from_row(row) for row in rows)
+    now = datetime.now(timezone.utc)
+    for entry in entries:
+        self.upsert_semantic_index_entry(
+            replace(
+                entry,
+                status="deleted",
+                updated_at=now,
+                metadata={
+                    **dict(entry.metadata),
+                    "retention_lifecycle_status": "deleted",
+                    "deleted_by": deleted_by,
+                },
+            )
+        )
+    return len(entries)
 
 _PATH_STEP_SELECT = """
     SELECT path_step_id, path_id, personal_model_id, title, description, status,

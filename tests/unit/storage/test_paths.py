@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from packages.contracts import SemanticIndexEntry
 from packages.storage import RuntimeStorageRepository
 
 
@@ -311,20 +312,62 @@ class RuntimeStoragePathTest(unittest.TestCase):
                 what_done="Temporary work.",
             )
             repository.write_understanding_check(summary_id=summary.summary_id, status="pending")
+            repository.upsert_semantic_index_entry(
+                SemanticIndexEntry(
+                    semantic_index_entry_id="semantic:path-step-delete",
+                    owner_scope="personal_model",
+                    source_id=f"path:learning_summary:{summary.summary_id}",
+                    provider_id="stub-provider",
+                    model_id="stub-model",
+                    dimensions=4,
+                    content_hash="sha256:path-step-delete",
+                    personal_model_id=path.personal_model_id,
+                    created_at=datetime(2026, 5, 30, tzinfo=timezone.utc),
+                    updated_at=datetime(2026, 5, 30, tzinfo=timezone.utc),
+                )
+            )
 
             deleted_step = repository.delete_path_step(step.path_step_id)
+            deleted_step_index = repository.load_semantic_index_entry("semantic:path-step-delete")
 
             self.assertTrue(deleted_step)
             self.assertIsNone(repository.load_path_step(step.path_step_id))
             self.assertIsNone(repository.load_path_step_run(run.run_id))
             self.assertIsNone(repository.load_learning_summary(summary.summary_id))
+            self.assertIsNotNone(deleted_step_index)
+            assert deleted_step_index is not None
+            self.assertEqual(deleted_step_index.status, "deleted")
+            self.assertEqual(deleted_step_index.metadata["deleted_by"], "path_step_delete")
 
             second_step = repository.create_path_step(path_id=path.path_id, title="Second temporary step")
+            second_summary = repository.write_learning_summary(
+                path_step_id=second_step.path_step_id,
+                what_done="Second temporary work.",
+            )
+            repository.upsert_semantic_index_entry(
+                SemanticIndexEntry(
+                    semantic_index_entry_id="semantic:path-delete",
+                    owner_scope="personal_model",
+                    source_id=f"path:learning_summary:{second_summary.summary_id}",
+                    provider_id="stub-provider",
+                    model_id="stub-model",
+                    dimensions=4,
+                    content_hash="sha256:path-delete",
+                    personal_model_id=path.personal_model_id,
+                    created_at=datetime(2026, 5, 30, tzinfo=timezone.utc),
+                    updated_at=datetime(2026, 5, 30, tzinfo=timezone.utc),
+                )
+            )
             deleted_path = repository.delete_path(path.path_id)
+            deleted_path_index = repository.load_semantic_index_entry("semantic:path-delete")
 
             self.assertTrue(deleted_path)
             self.assertIsNone(repository.load_path(path.path_id))
             self.assertIsNone(repository.load_path_step(second_step.path_step_id))
+            self.assertIsNotNone(deleted_path_index)
+            assert deleted_path_index is not None
+            self.assertEqual(deleted_path_index.status, "deleted")
+            self.assertEqual(deleted_path_index.metadata["deleted_by"], "path_delete")
 
 
 if __name__ == "__main__":

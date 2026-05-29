@@ -267,6 +267,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   `/v1/operator/config`, appeared in the Settings snapshot and YAML, and was
   then restored with the original YAML byte-for-byte. The managed API remained
   healthy and no newer macOS crash report appeared.
+- Path learning-memory lifecycle was verified through the rebuilt real packaged
+  app's managed API while Sleep Display remained locked. A temporary Path,
+  Flow step, comment, queued run, learning summary, and understanding check
+  were created; the step moved to Done after the understood check, the learning
+  summary wrote a `path:learning_summary:*` semantic-index row in the Personal
+  Model scope with the temporary marker, and deleting the Path marked that
+  semantic row `deleted` with the Path retention lifecycle metadata. The managed
+  API remained healthy and no newer macOS crash report appeared.
 
 ## Open Acceptance Matrix
 
@@ -277,7 +285,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
-| Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
+| Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, and deleted-Path memory cleanup verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
@@ -331,6 +339,17 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   assistive technology instead of generic close controls.
 - Require a native confirmation dialog before deleting a Path or Flow step.
 - Keep cancel non-mutating and verify it from the packaged app before shipping.
+
+## Path Learning Memory Fix Track
+
+- Index Path learning summaries as Personal Model-scoped recall material
+  because they are durable user-facing takeaways, not state-scoped Episode
+  traces.
+- Include existing Path learning summaries in startup semantic backfill so
+  upgraded runtimes recover previous Path learning memory.
+- When a Path or Flow step is deleted, mark the corresponding
+  `path:learning_summary:*` semantic-index rows deleted so removed Paths cannot
+  remain active recall material.
 
 ## Calendar Accessibility Fix Track
 

@@ -184,10 +184,16 @@ class SemanticSummaryBackfillResult:
     facts_indexed: int = 0
     episodes_indexed: int = 0
     steps_indexed: int = 0
+    learning_summaries_indexed: int = 0
 
     @property
     def total_indexed(self) -> int:
-        return self.facts_indexed + self.episodes_indexed + self.steps_indexed
+        return (
+            self.facts_indexed
+            + self.episodes_indexed
+            + self.steps_indexed
+            + self.learning_summaries_indexed
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,7 +393,7 @@ class SemanticSummaryIndexer:
         return self._index(
             text=text,
             source_id=f"path:learning_summary:{summary.summary_id}",
-            owner_scope="state",
+            owner_scope="personal_model",
             personal_model_id=personal_model_id,
             state_id=None,
             metadata={
@@ -467,6 +473,7 @@ def backfill_existing_semantic_summaries(
     personal_model_limit: int = 128,
     episode_limit: int = 80,
     step_limit: int = 160,
+    learning_summary_limit: int = 160,
 ) -> SemanticSummaryBackfillResult:
     """Index existing committed records so upgraded runtimes do not start with empty recall."""
 
@@ -476,6 +483,7 @@ def backfill_existing_semantic_summaries(
     facts_indexed = 0
     episodes_indexed = 0
     steps_indexed = 0
+    learning_summaries_indexed = 0
 
     list_facts = getattr(repository, "list_personal_model_facts", None)
     if callable(list_facts):
@@ -529,8 +537,24 @@ def backfill_existing_semantic_summaries(
                 steps_indexed += 1
                 source_ids.add(source_id)
 
+    list_learning_summaries = getattr(repository, "list_learning_summaries", None)
+    if callable(list_learning_summaries):
+        try:
+            summaries = list_learning_summaries(limit=learning_summary_limit)
+        except Exception:
+            LOGGER.debug("Failed to list Path learning summaries for semantic backfill.", exc_info=True)
+            summaries = ()
+        for summary in summaries:
+            source_id = f"path:learning_summary:{getattr(summary, 'summary_id', '')}"
+            if source_id in source_ids:
+                continue
+            if indexer.index_learning_summary(summary) is not None:
+                learning_summaries_indexed += 1
+                source_ids.add(source_id)
+
     return SemanticSummaryBackfillResult(
         facts_indexed=facts_indexed,
         episodes_indexed=episodes_indexed,
         steps_indexed=steps_indexed,
+        learning_summaries_indexed=learning_summaries_indexed,
     )
