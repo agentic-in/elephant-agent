@@ -99,8 +99,10 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Personal Model map interaction was verified from the packaged app. Selecting
   a map dot opened the fact detail with kind, namespace, provenance, text, and
   close affordance.
-- The current local state exposes Personal Model fact traces, but the semantic
-  index count is `0`, so source indexing quality remains an acceptance follow-up.
+- The Personal Model pass initially exposed active fact traces while the
+  semantic index count was `0`; the later packaged runtime/backfill fix
+  recovered semantic indexing and made source indexing quality directly
+  verifiable.
 - Diary was inspected in the packaged app. Markdown entries render expanded,
   the date selector changes the target date, and Write Diary queued a real
   diary job for 2026-05-30 with visible success feedback.
@@ -212,6 +214,18 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   question, or skill-affinity writes. No recursive `episode_close` learning job
   was created after the manual menu Reflect run, semantic index health remained
   ready with 80 entries, and no newer Elephant Agent crash report appeared.
+- Learn Dream and Letter variants were executed through the real packaged app's
+  managed API while Sleep Display remained locked. The Dream run
+  (`learning-job:c2a8ba142ec541ca94332528b717bbcc`) resolved the full
+  `dream,questions,skill_affinity,skill_evolution,diary` feature bundle,
+  streamed tool progress, completed successfully, and wrote the 2026-05-29
+  diary entry "A Quiet Page Between Threads" without duplicating Personal Model
+  changes. The Letter run
+  (`learning-job:9def1a3f37f843feb16ebe38ff44fcac`) completed and wrote the
+  2026-05-30 onboarding letter diary entry. Only those two Learn jobs were
+  created in the window, the managed API stayed healthy, semantic index health
+  advanced to 82 ready entries, and no newer Elephant Agent crash report
+  appeared.
 
 ## Open Acceptance Matrix
 
@@ -228,7 +242,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
-| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching run, diary queue, launcher disable/re-enable, progress/status, history, and needs-attention detail verified; dream/letter variants still need direct execution |
+| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching UI run, diary queue, launcher disable/re-enable, progress/status, history, needs-attention detail, managed-API Dream execution, and managed-API Letter execution verified; unlocked Dream/Letter button state still needs UI reinspection |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, and Reflect verified; sidebar command still needs separate exercise |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
