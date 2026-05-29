@@ -103,6 +103,26 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Skills was inspected in the packaged app. Learned skill matches, library
   counts, search, pagination state, enabled/available rows, and the detail sheet
   were verified with a `paper` search.
+- Messaging was inspected in the packaged app. WeChat QR startup now surfaces a
+  visible connection failure instead of hanging, and Feishu exposes local secure
+  credential fields plus save/connect controls; live transport remains blocked
+  by network/device/credential availability.
+- Herd was inspected in the packaged app. Mother and baby elephant rows, runtime
+  status, Codex/Gemini/Copilot/Hermes engine choices, tools, skills, prompt, and
+  local CLI baby configuration tabs are editable from the native sheet.
+- Usage was inspected in the packaged app. Token totals, token-flow chart,
+  recent event rows, and the day/week aggregation toggle all render against real
+  usage events.
+- Calendar was inspected in the packaged app. Week, Month, and Year views,
+  reminder rows, system Run/Pause controls, New Reminder open/cancel, and event
+  detail popovers were verified without mutating reminder data.
+- Calendar Year view accessibility was fixed and re-verified in the rebuilt app:
+  non-event mini-calendar dates are no longer exposed as hundreds of disabled
+  buttons, while event dates remain actionable with a full date/reminder label
+  and a working detail popover.
+- Learn was inspected in the packaged app. Background status cards, focused
+  evolution job launchers, completed history rows, and needs-attention details
+  were visible and expandable without creating a new learning job.
 
 ## Open Acceptance Matrix
 
@@ -115,11 +135,11 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, and write queue verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
-| Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Not complete |
-| Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Not complete |
-| Usage | Token trend chart and row detail verified with real usage events. | Not complete |
-| Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Not complete |
-| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Not complete |
+| Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
+| Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
+| Usage | Token trend chart and row detail verified with real usage events. | Complete |
+| Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Partial; Week/Month/Year, New Reminder open/cancel, event popover, and system controls verified; destructive/mutating controls not executed |
+| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; launchers, history, progress/status, and needs-attention detail verified without creating new jobs |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; provider and tools rows verified |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Not complete |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Partial |
@@ -147,6 +167,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   assistive technology instead of generic close controls.
 - Require a native confirmation dialog before deleting a Path or Flow step.
 - Keep cancel non-mutating and verify it from the packaged app before shipping.
+
+## Calendar Accessibility Fix Track
+
+- Keep the Year view visually dense while avoiding hundreds of disabled
+  mini-calendar day buttons in VoiceOver and keyboard navigation.
+- Expose only scheduled event days as actionable controls in the Year view, with
+  a full date/reminder label and the same event detail popover as the visual UI.
+- Keep non-event mini-calendar dates decorative in the accessibility tree.
 
 ## Exit Criteria
 

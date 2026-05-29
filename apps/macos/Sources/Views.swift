@@ -17616,30 +17616,71 @@ struct MiniMonthDay: View {
     @State private var showingDetail = false
 
     var body: some View {
-        Button {
+        Group {
             if event != nil {
-                showingDetail = true
-            }
-        } label: {
-            VStack(spacing: 2) {
-                Text("\(Calendar.current.component(.day, from: day))")
-                    .font(.caption.weight(isToday || showingDetail ? .bold : .medium))
-                    .foregroundStyle(dayColor)
-                    .frame(width: 24, height: 20)
-                    .background(isToday ? ElephantTheme.accent : showingDetail ? ElephantTheme.accent.opacity(0.14) : Color.clear, in: Capsule())
-                Capsule()
-                    .fill(eventCount > 0 ? ElephantTheme.accent.opacity(showingDetail ? 0.95 : 0.58) : Color.clear)
-                    .frame(width: eventCount > 1 ? 12 : 5, height: 3)
+                Button {
+                    showingDetail = true
+                } label: {
+                    dayContent
+                }
+                .buttonStyle(.plain)
+                .help(helpText)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint("Show reminder details")
+            } else {
+                dayContent
+                    .accessibilityHidden(true)
             }
         }
-        .buttonStyle(.plain)
-        .disabled(eventCount == 0)
         .opacity(inMonth ? 1 : 0.42)
         .popover(isPresented: $showingDetail, arrowEdge: .bottom) {
             if let event {
                 CalendarEventPopover(event: event)
             }
         }
+    }
+
+    private var dayContent: some View {
+        VStack(spacing: 2) {
+            Text("\(Calendar.current.component(.day, from: day))")
+                .font(.caption.weight(isToday || showingDetail ? .bold : .medium))
+                .foregroundStyle(dayColor)
+                .frame(width: 24, height: 20)
+                .background(isToday ? ElephantTheme.accent : showingDetail ? ElephantTheme.accent.opacity(0.14) : Color.clear, in: Capsule())
+            Capsule()
+                .fill(eventCount > 0 ? ElephantTheme.accent.opacity(showingDetail ? 0.95 : 0.58) : Color.clear)
+                .frame(width: eventCount > 1 ? 12 : 5, height: 3)
+        }
+    }
+
+    private var accessibilityLabel: String {
+        guard let event else {
+            return dayLabel
+        }
+        let suffix = eventCount > 1 ? ", \(eventCount) reminders" : ", \(event.job.title)"
+        return dayLabel + suffix
+    }
+
+    private var dayLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateStyle = .full
+        formatter.timeStyle = .none
+        return formatter.string(from: day)
+    }
+
+    private var helpText: String {
+        guard let event else {
+            return dayLabel
+        }
+        return [
+            dayLabel,
+            event.job.title,
+            event.job.schedule,
+            event.job.detail
+        ]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 
     private var isToday: Bool {
