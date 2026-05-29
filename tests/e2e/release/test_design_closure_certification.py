@@ -40,10 +40,10 @@ CONTRACT_MODULES = (
 )
 
 RESET_API_E2E_TARGETS = (
-    "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads",
-    "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state",
-    "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence",
-    "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_default_provider_bad_request_hides_legacy_profile_field_names",
+    "tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads",
+    "tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_operator_dashboard_projection_is_empty_without_runtime_state",
+    "tests.e2e.api.test_api_surface_dashboard.APISurfaceDashboardE2ETest.test_internal_dashboard_projection_surfaces_canonical_runtime_and_evidence",
+    "tests.e2e.api.test_api_surface_providers.APISurfaceProviderE2ETest.test_default_provider_bad_request_hides_legacy_profile_field_names",
 )
 
 DESIGN_CLOSURE_MATRIX_TARGETS = ("tests.agent.test_system_layer_reset_matrix",)
@@ -124,6 +124,15 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("case tools", views)
         self.assertIn("ProviderSettingsContent()", views)
         self.assertIn("ToolsSettingsContent()", views)
+
+    def test_macos_sidebar_menu_command_controls_custom_sidebar(self) -> None:
+        app = (ROOT / "apps" / "macos" / "Sources" / "ElephantAgentMacApp.swift").read_text(encoding="utf-8")
+
+        self.assertNotIn("SidebarCommands()", app)
+        self.assertIn("CommandGroup(replacing: .sidebar)", app)
+        self.assertIn("model.text(.toggleSidebar)", app)
+        self.assertIn("NotificationCenter.default.post(name: .elephantToggleSidebar", app)
+        self.assertIn('.keyboardShortcut("s", modifiers: [.command, .option])', app)
 
     def test_macos_voice_capture_ignores_stale_permission_callbacks(self) -> None:
         speech_input = MACOS_SPEECH_INPUT_PATH.read_text(encoding="utf-8")

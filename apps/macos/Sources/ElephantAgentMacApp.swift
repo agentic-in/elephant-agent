@@ -74,7 +74,12 @@ struct ElephantCommands: Commands {
     @ObservedObject var model: ElephantAppModel
 
     var body: some Commands {
-        SidebarCommands()
+        CommandGroup(replacing: .sidebar) {
+            Button(model.text(.toggleSidebar)) {
+                NotificationCenter.default.post(name: .elephantToggleSidebar, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .option])
+        }
 
         CommandGroup(after: .newItem) {
             Button(model.text(.newChat)) {

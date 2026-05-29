@@ -237,6 +237,15 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   reflection, onboarding-letter, and voice-crash-recovery recall queries;
   `/healthz` remained healthy, semantic index health reported 86 ready entries,
   and no newer Elephant Agent crash report appeared.
+- Sidebar menu command coverage was tightened and verified in the rebuilt real
+  app. The app no longer relies on the inert default `SidebarCommands()` path
+  for its custom sidebar; the standard View menu now exposes `Show or Hide
+  Sidebar` through a command group wired to the app's sidebar notification. In
+  Sleep Display, the real menu item was present, enabled, and clicked from the
+  macOS menu bar; the app process stayed alive, the managed API remained
+  healthy, and no newer Elephant Agent crash report appeared. Visual sidebar
+  collapse/restore under unlocked content remains part of the broader design
+  pass.
 
 ## Open Acceptance Matrix
 
@@ -255,7 +264,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching UI run, diary queue, launcher disable/re-enable, progress/status, history, needs-attention detail, managed-API Dream execution, and managed-API Letter execution verified; unlocked Dream/Letter button state still needs UI reinspection |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
-| Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, and Reflect verified; sidebar command still needs separate exercise |
+| Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
 | Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, and fullscreen Home/Settings behavior verified |
 
