@@ -23411,6 +23411,7 @@ struct RuntimeConfigSettingsContent: View {
     @EnvironmentObject private var model: ElephantAppModel
     @State private var draft = ""
     @State private var loadedPath = ""
+    @State private var loadedYaml = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -23461,6 +23462,8 @@ struct RuntimeConfigSettingsContent: View {
 
                     Button(localizedYouText(model.appLanguage, en: "Reset", zh: "重置", fr: "Réinitialiser", de: "Zurücksetzen")) {
                         draft = model.snapshot.settingsYaml
+                        loadedYaml = model.snapshot.settingsYaml
+                        loadedPath = model.snapshot.settingsPath
                     }
                     .settingsActionButton()
                     .disabled(!hasChanges)
@@ -23479,6 +23482,11 @@ struct RuntimeConfigSettingsContent: View {
         .onChange(of: model.snapshot.settingsYaml) { _ in
             syncDraftIfNeeded()
         }
+        .onChange(of: model.configActionResult) { result in
+            if !result.isEmpty {
+                syncDraftFromSnapshot()
+            }
+        }
     }
 
     private var hasChanges: Bool {
@@ -23486,9 +23494,17 @@ struct RuntimeConfigSettingsContent: View {
     }
 
     private func syncDraftIfNeeded() {
-        guard loadedPath != model.snapshot.settingsPath || draft.isEmpty else { return }
+        if loadedPath == model.snapshot.settingsPath && !draft.isEmpty && draft != loadedYaml {
+            loadedYaml = model.snapshot.settingsYaml
+            return
+        }
+        syncDraftFromSnapshot()
+    }
+
+    private func syncDraftFromSnapshot() {
         draft = model.snapshot.settingsYaml
         loadedPath = model.snapshot.settingsPath
+        loadedYaml = model.snapshot.settingsYaml
     }
 }
 

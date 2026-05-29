@@ -261,6 +261,12 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   response returned Personal Model display name `You`, the SQLite
   `personal_models` row stayed `you|You` before and after the request, and
   `/healthz` remained healthy.
+- Runtime Config save/restore was exercised through the real packaged app's
+  managed API while Sleep Display remained locked. A temporary
+  `extensions.acceptance_settings_roundtrip` marker was written through
+  `/v1/operator/config`, appeared in the Settings snapshot and YAML, and was
+  then restored with the original YAML byte-for-byte. The managed API remained
+  healthy and no newer macOS crash report appeared.
 
 ## Open Acceptance Matrix
 
@@ -278,7 +284,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching UI run, diary queue, launcher disable/re-enable, progress/status, history, needs-attention detail, managed-API Dream execution, and managed-API Letter execution verified; unlocked Dream/Letter button state still needs UI reinspection |
-| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
+| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, config surface, and managed-API config save/restore verified; unlocked editor button/draft state covered by static contract |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
 | Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, and fullscreen Home/Settings behavior verified |
@@ -308,6 +314,16 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   intensity.
 - Keep explicit identity changes on the identity/profile API surfaces where
   they can be audited as user-directed profile edits.
+
+## Runtime Config Save State Fix Track
+
+- Treat each Runtime Config save as a new operation by clearing stale success
+  state before sending the write request.
+- After a successful save and dashboard refresh, resync the editor draft from
+  the Settings snapshot so normalized YAML does not keep the Save and Reset
+  controls enabled.
+- Preserve unsaved local edits when unrelated Settings refreshes arrive before
+  an explicit successful save.
 
 ## Paths Safety Fix Track
 

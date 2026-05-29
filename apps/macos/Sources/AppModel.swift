@@ -3142,6 +3142,7 @@ final class ElephantAppModel: ObservableObject {
 
     func saveGlobalConfig(yamlText: String) async {
         do {
+            configActionResult = ""
             try await client.saveGlobalConfig(yamlText: yamlText)
             try await refreshDashboard()
             configActionResult = "Config saved."

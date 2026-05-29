@@ -134,6 +134,21 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("NotificationCenter.default.post(name: .elephantToggleSidebar", app)
         self.assertIn('.keyboardShortcut("s", modifiers: [.command, .option])', app)
 
+    def test_macos_runtime_config_save_resets_clean_draft_state(self) -> None:
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        runtime_config = views.split("struct RuntimeConfigSettingsContent: View", 1)[1].split("struct OperatorItemGroup", 1)[0]
+        save_global_config = app_model.split("func saveGlobalConfig(yamlText: String) async", 1)[1].split("func surfaceQuestionSooner", 1)[0]
+
+        self.assertIn("@State private var loadedYaml", runtime_config)
+        self.assertIn("syncDraftFromSnapshot()", runtime_config)
+        self.assertIn(".onChange(of: model.configActionResult)", runtime_config)
+        self.assertIn("if !result.isEmpty", runtime_config)
+        self.assertIn("loadedYaml = model.snapshot.settingsYaml", runtime_config)
+        self.assertIn("draft != loadedYaml", runtime_config)
+        self.assertIn('configActionResult = ""', save_global_config)
+        self.assertIn('configActionResult = "Config saved."', save_global_config)
+
     def test_macos_voice_capture_ignores_stale_permission_callbacks(self) -> None:
         speech_input = MACOS_SPEECH_INPUT_PATH.read_text(encoding="utf-8")
         views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
