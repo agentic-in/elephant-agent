@@ -123,13 +123,36 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Learn was inspected in the packaged app. Background status cards, focused
   evolution job launchers, completed history rows, and needs-attention details
   were visible and expandable without creating a new learning job.
+- Settings was inspected in the packaged app after a real runtime restart.
+  Language, model provider, voice, memory engine, tools, history, sleep, logs,
+  reset, advanced runtime, and system config rows were visible and expandable;
+  reset was inspected without executing destructive data removal, and unchanged
+  config state kept Save/Reset disabled.
+- The app's menu bar was inspected and exercised in the real app. File > New
+  chat opened a fresh conversation, Navigate jumped to Usage, Actions > Sleep
+  Display entered the native sleep display and returned cleanly, and Actions >
+  Reveal Database handed off to Finder.
+- Restart Core was exercised from Settings. The app process stayed alive while
+  the managed API child process moved from the old port to a new loopback port,
+  and Settings returned to a verified runtime state.
+- After the runtime restart, Chat sent a fresh real model turn through the
+  packaged app. The visible activity card advanced from live to done, the model
+  reply used a Personal Model fact about the user, and SQLite Step records
+  confirmed `record_input`, `assemble_context`, `call_model`, and
+  `emit_response` completed.
+- Window behavior was checked at the enforced minimum window size, a wider
+  desktop size, and native fullscreen. Home and Settings remained scrollable,
+  text and controls did not incoherently overlap, and exiting fullscreen
+  returned to a normal window.
+- Quit cleanup was re-verified after the session: the app process and its
+  managed API child process both exited, leaving no duplicate loopback API.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, history open, live activity, memory-backed real model reply, and step records verified after restart |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, and reply cancel verified; semantic index is empty |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, and write queue verified |
@@ -140,10 +163,10 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Partial; Week/Month/Year, New Reminder open/cancel, event popover, and system controls verified; destructive/mutating controls not executed |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; launchers, history, progress/status, and needs-attention detail verified without creating new jobs |
-| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; provider and tools rows verified |
-| Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Not complete |
-| Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Partial |
-| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA verified |
+| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
+| Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, and Restart Core verified; Reflect/Refresh not executed |
+| Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
+| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, and fullscreen Home/Settings behavior verified |
 
 ## First Fix Track
 
