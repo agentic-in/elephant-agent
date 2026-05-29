@@ -32,6 +32,25 @@ def _latest_loop_for_episode(storage: KernelStoragePort, episode_id: str) -> obj
         return loops[-1] if loops else None
 
 
+def _truthy_metadata_value(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _suppresses_episode_learning(episode: Episode) -> bool:
+    metadata = dict(getattr(episode, "metadata", {}) or {})
+    surface = str(getattr(episode, "entry_surface", "") or "").strip().lower()
+    event_type = str(metadata.get("event_type") or "").strip().lower()
+    context_mode = str(metadata.get("context_mode") or "").strip().lower()
+    owner_scope = str(metadata.get("owner_scope") or "").strip().lower()
+    return (
+        surface.startswith("learning.")
+        or _truthy_metadata_value(metadata.get("learning_agent"))
+        or context_mode == "learning_agent"
+        or event_type == "turn.internal"
+        or owner_scope in {"background", "internal", "sub_agent", "learning_agent"}
+    )
+
+
 def _cleanup_episode_resources(
     session_resource_manager: KernelSessionResourceManager | None,
     episode_id: str,
@@ -110,7 +129,7 @@ def close_episode(
 
     # Side-effect 2: Enqueue learning job
     enqueue = getattr(storage, "enqueue_learning_job", None)
-    if callable(enqueue):
+    if callable(enqueue) and not _suppresses_episode_learning(closed):
         loop = _latest_loop_for_episode(storage, episode_id)
         try:
             enqueue(

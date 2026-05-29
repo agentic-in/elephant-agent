@@ -206,13 +206,22 @@ def _episode_metadata(
     current: datetime,
     state: State,
 ) -> dict[str, str]:
-    return {
+    source_payload = dict(request.source_payload or {})
+    metadata = {
         "policy": policy,
         "route_id": request.route_id,
         "surface": request.surface,
+        "event_type": request.source_event_type,
         "last_activity_at": current.isoformat(),
         **_episode_resume_metadata(state),
     }
+    owner_scope = str(request.owner_scope or "").strip()
+    context_mode = str(source_payload.get("context_mode") or "").strip()
+    if owner_scope:
+        metadata["owner_scope"] = owner_scope
+    if context_mode:
+        metadata["context_mode"] = context_mode
+    return metadata
 
 
 def _parse_episode_activity(episode: Episode) -> datetime | None:

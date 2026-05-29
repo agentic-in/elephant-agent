@@ -142,6 +142,17 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Learn was inspected in the packaged app. Background status cards, focused
   evolution job launchers, completed history rows, and needs-attention details
   were visible and expandable without creating a new learning job.
+- Learn focused evolution was executed from the rebuilt packaged app. The Home
+  Learn readiness card navigated to Learn, Skill Matching entered the running
+  state, disabled duplicate launchers, streamed tool progress into storage,
+  completed successfully, updated skill affinity memory, returned the UI to
+  Ready, and left the worker stopped.
+- The Learn run exposed and fixed a background-learning self-trigger loop:
+  learning sub-agent child Episodes were closing through the canonical Episode
+  state machine and enqueueing new `episode_close` learning jobs. The close path
+  now suppresses learning enqueue for internal/learning-agent Episodes, and the
+  rebuilt app verified that a completed manual learning job did not create a
+  follow-on `episode_close` job after a wait window.
 - Settings was inspected in the packaged app after a real runtime restart.
   Language, model provider, voice, memory engine, tools, history, sleep, logs,
   reset, advanced runtime, and system config rows were visible and expandable;
@@ -181,7 +192,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
-| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; launchers, history, progress/status, and needs-attention detail verified without creating new jobs |
+| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching run, diary queue, launcher disable/re-enable, progress/status, history, and needs-attention detail verified; dream/letter variants still need direct execution |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, and Restart Core verified; Reflect/Refresh not executed |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
@@ -234,6 +245,17 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   evidence into the diary tool call.
 - Fall back to current episode/session ID in the diary write tool when the model
   omits explicit sources.
+
+## Learning Recursion Fix Track
+
+- Keep normal user Episodes eligible for `episode_boundary_learning` on close.
+- Suppress learning enqueue for internal learning-agent child Episodes in the
+  canonical Episode close path, not only in the foreground kernel enqueue layer.
+- Preserve internal metadata such as event type, owner scope, and context mode
+  on Episodes so close-path side effects can distinguish user-facing work from
+  background work.
+- Verify from the packaged app that a manual Learn job completes without
+  creating recursive `episode_close` jobs.
 
 ## Exit Criteria
 
