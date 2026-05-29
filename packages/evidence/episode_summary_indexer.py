@@ -40,6 +40,8 @@ LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "SemanticSummaryIndexer",
+    "SemanticSummaryBackfillResult",
+    "backfill_existing_semantic_summaries",
     "build_episode_summary_text",
     "build_learning_summary_recall_text",
     "build_personal_model_claim_text",
@@ -175,6 +177,17 @@ def build_learning_summary_recall_text(
         f"how it was done: {summary.how_it_was_done}" if summary.how_it_was_done else "",
     ]
     return _truncate(" | ".join(part for part in pieces if part.strip()))
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticSummaryBackfillResult:
+    facts_indexed: int = 0
+    episodes_indexed: int = 0
+    steps_indexed: int = 0
+
+    @property
+    def total_indexed(self) -> int:
+        return self.facts_indexed + self.episodes_indexed + self.steps_indexed
 
 
 @dataclass(frozen=True, slots=True)
@@ -408,3 +421,116 @@ class SemanticSummaryIndexer:
         except Exception:
             LOGGER.debug("Failed to load Path for semantic summary indexing.", exc_info=True)
             return None
+
+
+def _existing_semantic_source_ids(repository: Any) -> set[str]:
+    list_entries = getattr(repository, "list_semantic_index_entries", None)
+    if not callable(list_entries):
+        return set()
+    try:
+        entries = list_entries()
+    except Exception:
+        LOGGER.debug("Failed to list semantic index entries before backfill.", exc_info=True)
+        return set()
+    return {
+        str(getattr(entry, "source_id", "") or "").strip()
+        for entry in entries
+        if str(getattr(entry, "status", "") or "").strip().lower() != "deleted"
+    }
+
+
+def _personal_model_ids(repository: Any) -> tuple[str, ...]:
+    ids: list[str] = []
+    list_models = getattr(repository, "list_personal_models", None)
+    if callable(list_models):
+        try:
+            ids.extend(
+                str(getattr(model, "personal_model_id", "") or "").strip()
+                for model in list_models()
+            )
+        except Exception:
+            LOGGER.debug("Failed to list Personal Models for semantic backfill.", exc_info=True)
+    current_state = getattr(repository, "current_state", None)
+    if callable(current_state):
+        try:
+            state = current_state()
+            ids.append(str(getattr(state, "personal_model_id", "") or "").strip())
+        except Exception:
+            LOGGER.debug("Failed to inspect current state for semantic backfill.", exc_info=True)
+    return tuple(dict.fromkeys(item for item in ids if item))
+
+
+def backfill_existing_semantic_summaries(
+    *,
+    repository: Any,
+    indexer: SemanticSummaryIndexer | None,
+    personal_model_limit: int = 128,
+    episode_limit: int = 80,
+    step_limit: int = 160,
+) -> SemanticSummaryBackfillResult:
+    """Index existing committed records so upgraded runtimes do not start with empty recall."""
+
+    if repository is None or indexer is None:
+        return SemanticSummaryBackfillResult()
+    source_ids = _existing_semantic_source_ids(repository)
+    facts_indexed = 0
+    episodes_indexed = 0
+    steps_indexed = 0
+
+    list_facts = getattr(repository, "list_personal_model_facts", None)
+    if callable(list_facts):
+        for personal_model_id in _personal_model_ids(repository):
+            if facts_indexed >= personal_model_limit:
+                break
+            try:
+                facts = list_facts(personal_model_id=personal_model_id, status="active")
+            except Exception:
+                LOGGER.debug("Failed to list Personal Model facts for semantic backfill.", exc_info=True)
+                continue
+            for fact in facts:
+                if facts_indexed >= personal_model_limit:
+                    break
+                source_id = str(getattr(fact, "fact_id", "") or "").strip()
+                if not source_id or source_id in source_ids:
+                    continue
+                if indexer.index_personal_model_claim(fact) is not None:
+                    facts_indexed += 1
+                    source_ids.add(source_id)
+
+    list_episodes = getattr(repository, "list_episodes", None)
+    if callable(list_episodes):
+        try:
+            episodes = list_episodes(status="closed", newest_first=True, limit=episode_limit)
+        except Exception:
+            LOGGER.debug("Failed to list Episodes for semantic backfill.", exc_info=True)
+            episodes = ()
+        for episode in episodes:
+            source_id = f"episode:{getattr(episode, 'episode_id', '')}"
+            if source_id in source_ids:
+                continue
+            if not str(getattr(episode, "exit_summary", "") or "").strip():
+                continue
+            if indexer.index_episode_exit(episode) is not None:
+                episodes_indexed += 1
+                source_ids.add(source_id)
+
+    list_steps = getattr(repository, "list_steps", None)
+    if callable(list_steps):
+        try:
+            steps = list_steps(newest_first=True, limit=step_limit)
+        except Exception:
+            LOGGER.debug("Failed to list Steps for semantic backfill.", exc_info=True)
+            steps = ()
+        for step in steps:
+            source_id = f"step:{getattr(step, 'step_id', '')}"
+            if source_id in source_ids:
+                continue
+            if indexer.index_step(step) is not None:
+                steps_indexed += 1
+                source_ids.add(source_id)
+
+    return SemanticSummaryBackfillResult(
+        facts_indexed=facts_indexed,
+        episodes_indexed=episodes_indexed,
+        steps_indexed=steps_indexed,
+    )

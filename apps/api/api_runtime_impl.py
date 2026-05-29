@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 import json
 import logging
-from threading import Lock
+from threading import Lock, Thread
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -25,7 +25,12 @@ from packages.contracts import (
 )
 from packages.contracts.runtime import PersonalModelRuntimeState, RecallEvidence
 from packages.kernel import KernelDependencies, KernelOutcome, KernelService, KernelSourceRequest, ReconciliationPipeline, StateReconciler
-from packages.evidence import RecallRuntime, SemanticSummaryIndexer, build_semantic_index_bundle
+from packages.evidence import (
+    RecallRuntime,
+    SemanticSummaryIndexer,
+    backfill_existing_semantic_summaries,
+    build_semantic_index_bundle,
+)
 from packages.operator.runtime import (
     RecallEvidenceOperatorDetail,
     RecallEvidenceSearchHit,
@@ -128,6 +133,36 @@ def _steady_embedding_runtime(embedding_service: Any) -> None:
         return
 
 
+def _backfill_semantic_summaries_async(repository: Any, indexer: Any) -> bool:
+    if repository is None or indexer is None:
+        return False
+
+    def _run_backfill() -> None:
+        try:
+            result = backfill_existing_semantic_summaries(
+                repository=repository,
+                indexer=indexer,
+            )
+        except Exception:
+            LOGGER.debug("Existing semantic summary backfill failed during API startup.", exc_info=True)
+            return
+        if result.total_indexed:
+            LOGGER.info(
+                "Backfilled existing semantic summaries into the recall index: "
+                "facts=%s episodes=%s steps=%s",
+                result.facts_indexed,
+                result.episodes_indexed,
+                result.steps_indexed,
+            )
+
+    Thread(
+        target=_run_backfill,
+        name="elephant-semantic-summary-backfill",
+        daemon=True,
+    ).start()
+    return True
+
+
 def _provider_context_total_tokens(profile: AuthProfile | None, fallback: int) -> int:
     metadata = getattr(profile, "metadata", {}) if profile is not None else {}
     raw_value = metadata.get("context_window_tokens") if isinstance(metadata, Mapping) else None
@@ -226,6 +261,7 @@ class ElephantAPIApp:
             if _api_embedding_service is not None
             else None
         )
+        _backfill_semantic_summaries_async(self.repository, self.semantic_summary_indexer)
         self.skill_runtime = build_surface_skill_runtime(
             skill_manifest,
             repository=self.repository,

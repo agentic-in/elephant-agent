@@ -176,6 +176,19 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   returned to a normal window.
 - Quit cleanup was re-verified after the session: the app process and its
   managed API child process both exited, leaving no duplicate loopback API.
+- The macOS packaged Python runtime exposed why Personal Model semantic search
+  had stayed empty: the app bundle installed `torch 2.2.x` under Python 3.12,
+  and ModernBERT loading failed through the `torch.compile`/Dynamo path. The
+  rebuilt bundle now carries a Python 3.12-compatible embedding stack
+  (`sentence-transformers 5.5.1`, `transformers 4.57.6`, `torch 2.6.0`,
+  `torchaudio 2.6.0`, and `numpy 1.26.4`), and the embedding provider also
+  avoids numpy conversion on the hot path.
+- The rebuilt packaged app was launched through the real macOS shell and its
+  managed API. Startup semantic backfill populated the previously empty durable
+  index with 80 indexed entries: 48 Personal Model claims, 28 Episode summaries,
+  and 4 Step recall documents. `/v1/internal/dashboard/evidence` reported
+  `semantic_index_health.entry_count = 80`, provider
+  `elephant-local-embed`, and `embedding_bootstrap_status = ready`.
 
 ## Open Acceptance Matrix
 
@@ -184,7 +197,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, and step records verified after restart |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
-| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, and reply cancel verified; semantic index is empty |
+| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, and durable semantic index recovery verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
@@ -256,6 +269,18 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   background work.
 - Verify from the packaged app that a manual Learn job completes without
   creating recursive `episode_close` jobs.
+
+## Semantic Index Recovery Fix Track
+
+- Keep the macOS packaged embedding runtime compatible with the ModernBERT local
+  embedding model on Python 3.12.
+- Avoid numpy-dependent tensor conversion in the local embedding provider so
+  packaged torch/numpy ABI drift cannot disable recall.
+- Backfill existing Personal Model claims, closed Episode summaries, and recent
+  useful Steps into the durable semantic index at runtime startup without
+  blocking app launch.
+- Verify from the packaged app and managed API that semantic index health is
+  non-empty and ready.
 
 ## Exit Criteria
 

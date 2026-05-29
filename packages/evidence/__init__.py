@@ -3,7 +3,9 @@
 from .inventory import EVIDENCE_SURFACES
 from .recall_runtime import RecallRuntime
 from .episode_summary_indexer import (
+    SemanticSummaryBackfillResult,
     SemanticSummaryIndexer,
+    backfill_existing_semantic_summaries,
     build_episode_summary_text,
     build_learning_summary_recall_text,
     build_personal_model_claim_text,
@@ -67,10 +69,12 @@ __all__ = [
     "RecallTimeRange",
     "RecallQueryPlan",
     "RecallRankedHit",
+    "SemanticSummaryBackfillResult",
     "SemanticSummaryIndexer",
     "SemanticIndexBundle",
     "UnifiedRecallRepository",
     "UnifiedRecallRequest",
+    "backfill_existing_semantic_summaries",
     "build_embedding_index_policy",
     "build_episode_summary_text",
     "build_learning_summary_recall_text",

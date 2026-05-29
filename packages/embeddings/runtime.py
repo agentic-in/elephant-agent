@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import re
+import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -57,10 +58,71 @@ def _suppress_local_embedding_load_warnings(model_root: str | None = None) -> No
 
         for logger_name in (
             "sentence_transformers.SentenceTransformer",
+            "transformers",
             "transformers.tokenization_utils_tokenizers",
         ):
             logging.getLogger(logger_name).addFilter(_LocalEmbeddingLoadFilter())
         _LOCAL_EMBEDDING_LOG_FILTER_INSTALLED = True
+
+
+def _identity_torch_compile(fn: Any = None, *args: Any, **kwargs: Any) -> Any:
+    del args, kwargs
+    if fn is None:
+        def _decorator(candidate: Any) -> Any:
+            return candidate
+
+        return _decorator
+    return fn
+
+
+def _patch_unsupported_torch_compile() -> None:
+    """ModernBERT decorates blocks with torch.compile, which old torch cannot use on Python 3.12."""
+
+    if sys.version_info < (3, 12):
+        return
+    try:
+        import torch  # type: ignore[import-not-found]
+    except Exception:
+        return
+    compile_fn = getattr(torch, "compile", None)
+    if not callable(compile_fn) or getattr(compile_fn, "_elephant_identity_compile", False):
+        return
+    try:
+        compile_fn(lambda value: value)
+    except RuntimeError as error:
+        if "Dynamo is not supported" not in str(error):
+            return
+        patched = _identity_torch_compile
+        setattr(patched, "_elephant_identity_compile", True)
+        setattr(torch, "compile", patched)
+    except Exception:
+        return
+
+
+def _python_values(value: Any) -> Any:
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    return value
+
+
+def _encoded_embedding_rows(encoded: Any) -> list[Any]:
+    rows = _python_values(encoded)
+    if rows is None:
+        return []
+    if isinstance(rows, tuple):
+        rows = list(rows)
+    if not isinstance(rows, list):
+        return [rows]
+    if not rows:
+        return []
+    first = _python_values(rows[0])
+    if isinstance(first, (list, tuple)):
+        return [_python_values(row) for row in rows]
+    return [rows]
 
 
 def embedding_model_root_path(model_root: str | None = None) -> Path:
@@ -437,6 +499,7 @@ class SentenceTransformerEmbeddingProvider:
                 # compatibility warnings into the interactive TUI while the local embedder steadys.
                 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
                 _suppress_local_embedding_load_warnings(self.model_root)
+                _patch_unsupported_torch_compile()
                 from sentence_transformers import SentenceTransformer
 
                 _model_path = str(embedding_model_root_path(self.model_root))
@@ -463,15 +526,10 @@ class SentenceTransformerEmbeddingProvider:
             list(texts),
             batch_size=batch_size,
             normalize_embeddings=True,
-            convert_to_numpy=True,
+            convert_to_numpy=False,
             truncate_dim=dimensions,
         )
-        if hasattr(encoded, "tolist"):
-            encoded_rows = encoded.tolist()
-        else:
-            encoded_rows = encoded
-        if texts and encoded_rows and not isinstance(encoded_rows[0], (list, tuple)):
-            encoded_rows = [encoded_rows]
+        encoded_rows = _encoded_embedding_rows(encoded)
         vectors = tuple(
             _truncate_matryoshka_vector(tuple(float(value) for value in row), dimensions=dimensions)
             for row in encoded_rows

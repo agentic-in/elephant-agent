@@ -210,8 +210,19 @@ class EmbeddingRuntimeTest(unittest.TestCase):
 
     def test_local_embedding_loader_passes_tokenizer_regex_fix(self) -> None:
         provider = SentenceTransformerEmbeddingProvider(model_root="/tmp/elephant-embed")
-        sentence_transformer = mock.Mock(return_value=object())
-        fake_module = types.SimpleNamespace(SentenceTransformer=sentence_transformer)
+        calls: list[dict[str, object]] = []
+
+        class _SentenceTransformer:
+            def __init__(self, model_path: str, *, local_files_only: bool, processor_kwargs: dict[str, object] | None = None) -> None:
+                calls.append(
+                    {
+                        "model_path": model_path,
+                        "local_files_only": local_files_only,
+                        "processor_kwargs": processor_kwargs,
+                    }
+                )
+
+        fake_module = types.SimpleNamespace(SentenceTransformer=_SentenceTransformer)
 
         with (
             mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
@@ -220,11 +231,66 @@ class EmbeddingRuntimeTest(unittest.TestCase):
         ):
             provider._load_model()
 
-        sentence_transformer.assert_called_once_with(
-            "/tmp/elephant-embed",
-            local_files_only=True,
-            processor_kwargs={"fix_mistral_regex": True},
+        self.assertEqual(
+            calls,
+            [
+                {
+                    "model_path": "/tmp/elephant-embed",
+                    "local_files_only": True,
+                    "processor_kwargs": {"fix_mistral_regex": True},
+                }
+            ],
         )
+
+    def test_local_embedding_loader_patches_unsupported_torch_compile(self) -> None:
+        provider = SentenceTransformerEmbeddingProvider(model_root="/tmp/elephant-embed")
+        sentence_transformer = mock.Mock(return_value=object())
+        fake_module = types.SimpleNamespace(SentenceTransformer=sentence_transformer)
+
+        def _unsupported_compile(_fn=None, **_kwargs):
+            raise RuntimeError("Dynamo is not supported on Python 3.12+")
+
+        fake_torch = types.SimpleNamespace(compile=_unsupported_compile)
+
+        with (
+            mock.patch("packages.embeddings.runtime.sentence_transformers_dependencies_ready", return_value=True),
+            mock.patch("packages.embeddings.runtime.embedding_root_is_healthy", return_value=True),
+            mock.patch.dict(sys.modules, {"sentence_transformers": fake_module, "torch": fake_torch}),
+        ):
+            provider._load_model()
+
+        candidate = lambda value: value
+        self.assertIs(fake_torch.compile(candidate), candidate)
+        self.assertTrue(getattr(fake_torch.compile, "_elephant_identity_compile", False))
+
+    def test_encode_texts_avoids_numpy_conversion_and_accepts_tensor_rows(self) -> None:
+        provider = SentenceTransformerEmbeddingProvider()
+        calls: list[dict[str, object]] = []
+
+        class _TensorRow:
+            def __init__(self, values: tuple[float, ...]) -> None:
+                self._values = values
+
+            def detach(self):
+                return self
+
+            def cpu(self):
+                return self
+
+            def tolist(self):
+                return list(self._values)
+
+        class _Model:
+            def encode(self, texts, **kwargs):
+                calls.append(dict(kwargs))
+                return [_TensorRow(_unit_vector(64, index=index)) for index, _text in enumerate(texts)]
+
+        with mock.patch.object(provider, "_load_model", return_value=_Model()):
+            vectors = provider._encode_texts(("first", "second"), dimensions=64)
+
+        self.assertEqual(len(vectors), 2)
+        self.assertEqual(len(vectors[0]), 64)
+        self.assertEqual(calls[0]["convert_to_numpy"], False)
 
     def test_local_embedding_loader_suppresses_known_tokenizer_regex_warning(self) -> None:
         class _CaptureHandler(logging.Handler):

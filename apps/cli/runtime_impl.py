@@ -26,7 +26,12 @@ from packages.contracts.runtime import (
     PersonalModelRuntimeState,
 )
 from packages.cron import CronRuntime
-from packages.evidence import RecallRuntime, SemanticSummaryIndexer, build_semantic_index_bundle
+from packages.evidence import (
+    RecallRuntime,
+    SemanticSummaryIndexer,
+    backfill_existing_semantic_summaries,
+    build_semantic_index_bundle,
+)
 from packages.gateway_core import FileGatewayIdentityStore, GatewayOutboundQueue, default_outbound_queue_path
 from packages.gateway_core.outbound_delivery import GatewayMessageDeliverySurface
 from packages.growth import GrowthUpdate
@@ -305,6 +310,29 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
                     # Best-effort: an unavailable runtime is not an error.
                     LOGGER.warning("failed to start embedding runtime steady task during CLI runtime init", exc_info=True)
                     pass
+        if semantic_summary_indexer is not None:
+            def _run_semantic_backfill() -> None:
+                try:
+                    result = backfill_existing_semantic_summaries(
+                        repository=repository,
+                        indexer=semantic_summary_indexer,
+                    )
+                except Exception:
+                    LOGGER.debug("existing semantic summary backfill failed during CLI runtime init", exc_info=True)
+                    return
+                if result.total_indexed:
+                    LOGGER.info(
+                        "backfilled existing semantic summaries into the recall index: facts=%s episodes=%s steps=%s",
+                        result.facts_indexed,
+                        result.episodes_indexed,
+                        result.steps_indexed,
+                    )
+
+            threading.Thread(
+                target=_run_semantic_backfill,
+                name="elephant-cli-semantic-summary-backfill",
+                daemon=True,
+            ).start()
         skill_runtime = build_skill_runtime(
             extension_manifest,
             repository=repository,

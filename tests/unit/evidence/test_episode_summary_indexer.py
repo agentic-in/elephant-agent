@@ -7,10 +7,11 @@ from datetime import datetime, timezone
 import logging
 from typing import Any
 
-from packages.contracts import Episode, Fact
+from packages.contracts import Episode, Fact, PersonalModel, State, Step
 from packages.contracts.paths import LearningSummaryRecord, PathRecord, PathStepRecord
 from packages.evidence import (
     SemanticSummaryIndexer,
+    backfill_existing_semantic_summaries,
     build_episode_summary_text,
     build_learning_summary_recall_text,
     build_personal_model_claim_text,
@@ -115,6 +116,24 @@ def _learning_summary(**kwargs: Any) -> LearningSummaryRecord:
     return LearningSummaryRecord(**defaults)
 
 
+def _step(**kwargs: Any) -> Step:
+    defaults: dict[str, Any] = dict(
+        step_id="step:1",
+        loop_id="loop:1",
+        episode_id="session:1",
+        state_id="state:1",
+        personal_model_id="pm:1",
+        phase="observation",
+        action="record_input",
+        status="completed",
+        sequence=1,
+        created_at=datetime(2026, 4, 30, tzinfo=timezone.utc),
+        metadata={"user_query": "Remember that I care about semantic recall."},
+    )
+    defaults.update(kwargs)
+    return Step(**defaults)
+
+
 def test_build_episode_summary_joins_entry_exit_and_metadata() -> None:
     ep = _episode(
         entry_surface="cli",
@@ -212,6 +231,85 @@ def test_indexer_writes_document_for_path_learning_summary() -> None:
     assert doc.source_id == "path:learning_summary:learning-summary:1"
     assert doc.metadata["kind"] == "path_learning_summary"
     assert "core essence" in doc.text
+
+
+def test_backfill_existing_semantic_summaries_indexes_missing_records() -> None:
+    emb = _StubEmbeddingService()
+    idx = _StubSemanticIndex()
+    indexer = SemanticSummaryIndexer(
+        semantic_index=idx,
+        embedding_service=emb,
+        provider_id="stub-provider",
+        model_id="stub-model",
+    )
+
+    class _Repository:
+        def list_semantic_index_entries(self):
+            return ()
+
+        def list_personal_models(self):
+            return (PersonalModel(personal_model_id="pm:1"),)
+
+        def current_state(self):
+            return State(state_id="state:1", personal_model_id="pm:1", state_anchor="qa")
+
+        def list_personal_model_facts(self, **_kwargs: Any):
+            return (_fact(),)
+
+        def list_episodes(self, **_kwargs: Any):
+            return (_episode(),)
+
+        def list_steps(self, **_kwargs: Any):
+            return (_step(), _step(step_id="step:tool", action="call_tool", metadata={"tool_name": "noop"}))
+
+    result = backfill_existing_semantic_summaries(repository=_Repository(), indexer=indexer)
+
+    assert result.facts_indexed == 1
+    assert result.episodes_indexed == 1
+    assert result.steps_indexed == 1
+    assert result.total_indexed == 3
+    assert [doc.source_id for doc in idx.documents] == [
+        "fact:pm:1",
+        "episode:session:1",
+        "step:step:1",
+    ]
+
+
+def test_backfill_existing_semantic_summaries_skips_existing_source_ids() -> None:
+    emb = _StubEmbeddingService()
+    idx = _StubSemanticIndex()
+    indexer = SemanticSummaryIndexer(
+        semantic_index=idx,
+        embedding_service=emb,
+        provider_id="stub-provider",
+        model_id="stub-model",
+    )
+
+    class _Repository:
+        def list_semantic_index_entries(self):
+            return (
+                type("Entry", (), {"source_id": "fact:pm:1", "status": "indexed"})(),
+                type("Entry", (), {"source_id": "episode:session:1", "status": "indexed"})(),
+            )
+
+        def list_personal_models(self):
+            return (PersonalModel(personal_model_id="pm:1"),)
+
+        def list_personal_model_facts(self, **_kwargs: Any):
+            return (_fact(),)
+
+        def list_episodes(self, **_kwargs: Any):
+            return (_episode(),)
+
+        def list_steps(self, **_kwargs: Any):
+            return (_step(),)
+
+    result = backfill_existing_semantic_summaries(repository=_Repository(), indexer=indexer)
+
+    assert result.facts_indexed == 0
+    assert result.episodes_indexed == 0
+    assert result.steps_indexed == 1
+    assert [doc.source_id for doc in idx.documents] == ["step:step:1"]
 
 
 def test_indexer_swallows_embedding_exception(caplog) -> None:

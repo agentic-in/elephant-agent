@@ -21,17 +21,22 @@ SITE_PACKAGES="${RUNTIME_ROOT}/site-packages"
 BROWSERS_ROOT="${RUNTIME_ROOT}/ms-playwright"
 MANIFEST="${RUNTIME_ROOT}/manifest.json"
 EMBEDDING_RUNTIME_REQUIREMENTS=(
-  "sentence-transformers>=3,<4"
+  "sentence-transformers>=5.4,<6"
+  "transformers>=4.57,<4.58"
   "huggingface-hub>=0.30,<1"
   "modelscope>=1.10,<2"
+)
+TORCH_RUNTIME_REQUIREMENTS=(
+  "numpy>=1.26,<2"
+  "torch>=2.6,<2.7"
+  "torchaudio>=2.6,<2.7"
 )
 VOICE_RUNTIME_REQUIREMENTS=(
   "edge-tts>=7.2,<8"
   "funasr>=1.2,<2"
   "modelscope>=1.10,<2"
   "setuptools>=69"
-  # Match the macOS torch wheel family; newer torchaudio wheels are arm64-only.
-  "torchaudio>=2.2,<2.3"
+  "${TORCH_RUNTIME_REQUIREMENTS[@]}"
 )
 
 fail() {
@@ -158,6 +163,8 @@ runtime_dependency_cache_key() {
     cat "${requirements}"
     printf '\nembedding_requirements=\n'
     printf '%s\n' "${EMBEDDING_RUNTIME_REQUIREMENTS[@]}"
+    printf '\ntorch_requirements=\n'
+    printf '%s\n' "${TORCH_RUNTIME_REQUIREMENTS[@]}"
     printf '\nvoice_requirements=\n'
     printf '%s\n' "${VOICE_RUNTIME_REQUIREMENTS[@]}"
   } > "${key_source}"
@@ -202,7 +209,7 @@ import importlib.util
 
 import playwright  # noqa: F401
 
-for module_name in ("sentence_transformers", "huggingface_hub", "modelscope", "edge_tts"):
+for module_name in ("sentence_transformers", "transformers", "huggingface_hub", "modelscope", "edge_tts", "funasr", "torch", "torchaudio", "numpy"):
     if importlib.util.find_spec(module_name) is None:
         raise SystemExit(f"missing bundled runtime dependency: {module_name}")
 PY
@@ -272,7 +279,7 @@ import importlib.util
 import apps.api  # noqa: F401
 import playwright  # noqa: F401
 
-for module_name in ("sentence_transformers", "huggingface_hub", "modelscope", "edge_tts"):
+for module_name in ("sentence_transformers", "transformers", "huggingface_hub", "modelscope", "edge_tts", "funasr", "torch", "torchaudio", "numpy"):
     if importlib.util.find_spec(module_name) is None:
         raise SystemExit(f"missing bundled runtime dependency: {module_name}")
 PY
