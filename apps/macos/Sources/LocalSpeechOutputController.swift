@@ -39,6 +39,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
     private var speechTask: Task<Void, Never>?
     private var generationID: UUID?
     private var activeAudioURL: URL?
+    private weak var activeSystemUtterance: AVSpeechUtterance?
 
     override init() {
         super.init()
@@ -91,6 +92,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
             audioPlayer.stop()
         }
         audioPlayer = nil
+        activeSystemUtterance = nil
         cleanupActiveAudio()
         activeMessageID = nil
         isPreparing = false
@@ -193,6 +195,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
+            guard self?.activeSystemUtterance === utterance else { return }
             self?.isPreparing = false
             self?.isSpeaking = true
         }
@@ -200,6 +203,8 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
+            guard self?.activeSystemUtterance === utterance else { return }
+            self?.activeSystemUtterance = nil
             self?.activeMessageID = nil
             self?.isPreparing = false
             self?.isSpeaking = false
@@ -208,6 +213,8 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
+            guard self?.activeSystemUtterance === utterance else { return }
+            self?.activeSystemUtterance = nil
             self?.activeMessageID = nil
             self?.isPreparing = false
             self?.isSpeaking = false
@@ -216,6 +223,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor [weak self] in
+            guard self?.audioPlayer === player else { return }
             self?.activeMessageID = nil
             self?.isPreparing = false
             self?.isSpeaking = false
@@ -226,6 +234,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         Task { @MainActor [weak self] in
+            guard self?.audioPlayer === player else { return }
             let failedMessageID = self?.activeMessageID
             self?.lastError = error?.localizedDescription ?? "Could not play the generated voice reply."
             self?.lastFailedMessageID = failedMessageID
@@ -249,6 +258,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
             : edgeVoiceIdentifier
         let id = UUID()
         generationID = id
+        activeSystemUtterance = nil
         activeMessageID = messageID
         isPreparing = true
         isSpeaking = false
@@ -381,6 +391,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
             audioPlayer.stop()
         }
         audioPlayer = nil
+        activeSystemUtterance = nil
         cleanupActiveAudio()
 
         let voice = Self.preferredVoice(language: language, preferredIdentifier: preferredVoiceIdentifier)
@@ -393,6 +404,7 @@ final class LocalSpeechOutputController: NSObject, ObservableObject, AVSpeechSyn
         activeMessageID = messageID
         isPreparing = false
         isSpeaking = true
+        activeSystemUtterance = utterance
         lastPlaybackMessageID = messageID
         lastFailedMessageID = nil
         activeVoiceName = voice?.name ?? "System Default"

@@ -113,7 +113,7 @@ final class SpeechInputController: NSObject, ObservableObject {
             case .funASR:
                 self.requestSpeechPreviewAccess(locale: Locale(identifier: "zh-CN")) { [weak self] locale in
                     guard let self, self.isActiveCapture(generation) else { return }
-                    self.startLocalRecording(previewLocale: locale)
+                    self.startLocalRecording(previewLocale: locale, generation: generation)
                 }
             case .apple(let locale, let statusNotice):
                 SFSpeechRecognizer.requestAuthorization { status in
@@ -124,7 +124,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                             self.statusText = Self.localizedStatus(self.activeLanguage, en: "Speech recognition is not authorized.", zh: "语音识别权限未开启。")
                             return
                         }
-                        self.startAppleRecording(locale: locale, statusNotice: statusNotice)
+                        self.startAppleRecording(locale: locale, statusNotice: statusNotice, generation: generation)
                     }
                 }
             }
@@ -135,6 +135,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         guard isRecording || audioEngine.isRunning else { return }
         updateCapturedDuration()
         let mode = activeMode
+        let generation = captureGeneration
         stopAudioEngine()
         isRecording = false
         recordingStartedAt = nil
@@ -142,7 +143,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         switch mode {
         case .funASR:
             stopApplePreviewRecognition()
-            startFunASRTranscription()
+            startFunASRTranscription(generation: generation)
         case .apple:
             recognitionRequest?.endAudio()
             recognitionTask?.finish()
@@ -264,7 +265,8 @@ final class SpeechInputController: NSObject, ObservableObject {
         }
     }
 
-    private func startAppleRecording(locale: Locale, statusNotice: String?) {
+    private func startAppleRecording(locale: Locale, statusNotice: String?, generation: Int) {
+        guard isActiveCapture(generation) else { return }
         recognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer, recognizer.isAvailable else {
             statusText = Self.localizedStatus(activeLanguage, en: "Speech recognizer is unavailable.", zh: "语音识别暂不可用。")
@@ -297,6 +299,13 @@ final class SpeechInputController: NSObject, ObservableObject {
             sink.accept(buffer)
         }
 
+        guard isActiveCapture(generation) else {
+            stopAudioEngine()
+            recognitionRequest.endAudio()
+            self.recognitionRequest = nil
+            self.recognizer = nil
+            return
+        }
         do {
             audioEngine.prepare()
             try audioEngine.start()
@@ -318,6 +327,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.isActiveCapture(generation) else { return }
                 if let result {
                     let spoken = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.applyRecognizedText(spoken)
@@ -327,13 +337,14 @@ final class SpeechInputController: NSObject, ObservableObject {
                 }
 
                 if error != nil || result?.isFinal == true {
-                    self.finishAppleRecognition()
+                    self.finishAppleRecognition(generation: generation)
                 }
             }
         }
     }
 
-    private func startLocalRecording(previewLocale: Locale?) {
+    private func startLocalRecording(previewLocale: Locale?, generation: Int) {
+        guard isActiveCapture(generation) else { return }
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
         let format: AVAudioFormat
@@ -353,7 +364,7 @@ final class SpeechInputController: NSObject, ObservableObject {
             return
         }
         recordingURL = url
-        let previewRequest = previewLocale.flatMap { startApplePreviewRecognition(locale: $0) }
+        let previewRequest = previewLocale.flatMap { startApplePreviewRecognition(locale: $0, generation: generation) }
 
         let sink = SpeechAudioTapSink(file: file, recognitionRequest: previewRequest)
         audioTapSink = sink
@@ -361,6 +372,11 @@ final class SpeechInputController: NSObject, ObservableObject {
             sink.accept(buffer)
         }
 
+        guard isActiveCapture(generation) else {
+            stopAudioEngine()
+            previewRequest?.endAudio()
+            return
+        }
         do {
             audioEngine.prepare()
             try audioEngine.start()
@@ -379,7 +395,8 @@ final class SpeechInputController: NSObject, ObservableObject {
         statusText = Self.localizedStatus(activeLanguage, en: "Listening...", zh: "正在听...")
     }
 
-    private func startApplePreviewRecognition(locale: Locale) -> SFSpeechAudioBufferRecognitionRequest? {
+    private func startApplePreviewRecognition(locale: Locale, generation: Int) -> SFSpeechAudioBufferRecognitionRequest? {
+        guard isActiveCapture(generation) else { return nil }
         recognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer, recognizer.isAvailable else {
             recognizer = nil
@@ -394,6 +411,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.isActiveCapture(generation) else { return }
                 if let result {
                     let spoken = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !spoken.isEmpty {
@@ -412,7 +430,8 @@ final class SpeechInputController: NSObject, ObservableObject {
         return request
     }
 
-    private func startFunASRTranscription() {
+    private func startFunASRTranscription(generation: Int) {
+        guard isActiveCapture(generation) else { return }
         guard let recordingURL else {
             statusText = Self.localizedStatus(activeLanguage, en: "No local recording was captured.", zh: "没有捕捉到本地录音。")
             return
@@ -431,6 +450,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                 )
                 await MainActor.run {
                     guard let self, !Task.isCancelled else { return }
+                    guard self.isActiveCapture(generation) else { return }
                     self.convertedRecordingURL = wavURL
                     self.applyRecognizedText(text)
                     self.statusText = Self.localizedStatus(self.activeLanguage, en: "Voice input captured.", zh: "已捕捉到语音。")
@@ -439,6 +459,7 @@ final class SpeechInputController: NSObject, ObservableObject {
             } catch {
                 await MainActor.run {
                     guard let self, !Task.isCancelled else { return }
+                    guard self.isActiveCapture(generation) else { return }
                     let draft = self.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.statusText = draft.isEmpty
                         ? Self.localizedStatus(self.activeLanguage, en: "Chinese recognition failed: \(error.localizedDescription)", zh: "中文识别失败：\(error.localizedDescription)")
@@ -449,7 +470,8 @@ final class SpeechInputController: NSObject, ObservableObject {
         }
     }
 
-    private func finishAppleRecognition() {
+    private func finishAppleRecognition(generation: Int) {
+        guard isActiveCapture(generation) else { return }
         updateCapturedDuration()
         if audioEngine.isRunning {
             stopAudioEngine()

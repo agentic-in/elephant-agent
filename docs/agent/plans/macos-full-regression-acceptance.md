@@ -87,6 +87,12 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Voice cancel was verified after the timeout state; the overlay dismissed, no
   late permission callback restarted capture, and no new macOS crash report was
   produced.
+- Voice capture and reply playback were hardened against stale asynchronous
+  callbacks. Permission, recognizer, preview-recognizer, local transcription,
+  system speech, and audio-player callbacks now ignore outdated capture/playback
+  generations so rapid stop/start/send flows cannot mutate a newer voice turn.
+- The rebuilt packaged app launched into Sleep Display with its managed API
+  healthy, and the post-rebuild smoke did not produce a new macOS crash report.
 - The only macOS crash report found during this pass predated the current
   packaged-app launch; the Chat, voice-timeout, Settings, attachment, Calendar,
   Diary, and Personal Model passes did not create a new crash report.
@@ -282,7 +288,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, managed-API recall search, and episode identity preservation verified |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, and deleted-Path memory cleanup verified |
