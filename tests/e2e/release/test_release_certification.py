@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 from pathlib import Path
 import subprocess
 import sys
@@ -20,6 +21,8 @@ RELEASE_MODEL_PATH = ROOT / "docs" / "agent" / "release-model.md"
 PROVENANCE_ADR_PATH = ROOT / "docs" / "agent" / "adr" / "adr-0002-release-artifact-provenance.md"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
 DASHBOARD_PACKAGE_PATH = ROOT / "apps" / "dashboard" / "package.json"
+MACOS_BUILD_SCRIPT_PATH = ROOT / "apps" / "macos" / "Scripts" / "build-app.sh"
+MACOS_ENTITLEMENTS_PATH = ROOT / "apps" / "macos" / "Entitlements.plist"
 
 RESET_API_E2E_TARGETS = (
     "tests.e2e.api.test_api_surface.APISurfaceE2ETest.test_operator_namespace_no_longer_exposes_public_dashboard_reads",
@@ -189,6 +192,14 @@ class ReleaseCertificationContractsTest(unittest.TestCase):
         self.assertIn("Developer ID", text)
         self.assertIn("notarization", text)
         self.assertIn("Future SBOM, external transparency-log, or repository-attestation", text)
+
+    def test_macos_voice_privacy_and_audio_input_entitlement_stay_packaged(self) -> None:
+        build_script = MACOS_BUILD_SCRIPT_PATH.read_text(encoding="utf-8")
+        entitlements = plistlib.loads(MACOS_ENTITLEMENTS_PATH.read_bytes())
+
+        self.assertIn("NSMicrophoneUsageDescription", build_script)
+        self.assertIn("NSSpeechRecognitionUsageDescription", build_script)
+        self.assertTrue(entitlements.get("com.apple.security.device.audio-input"))
 
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")

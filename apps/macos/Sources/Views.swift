@@ -2885,24 +2885,29 @@ struct WakeComposerPanel: View {
 
                         HStack(spacing: 8) {
                             Button {
-                                startVoiceCapture()
+                                if speech.isRecording {
+                                    stopVoiceCapture()
+                                } else {
+                                    startVoiceCapture()
+                                }
                             } label: {
-                                Image(systemName: speech.isRecording ? "waveform" : "mic.fill")
+                                Image(systemName: voiceInputButtonSymbol)
                                     .font(.system(size: 14, weight: .semibold))
                                     .frame(width: 30, height: 30)
-                                    .foregroundStyle(speech.isRecording ? Color.white : ElephantTheme.muted)
+                                    .foregroundStyle(voiceInputButtonForeground)
                                     .background(
                                         Circle()
-                                            .fill(speech.isRecording ? ElephantTheme.accent : ElephantTheme.panel.opacity(0.72))
+                                            .fill(voiceInputButtonFill)
                                     )
                                     .overlay(
                                         Circle()
-                                            .stroke(speech.isRecording ? ElephantTheme.accent.opacity(0.18) : ElephantTheme.line.opacity(0.50), lineWidth: 1)
+                                            .stroke(voiceInputButtonStroke, lineWidth: 1)
                                     )
                             }
                             .buttonStyle(PressablePlainButtonStyle())
-                            .help(speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput))
-                            .accessibilityLabel(speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput))
+                            .disabled(speech.isTranscribing)
+                            .help(voiceInputButtonHelp)
+                            .accessibilityLabel(voiceInputButtonHelp)
 
                             Button {
                                 speech.stop()
@@ -3003,7 +3008,10 @@ struct WakeComposerPanel: View {
     }
 
     private func startVoiceCapture() {
-        guard !speech.isRecording else { return }
+        guard !speech.isRecording && !speech.isTranscribing else {
+            voiceCaptureVisible = true
+            return
+        }
         model.stopVoiceReply()
         voiceDraftSourceText = model.wakeDraft
         voiceRecognizedDraft = model.wakeDraft
@@ -3065,6 +3073,32 @@ struct WakeComposerPanel: View {
 
     private var canSendVoice: Bool {
         !speech.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var voiceInputButtonSymbol: String {
+        if speech.isTranscribing {
+            return "text.bubble"
+        }
+        return speech.isRecording ? "waveform" : "mic.fill"
+    }
+
+    private var voiceInputButtonForeground: Color {
+        speech.isRecording ? Color.white : ElephantTheme.muted
+    }
+
+    private var voiceInputButtonFill: Color {
+        speech.isRecording ? ElephantTheme.accent : ElephantTheme.panel.opacity(0.72)
+    }
+
+    private var voiceInputButtonStroke: Color {
+        speech.isRecording ? ElephantTheme.accent.opacity(0.18) : ElephantTheme.line.opacity(0.50)
+    }
+
+    private var voiceInputButtonHelp: String {
+        if speech.isTranscribing {
+            return localizedYouText(model.appLanguage, en: "Voice is transcribing", zh: "正在识别语音", fr: "Transcription vocale", de: "Sprache wird transkribiert")
+        }
+        return speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput)
     }
 
     private var currentVoiceDuration: TimeInterval {
@@ -3164,83 +3198,97 @@ struct VoiceListeningOverlay: View {
     var cancel: () -> Void
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || (!isRecording && !isTranscribing))) { timeline in
-            let elapsed = elapsedDuration(now: timeline.date)
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor))
-                    .overlay(
-                        MemoryCurrentField(paused: reduceMotion || !isRecording)
-                            .opacity(0.12)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    )
-                    .overlay(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.30),
-                                ElephantTheme.accent.opacity(0.035),
-                                Color.white.opacity(0.18)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(ElephantTheme.accent.opacity(isRecording || isTranscribing ? 0.20 : 0.12), lineWidth: 1)
-                    )
+        ZStack {
+            background
 
-                VStack(spacing: 18) {
-                    Spacer(minLength: 24)
-                    ZStack {
-                        VoiceListeningWaveform(active: isRecording || isTranscribing, seconds: timeline.date.timeIntervalSinceReferenceDate)
-                            .frame(width: 340, height: 112)
-                            .opacity(isRecording || isTranscribing ? 0.92 : 0.56)
-                        Circle()
-                            .fill(Color(nsColor: .textBackgroundColor).opacity(0.88))
-                            .frame(width: 66, height: 66)
-                            .overlay(Circle().stroke(Color.white.opacity(0.62), lineWidth: 1))
-                            .shadow(color: ElephantTheme.accent.opacity(isRecording || isTranscribing ? 0.16 : 0.06), radius: 20, y: 8)
-                        Image(systemName: isTranscribing ? "text.bubble" : isRecording ? "waveform" : "mic.fill")
-                            .font(.system(size: 23, weight: .semibold))
-                            .foregroundStyle(isRecording || isTranscribing ? ElephantTheme.accent : ElephantTheme.muted)
-                    }
-                    .accessibilityHidden(true)
-
-                    VStack(spacing: 5) {
-                        Text(title)
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(ElephantTheme.ink)
-                        Text(detail(elapsed: elapsed))
-                            .font(.system(.callout, design: .rounded).weight(.medium))
-                            .foregroundStyle(ElephantTheme.muted)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: 520)
-
-                    HStack(spacing: 12) {
-                        overlayButton(symbol: "xmark", tint: ElephantTheme.muted, action: cancel)
-                            .help(localizedYouText(model.appLanguage, en: "Cancel voice", zh: "取消语音", fr: "Annuler la voix", de: "Sprache abbrechen"))
-                            .accessibilityLabel(localizedYouText(model.appLanguage, en: "Cancel voice", zh: "取消语音", fr: "Annuler la voix", de: "Sprache abbrechen"))
-                        overlayButton(symbol: "stop.fill", tint: ElephantTheme.orange, action: stop)
-                            .disabled(!isRecording)
-                            .opacity(isRecording ? 1 : 0.42)
-                            .help(model.text(.stopVoiceInput))
-                            .accessibilityLabel(model.text(.stopVoiceInput))
-                        overlayButton(symbol: "arrow.up", tint: canSend ? ElephantTheme.accent : ElephantTheme.faint, action: send)
-                            .disabled(!canSend)
-                            .help(model.text(.send))
-                            .accessibilityLabel(model.text(.send))
-                    }
-
-                    Spacer(minLength: 24)
-                }
-                .padding(32)
+            VStack(spacing: 18) {
+                Spacer(minLength: 24)
+                animatedIndicator
+                titleAndDetail
+                controls
+                Spacer(minLength: 24)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityElement(children: .contain)
+            .padding(32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var background: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color(nsColor: .textBackgroundColor))
+            .overlay(
+                MemoryCurrentField(paused: reduceMotion || !isRecording)
+                    .opacity(0.12)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            )
+            .overlay(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.30),
+                        ElephantTheme.accent.opacity(0.035),
+                        Color.white.opacity(0.18)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(ElephantTheme.accent.opacity(isRecording || isTranscribing ? 0.20 : 0.12), lineWidth: 1)
+            )
+    }
+
+    private var animatedIndicator: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || (!isRecording && !isTranscribing))) { timeline in
+            ZStack {
+                VoiceListeningWaveform(active: isRecording || isTranscribing, seconds: timeline.date.timeIntervalSinceReferenceDate)
+                    .frame(width: 340, height: 112)
+                    .opacity(isRecording || isTranscribing ? 0.92 : 0.56)
+                Circle()
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.88))
+                    .frame(width: 66, height: 66)
+                    .overlay(Circle().stroke(Color.white.opacity(0.62), lineWidth: 1))
+                    .shadow(color: ElephantTheme.accent.opacity(isRecording || isTranscribing ? 0.16 : 0.06), radius: 20, y: 8)
+                Image(systemName: isTranscribing ? "text.bubble" : isRecording ? "waveform" : "mic.fill")
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(isRecording || isTranscribing ? ElephantTheme.accent : ElephantTheme.muted)
+            }
+            .accessibilityHidden(true)
+        }
+    }
+
+    private var titleAndDetail: some View {
+        VStack(spacing: 5) {
+            Text(title)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(ElephantTheme.ink)
+            TimelineView(.periodic(from: Date(), by: reduceMotion ? 1.0 : 0.25)) { timeline in
+                Text(detail(elapsed: elapsedDuration(now: timeline.date)))
+                    .font(.system(.callout, design: .rounded).weight(.medium))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: 520)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 12) {
+            overlayButton(symbol: "xmark", tint: ElephantTheme.muted, action: cancel)
+                .help(localizedYouText(model.appLanguage, en: "Cancel voice", zh: "取消语音", fr: "Annuler la voix", de: "Sprache abbrechen"))
+                .accessibilityLabel(localizedYouText(model.appLanguage, en: "Cancel voice", zh: "取消语音", fr: "Annuler la voix", de: "Sprache abbrechen"))
+            overlayButton(symbol: "stop.fill", tint: ElephantTheme.orange, action: stop)
+                .disabled(!isRecording)
+                .opacity(isRecording ? 1 : 0.42)
+                .help(model.text(.stopVoiceInput))
+                .accessibilityLabel(model.text(.stopVoiceInput))
+            overlayButton(symbol: "arrow.up", tint: canSend ? ElephantTheme.accent : ElephantTheme.faint, action: send)
+                .disabled(!canSend)
+                .help(model.text(.send))
+                .accessibilityLabel(model.text(.send))
         }
     }
 

@@ -2,6 +2,37 @@ import AVFoundation
 import Foundation
 import Speech
 
+private final class SpeechAudioTapSink {
+    private let lock = NSLock()
+    private var acceptingBuffers = true
+    private let file: AVAudioFile?
+    private let recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+
+    init(
+        file: AVAudioFile? = nil,
+        recognitionRequest: SFSpeechAudioBufferRecognitionRequest? = nil
+    ) {
+        self.file = file
+        self.recognitionRequest = recognitionRequest
+    }
+
+    func accept(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard acceptingBuffers else { return }
+        if let file {
+            try? file.write(from: buffer)
+        }
+        recognitionRequest?.append(buffer)
+    }
+
+    func close() {
+        lock.lock()
+        acceptingBuffers = false
+        lock.unlock()
+    }
+}
+
 @MainActor
 final class SpeechInputController: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
@@ -20,6 +51,7 @@ final class SpeechInputController: NSObject, ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
+    private var audioTapSink: SpeechAudioTapSink?
     private var recordingURL: URL?
     private var convertedRecordingURL: URL?
     private var transcriptionTask: Task<Void, Never>?
@@ -58,6 +90,10 @@ final class SpeechInputController: NSObject, ObservableObject {
         cleanupRecordingFiles()
         activeMode = Self.resolvedMode(language: language, recognitionEngine: recognitionEngine)
         statusText = Self.localizedStatus(language, en: "Requesting microphone access...", zh: "正在请求麦克风权限...")
+        guard Self.hasAudioInputDevice() else {
+            statusText = Self.localizedStatus(language, en: "No microphone input device was found.", zh: "没有找到可用的麦克风输入设备。")
+            return
+        }
 
         requestMicrophoneAccess { [weak self] allowed in
             guard let self else { return }
@@ -213,16 +249,29 @@ final class SpeechInputController: NSObject, ObservableObject {
 
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
-        let format = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak recognitionRequest] buffer, _ in
-            recognitionRequest?.append(buffer)
+        let format: AVAudioFormat
+        do {
+            format = try validInputFormat(from: inputNode)
+        } catch {
+            recognitionRequest.endAudio()
+            self.recognitionRequest = nil
+            statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
+            return
+        }
+        let sink = SpeechAudioTapSink(recognitionRequest: recognitionRequest)
+        audioTapSink = sink
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            sink.accept(buffer)
         }
 
         do {
             audioEngine.prepare()
             try audioEngine.start()
         } catch {
-            inputNode.removeTap(onBus: 0)
+            stopAudioEngine()
+            recognitionRequest.endAudio()
+            self.recognitionRequest = nil
+            self.recognizer = nil
             statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
             return
         }
@@ -252,30 +301,36 @@ final class SpeechInputController: NSObject, ObservableObject {
     private func startLocalRecording(previewLocale: Locale?) {
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
-        let format = inputNode.outputFormat(forBus: 0)
-        let previewRequest = previewLocale.flatMap { startApplePreviewRecognition(locale: $0) }
+        let format: AVAudioFormat
+        do {
+            format = try validInputFormat(from: inputNode)
+        } catch {
+            statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
+            return
+        }
 
         let file: AVAudioFile
         let url: URL
         do {
             (url, file) = try makeRecordingFile(inputFormat: format)
         } catch {
-            stopApplePreviewRecognition()
             statusText = Self.localizedStatus(activeLanguage, en: "Could not prepare local recording: \(error.localizedDescription)", zh: "无法准备本地录音：\(error.localizedDescription)")
             return
         }
         recordingURL = url
+        let previewRequest = previewLocale.flatMap { startApplePreviewRecognition(locale: $0) }
 
+        let sink = SpeechAudioTapSink(file: file, recognitionRequest: previewRequest)
+        audioTapSink = sink
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            try? file.write(from: buffer)
-            previewRequest?.append(buffer)
+            sink.accept(buffer)
         }
 
         do {
             audioEngine.prepare()
             try audioEngine.start()
         } catch {
-            inputNode.removeTap(onBus: 0)
+            stopAudioEngine()
             stopApplePreviewRecognition()
             statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
             return
@@ -383,6 +438,8 @@ final class SpeechInputController: NSObject, ObservableObject {
     }
 
     private func stopAudioEngine() {
+        audioTapSink?.close()
+        audioTapSink = nil
         if audioEngine.isRunning {
             audioEngine.stop()
         }
@@ -405,6 +462,22 @@ final class SpeechInputController: NSObject, ObservableObject {
 
     private static func localizedStatus(_ language: AppLanguage, en: String, zh: String) -> String {
         language == .zh ? zh : en
+    }
+
+    private static func hasAudioInputDevice() -> Bool {
+        AVCaptureDevice.default(for: .audio) != nil
+    }
+
+    private func validInputFormat(from inputNode: AVAudioInputNode) throws -> AVAudioFormat {
+        let format = inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate.isFinite, format.sampleRate > 0, format.channelCount > 0 else {
+            throw MacVoiceRuntimeError.invalidOutput(Self.localizedStatus(
+                activeLanguage,
+                en: "The current microphone input format is not usable.",
+                zh: "当前麦克风输入格式不可用。"
+            ))
+        }
+        return format
     }
 
     private func makeRecordingFile(inputFormat: AVAudioFormat) throws -> (URL, AVAudioFile) {
