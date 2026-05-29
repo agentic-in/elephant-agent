@@ -9549,6 +9549,7 @@ private struct PathRailChip: View {
     var isSelected: Bool
     var onSelect: () -> Void
     var onDelete: () -> Void
+    @State private var confirmingDelete = false
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -9579,7 +9580,9 @@ private struct PathRailChip: View {
             }
             .buttonStyle(PressablePlainButtonStyle())
 
-            Button(action: onDelete) {
+            Button {
+                confirmingDelete = true
+            } label: {
                 Image(systemName: "xmark")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(ElephantTheme.faint)
@@ -9587,7 +9590,14 @@ private struct PathRailChip: View {
                     .background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: Circle())
             }
             .buttonStyle(PressablePlainButtonStyle())
-            .help(localizedYouText(model.appLanguage, en: "Delete Path", zh: "删除路径", fr: "Supprimer", de: "Pfad löschen"))
+            .help(deletePathTitle)
+            .accessibilityLabel(deletePathTitle)
+            .confirmationDialog(deletePathTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button(deletePathTitle, role: .destructive, action: onDelete)
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen"), role: .cancel) {}
+            } message: {
+                Text(path.title)
+            }
             .padding(.trailing, 6)
         }
         .frame(width: 260, height: 42)
@@ -9597,6 +9607,10 @@ private struct PathRailChip: View {
 
     private var chipBackground: Color {
         isSelected ? ElephantTheme.accent.opacity(0.075) : Color(nsColor: .textBackgroundColor).opacity(0.78)
+    }
+
+    private var deletePathTitle: String {
+        localizedYouText(model.appLanguage, en: "Delete Path", zh: "删除路径", fr: "Supprimer le parcours", de: "Pfad löschen")
     }
 }
 
@@ -10144,6 +10158,7 @@ private struct PathStepListRow: View {
     @EnvironmentObject private var model: ElephantAppModel
     var step: PathStepItem
     var onOpen: (PathStepItem) -> Void
+    @State private var confirmingDelete = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -10164,7 +10179,7 @@ private struct PathStepListRow: View {
             }
             Spacer()
             Button {
-                Task { await model.deletePathStep(step) }
+                confirmingDelete = true
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption2.weight(.bold))
@@ -10172,7 +10187,16 @@ private struct PathStepListRow: View {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(PressablePlainButtonStyle())
-            .help(localizedYouText(model.appLanguage, en: "Delete Flow step", zh: "删除事项", fr: "Supprimer", de: "Schritt löschen"))
+            .help(deleteStepTitle)
+            .accessibilityLabel(deleteStepTitle)
+            .confirmationDialog(deleteStepTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button(deleteStepTitle, role: .destructive) {
+                    Task { await model.deletePathStep(step) }
+                }
+                Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen"), role: .cancel) {}
+            } message: {
+                Text(step.title)
+            }
             if !step.assigneeElephantID.isEmpty {
                 Text(assigneeName(step.assigneeElephantID, herd: model.snapshot.herdItems))
                     .font(.caption.weight(.semibold))
@@ -10187,6 +10211,10 @@ private struct PathStepListRow: View {
             model.selectPathStep(step)
             onOpen(step)
         }
+    }
+
+    private var deleteStepTitle: String {
+        localizedYouText(model.appLanguage, en: "Delete Flow step", zh: "删除事项", fr: "Supprimer l'étape", de: "Schritt löschen")
     }
 }
 
@@ -10854,6 +10882,7 @@ private struct PathStepDetailSheet: View {
     @State private var assignee = ""
     @State private var isEditing = false
     @State private var selectedTab: PathStepDetailTab = .activity
+    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -10892,10 +10921,7 @@ private struct PathStepDetailSheet: View {
                     }
                     .buttonStyle(PressablePlainButtonStyle())
                     Button {
-                        Task {
-                            await model.deletePathStep(step)
-                            isPresented = false
-                        }
+                        confirmingDelete = true
                     } label: {
                         Image(systemName: "trash")
                             .font(.callout.weight(.semibold))
@@ -10903,7 +10929,19 @@ private struct PathStepDetailSheet: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(PressablePlainButtonStyle())
-                    .help(localizedYouText(model.appLanguage, en: "Delete Flow step", zh: "删除事项", fr: "Supprimer", de: "Schritt löschen"))
+                    .help(deleteStepTitle)
+                    .accessibilityLabel(deleteStepTitle)
+                    .confirmationDialog(deleteStepTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+                        Button(deleteStepTitle, role: .destructive) {
+                            Task {
+                                await model.deletePathStep(step)
+                                isPresented = false
+                            }
+                        }
+                        Button(localizedYouText(model.appLanguage, en: "Cancel", zh: "取消", fr: "Annuler", de: "Abbrechen"), role: .cancel) {}
+                    } message: {
+                        Text(step.title)
+                    }
                     Button {
                         isPresented = false
                     } label: {
@@ -11007,6 +11045,10 @@ private struct PathStepDetailSheet: View {
             isEditing = false
             selectedTab = .activity
         }
+    }
+
+    private var deleteStepTitle: String {
+        localizedYouText(model.appLanguage, en: "Delete Flow step", zh: "删除事项", fr: "Supprimer l'étape", de: "Schritt löschen")
     }
 
     private var step: PathStepItem? {

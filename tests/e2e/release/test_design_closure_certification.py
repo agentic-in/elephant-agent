@@ -155,6 +155,19 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("help: surfaceHelpText", question_row)
         self.assertIn("help: dismissHelpText", question_row)
 
+    def test_macos_paths_destructive_actions_are_confirmed_and_labeled(self) -> None:
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("deletePathTitle", views)
+        self.assertIn("accessibilityLabel(deletePathTitle)", views)
+        self.assertIn("confirmationDialog(deletePathTitle", views)
+        self.assertIn("Button(deletePathTitle, role: .destructive", views)
+
+        self.assertIn("deleteStepTitle", views)
+        self.assertGreaterEqual(views.count("accessibilityLabel(deleteStepTitle)"), 2)
+        self.assertGreaterEqual(views.count("confirmationDialog(deleteStepTitle"), 2)
+        self.assertGreaterEqual(views.count("Button(deleteStepTitle, role: .destructive"), 2)
+
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")
 

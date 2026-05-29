@@ -91,6 +91,18 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   app without mutating question data.
 - The current local state exposes Personal Model fact traces, but the semantic
   index count is `0`, so source indexing quality remains an acceptance follow-up.
+- Diary was inspected in the packaged app. Markdown entries render expanded,
+  the date selector changes the target date, and Write Diary queued a real
+  diary job for 2026-05-30 with visible success feedback.
+- Paths was inspected in the packaged app. The board, path rail, board/list
+  controls, step detail sheet, Activity/Learning/Properties tabs, run affordance,
+  and comment composer are visible and navigable.
+- Path and Flow step destructive actions now expose explicit Delete labels and
+  native confirmation dialogs; cancel was verified from the packaged app without
+  deleting user data.
+- Skills was inspected in the packaged app. Learned skill matches, library
+  counts, search, pagination state, enabled/available rows, and the detail sheet
+  were verified with a `paper` search.
 
 ## Open Acceptance Matrix
 
@@ -100,9 +112,9 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, and reply cancel verified; semantic index is empty |
-| Diary | Read/write Markdown diary entries and learning linkage verified. | Not complete |
-| Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Not complete |
-| Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Not complete |
+| Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, and write queue verified |
+| Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
+| Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Not complete |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Not complete |
 | Usage | Token trend chart and row detail verified with real usage events. | Not complete |
@@ -128,6 +140,13 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Show source/evidence counts and fact trace rows before the question field.
 - Expose direct Sooner, Dismiss, and Reply actions for actionable open
   questions, with native tooltips and accessibility labels.
+
+## Paths Safety Fix Track
+
+- Label icon-only destructive controls as Delete Path or Delete Flow step for
+  assistive technology instead of generic close controls.
+- Require a native confirmation dialog before deleting a Path or Flow step.
+- Keep cancel non-mutating and verify it from the packaged app before shipping.
 
 ## Exit Criteria
 
