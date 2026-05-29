@@ -189,6 +189,20 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   and 4 Step recall documents. `/v1/internal/dashboard/evidence` reported
   `semantic_index_health.entry_count = 80`, provider
   `elephant-local-embed`, and `embedding_bootstrap_status = ready`.
+- The packaged voice runtime was verified beyond import success. The FunASR
+  health check loaded the local Chinese recognition model chain
+  (`paraformer-zh`, `fsmn-vad`, and `ct-punc`) through the app bundle's Python
+  runtime, then transcribed a generated Mandarin audio sample as
+  "你好，大象，请记住我今天在回归测试语音对话。" with punctuation. The Edge
+  online voice helper produced a readable MP3 reply asset that macOS audio
+  tooling identified as a 24 kHz MP3.
+- The real app was relaunched after the voice helper checks and was sitting in
+  Sleep Display. A wrong-password unlock attempt showed the expected
+  `That password does not match.` inline error, the managed API child process
+  stayed healthy, semantic index health still reported 80 ready entries, and no
+  newer Elephant Agent crash report appeared. Full Chat/Settings voice control
+  re-inspection remains gated by the user's lock password or an explicit local
+  state reset.
 
 ## Open Acceptance Matrix
 
@@ -196,7 +210,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, and step records verified after restart |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, and durable semantic index recovery verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
@@ -281,6 +295,19 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   blocking app launch.
 - Verify from the packaged app and managed API that semantic index health is
   non-empty and ready.
+
+## Voice Runtime Regression Track
+
+- Keep bundled voice dependencies importable under the packaged Python runtime,
+  including `funasr`, `edge_tts`, `torch`, `torchaudio`, and `numpy`.
+- Verify local Chinese recognition by loading the actual FunASR model chain,
+  not only by checking Python imports.
+- Exercise a real audio file through the packaged transcription helper and keep
+  the recognized text useful enough to send as a Chat draft.
+- Verify the online reply-voice helper produces a playable audio asset, while
+  preserving the app's local AVSpeech fallback path for online failures.
+- Treat Sleep Display and microphone permission prompts as user-controlled
+  gates; verify graceful locked/permission states without bypassing privacy.
 
 ## Exit Criteria
 
