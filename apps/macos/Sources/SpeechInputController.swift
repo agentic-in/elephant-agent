@@ -55,6 +55,8 @@ final class SpeechInputController: NSObject, ObservableObject {
     private var recordingURL: URL?
     private var convertedRecordingURL: URL?
     private var transcriptionTask: Task<Void, Never>?
+    private var permissionTimeoutTask: Task<Void, Never>?
+    private var captureGeneration = 0
     private var baseText = ""
     private var onText: ((String) -> Void)?
     private var activeMode: ActiveMode = .apple(locale: Locale(identifier: "en-US"), statusNotice: nil)
@@ -81,6 +83,9 @@ final class SpeechInputController: NSObject, ObservableObject {
         onText: @escaping (String) -> Void
     ) {
         guard !isRecording && !isTranscribing else { return }
+        captureGeneration += 1
+        let generation = captureGeneration
+        permissionTimeoutTask?.cancel()
         baseText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.onText = onText
         activeLanguage = language
@@ -95,8 +100,10 @@ final class SpeechInputController: NSObject, ObservableObject {
             return
         }
 
+        schedulePermissionTimeout(generation: generation, language: language)
         requestMicrophoneAccess { [weak self] allowed in
             guard let self else { return }
+            guard self.isActiveCapture(generation) else { return }
             guard allowed else {
                 self.statusText = Self.localizedStatus(self.activeLanguage, en: "Microphone access is disabled.", zh: "麦克风权限未开启。")
                 return
@@ -105,12 +112,14 @@ final class SpeechInputController: NSObject, ObservableObject {
             switch self.activeMode {
             case .funASR:
                 self.requestSpeechPreviewAccess(locale: Locale(identifier: "zh-CN")) { [weak self] locale in
-                    self?.startLocalRecording(previewLocale: locale)
+                    guard let self, self.isActiveCapture(generation) else { return }
+                    self.startLocalRecording(previewLocale: locale)
                 }
             case .apple(let locale, let statusNotice):
                 SFSpeechRecognizer.requestAuthorization { status in
                     Task { @MainActor [weak self] in
                         guard let self else { return }
+                        guard self.isActiveCapture(generation) else { return }
                         guard status == .authorized else {
                             self.statusText = Self.localizedStatus(self.activeLanguage, en: "Speech recognition is not authorized.", zh: "语音识别权限未开启。")
                             return
@@ -145,6 +154,9 @@ final class SpeechInputController: NSObject, ObservableObject {
     }
 
     func resetCapture() {
+        captureGeneration += 1
+        permissionTimeoutTask?.cancel()
+        permissionTimeoutTask = nil
         transcriptionTask?.cancel()
         transcriptionTask = nil
         if isRecording || audioEngine.isRunning {
@@ -216,6 +228,27 @@ final class SpeechInputController: NSObject, ObservableObject {
         }
     }
 
+    private func schedulePermissionTimeout(generation: Int, language: AppLanguage) {
+        permissionTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            await MainActor.run {
+                guard let self, !Task.isCancelled else { return }
+                guard self.isActiveCapture(generation), !self.isRecording, !self.isTranscribing else { return }
+                let lowerStatus = self.statusText.lowercased()
+                guard lowerStatus.contains("requesting") || self.statusText.contains("请求") else { return }
+                self.statusText = Self.localizedStatus(
+                    language,
+                    en: "Microphone permission did not finish. If no system prompt appeared, open System Settings > Privacy & Security > Microphone, allow Elephant Agent, then try again.",
+                    zh: "麦克风权限请求没有完成。如果没有出现系统弹窗，请打开“系统设置 > 隐私与安全性 > 麦克风”，允许 Elephant Agent 后重试。"
+                )
+            }
+        }
+    }
+
+    private func isActiveCapture(_ generation: Int) -> Bool {
+        captureGeneration == generation && onText != nil
+    }
+
     private func requestSpeechPreviewAccess(locale: Locale, completion: @escaping (Locale?) -> Void) {
         switch SFSpeechRecognizer.authorizationStatus() {
         case .authorized:
@@ -276,6 +309,8 @@ final class SpeechInputController: NSObject, ObservableObject {
             return
         }
 
+        permissionTimeoutTask?.cancel()
+        permissionTimeoutTask = nil
         isRecording = true
         recordingStartedAt = Date()
         capturedDuration = 0
@@ -336,6 +371,8 @@ final class SpeechInputController: NSObject, ObservableObject {
             return
         }
 
+        permissionTimeoutTask?.cancel()
+        permissionTimeoutTask = nil
         isRecording = true
         recordingStartedAt = Date()
         capturedDuration = 0

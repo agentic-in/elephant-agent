@@ -9,6 +9,7 @@ WORKFLOW_PATH = ROOT / ".github" / "workflows" / "design-closure-certification.y
 MAKEFILE_PATH = ROOT / "Makefile"
 MACOS_APP_MODEL_PATH = ROOT / "apps" / "macos" / "Sources" / "AppModel.swift"
 MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
+MACOS_SPEECH_INPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "SpeechInputController.swift"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
 CANONICAL_DESIGN_DOCS = (
     ROOT / "docs" / "system-design" / "README.md",
@@ -123,6 +124,18 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("case tools", views)
         self.assertIn("ProviderSettingsContent()", views)
         self.assertIn("ToolsSettingsContent()", views)
+
+    def test_macos_voice_capture_ignores_stale_permission_callbacks(self) -> None:
+        speech_input = MACOS_SPEECH_INPUT_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("captureGeneration", speech_input)
+        self.assertIn("permissionTimeoutTask", speech_input)
+        self.assertIn("schedulePermissionTimeout(generation:", speech_input)
+        self.assertIn("isActiveCapture(_ generation: Int)", speech_input)
+        self.assertGreaterEqual(speech_input.count("isActiveCapture(generation) else { return }"), 3)
+        self.assertIn("Microphone permission did not finish", speech_input)
+        self.assertIn("lowerStatus.contains(\"permission\")", views)
 
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")

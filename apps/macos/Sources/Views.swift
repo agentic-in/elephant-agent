@@ -3286,13 +3286,20 @@ struct VoiceListeningOverlay: View {
     }
 
     private var title: String {
+        let lowerStatus = statusText.lowercased()
         if isRecording {
             return localizedYouText(model.appLanguage, en: "Listening", zh: "正在听", fr: "Écoute", de: "Hört zu")
         }
         if isTranscribing {
             return localizedYouText(model.appLanguage, en: "Transcribing", zh: "正在识别", fr: "Transcription", de: "Transkribiert")
         }
-        if statusText.lowercased().contains("disabled") || statusText.lowercased().contains("authorized") || statusText.lowercased().contains("unavailable") {
+        if lowerStatus.contains("disabled")
+            || lowerStatus.contains("not authorized")
+            || lowerStatus.contains("unavailable")
+            || lowerStatus.contains("could not")
+            || lowerStatus.contains("permission did not")
+            || statusText.contains("没有完成")
+            || statusText.contains("权限未开启") {
             return localizedYouText(model.appLanguage, en: "Voice unavailable", zh: "语音暂不可用", fr: "Voix indisponible", de: "Sprache nicht verfügbar")
         }
         if !recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -3303,7 +3310,14 @@ struct VoiceListeningOverlay: View {
 
     private func detail(elapsed: TimeInterval) -> String {
         let lowerStatus = statusText.lowercased()
-        if lowerStatus.contains("disabled") || lowerStatus.contains("authorized") || lowerStatus.contains("unavailable") || lowerStatus.contains("could not") {
+        if lowerStatus.contains("requesting")
+            || lowerStatus.contains("disabled")
+            || lowerStatus.contains("authorized")
+            || lowerStatus.contains("unavailable")
+            || lowerStatus.contains("could not")
+            || lowerStatus.contains("permission")
+            || statusText.contains("请求")
+            || statusText.contains("权限") {
             return statusText
         }
         if isRecording {

@@ -76,6 +76,13 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   rows were verified in the packaged app.
 - No new macOS crash report was produced during the post-fix packaged app
   launch and Settings navigation pass.
+- Voice input was exercised from the packaged app. When the system microphone
+  permission request did not return a prompt, the overlay now times out to a
+  clear `Voice unavailable` state with System Settings guidance instead of
+  remaining in a misleading empty capture state.
+- Voice cancel was verified after the timeout state; the overlay dismissed, no
+  late permission callback restarted capture, and no new macOS crash report was
+  produced.
 
 ## Open Acceptance Matrix
 
@@ -83,7 +90,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Not complete |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Not complete |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Not complete |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Not complete |
