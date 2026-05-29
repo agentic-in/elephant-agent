@@ -317,48 +317,40 @@ class SandboxConfig:
             else:
                 resolved_workspace_access = "rw"
 
-            # --- Translate mode + allow/deny delta into seatbelt options ---
-            # Base network settings per mode
-            if mode_str in ("dev", "open"):
-                mode_allow_network = True
-                mode_allow_loopback = True
-            elif mode_str == "safe":
-                mode_allow_network = False
-                mode_allow_loopback = True
-            else:  # readonly
-                mode_allow_network = False
-                mode_allow_loopback = False
+            # --- Use sandbox_mode.mode_to_policy() for authoritative derivation ---
+            from .sandbox_mode import SandboxMode, AllowDenyDelta, mode_to_policy
 
-            # Apply allow/deny delta for network
-            if allow_delta.get("network"):
-                mode_allow_network = True
-                mode_allow_loopback = True
-            if deny_delta.get("network"):
-                mode_allow_network = False
-                mode_allow_loopback = False
+            mode_enum = SandboxMode.from_str(mode_str)
+            delta = AllowDenyDelta.from_config({"allow": allow_delta, "deny": deny_delta})
+            spec = mode_to_policy(mode_enum, delta)
 
-            # restrict_file_read: open mode allows all, others use whitelist
-            mode_restrict_file_read = (mode_str != "open")
-
-            # Extra readable/writable paths from delta
-            extra_readable = tuple(str(p) for p in (allow_delta.get("read") or []))
-            extra_writable = tuple(str(p) for p in (allow_delta.get("write") or []))
-            deny_read_globs = tuple(str(p) for p in (deny_delta.get("read") or []))
-
-            # Build the seatbelt options from mode derivation
-            # (override whatever was parsed from the seatbelt section)
+            # Build the seatbelt options from the derived PolicySpec
             seatbelt_options = SeatbeltSandboxOptions(
-                allow_network=mode_allow_network,
-                allow_network_loopback=mode_allow_loopback,
+                allow_network=spec.allow_network,
+                allow_network_loopback=spec.allow_network_loopback,
                 allow_writable_tmp=True,
                 protected_paths=seatbelt_options.protected_paths,
-                deny_read_credentials=True,
+                deny_read_credentials=spec.deny_read_credentials,
                 mach_services=seatbelt_options.mach_services,
-                extra_writable_roots=extra_writable,
-                restrict_file_read=mode_restrict_file_read,
-                extra_readable_paths=extra_readable,
-                deny_read_globs=deny_read_globs,
+                extra_writable_roots=tuple(spec.extra_readable_paths),  # allow.write paths
+                restrict_file_read=spec.restrict_file_read,
+                extra_readable_paths=tuple(spec.extra_readable_paths),
+                deny_read_globs=spec.deny_read_globs,
             )
+            # Override extra_writable_roots with the actual write paths from delta
+            if delta.allow_write:
+                seatbelt_options = SeatbeltSandboxOptions(
+                    allow_network=seatbelt_options.allow_network,
+                    allow_network_loopback=seatbelt_options.allow_network_loopback,
+                    allow_writable_tmp=seatbelt_options.allow_writable_tmp,
+                    protected_paths=seatbelt_options.protected_paths,
+                    deny_read_credentials=seatbelt_options.deny_read_credentials,
+                    mach_services=seatbelt_options.mach_services,
+                    extra_writable_roots=tuple(str(p) for p in delta.allow_write),
+                    restrict_file_read=seatbelt_options.restrict_file_read,
+                    extra_readable_paths=seatbelt_options.extra_readable_paths,
+                    deny_read_globs=seatbelt_options.deny_read_globs,
+                )
 
         return cls(
             mode=mode_str,

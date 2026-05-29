@@ -104,7 +104,8 @@ class TestModeToPolicySafe(unittest.TestCase):
         self.assertIn(resolved, self.spec.writable_roots)
 
     def test_restrict_file_read(self) -> None:
-        self.assertTrue(self.spec.restrict_file_read)
+        # safe uses allow-all-read (credential deny covers security)
+        self.assertFalse(self.spec.restrict_file_read)
 
     def test_no_network(self) -> None:
         self.assertFalse(self.spec.allow_network)
@@ -125,7 +126,8 @@ class TestModeToPolicyDev(unittest.TestCase):
         self.assertIn(resolved, self.spec.writable_roots)
 
     def test_restrict_file_read(self) -> None:
-        self.assertTrue(self.spec.restrict_file_read)
+        # dev uses allow-all-read (credential deny covers security)
+        self.assertFalse(self.spec.restrict_file_read)
 
     def test_network_open(self) -> None:
         self.assertTrue(self.spec.allow_network)

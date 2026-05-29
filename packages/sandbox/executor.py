@@ -482,6 +482,14 @@ class SandboxToolExecutor:
 
         # Build the same result format as the original foreground terminal exec
         body = join_parts(output.stdout, output.stderr)
+
+        # Inject sandbox diagnostics into the body so agent can see them
+        if output.diagnostics:
+            diag_lines = [d for d in output.diagnostics if d.startswith("sandbox:denied")]
+            if diag_lines:
+                diag_block = "\n".join(f"[sandbox] {d}" for d in diag_lines)
+                body = join_parts(body, diag_block)
+
         if output.timed_out:
             summary = body or f"command timed out after {timeout_seconds} seconds"
             return tool_summary(

@@ -386,6 +386,45 @@ def build_typer_app(*, default_state_dir: Path | None = None) -> typer.Typer:
         ))
 
     # ------------------------------------------------------------------
+    # elephant sandbox violations
+    # ------------------------------------------------------------------
+
+    @app.command("violations")
+    def sandbox_violations(
+        ctx: typer.Context,
+        limit: int = typer.Option(20, "--limit", "-n", help="Number of recent violations to show."),
+        clear: bool = typer.Option(False, "--clear", help="Clear violation history."),
+    ) -> None:
+        """Show recent sandbox-denied operations."""
+        from packages.sandbox.violations import ViolationStore
+        from pathlib import Path
+
+        # Violations are global (not per-herd), stored in ~/.elephant/
+        store = ViolationStore(Path.home() / ".elephant")
+
+        if clear:
+            count = store.clear()
+            typer.echo(f"Cleared {count} violation(s).")
+            raise typer.Exit(0)
+
+        violations = store.recent(limit=limit)
+        if not violations:
+            typer.echo("No sandbox violations recorded.")
+            typer.echo("  Violations are logged when sandbox blocks an operation.")
+            raise typer.Exit(0)
+
+        typer.echo(f"Recent sandbox violations ({len(violations)} entries):\n")
+        for v in violations:
+            typer.echo(f"  {v.format_short()}")
+            if v.command:
+                typer.echo(f"     Command: {v.command}")
+            typer.echo("")
+
+        typer.echo(f"Log: {store.log_path}")
+        typer.echo("Tip: use --clear to reset, or `elephant sandbox allow` to permit operations.")
+        raise typer.Exit(0)
+
+    # ------------------------------------------------------------------
     # elephant sandbox doctor
     # ------------------------------------------------------------------
 
