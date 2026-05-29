@@ -164,6 +164,53 @@ class RecallRuntimeTests(unittest.TestCase):
         self.assertFalse(policy.rebuild_required)
         self.assertEqual(policy.tracked_evidence_count, 0)
 
+    def test_recall_runtime_retrieve_uses_episode_scope_for_unified_recall(self) -> None:
+        class Repository:
+            def __init__(self) -> None:
+                self.step_calls: list[dict[str, object]] = []
+
+            def load_episode(self, episode_id: str) -> object | None:
+                if episode_id != "episode:voice":
+                    return None
+                return type(
+                    "EpisodeStub",
+                    (),
+                    {
+                        "episode_id": "episode:voice",
+                        "state_id": "state:voice",
+                        "personal_model_id": "you",
+                    },
+                )()
+
+            def list_episodes(self, **kwargs: object) -> tuple[object, ...]:
+                del kwargs
+                return ()
+
+            def list_steps(self, **kwargs: object) -> tuple[object, ...]:
+                self.step_calls.append(dict(kwargs))
+                return (
+                    _step(
+                        "step:voice",
+                        episode_id="episode:prior",
+                        state_id="state:voice",
+                        personal_model_id="you",
+                        user_query="voice conversation crash recovery",
+                    ),
+                )
+
+        repository = Repository()
+        runtime = RecallRuntime.from_repository(repository)
+
+        result = runtime.retrieve("episode:voice", "voice crash", limit=3)
+
+        self.assertEqual(repository.step_calls[0]["state_id"], "state:voice")
+        self.assertEqual(repository.step_calls[0]["personal_model_id"], "you")
+        self.assertEqual(len(result.candidates), 1)
+        evidence = result.candidates[0].evidence
+        self.assertEqual(evidence.episode_id, "episode:prior")
+        self.assertEqual(evidence.source_id, "step:voice")
+        self.assertEqual(evidence.source_kind, "step")
+
     def test_embedding_health_failure_is_logged_and_uses_lexical_recall(self) -> None:
         class Store:
             def list(self, episode_id: str | None = None, *, include_inactive: bool = False):
@@ -308,7 +355,14 @@ class RecallRuntimeTests(unittest.TestCase):
         self.assertIn("Semantic evidence search failed for owner scope personal_model", "\n".join(logs.output))
 
 
-def _step(step_id: str, *, episode_id: str) -> object:
+def _step(
+    step_id: str,
+    *,
+    episode_id: str,
+    state_id: str = "state:alpha",
+    personal_model_id: str = "you",
+    user_query: str = "",
+) -> object:
     return type(
         "StepStub",
         (),
@@ -316,6 +370,8 @@ def _step(step_id: str, *, episode_id: str) -> object:
             "step_id": step_id,
             "loop_id": "loop:1",
             "episode_id": episode_id,
+            "state_id": state_id,
+            "personal_model_id": personal_model_id,
             "action": "record_input",
             "status": "completed",
             "phase": "observation",
@@ -323,7 +379,7 @@ def _step(step_id: str, *, episode_id: str) -> object:
             "summary": "concise examples",
             "outcome": "",
             "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
-            "metadata": {},
+            "metadata": {"user_query": user_query} if user_query else {},
         },
     )()
 

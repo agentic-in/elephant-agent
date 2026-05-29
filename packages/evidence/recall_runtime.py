@@ -172,6 +172,31 @@ class RecallRuntime:
         del event
         return None
 
+    def _episode_scope(self, episode_id: str) -> tuple[str, str | None]:
+        repository = self.repository
+        personal_model_id = "you"
+        state_id: str | None = None
+        if repository is None:
+            return personal_model_id, state_id
+
+        episode = None
+        for loader_name in ("load_episode", "load_episode_state"):
+            loader = getattr(repository, loader_name, None)
+            if not callable(loader):
+                continue
+            try:
+                episode = loader(episode_id)
+            except Exception:
+                episode = None
+            if episode is not None:
+                break
+
+        if episode is None:
+            return personal_model_id, state_id
+        resolved_personal_model_id = str(getattr(episode, "personal_model_id", "") or "").strip()
+        resolved_state_id = str(getattr(episode, "state_id", "") or "").strip()
+        return resolved_personal_model_id or personal_model_id, resolved_state_id or None
+
     def retrieve(
         self,
         episode_id: str,
@@ -185,28 +210,46 @@ class RecallRuntime:
         del work_item_ids, scope_episode_ids
         if self.repository is None:
             return RecallRetrievalResult(scope_reason=scope_reason)
+        personal_model_id, state_id = self._episode_scope(episode_id)
+        semantic_bundle = getattr(self.evidence_retriever, "semantic_bundle", None)
+        searcher = getattr(semantic_bundle, "searcher", None)
+        embedding_service = getattr(self.evidence_retriever, "embedding_service", None)
+        embedding_health = getattr(embedding_service, "health", None)
         hits = unified_recall(
             UnifiedRecallRequest(
                 query=query,
-                personal_model_id="you",
-                state_id=None,
-                episode_id=episode_id,
+                personal_model_id=personal_model_id,
+                state_id=state_id,
                 scopes=("steps", "episodes"),
                 limit=limit,
             ),
             repository=self.repository,
+            searcher=searcher,
+            embedding_service=embedding_service,
+            embedding_health_callable=embedding_health if callable(embedding_health) else None,
         )
         candidates = tuple(
             RecallRetrievalCandidate(
                 evidence=RecallEvidence(
                     evidence_id=f"recall:{index}",
-                    episode_id=episode_id,
+                    episode_id=str(hit.extra_metadata.get("episode_id") or episode_id),
                     kind=hit.kind,
                     content=hit.content,
+                    source_id=str(
+                        hit.extra_metadata.get("source_id")
+                        or hit.extra_metadata.get("step_id")
+                        or hit.extra_metadata.get("document_id")
+                        or hit.extra_metadata.get("episode_id")
+                        or ""
+                    ),
+                    source_kind=str(hit.extra_metadata.get("recall_source") or hit.extra_metadata.get("owner_scope") or "semantic_index"),
+                    step_id=str(hit.extra_metadata.get("step_id") or "") or None,
+                    loop_id=str(hit.extra_metadata.get("loop_id") or "") or None,
                     created_at=hit.when_datetime,
                     metadata=dict(hit.extra_metadata),
                 ),
                 score=hit.score,
+                reasons=tuple(str(reason) for reason in str(hit.extra_metadata.get("semantic_reasons") or "").split(",") if reason),
             )
             for index, hit in enumerate(hits)
         )

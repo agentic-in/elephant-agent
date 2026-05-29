@@ -226,15 +226,26 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   created in the window, the managed API stayed healthy, semantic index health
   advanced to 82 ready entries, and no newer Elephant Agent crash report
   appeared.
+- The rebuilt packaged app exposed and fixed a managed-API recall regression
+  found during the voice/memory acceptance pass: `POST
+  /v1/episodes/{episode_id}/recall/search` returned a 400 because the API
+  adapter passed an obsolete `episode_id` field into `UnifiedRecallRequest`.
+  The runtime now resolves the calling Episode's Personal Model and State scope
+  before invoking unified recall, wires the durable semantic searcher into the
+  API path, and returns source fields for search hits. After rebuilding and
+  relaunching the real `.app`, the managed API returned hits for diary
+  reflection, onboarding-letter, and voice-crash-recovery recall queries;
+  `/healthz` remained healthy, semantic index health reported 86 ready entries,
+  and no newer Elephant Agent crash report appeared.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, and step records verified after restart |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, and managed-API recall search verified after restart |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
-| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, and durable semantic index recovery verified |
+| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, and managed-API recall query verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
