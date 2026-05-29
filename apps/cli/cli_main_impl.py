@@ -1018,7 +1018,8 @@ def _run_sandbox_verify(runtime: CliRuntime) -> int:
         else:
             results.append({"probe": "env_var", "status": "FAIL", "detail": "ELEPHANT_SANDBOX not set — commands may not be sandboxed"})
 
-        # ── Probe 2: Write to cwd (should be allowed) ─────────────────
+        # ── Probe 2: Write to cwd ─────────────────────────────────────
+        # In readonly mode, writes to cwd should be DENIED (expected behavior).
         probe_file = test_cwd / "_verify_write.txt"
         output = env.execute(
             handle,
@@ -1026,10 +1027,17 @@ def _run_sandbox_verify(runtime: CliRuntime) -> int:
             cwd=test_cwd, timeout_seconds=10,
         )
         wrote_ok = probe_file.exists() and probe_file.read_text() == "ok"
+        is_readonly_mode = config.mode == "readonly" or config.workspace_access in ("ro", "none")
         if wrote_ok:
-            results.append({"probe": "write_cwd", "status": "PASS", "detail": "can write to cwd (workspace_access policy)"})
+            if is_readonly_mode:
+                results.append({"probe": "write_cwd", "status": "FAIL", "detail": "wrote to cwd in readonly mode — write containment broken!"})
+            else:
+                results.append({"probe": "write_cwd", "status": "PASS", "detail": "can write to cwd (workspace_access policy)"})
         else:
-            results.append({"probe": "write_cwd", "status": "FAIL", "detail": f"cannot write to cwd: rc={output.returncode}, stderr={output.stderr[:80]}"})
+            if is_readonly_mode:
+                results.append({"probe": "write_cwd", "status": "PASS", "detail": "cwd write correctly denied (readonly mode)"})
+            else:
+                results.append({"probe": "write_cwd", "status": "FAIL", "detail": f"cannot write to cwd: rc={output.returncode}, stderr={output.stderr[:80]}"})
 
         # ── Probe 3: Write to /tmp (should be allowed) ────────────────
         tmp_probe = Path("/tmp") / f"_elephant_verify_{os.getpid()}.txt"
@@ -1066,7 +1074,7 @@ def _run_sandbox_verify(runtime: CliRuntime) -> int:
         else:
             results.append({"probe": "write_escape", "status": "PASS", "detail": f"cannot write to {outside_probe} (write containment OK)"})
 
-        # ── Probe 5: Network access (should be DENIED by default) ─────
+        # ── Probe 5: Network access ───────────────────────────────────
         if config.backend == "seatbelt" and not config.seatbelt.allow_network:
             output = env.execute(
                 handle,
@@ -1082,8 +1090,23 @@ def _run_sandbox_verify(runtime: CliRuntime) -> int:
                 results.append({"probe": "network_block", "status": "PASS", "detail": f"outbound network blocked (curl http_code={http_code}, exit={curl_exit})"})
             else:
                 results.append({"probe": "network_block", "status": "FAIL", "detail": f"outbound network NOT blocked — curl returned http_code={http_code}"})
+        elif config.backend == "seatbelt" and config.seatbelt.allow_network:
+            # Network is allowed — verify it actually works
+            output = env.execute(
+                handle,
+                "curl -s --connect-timeout 5 -o /dev/null -w '%{http_code}' https://httpbin.org/get 2>/dev/null; echo EXIT:$?",
+                cwd=test_cwd, timeout_seconds=15,
+            )
+            stdout = output.stdout.strip()
+            http_code = stdout.strip().strip("'").split("EXIT:")[0].strip() if "EXIT:" in stdout else stdout.strip("'")
+            curl_exit = stdout.split("EXIT:")[-1].strip() if "EXIT:" in stdout else ""
+            network_works = http_code == "200" or curl_exit == "0"
+            if network_works:
+                results.append({"probe": "network_open", "status": "PASS", "detail": f"outbound network open (curl http_code={http_code})"})
+            else:
+                results.append({"probe": "network_open", "status": "WARN", "detail": f"network allowed but curl failed (http_code={http_code}, exit={curl_exit}) — may be offline"})
         else:
-            results.append({"probe": "network_block", "status": "SKIP", "detail": f"network allowed by policy (allow_network={config.seatbelt.allow_network if config.backend == 'seatbelt' else 'N/A'})"})
+            results.append({"probe": "network_block", "status": "SKIP", "detail": f"network probe not applicable (backend={config.backend})"})
 
         # ── Probe 6: Fork bomb protection ─────────────────────────────
         output = env.execute(

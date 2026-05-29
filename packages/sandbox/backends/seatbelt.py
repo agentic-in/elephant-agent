@@ -199,6 +199,42 @@ class SeatbeltPolicyBuilder:
             if rule:
                 self._extra_policy_lines.append(rule)
 
+    def add_deny_write_paths(self, paths: tuple[str, ...] | list[str] = ()) -> None:
+        """Add deny-write rules for specific paths.
+
+        Each path becomes a ``(deny file-write* (subpath "..."))`` rule
+        that takes precedence over any allow-write rules.
+        """
+        for path_str in paths:
+            resolved = str(Path(path_str).expanduser().resolve())
+            param_key = f"DENY_WRITE_{len(self._params)}"
+            self._params[param_key] = resolved
+            self._extra_policy_lines.append(
+                f'(deny file-write* (subpath (param "{param_key}")))'
+            )
+
+    def add_toolchain_paths(self, home: Path) -> None:
+        """Add common developer toolchain paths as readable + executable.
+
+        Auto-detects installed version managers (pyenv, nvm, rustup, etc.)
+        and adds their directories to the read+exec whitelist.
+        """
+        _TOOLCHAIN_DIRS = (
+            ".pyenv", ".nvm", ".fnm", ".rustup", ".cargo",
+            ".local", "go", ".volta", ".bun", ".deno",
+            ".sdkman", ".jabba", ".rbenv",
+        )
+        lines: list[str] = []
+        for dirname in _TOOLCHAIN_DIRS:
+            toolchain_path = home / dirname
+            if toolchain_path.exists():
+                param_key = f"TOOLCHAIN_{dirname.lstrip('.').upper()}"
+                self._params[param_key] = str(toolchain_path.resolve())
+                lines.append(f'(allow file-read* file-test-existence file-map-executable (subpath (param "{param_key}")))')
+        if lines:
+            self._extra_policy_lines.append("; --- Developer toolchain paths ---")
+            self._extra_policy_lines.extend(lines)
+
     @staticmethod
     def _load_network_policy() -> str:
         """Load the network policy SBPL fragment."""
@@ -421,7 +457,10 @@ class SeatbeltBackend:
 
         # Prepare environment
         base_env = dict(os.environ)
-        sanitized_env = self._security_guard.sanitize_env(base_env, extra_env=env)
+        exempt_vars = tuple(self._config.allow_delta.get("env") or [])
+        sanitized_env = self._security_guard.sanitize_env(
+            base_env, extra_env=env, exempt_vars=exempt_vars,
+        )
         sanitized_env["ELEPHANT_SANDBOX_SESSION"] = handle.session_id
         sanitized_env["ELEPHANT_SANDBOX"] = "seatbelt"
 
@@ -465,6 +504,10 @@ class SeatbeltBackend:
         diagnostics = list(result.diagnostics)
         if result.returncode == 134 and not result.stdout.strip():
             diagnostics.append("seatbelt: sandbox-exec aborted (policy error or violation)")
+
+        # Detect sandbox violations from stderr AND stdout (commands often redirect stderr to stdout)
+        combined_output = result.stderr + "\n" + result.stdout
+        diagnostics.extend(self._detect_violations(combined_output, command))
 
         # Update cwd from cwd_file if command changed directory
         try:
@@ -541,6 +584,10 @@ class SeatbeltBackend:
         if seatbelt_opts.deny_read_credentials:
             builder.add_credential_deny(Path.home())
 
+        # Developer toolchain paths (auto-detected)
+        if seatbelt_opts.restrict_file_read:
+            builder.add_toolchain_paths(Path.home())
+
         # Network rules (basic)
         builder.add_network_rules()
 
@@ -553,4 +600,64 @@ class SeatbeltBackend:
         if deny_globs:
             builder.add_deny_read_globs(deny_globs)
 
+        # Deny-write paths from deny delta
+        deny_write_paths = tuple(self._config.deny_delta.get("write") or [])
+        if deny_write_paths:
+            builder.add_deny_write_paths(deny_write_paths)
+
         return builder.render()
+
+    @staticmethod
+    def _detect_violations(stderr: str, command: str) -> list[str]:
+        """Detect sandbox violations from stderr and produce structured diagnostics.
+
+        Parses "Operation not permitted" patterns and maps them to known
+        protection reasons for better agent/user feedback.
+        """
+        import re
+
+        if "Operation not permitted" not in stderr and "permission denied" not in stderr.lower():
+            return []
+
+        diagnostics: list[str] = []
+
+        # Known protection patterns and their reasons
+        _VIOLATION_PATTERNS = (
+            (r"\.git/hooks", "sandbox:denied:write .git/hooks (protected: git hook injection prevention)"),
+            (r"\.claude/settings", "sandbox:denied:write .claude/settings (protected: config tampering prevention)"),
+            (r"\.claude/skills", "sandbox:denied:write .claude/skills (protected: code injection prevention)"),
+            (r"\.claude/commands", "sandbox:denied:write .claude/commands (protected: code injection prevention)"),
+            (r"\.claude/agents", "sandbox:denied:write .claude/agents (protected: code injection prevention)"),
+            (r"\.ssh", "sandbox:denied:read ~/.ssh (protected: credential protection)"),
+            (r"\.aws", "sandbox:denied:read ~/.aws (protected: credential protection)"),
+            (r"\.gnupg", "sandbox:denied:read ~/.gnupg (protected: credential protection)"),
+            (r"\.kube", "sandbox:denied:read ~/.kube (protected: credential protection)"),
+            (r"\.docker", "sandbox:denied:read ~/.docker (protected: credential protection)"),
+        )
+
+        combined_text = stderr + " " + command
+        matched = False
+        for pattern, reason in _VIOLATION_PATTERNS:
+            if re.search(pattern, combined_text):
+                diagnostics.append(reason)
+                matched = True
+
+        if not matched and "Operation not permitted" in stderr:
+            # Generic violation — try to extract the path
+            path_match = re.search(r"['\"]?(/[^\s'\"]+)['\"]?.*Operation not permitted", stderr)
+            if path_match:
+                diagnostics.append(f"sandbox:denied {path_match.group(1)} (Operation not permitted)")
+            else:
+                diagnostics.append("sandbox:denied (Operation not permitted — check sandbox policy)")
+
+        # Network violations
+        if any(indicator in stderr for indicator in (
+            "Could not resolve host",
+            "Connection refused",
+            "connect to host",
+            "Network is unreachable",
+            "nodename nor servname",
+        )):
+            diagnostics.append("sandbox:denied:network (network isolated by sandbox policy)")
+
+        return diagnostics
