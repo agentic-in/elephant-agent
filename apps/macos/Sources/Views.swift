@@ -570,13 +570,6 @@ struct SidebarView: View {
                     StatusDot(tint: phaseTint)
                         .help(statusLine)
                     SidebarIconButton(
-                        section: .provider,
-                        language: model.appLanguage,
-                        selected: model.selectedSection == .provider
-                    ) {
-                        model.selectedSection = .provider
-                    }
-                    SidebarIconButton(
                         section: .settings,
                         language: model.appLanguage,
                         selected: model.selectedSection == .settings
@@ -2757,7 +2750,7 @@ struct WakeComposerPanel: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.96)))
                     }
                     Button {
-                        model.selectedSection = .provider
+                        model.selectedSection = .settings
                     } label: {
                         Pill(text: providerLabel, symbol: "cpu", tint: providerTint)
                     }
@@ -18510,7 +18503,9 @@ private struct RuntimeChip: View {
 
 private enum SettingsPane: Hashable {
     case language
+    case provider
     case voiceReplies
+    case tools
     case memoryEngine
     case curiosity
     case history
@@ -18569,6 +18564,14 @@ struct SettingsView: View {
                         LanguageSettingsContent()
                     }
                     ExpandableSettingsRow(
+                        symbol: "cpu",
+                        title: model.text(.providerTitle),
+                        subtitle: providerSubtitle,
+                        expanded: paneBinding(.provider)
+                    ) {
+                        ProviderSettingsContent()
+                    }
+                    ExpandableSettingsRow(
                         symbol: "speaker.wave.2",
                         title: localizedYouText(
                             model.appLanguage,
@@ -18603,6 +18606,22 @@ struct SettingsView: View {
                         expanded: paneBinding(.memoryEngine)
                     ) {
                         MemoryEngineSettingsContent()
+                    }
+                    ExpandableSettingsRow(
+                        symbol: "wrench.and.screwdriver",
+                        title: localizedYouText(model.appLanguage, en: "Tools", zh: "工具", fr: "Outils", de: "Werkzeuge"),
+                        subtitle: localizedFormat(
+                            model.appLanguage,
+                            en: "%d enabled · %d total · MCP in advanced runtime",
+                            zh: "%d 已启用 · %d 总计 · MCP 在高级运行时中管理",
+                            fr: "%d activés · %d au total · MCP dans le runtime avancé",
+                            de: "%d aktiv · %d gesamt · MCP unter erweiterter Runtime",
+                            model.snapshot.enabledTools,
+                            model.snapshot.tools
+                        ),
+                        expanded: paneBinding(.tools)
+                    ) {
+                        ToolsSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "clock.arrow.circlepath",
@@ -21254,23 +21273,7 @@ struct ToolsCatalogPanel: View {
 
     var body: some View {
         NativePanel {
-            OperatorCatalogContent(
-                kind: "tools",
-                title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Werkzeugbibliothek"),
-                subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
-                searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Werkzeuge suchen"),
-                emptySymbol: "wrench.and.screwdriver",
-                emptyText: model.snapshot.tools > 0
-                    ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Werkzeuge erkannt.", model.snapshot.tools)
-                    : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Werkzeuge zurückgegeben."),
-                items: model.snapshot.toolItems,
-                fallbackNames: model.snapshot.toolNames,
-                totalCount: model.snapshot.tools,
-                enabledCount: model.snapshot.enabledTools,
-                logoSymbol: "hammer",
-                logoTint: ElephantTheme.accent,
-                pageSize: 12
-            )
+            ToolsSettingsContent()
         }
     }
 }

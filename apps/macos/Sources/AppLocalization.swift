@@ -857,7 +857,7 @@ enum AppText {
         case .homeReadinessMessaging:
             return pick(language, en: "Messaging", zh: "消息", fr: "Messagerie", de: "Nachrichten")
         case .homeReadinessLearn:
-            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
+            return pick(language, en: "Learn", zh: "学习", fr: "Apprendre", de: "Lernen")
         case .chooseModel:
             return pick(language, en: "choose a model", zh: "选择一个模型", fr: "choisir un modèle", de: "Modell wählen")
         case .memorySummaryFormat:
@@ -985,7 +985,7 @@ enum AppText {
         case .sectionCalendar:
             return pick(language, en: "Calendar", zh: "日历", fr: "Calendrier", de: "Kalender")
         case .sectionLearn:
-            return pick(language, en: "Evolution", zh: "自我进化", fr: "Évolution", de: "Evolution")
+            return pick(language, en: "Learn", zh: "学习", fr: "Apprendre", de: "Lernen")
         case .sectionProvider:
             return pick(language, en: "Provider", zh: "模型服务", fr: "Fournisseur", de: "Anbieter")
         case .sectionSettings:

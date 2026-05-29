@@ -7,6 +7,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "design-closure-certification.yml"
 MAKEFILE_PATH = ROOT / "Makefile"
+MACOS_APP_MODEL_PATH = ROOT / "apps" / "macos" / "Sources" / "AppModel.swift"
+MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
 CANONICAL_DESIGN_DOCS = (
     ROOT / "docs" / "system-design" / "README.md",
@@ -107,6 +109,20 @@ class DesignClosureContractsTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertNotIn("/goals", text)
                 self.assertNotIn("/procedure", text)
+
+    def test_macos_primary_sidebar_keeps_runtime_internals_in_settings(self) -> None:
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        primary_section = app_model.split("static let primary: [AppSection] = [", 1)[1].split("]", 1)[0]
+        sidebar = views.split("struct SidebarView: View", 1)[1].split("struct SidebarCollapseButton", 1)[0]
+        sidebar_footer = sidebar.split("VStack(spacing: 10) {", 1)[1].split(".padding(.bottom, 16)", 1)[0]
+
+        self.assertNotIn(".tools", primary_section)
+        self.assertNotIn("section: .provider", sidebar_footer)
+        self.assertIn("case provider", views)
+        self.assertIn("case tools", views)
+        self.assertIn("ProviderSettingsContent()", views)
+        self.assertIn("ToolsSettingsContent()", views)
 
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")

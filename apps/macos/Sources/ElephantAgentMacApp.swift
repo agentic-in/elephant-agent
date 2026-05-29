@@ -102,9 +102,6 @@ struct ElephantCommands: Commands {
                 }
             }
             Divider()
-            Button(AppSection.provider.title(language: model.appLanguage)) {
-                model.selectedSection = .provider
-            }
             Button(AppSection.settings.title(language: model.appLanguage)) {
                 model.selectedSection = .settings
             }

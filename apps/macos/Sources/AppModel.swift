@@ -29,7 +29,6 @@ enum AppSection: String, CaseIterable, Identifiable {
         .paths,
         .diary,
         .skills,
-        .tools,
         .messaging,
         .herd,
         .usage,

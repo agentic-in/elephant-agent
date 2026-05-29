@@ -12,6 +12,9 @@ Current active planning set:
 - [L4 Paths And Herd Roadmap](l4-paths-herd-roadmap.md)
   - active product and runtime roadmap for Mother-led Paths, Steps,
     Checkpoints, Herds, and long-running work
+- [macOS Full Regression Acceptance](macos-full-regression-acceptance.md)
+  - active acceptance plan for real packaged macOS app, model-backed UX,
+    Personal Model memory, and native desktop workflow coverage
 
 Rules:
 
