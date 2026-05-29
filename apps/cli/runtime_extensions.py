@@ -219,6 +219,7 @@ def _resolve_tool_runtime_context(
         personal_model_id="" if state is None else state.personal_model_id,
         state_id="" if state is None else state.state_id,
         elephant_id=elephant_id,
+        episode_id=session.episode_id,
     )
 
 

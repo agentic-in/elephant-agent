@@ -1483,6 +1483,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var gatewaySecretDrafts: [String: [String: String]] = [:]
     @Published var gatewayQR = GatewayQRState()
     @Published var cronActionResult = ""
+    @Published var cronActionIsError = false
     @Published var pathActionResult = ""
     @Published var selectedPathID = ""
     @Published var selectedPathStepID = ""
@@ -3652,21 +3653,32 @@ final class ElephantAppModel: ObservableObject {
                 elephantID: snapshot.currentStateID.replacingOccurrences(of: "state:", with: ""),
                 profileID: snapshot.currentPersonalModelID
             )
+            cronActionIsError = false
             cronActionResult = "Reminder created."
             try await refreshDashboard()
         } catch {
-            cronActionResult = ""
+            cronActionIsError = true
+            cronActionResult = error.localizedDescription
             lastError = error.localizedDescription
         }
     }
 
     func runCronJob(_ job: CronJobItem) async {
         do {
-            try await client.runCronJob(job.id)
-            cronActionResult = "\(job.title) ran."
+            let result = try await client.runCronJob(job.id)
+            if result.succeeded {
+                cronActionIsError = false
+                cronActionResult = "\(job.title) ran."
+            } else {
+                let detail = "\(job.title) unavailable: \(result.displayMessage)"
+                cronActionIsError = true
+                cronActionResult = detail
+                lastError = detail
+            }
             try await refreshDashboard()
         } catch {
-            cronActionResult = ""
+            cronActionIsError = true
+            cronActionResult = error.localizedDescription
             lastError = error.localizedDescription
         }
     }
@@ -3674,10 +3686,12 @@ final class ElephantAppModel: ObservableObject {
     func setCronJob(_ job: CronJobItem, paused: Bool) async {
         do {
             try await client.setCronJobStatus(job.id, action: paused ? "pause" : "resume")
+            cronActionIsError = false
             cronActionResult = paused ? "\(job.title) paused." : "\(job.title) resumed."
             try await refreshDashboard()
         } catch {
-            cronActionResult = ""
+            cronActionIsError = true
+            cronActionResult = error.localizedDescription
             lastError = error.localizedDescription
         }
     }
@@ -3685,10 +3699,12 @@ final class ElephantAppModel: ObservableObject {
     func deleteCronJob(_ job: CronJobItem) async {
         do {
             try await client.deleteCronJob(job.id)
+            cronActionIsError = false
             cronActionResult = "\(job.title) deleted."
             try await refreshDashboard()
         } catch {
-            cronActionResult = ""
+            cronActionIsError = true
+            cronActionResult = error.localizedDescription
             lastError = error.localizedDescription
         }
     }

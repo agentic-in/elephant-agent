@@ -105,6 +105,23 @@ class _ConversationSearchStub:
         return {"personal_model_id": "you", "claims": ()}
 
     def search_conversation(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if kwargs.get("mode") == "recall":
+            return {
+                "personal_model_id": "you",
+                "scope": "history",
+                "mode": "recall",
+                "view": kwargs.get("view", "conversation"),
+                "query": kwargs.get("query", "release"),
+                "hits": (
+                    {
+                        "title": "release planning",
+                        "content": "publish the release artifacts",
+                        "when": "2026-05-12",
+                        "episode_id": "episode-source-1",
+                        "loop_id": "loop-source-1",
+                    },
+                ),
+            }
         return {
             "personal_model_id": "you",
             "scope": "history",
@@ -882,6 +899,26 @@ class BuiltinToolsV2Test(BuiltinToolsTestBase):
             self.assertIn("start_at=2026-05-12T08:00:00+08:00", result.summary)
             self.assertIn("timezone=Asia/Shanghai", result.summary)
 
+    def test_conversation_search_recall_includes_source_episode_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(
+                    cwd=cwd,
+                    personal_model_understanding=_ConversationSearchStub(),
+                ),
+            )
+
+            result = runtime.invoke(
+                "tool.conversation.search",
+                {"mode": "recall", "query": "release"},
+                session_id="session-conversation",
+            )
+
+            self.assertIn("source_episode_ids: episode-source-1", result.summary)
+            self.assertIn("source: episode_id=episode-source-1 loop_id=loop-source-1", result.summary)
+
     def test_diary_write_validates_date_and_warns_for_future_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             cwd = Path(tmpdir)
@@ -903,6 +940,23 @@ class BuiltinToolsV2Test(BuiltinToolsTestBase):
             )
 
             self.assertIn("warning: entry_date is in the future", future.summary)
+
+    def test_diary_write_defaults_source_episode_to_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            diary = _DiaryStub()
+            runtime = self._make_builtin_runtime(
+                cwd=cwd,
+                dependencies=BuiltinToolDependencies(cwd=cwd, diary_surface=diary),
+            )
+
+            runtime.invoke(
+                "tool.diary.write",
+                {"entry_date": "2026-05-23", "content": "Diary note"},
+                session_id="session-diary",
+            )
+
+            self.assertEqual(diary.last_write_kwargs["source_episode_ids"], ("session-diary",))
 
     def test_diary_write_passes_metadata_to_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -17858,9 +17858,9 @@ struct ReminderComposerLauncher: View {
                 Spacer(minLength: 16)
 
                 if !model.cronActionResult.isEmpty {
-                    Label(model.cronActionResult, systemImage: "checkmark.circle.fill")
+                    Label(model.cronActionResult, systemImage: model.cronActionIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(ElephantTheme.green)
+                        .foregroundStyle(model.cronActionIsError ? ElephantTheme.orange : ElephantTheme.green)
                         .lineLimit(2)
                 }
 

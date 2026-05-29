@@ -16,9 +16,9 @@ FEATURE = Feature(
 You MUST call tools in this order:
 1. Call tool.diary.list with limit=5 to check if an entry already exists for the target date.
 2. Call tool.conversation.search with mode=discover, expr=<target_date>, timezone=<user_timezone> to find conversations for that day.
-3. If conversations found, call tool.conversation.search with mode=recall for the most active time range.
+3. If conversations found, call tool.conversation.search with mode=recall for the most active time range. Preserve any source_episode_ids returned by recall.
 4. Call tool.personal_model.search with query about the user's current state/mood/focus.
-5. Call tool.diary.write with entry_date=<target_date> and the reflective diary content.
+5. Call tool.diary.write with entry_date=<target_date>, source_episode_ids=<episode ids from recalled sources>, and the reflective diary content.
 
 The diary entry should be reflective, emotionally honest, in second person (addressing the user as "你"/"you"), 400-800 words in the user's first language.
 Do NOT skip any tool calls. Every diary entry MUST end with a tool.diary.write call.""",

@@ -435,6 +435,16 @@ def run_conversation_search(
             lines.append(f"- {title}" + (f" @ {when}" if when else ""))
             if content:
                 lines.append(f"  text: {content}")
+            source_parts = []
+            for key in ("episode_id", "loop_id", "step_id", "source_id", "document_id"):
+                value = str(hit.get(key) or "").strip()
+                if value:
+                    source_parts.append(f"{key}={value}")
+            if source_parts:
+                episode_id = str(hit.get("episode_id") or "").strip()
+                if episode_id:
+                    lines.append(f"  source_episode_ids: {episode_id}")
+                lines.append(f"  source: {' '.join(source_parts)}")
     if not ranges and not hits:
         lines.append("results: 0")
     return tool_summary(invocation, "\n".join(lines), side_effects=("conversation", "search"))

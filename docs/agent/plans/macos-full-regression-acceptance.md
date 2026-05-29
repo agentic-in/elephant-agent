@@ -67,6 +67,10 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   continuity context on first unlock.
 - Chat sent a real model turn through the UI using the configured provider and
   rendered tool activity as a user-facing activity card.
+- Chat image attachment was verified through the packaged app with the native
+  file picker. The attachment chip, preview, persisted attachment copy, real
+  model reply, and `record_input` -> `assemble_context` -> `call_model` ->
+  `emit_response` Step records were all confirmed.
 - SQLite Step records confirmed `record_input`, context assembly, model call,
   reflection, state write, and response emission for the real UI turn.
 - The primary sidebar now exposes only user-facing work surfaces: Home, Chat,
@@ -83,17 +87,27 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Voice cancel was verified after the timeout state; the overlay dismissed, no
   late permission callback restarted capture, and no new macOS crash report was
   produced.
+- The only macOS crash report found during this pass predated the current
+  packaged-app launch; the Chat, voice-timeout, Settings, attachment, Calendar,
+  Diary, and Personal Model passes did not create a new crash report.
 - The packaged Personal Model surface was inspected in the real app. Facts
   expand with correct/recover/delete controls, source-backed evidence now has a
   dedicated panel, and open questions expose direct Sooner, Dismiss, and Reply
   actions.
 - The Personal Model Reply popover was opened and canceled from the packaged
   app without mutating question data.
+- Personal Model map interaction was verified from the packaged app. Selecting
+  a map dot opened the fact detail with kind, namespace, provenance, text, and
+  close affordance.
 - The current local state exposes Personal Model fact traces, but the semantic
   index count is `0`, so source indexing quality remains an acceptance follow-up.
 - Diary was inspected in the packaged app. Markdown entries render expanded,
   the date selector changes the target date, and Write Diary queued a real
   diary job for 2026-05-30 with visible success feedback.
+- Diary source linkage was inspected in storage and fixed. Conversation recall
+  now exposes source episode IDs, the diary writing SOP preserves them, and the
+  diary write tool falls back to the current episode/session when a model omits
+  explicit source IDs.
 - Paths was inspected in the packaged app. The board, path rail, board/list
   controls, step detail sheet, Activity/Learning/Properties tabs, run affordance,
   and comment composer are visible and navigable.
@@ -116,6 +130,11 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Calendar was inspected in the packaged app. Week, Month, and Year views,
   reminder rows, system Run/Pause controls, New Reminder open/cancel, and event
   detail popovers were verified without mutating reminder data.
+- Calendar user reminder create, pause, delete, and cleanup were verified from
+  the packaged app/API against a temporary reminder. A second temporary
+  reminder exposed a false-success Run result when the cron runtime bridge was
+  unavailable; the rebuilt app now renders that result as an orange unavailable
+  error state instead of a green success.
 - Calendar Year view accessibility was fixed and re-verified in the rebuilt app:
   non-event mini-calendar dates are no longer exposed as hundreds of disabled
   buttons, while event dates remain actionable with a full date/reminder label
@@ -152,16 +171,16 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, history open, live activity, memory-backed real model reply, and step records verified after restart |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, and step records verified after restart |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
-| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, and reply cancel verified; semantic index is empty |
-| Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, and write queue verified |
+| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, and reply cancel verified; semantic index is empty |
+| Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, run affordance, and safe delete confirmation verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
-| Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Partial; Week/Month/Year, New Reminder open/cancel, event popover, and system controls verified; destructive/mutating controls not executed |
+| Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; launchers, history, progress/status, and needs-attention detail verified without creating new jobs |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, and Restart Core verified; Reflect/Refresh not executed |
@@ -198,6 +217,23 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Expose only scheduled event days as actionable controls in the Year view, with
   a full date/reminder label and the same event detail popover as the visual UI.
 - Keep non-event mini-calendar dates decorative in the accessibility tree.
+
+## Calendar Run Feedback Fix Track
+
+- Treat a 200 response from the cron Run endpoint as a transport success only;
+  parse the nested run outcome before showing user-facing success.
+- Show unavailable or failed cron run outcomes with warning styling and a clear
+  detail message.
+- Keep successful create, pause/resume, and delete actions on the existing
+  green confirmation path.
+
+## Diary Source Linkage Fix Track
+
+- Preserve source episode IDs emitted by conversation recall into diary writes.
+- Include source provenance lines in recall summaries so the model can carry
+  evidence into the diary tool call.
+- Fall back to current episode/session ID in the diary write tool when the model
+  omits explicit sources.
 
 ## Exit Criteria
 

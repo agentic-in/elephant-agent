@@ -29,6 +29,10 @@ def run_diary_write(
     source_episode_ids: tuple[str, ...] = ()
     if isinstance(source_episode_ids_raw, (list, tuple)):
         source_episode_ids = tuple(str(s).strip() for s in source_episode_ids_raw if str(s).strip())
+    if not source_episode_ids:
+        fallback_episode_id = str(invocation.context.episode_id or invocation.session_id or "").strip()
+        if fallback_episode_id:
+            source_episode_ids = (fallback_episode_id,)
     metadata_raw = invocation.arguments.get("metadata")
     metadata: dict[str, str] = {}
     if isinstance(metadata_raw, Mapping):

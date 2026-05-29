@@ -17,6 +17,25 @@ struct WakeStreamEvent {
     var error: String = ""
 }
 
+struct CronRunResult {
+    var outcome: String
+    var summary: String
+    var deliveryError: String
+
+    var succeeded: Bool {
+        outcome.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "success"
+    }
+
+    var displayMessage: String {
+        let detail = deliveryError.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !detail.isEmpty { return detail }
+        let text = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { return text }
+        let normalizedOutcome = outcome.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedOutcome.isEmpty ? "Cron run unavailable." : normalizedOutcome
+    }
+}
+
 struct APIClient {
     var baseURL: URL?
     private let session: URLSession
@@ -958,8 +977,20 @@ struct APIClient {
         _ = try await request(path: "/v1/operator/cron", method: "POST", body: body)
     }
 
-    func runCronJob(_ jobID: String) async throws {
-        _ = try await request(path: "/v1/operator/cron/\(Self.pathSegment(jobID))/run", method: "POST", body: [:])
+    func runCronJob(_ jobID: String) async throws -> CronRunResult {
+        let json = try await request(path: "/v1/operator/cron/\(Self.pathSegment(jobID))/run", method: "POST", body: [:])
+        let cron = json["cron"] as? [String: Any] ?? [:]
+        let run = cron["run"] as? [String: Any] ?? [:]
+        func text(_ key: String) -> String {
+            if let value = run[key] as? String { return value }
+            return ""
+        }
+        let outcome = text("outcome").trimmingCharacters(in: .whitespacesAndNewlines)
+        return CronRunResult(
+            outcome: outcome.isEmpty ? "success" : outcome,
+            summary: text("summary"),
+            deliveryError: text("delivery_error")
+        )
     }
 
     func setCronJobStatus(_ jobID: String, action: String) async throws {
