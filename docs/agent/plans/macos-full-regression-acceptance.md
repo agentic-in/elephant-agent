@@ -254,13 +254,20 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   deleted both the original and superseding refs, marked their Personal Model
   semantic-index entries deleted, and a recall search for the temporary marker
   returned zero hits. The app and managed API stayed alive throughout.
+- A Chat/acceptance episode creation regression was fixed and verified against
+  the rebuilt packaged app's managed API. `POST /v1/episodes` with
+  `profile_id=you` and the macOS Chat session display name now opens an Episode
+  without overwriting the existing Personal Model identity. The real managed API
+  response returned Personal Model display name `You`, the SQLite
+  `personal_models` row stayed `you|You` before and after the request, and
+  `/healthz` remained healthy.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, and managed-API recall search verified after restart |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, managed-API recall search, and episode identity preservation verified |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
@@ -291,6 +298,16 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Show source/evidence counts and fact trace rows before the question field.
 - Expose direct Sooner, Dismiss, and Reply actions for actionable open
   questions, with native tooltips and accessibility labels.
+
+## Episode Identity Preservation Fix Track
+
+- Treat `POST /v1/episodes` as an Episode-open operation when the Personal
+  Model already exists.
+- Do not let transient session display names such as Chat overwrite durable
+  Personal Model display name, preferences, enabled capabilities, or learning
+  intensity.
+- Keep explicit identity changes on the identity/profile API surfaces where
+  they can be audited as user-directed profile edits.
 
 ## Paths Safety Fix Track
 

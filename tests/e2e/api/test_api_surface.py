@@ -11,10 +11,50 @@ if str(ROOT) not in sys.path:
 
 from tests.e2e.api.api_surface_test_base import APISurfaceTestBase
 from packages.contracts import PersonalModelGrowthState
+from packages.contracts.runtime import PersonalModelRuntimeState
 from packages.runtime_layout import elephant_file_path
 
 
 class APISurfaceE2ETest(APISurfaceTestBase):
+    def test_episode_create_preserves_existing_personal_model_identity(self) -> None:
+        self.app.repository.upsert_personal_model_runtime_state(
+            PersonalModelRuntimeState(
+                profile_id="you",
+                display_name="You",
+                mode="companion",
+                preferences=("desktop", "native"),
+                enabled_capabilities=("voice", "personal_model"),
+                learning_intensity="high",
+            )
+        )
+
+        created = self.app.dispatch(
+            "POST",
+            "/v1/episodes",
+            body=self._body(
+                {
+                    "profile_id": "you",
+                    "display_name": "Chat",
+                    "mode": "companion",
+                    "elephant_id": "mother-elephant",
+                    "preferences": [],
+                    "enabled_capabilities": [],
+                    "episode_id": "session-preserve-you",
+                }
+            ),
+        )
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.payload["episode"]["episode_id"], "session-preserve-you")
+        self.assertEqual(created.payload["personal_model"]["display_name"], "You")
+        personal_model = self.app.repository.load_personal_model_runtime_state("you")
+        self.assertIsNotNone(personal_model)
+        assert personal_model is not None
+        self.assertEqual(personal_model.display_name, "You")
+        self.assertEqual(personal_model.preferences, ("desktop", "native"))
+        self.assertEqual(personal_model.enabled_capabilities, ("voice", "personal_model"))
+        self.assertEqual(personal_model.learning_intensity, "high")
+
     def test_episode_lifecycle_inspection_and_next(self) -> None:
         legacy_sessions = self.app.dispatch("GET", "/v1/sessions/session-1")
         self.assertEqual(legacy_sessions.status_code, 404)

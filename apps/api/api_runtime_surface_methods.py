@@ -101,8 +101,10 @@ def create_episode(
     provider_profile: Mapping[str, Any] | None = None,
     episode_id: str | None = None,
 ) -> APIEpisodeCreationResult:
-    personal_model = PersonalModelRuntimeState(
-        profile_id=canonical_personal_model_id(personal_model_id),
+    canonical_profile_id = canonical_personal_model_id(personal_model_id)
+    existing_personal_model = self.repository.load_personal_model_runtime_state(canonical_profile_id)
+    personal_model = existing_personal_model or PersonalModelRuntimeState(
+        profile_id=canonical_profile_id,
         display_name=display_name,
         mode=mode,
         elephant_path=elephant_path,
@@ -135,7 +137,8 @@ def create_episode(
         started_at=timestamp,
         updated_at=timestamp,
     )
-    self.repository.upsert_personal_model_runtime_state(personal_model, updated_at=timestamp)
+    if existing_personal_model is None:
+        self.repository.upsert_personal_model_runtime_state(personal_model, updated_at=timestamp)
     self.repository.upsert_episode_state(episode)
     state = _ensure_episode_state(self, episode=episode, personal_model=personal_model)
     self.personal_state.ensure_personal_model_state(
