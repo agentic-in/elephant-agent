@@ -83,6 +83,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Voice cancel was verified after the timeout state; the overlay dismissed, no
   late permission callback restarted capture, and no new macOS crash report was
   produced.
+- The packaged Personal Model surface was inspected in the real app. Facts
+  expand with correct/recover/delete controls, source-backed evidence now has a
+  dedicated panel, and open questions expose direct Sooner, Dismiss, and Reply
+  actions.
+- The Personal Model Reply popover was opened and canceled from the packaged
+  app without mutating question data.
+- The current local state exposes Personal Model fact traces, but the semantic
+  index count is `0`, so source indexing quality remains an acceptance follow-up.
 
 ## Open Acceptance Matrix
 
@@ -91,7 +99,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout and cancel verified |
-| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Not complete |
+| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, and reply cancel verified; semantic index is empty |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Not complete |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Not complete |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Not complete |
@@ -112,6 +120,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Keep tool catalog access out of the primary sidebar.
 - Use "Learn" as the user-facing sidebar label for background learning instead
   of exposing mechanism-heavy wording.
+
+## Personal Model Fix Track
+
+- Keep reviewed facts, source-backed evidence, and open questions as visually
+  separate Personal Model regions.
+- Show source/evidence counts and fact trace rows before the question field.
+- Expose direct Sooner, Dismiss, and Reply actions for actionable open
+  questions, with native tooltips and accessibility labels.
 
 ## Exit Criteria
 

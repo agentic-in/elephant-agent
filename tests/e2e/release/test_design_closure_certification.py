@@ -137,6 +137,24 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("Microphone permission did not finish", speech_input)
         self.assertIn("lowerStatus.contains(\"permission\")", views)
 
+    def test_macos_you_surface_separates_evidence_and_question_actions(self) -> None:
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        you_view = views.split("struct YouView: View", 1)[1].split("private func localizedYouText", 1)[0]
+        question_row = views.split("struct QuestionLedgerRow: View", 1)[1].split("struct QuestionReplyPopover", 1)[0]
+
+        self.assertIn("PersonalModelEvidencePanel()", you_view)
+        self.assertIn("struct PersonalModelEvidencePanel", views)
+        self.assertIn("Source-backed evidence", views)
+        self.assertIn("model.snapshot.semanticEntries", views)
+        self.assertIn("EvidenceTraceRow", views)
+
+        self.assertIn("QuestionActionPillButton", question_row)
+        self.assertIn("model.surfaceQuestionSooner(question)", question_row)
+        self.assertIn("model.dismissQuestion(question)", question_row)
+        self.assertIn("accessibilityLabel(replyText)", question_row)
+        self.assertIn("help: surfaceHelpText", question_row)
+        self.assertIn("help: dismissHelpText", question_row)
+
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")
 

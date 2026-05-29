@@ -6068,6 +6068,7 @@ struct YouView: View {
                     LensPartitionGrid(selectedLens: activeLensBinding)
                 }
                 LensFactsPager(lens: activeLens)
+                PersonalModelEvidencePanel()
                 QuestionFieldPanel()
             }
         }
@@ -6590,6 +6591,164 @@ struct PersonalModelMapPanel: View {
     }
 }
 
+struct PersonalModelEvidencePanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        NativePanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    SectionLabel(
+                        title: localizedYouText(
+                            model.appLanguage,
+                            en: "Source-backed evidence",
+                            zh: "有来源的证据",
+                            fr: "Preuves avec source",
+                            de: "Quellenbasierte Belege"
+                        ),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Evidence stays separate from the claims it supports, so memories can be checked instead of trusted blindly.",
+                            zh: "证据和结论分开放，记忆可以被核对，而不是只能被相信。",
+                            fr: "Les preuves restent séparées des affirmations pour que les souvenirs puissent être vérifiés.",
+                            de: "Belege bleiben von den Aussagen getrennt, damit Erinnerungen prüfbar bleiben."
+                        )
+                    )
+                    Spacer(minLength: 0)
+                    HStack(spacing: 8) {
+                        EvidenceMetricPill(
+                            value: "\(model.snapshot.semanticEntries)",
+                            label: localizedYouText(model.appLanguage, en: "indexed", zh: "已索引", fr: "indexées", de: "indexiert"),
+                            symbol: "doc.text.magnifyingglass",
+                            tint: ElephantTheme.green
+                        )
+                        EvidenceMetricPill(
+                            value: "\(sourcedFacts.count)",
+                            label: localizedYouText(model.appLanguage, en: "fact traces", zh: "事实来源", fr: "traces", de: "Spuren"),
+                            symbol: "link",
+                            tint: ElephantTheme.accent
+                        )
+                    }
+                }
+
+                if evidenceRows.isEmpty {
+                    EmptyLine(
+                        symbol: "doc.text.magnifyingglass",
+                        text: model.snapshot.semanticEntries > 0
+                            ? localizedYouText(
+                                model.appLanguage,
+                                en: "Evidence is indexed, but no Personal Model fact exposes a source trace yet.",
+                                zh: "证据已经索引，但个人模型事实还没有可展示的来源线索。",
+                                fr: "Les preuves sont indexées, mais aucun fait du modèle personnel n'expose encore de trace source.",
+                                de: "Belege sind indexiert, aber noch kein Fakt im persönlichen Modell zeigt eine Quelle."
+                            )
+                            : localizedYouText(
+                                model.appLanguage,
+                                en: "No indexed evidence is available yet. Reflect after concrete chats or diary entries to attach sources.",
+                                zh: "还没有可索引证据。完成具体对话或日记后运行 Reflect 来挂上来源。",
+                                fr: "Aucune preuve indexée pour l'instant. Lancez Reflect après des conversations ou journaux concrets.",
+                                de: "Noch keine indexierten Belege. Starte Reflect nach konkreten Chats oder Tagebucheinträgen."
+                            )
+                    )
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(evidenceRows) { fact in
+                            EvidenceTraceRow(fact: fact)
+                            if fact.id != evidenceRows.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    private var sourcedFacts: [PersonalModelFact] {
+        model.snapshot.personalModelFacts.filter { fact in
+            fact.status.lowercased() != "deleted"
+                && !fact.detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private var evidenceRows: [PersonalModelFact] {
+        Array(sourcedFacts.prefix(6))
+    }
+}
+
+private struct EvidenceMetricPill: View {
+    var value: String
+    var label: String
+    var symbol: String
+    var tint: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.caption.weight(.semibold))
+            Text(value)
+                .font(.caption.weight(.bold))
+            Text(label)
+                .font(.caption)
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(tint.opacity(0.08), in: Capsule())
+        .overlay(Capsule().stroke(tint.opacity(0.18), lineWidth: 1))
+        .accessibilityLabel("\(value) \(label)")
+    }
+}
+
+private struct EvidenceTraceRow: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    var fact: PersonalModelFact
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "link")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 18, height: 18)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(fact.detail)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                    Text(fact.text)
+                        .font(.callout)
+                        .foregroundStyle(ElephantTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+                Text(localizedLensTitle(fact.lens, language: model.appLanguage))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ElephantTheme.muted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.82), in: Capsule())
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(fact.detail), \(fact.text)")
+    }
+
+    private var tint: Color {
+        let lens = fact.lens.lowercased()
+        if lens.contains("pulse") { return PersonalModelMapPalette.pulse }
+        if lens.contains("world") { return PersonalModelMapPalette.world }
+        if lens.contains("journey") { return PersonalModelMapPalette.journey }
+        return PersonalModelMapPalette.identity
+    }
+}
+
 struct QuestionFieldPanel: View {
     @EnvironmentObject private var model: ElephantAppModel
     @State private var filter = "open"
@@ -6792,7 +6951,7 @@ struct QuestionLedgerRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 if question.canAct {
-                    replyButton
+                    questionActions
                 }
             }
             .padding(.horizontal, 12)
@@ -6882,6 +7041,37 @@ struct QuestionLedgerRow: View {
         .padding(.bottom, 12)
     }
 
+    private var questionActions: some View {
+        HStack(spacing: 6) {
+            surfaceButton
+            dismissButton
+            replyButton
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var surfaceButton: some View {
+        QuestionActionPillButton(
+            title: surfaceText,
+            symbol: "arrow.up.to.line",
+            tint: ElephantTheme.orange,
+            help: surfaceHelpText
+        ) {
+            Task { await model.surfaceQuestionSooner(question) }
+        }
+    }
+
+    private var dismissButton: some View {
+        QuestionActionPillButton(
+            title: dismissText,
+            symbol: "xmark",
+            tint: ElephantTheme.muted,
+            help: dismissHelpText
+        ) {
+            Task { await model.dismissQuestion(question) }
+        }
+    }
+
     private var replyButton: some View {
         Button {
             isReplying = true
@@ -6898,6 +7088,7 @@ struct QuestionLedgerRow: View {
         }
         .buttonStyle(.plain)
         .help(replyHelpText)
+        .accessibilityLabel(replyText)
         .popover(isPresented: $isReplying, arrowEdge: .trailing) {
             QuestionReplyPopover(
                 language: model.appLanguage,
@@ -6933,6 +7124,14 @@ struct QuestionLedgerRow: View {
         localizedYouText(model.appLanguage, en: "Reply", zh: "回复", fr: "Répondre", de: "Antworten")
     }
 
+    private var surfaceText: String {
+        localizedYouText(model.appLanguage, en: "Sooner", zh: "提前问", fr: "Plus tôt", de: "Früher")
+    }
+
+    private var dismissText: String {
+        localizedYouText(model.appLanguage, en: "Dismiss", zh: "忽略", fr: "Ignorer", de: "Verwerfen")
+    }
+
     private var replyHelpText: String {
         localizedYouText(
             model.appLanguage,
@@ -6940,6 +7139,26 @@ struct QuestionLedgerRow: View {
             zh: "用一次对话来回答，让 Elephant 从这次回答里学习。",
             fr: "Répondre dans une conversation pour qu'Elephant apprenne de la réponse.",
             de: "In einem Gespräch antworten, damit Elephant aus der Antwort lernt."
+        )
+    }
+
+    private var surfaceHelpText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Move this question up so Elephant asks it sooner.",
+            zh: "把这个问题提前，让 Elephant 更早询问。",
+            fr: "Remonter cette question pour qu'Elephant la pose plus tôt.",
+            de: "Diese Frage höher priorisieren, damit Elephant sie früher stellt."
+        )
+    }
+
+    private var dismissHelpText: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Dismiss this question when it is no longer useful.",
+            zh: "这个问题不再有帮助时，将它忽略。",
+            fr: "Ignorer cette question quand elle n'est plus utile.",
+            de: "Diese Frage verwerfen, wenn sie nicht mehr nützlich ist."
         )
     }
 
@@ -6967,6 +7186,32 @@ struct QuestionLedgerRow: View {
         replyDraft = ""
         isReplying = false
         Task { await model.answerQuestionFromReplySurface(question, content: draft) }
+    }
+}
+
+private struct QuestionActionPillButton: View {
+    var title: String
+    var symbol: String
+    var tint: Color
+    var help: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.86), in: Capsule())
+                .overlay(Capsule().stroke(tint.opacity(0.22), lineWidth: 1))
+                .shadow(color: tint.opacity(0.08), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(title)
     }
 }
 
@@ -9070,6 +9315,8 @@ private struct FactActionPillButton: View {
         }
         .buttonStyle(PressablePlainButtonStyle())
         .disabled(disabled)
+        .help(title)
+        .accessibilityLabel(title)
     }
 }
 
