@@ -203,6 +203,15 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   newer Elephant Agent crash report appeared. Full Chat/Settings voice control
   re-inspection remains gated by the user's lock password or an explicit local
   state reset.
+- Menu Refresh and Reflect were exercised from the real packaged app while the
+  window remained in Sleep Display. `Command-R` refreshed dashboard state
+  without creating a learning job, and the managed API stayed healthy.
+  `Shift-Command-R` created one `manual` Reflect job
+  (`learning-job:7ff576f0b36d4ef8a0075080a3b8f55b`), streamed tool progress,
+  completed successfully, and made no duplicate durable Personal Model,
+  question, or skill-affinity writes. No recursive `episode_close` learning job
+  was created after the manual menu Reflect run, semantic index health remained
+  ready with 80 entries, and no newer Elephant Agent crash report appeared.
 
 ## Open Acceptance Matrix
 
@@ -221,7 +230,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching run, diary queue, launcher disable/re-enable, progress/status, history, and needs-attention detail verified; dream/letter variants still need direct execution |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, and config surface verified; config editing not saved |
-| Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, and Restart Core verified; Reflect/Refresh not executed |
+| Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Partial; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, and Reflect verified; sidebar command still needs separate exercise |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
 | Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, and fullscreen Home/Settings behavior verified |
 
