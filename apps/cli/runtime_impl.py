@@ -113,6 +113,7 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
     skill_search_hub: SkillSearchHub
     security_policy: SecurityPolicy
     semantic_index_bundle: Any = None
+    semantic_summary_indexer: Any = None
     skill_prompt_context: SkillPromptContextBuilder | None = None
     todo_store: InMemorySessionTodoStore = field(default_factory=InMemorySessionTodoStore)
     browser_backend: BrowserToolBackend | None = None
@@ -322,11 +323,12 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
                     return
                 if result.total_indexed:
                     LOGGER.info(
-                        "backfilled existing semantic summaries into the recall index: facts=%s episodes=%s steps=%s path_learning_summaries=%s",
+                        "backfilled existing semantic summaries into the recall index: facts=%s episodes=%s steps=%s path_learning_summaries=%s diary_entries=%s",
                         result.facts_indexed,
                         result.episodes_indexed,
                         result.steps_indexed,
                         result.learning_summaries_indexed,
+                        result.diary_entries_indexed,
                     )
 
             threading.Thread(
@@ -364,6 +366,7 @@ class CliRuntime(CliRuntimeProfileMixin, CliRuntimeProviderMixin, CliRuntimeExte
             skill_search_hub=skill_search_hub,
             security_policy=security_policy,
             semantic_index_bundle=semantic_index_bundle,
+            semantic_summary_indexer=semantic_summary_indexer,
             skill_prompt_context=SkillPromptContextBuilder(
                 repository=repository,
                 profile_loader=profile_loader,

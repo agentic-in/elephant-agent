@@ -12588,6 +12588,21 @@ struct DiaryPanel: View {
                                     }
                                     .buttonStyle(PressablePlainButtonStyle())
                                 }
+                                if entry.sourceCount > 0 {
+                                    Label(
+                                        localizedFormat(model.appLanguage, en: "%d sources", zh: "%d 个来源", fr: "%d sources", de: "%d Quellen", entry.sourceCount),
+                                        systemImage: "link"
+                                    )
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(ElephantTheme.muted)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(ElephantTheme.panel.opacity(0.66), in: Capsule())
+                                    .overlay(Capsule().stroke(ElephantTheme.line.opacity(0.50), lineWidth: 1))
+                                    .help(localizedYouText(model.appLanguage, en: "Source Episodes", zh: "来源对话", fr: "Épisodes sources", de: "Quell-Episoden"))
+                                    .accessibilityLabel(localizedFormat(model.appLanguage, en: "%d source Episodes", zh: "%d 个来源对话", fr: "%d épisodes sources", de: "%d Quell-Episoden", entry.sourceCount))
+                                }
                                 if !entry.generatedAt.isEmpty {
                                     Text(MacLocalDateTime.formattedDate(entry.generatedAt, language: model.appLanguage))
                                         .font(.caption)

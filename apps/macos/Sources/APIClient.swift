@@ -1883,6 +1883,7 @@ enum SnapshotParser {
                 date: string(row["entry_date"]),
                 content: content,
                 generatedAt: string(row["generated_at"]),
+                sourceEpisodeIDs: stringArray(row["source_episode_ids"] ?? row["sourceEpisodeIds"] ?? row["sourceEpisodeIDs"]),
                 metadata: stringDictionary(row["metadata"])
             )
         }

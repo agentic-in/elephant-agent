@@ -7,11 +7,12 @@ from datetime import datetime, timezone
 import logging
 from typing import Any
 
-from packages.contracts import Episode, Fact, PersonalModel, State, Step
+from packages.contracts import DiaryEntry, Episode, Fact, PersonalModel, State, Step
 from packages.contracts.paths import LearningSummaryRecord, PathRecord, PathStepRecord
 from packages.evidence import (
     SemanticSummaryIndexer,
     backfill_existing_semantic_summaries,
+    build_diary_entry_recall_text,
     build_episode_summary_text,
     build_learning_summary_recall_text,
     build_personal_model_claim_text,
@@ -116,6 +117,20 @@ def _learning_summary(**kwargs: Any) -> LearningSummaryRecord:
     return LearningSummaryRecord(**defaults)
 
 
+def _diary_entry(**kwargs: Any) -> DiaryEntry:
+    defaults: dict[str, Any] = dict(
+        entry_id="diary:entry:1",
+        personal_model_id="pm:1",
+        entry_date="2026-05-30",
+        content="Today we learned that source-backed diary memory should be recallable.",
+        generated_at=datetime(2026, 5, 30, tzinfo=timezone.utc),
+        source_episode_ids=("session:1", "session:2"),
+        metadata={"kind": "daily_reflection", "source": "reflect"},
+    )
+    defaults.update(kwargs)
+    return DiaryEntry(**defaults)
+
+
 def _step(**kwargs: Any) -> Step:
     defaults: dict[str, Any] = dict(
         step_id="step:1",
@@ -165,6 +180,14 @@ def test_build_learning_summary_recall_text_prioritizes_takeaway_and_knowledge()
     assert "Extract the core lesson" in text
     assert "Index the core essence" in text
     assert "Path runs should be summarized" in text
+
+
+def test_build_diary_entry_recall_text_includes_date_content_and_sources() -> None:
+    text = build_diary_entry_recall_text(_diary_entry())
+    assert "diary date: 2026-05-30" in text
+    assert "source-backed diary memory" in text
+    assert "session:1" in text
+    assert "daily_reflection" in text
 
 
 def test_indexer_noop_without_semantic_index_or_embedding() -> None:
@@ -234,6 +257,28 @@ def test_indexer_writes_document_for_path_learning_summary() -> None:
     assert "core essence" in doc.text
 
 
+def test_indexer_writes_document_for_diary_entry() -> None:
+    emb = _StubEmbeddingService()
+    idx = _StubSemanticIndex()
+    indexer = SemanticSummaryIndexer(
+        semantic_index=idx,
+        embedding_service=emb,
+        provider_id="stub-provider",
+        model_id="stub-model",
+    )
+    indexer.index_diary_entry(_diary_entry())
+    assert len(idx.documents) == 1
+    doc = idx.documents[0]
+    assert doc.owner_scope == "personal_model"
+    assert doc.personal_model_id == "pm:1"
+    assert doc.state_id is None
+    assert doc.source_id == "diary:pm:1:2026-05-30"
+    assert doc.metadata["kind"] == "diary_entry"
+    assert doc.metadata["entry_date"] == "2026-05-30"
+    assert doc.metadata["source_episode_ids"] == "session:1,session:2"
+    assert "source-backed diary memory" in doc.text
+
+
 def test_backfill_existing_semantic_summaries_indexes_missing_records() -> None:
     emb = _StubEmbeddingService()
     idx = _StubSemanticIndex()
@@ -266,6 +311,9 @@ def test_backfill_existing_semantic_summaries_indexes_missing_records() -> None:
         def list_learning_summaries(self, **_kwargs: Any):
             return (_learning_summary(),)
 
+        def list_diary_entries(self, **_kwargs: Any):
+            return (_diary_entry(),)
+
         def load_path_step(self, path_step_id: str):
             return _path_step(path_step_id=path_step_id)
 
@@ -278,12 +326,14 @@ def test_backfill_existing_semantic_summaries_indexes_missing_records() -> None:
     assert result.episodes_indexed == 1
     assert result.steps_indexed == 1
     assert result.learning_summaries_indexed == 1
-    assert result.total_indexed == 4
+    assert result.diary_entries_indexed == 1
+    assert result.total_indexed == 5
     assert [doc.source_id for doc in idx.documents] == [
         "fact:pm:1",
         "episode:session:1",
         "step:step:1",
         "path:learning_summary:learning-summary:1",
+        "diary:pm:1:2026-05-30",
     ]
 
 

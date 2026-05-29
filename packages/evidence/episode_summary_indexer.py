@@ -26,13 +26,13 @@ never block a governance write because indexing had a bad day.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import logging
 from typing import Any
 from uuid import uuid4
 
-from packages.contracts import Episode, Fact, Step
+from packages.contracts import DiaryEntry, Episode, Fact, Step
 from packages.contracts.paths import LearningSummaryRecord
 
 LOGGER = logging.getLogger(__name__)
@@ -42,6 +42,7 @@ __all__ = [
     "SemanticSummaryIndexer",
     "SemanticSummaryBackfillResult",
     "backfill_existing_semantic_summaries",
+    "build_diary_entry_recall_text",
     "build_episode_summary_text",
     "build_learning_summary_recall_text",
     "build_personal_model_claim_text",
@@ -179,12 +180,26 @@ def build_learning_summary_recall_text(
     return _truncate(" | ".join(part for part in pieces if part.strip()))
 
 
+def build_diary_entry_recall_text(entry: DiaryEntry) -> str:
+    """Flatten a Diary entry into source-backed Personal Model recall text."""
+    metadata = dict(entry.metadata or {})
+    pieces = [
+        f"diary date: {entry.entry_date}",
+        f"kind: {metadata.get('kind', '')}",
+        f"source: {metadata.get('source', '')}",
+        f"sources: {', '.join(entry.source_episode_ids)}" if entry.source_episode_ids else "",
+        entry.content,
+    ]
+    return _truncate(" | ".join(part for part in pieces if part.strip()))
+
+
 @dataclass(frozen=True, slots=True)
 class SemanticSummaryBackfillResult:
     facts_indexed: int = 0
     episodes_indexed: int = 0
     steps_indexed: int = 0
     learning_summaries_indexed: int = 0
+    diary_entries_indexed: int = 0
 
     @property
     def total_indexed(self) -> int:
@@ -193,6 +208,7 @@ class SemanticSummaryBackfillResult:
             + self.episodes_indexed
             + self.steps_indexed
             + self.learning_summaries_indexed
+            + self.diary_entries_indexed
         )
 
 
@@ -408,6 +424,83 @@ class SemanticSummaryIndexer:
             },
         )
 
+    def index_diary_entry(self, entry: DiaryEntry) -> object | None:
+        """Index one Diary entry as durable source-backed Personal Model recall."""
+        if entry is None:
+            return None
+        text = build_diary_entry_recall_text(entry)
+        if not text:
+            return None
+        personal_model_id = str(entry.personal_model_id or "").strip() or None
+        source_id = _diary_entry_source_id(
+            personal_model_id=personal_model_id,
+            entry_date=entry.entry_date,
+        )
+        self._mark_previous_source_entries_deleted(
+            source_id=source_id,
+            personal_model_id=personal_model_id,
+            deleted_by="diary_reindex",
+        )
+        return self._index(
+            text=text,
+            source_id=source_id,
+            owner_scope="personal_model",
+            personal_model_id=personal_model_id,
+            state_id=None,
+            metadata={
+                "kind": "diary_entry",
+                "layer_type": "diary_entry",
+                "entry_id": entry.entry_id,
+                "entry_date": entry.entry_date,
+                "source_episode_ids": ",".join(entry.source_episode_ids),
+                "retention_lifecycle": "diary",
+            },
+        )
+
+    def _mark_previous_source_entries_deleted(
+        self,
+        *,
+        source_id: str,
+        personal_model_id: str | None,
+        deleted_by: str,
+    ) -> int:
+        list_entries = getattr(self.repository, "list_semantic_index_entries", None)
+        upsert_entry = getattr(self.repository, "upsert_semantic_index_entry", None)
+        if not callable(list_entries) or not callable(upsert_entry):
+            return 0
+        try:
+            entries = list_entries(
+                owner_scope="personal_model",
+                personal_model_id=personal_model_id,
+            )
+        except Exception:
+            LOGGER.debug("Failed to list previous semantic source entries for reindex.", exc_info=True)
+            return 0
+        now = _utc_now()
+        updated = 0
+        for entry in entries:
+            if str(getattr(entry, "source_id", "") or "") != source_id:
+                continue
+            if str(getattr(entry, "status", "") or "").strip().lower() == "deleted":
+                continue
+            try:
+                upsert_entry(
+                    replace(
+                        entry,
+                        status="deleted",
+                        updated_at=now,
+                        metadata={
+                            **dict(getattr(entry, "metadata", {}) or {}),
+                            "retention_lifecycle_status": "deleted",
+                            "deleted_by": deleted_by,
+                        },
+                    )
+                )
+                updated += 1
+            except Exception:
+                LOGGER.debug("Failed to mark previous semantic source entry deleted.", exc_info=True)
+        return updated
+
     def _load_path_step(self, path_step_id: str) -> Any | None:
         load_path_step = getattr(self.repository, "load_path_step", None)
         if not callable(load_path_step) or not path_step_id:
@@ -466,6 +559,11 @@ def _personal_model_ids(repository: Any) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item for item in ids if item))
 
 
+def _diary_entry_source_id(*, personal_model_id: str | None, entry_date: str) -> str:
+    pm_id = str(personal_model_id or "").strip() or "you"
+    return f"diary:{pm_id}:{str(entry_date or '').strip()}"
+
+
 def backfill_existing_semantic_summaries(
     *,
     repository: Any,
@@ -474,6 +572,7 @@ def backfill_existing_semantic_summaries(
     episode_limit: int = 80,
     step_limit: int = 160,
     learning_summary_limit: int = 160,
+    diary_entry_limit: int = 160,
 ) -> SemanticSummaryBackfillResult:
     """Index existing committed records so upgraded runtimes do not start with empty recall."""
 
@@ -484,6 +583,7 @@ def backfill_existing_semantic_summaries(
     episodes_indexed = 0
     steps_indexed = 0
     learning_summaries_indexed = 0
+    diary_entries_indexed = 0
 
     list_facts = getattr(repository, "list_personal_model_facts", None)
     if callable(list_facts):
@@ -552,9 +652,36 @@ def backfill_existing_semantic_summaries(
                 learning_summaries_indexed += 1
                 source_ids.add(source_id)
 
+    list_diary_entries = getattr(repository, "list_diary_entries", None)
+    if callable(list_diary_entries):
+        for personal_model_id in _personal_model_ids(repository):
+            if diary_entries_indexed >= diary_entry_limit:
+                break
+            try:
+                entries = list_diary_entries(
+                    personal_model_id=personal_model_id,
+                    limit=diary_entry_limit,
+                )
+            except Exception:
+                LOGGER.debug("Failed to list Diary entries for semantic backfill.", exc_info=True)
+                continue
+            for entry in entries:
+                if diary_entries_indexed >= diary_entry_limit:
+                    break
+                source_id = _diary_entry_source_id(
+                    personal_model_id=getattr(entry, "personal_model_id", personal_model_id),
+                    entry_date=getattr(entry, "entry_date", ""),
+                )
+                if source_id in source_ids:
+                    continue
+                if indexer.index_diary_entry(entry) is not None:
+                    diary_entries_indexed += 1
+                    source_ids.add(source_id)
+
     return SemanticSummaryBackfillResult(
         facts_indexed=facts_indexed,
         episodes_indexed=episodes_indexed,
         steps_indexed=steps_indexed,
         learning_summaries_indexed=learning_summaries_indexed,
+        diary_entries_indexed=diary_entries_indexed,
     )

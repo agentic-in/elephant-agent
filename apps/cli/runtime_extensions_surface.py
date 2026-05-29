@@ -311,6 +311,13 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
             metadata=dict(metadata) if metadata else {},
         )
         self.repository.upsert_diary_entry(entry)
+        indexer = getattr(self, "semantic_summary_indexer", None)
+        index_diary = getattr(indexer, "index_diary_entry", None)
+        if callable(index_diary):
+            try:
+                index_diary(entry)
+            except Exception:
+                LOGGER.debug("failed to index diary entry after write", exc_info=True)
         return {"entry_id": entry_id, "entry_date": entry_date, "status": "written"}
 
     def list_diary_entries(
@@ -750,6 +757,7 @@ class CliRuntimeExtensionsMixin(CliRuntimeSkillExtensionsMixin, CliRuntimeSubAge
                 provider_id=_idx_provider_id,
                 model_id=_idx_model_id,
             )
+        object.__setattr__(self, "semantic_summary_indexer", semantic_summary_indexer)
         object.__setattr__(
             self,
             "tool_runtime",

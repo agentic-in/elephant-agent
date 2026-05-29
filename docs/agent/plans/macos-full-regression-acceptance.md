@@ -281,6 +281,13 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   Model scope with the temporary marker, and deleting the Path marked that
   semantic row `deleted` with the Path retention lifecycle metadata. The managed
   API remained healthy and no newer macOS crash report appeared.
+- Diary memory lifecycle was verified through the rebuilt real packaged app's
+  managed API and packaged runtime while Sleep Display remained locked. A
+  temporary future-dated Diary entry was written with source episode provenance,
+  appeared through the managed Diary dashboard with `source_episode_ids`, wrote
+  a Personal Model-scoped `diary:*` semantic-index row, and deletion through the
+  managed API removed the Diary row while marking the semantic row `deleted`.
+  The managed API remained healthy and no newer macOS crash report appeared.
 
 ## Open Acceptance Matrix
 
@@ -290,7 +297,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, managed-API recall search, and episode identity preservation verified |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
-| Diary | Read/write Markdown diary entries and learning linkage verified. | Partial; Markdown render, date picker, write queue, and source-linkage hardening verified |
+| Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, and deleted-Path memory cleanup verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
@@ -381,6 +388,11 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   evidence into the diary tool call.
 - Fall back to current episode/session ID in the diary write tool when the model
   omits explicit sources.
+- Index Diary entries as Personal Model-scoped recall material so reflective
+  daily learning can shape future help.
+- When a Diary entry is deleted, mark the corresponding `diary:*`
+  semantic-index rows deleted so removed reflections cannot remain active recall
+  material.
 
 ## Learning Recursion Fix Track
 

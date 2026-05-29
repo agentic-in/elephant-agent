@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "design-closure-certification.yml"
 MAKEFILE_PATH = ROOT / "Makefile"
 MACOS_APP_MODEL_PATH = ROOT / "apps" / "macos" / "Sources" / "AppModel.swift"
+MACOS_API_CLIENT_PATH = ROOT / "apps" / "macos" / "Sources" / "APIClient.swift"
 MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
 MACOS_SPEECH_INPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "SpeechInputController.swift"
 MACOS_SPEECH_OUTPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "LocalSpeechOutputController.swift"
@@ -170,6 +171,23 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("activeSystemUtterance", speech_output)
         self.assertIn("guard self?.activeSystemUtterance === utterance else { return }", speech_output)
         self.assertIn("guard self?.audioPlayer === player else { return }", speech_output)
+
+    def test_macos_diary_entries_surface_source_provenance(self) -> None:
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        api_client = MACOS_API_CLIENT_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        diary_entry = app_model.split("struct DiaryEntry: Identifiable, Equatable", 1)[1].split("struct ProviderOption", 1)[0]
+        diary_parser = api_client.split("snapshot.diaryEntries = entries.prefix", 1)[1].split("return snapshot", 1)[0]
+        diary_panel = views.split("struct DiaryPanel: View", 1)[1].split("struct DiaryView: View", 1)[0]
+
+        self.assertIn("sourceEpisodeIDs: [String]", diary_entry)
+        self.assertIn("var sourceCount: Int", diary_entry)
+        self.assertIn('row["source_episode_ids"]', diary_parser)
+        self.assertIn('row["sourceEpisodeIds"]', diary_parser)
+        self.assertIn('row["sourceEpisodeIDs"]', diary_parser)
+        self.assertIn("entry.sourceCount > 0", diary_panel)
+        self.assertIn('systemImage: "link"', diary_panel)
+        self.assertIn("Source Episodes", diary_panel)
 
     def test_macos_you_surface_separates_evidence_and_question_actions(self) -> None:
         views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")

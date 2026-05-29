@@ -412,7 +412,12 @@ struct DiaryEntry: Identifiable, Equatable {
     var date: String
     var content: String
     var generatedAt: String
+    var sourceEpisodeIDs: [String] = []
     var metadata: [String: String] = [:]
+
+    var sourceCount: Int {
+        sourceEpisodeIDs.count
+    }
 
     var isOnboardingLetter: Bool {
         let kind = (metadata["kind"] ?? metadata["letter_kind"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

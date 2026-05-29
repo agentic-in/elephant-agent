@@ -936,6 +936,7 @@ def _fill_diary(dashboard: dict[str, Any], self) -> None:
                 "entry_date": e.entry_date,
                 "content": e.content,
                 "generated_at": e.generated_at.isoformat() if e.generated_at else "",
+                "source_episode_ids": tuple(e.source_episode_ids),
                 "metadata": dict(e.metadata) if e.metadata else {},
             }
             for e in entries

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from typing import Sequence
@@ -12,6 +13,7 @@ from .repository_support import (
     _iso,
     _json_dict_text,
     _json_mapping,
+    _semantic_index_entry_from_row,
     canonical_personal_model_id,
 )
 
@@ -356,6 +358,41 @@ def delete_open_question(self, *, question_id: str) -> None:
 # --- Diary entries ---
 
 
+def _diary_entry_semantic_source_id(*, personal_model_id: str, entry_date: str) -> str:
+    return f"diary:{canonical_personal_model_id(personal_model_id)}:{entry_date}"
+
+
+def _mark_diary_entry_index_deleted(self, *, personal_model_id: str, entry_date: str) -> int:
+    source_id = _diary_entry_semantic_source_id(
+        personal_model_id=personal_model_id,
+        entry_date=entry_date,
+    )
+    with self.connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT * FROM semantic_index_entries
+            WHERE source_id = ? AND status != 'deleted'
+            """,
+            (source_id,),
+        ).fetchall()
+    entries = tuple(_semantic_index_entry_from_row(row) for row in rows)
+    now = datetime.now(timezone.utc)
+    for entry in entries:
+        self.upsert_semantic_index_entry(
+            replace(
+                entry,
+                status="deleted",
+                updated_at=now,
+                metadata={
+                    **dict(entry.metadata),
+                    "retention_lifecycle_status": "deleted",
+                    "deleted_by": "diary_delete",
+                },
+            )
+        )
+    return len(entries)
+
+
 def _diary_entry_from_row(row) -> DiaryEntry:
     return DiaryEntry(
         entry_id=row["entry_id"],
@@ -409,6 +446,14 @@ def load_diary_entry(self, *, personal_model_id: str, entry_date: str) -> DiaryE
 
 
 def delete_diary_entry(self, *, personal_model_id: str, entry_date: str) -> bool:
+    existing = self.load_diary_entry(personal_model_id=personal_model_id, entry_date=entry_date)
+    if existing is None:
+        return False
+    _mark_diary_entry_index_deleted(
+        self,
+        personal_model_id=personal_model_id,
+        entry_date=entry_date,
+    )
     with self.connection() as connection:
         cursor = connection.execute(
             "DELETE FROM diary_entries WHERE personal_model_id = ? AND entry_date = ?",
