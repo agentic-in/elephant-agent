@@ -164,17 +164,42 @@ class APISurfaceE2ETest(APISurfaceTestBase):
             body=self._body(
                 {
                     "prompt": "Run the controlled path",
-                    "tool_name": "tool.code.execute",
-                    "tool_arguments": {"code": "print('hello api tool')"},
+                    "tool_name": "tool.skill.list",
+                    "tool_arguments": {"limit": 3},
                 }
             ),
         )
         self.assertEqual(tool_turn.status_code, 200)
         self.assertEqual(tool_turn.payload["outcome"]["execution"]["outcome"], "success")
-        self.assertEqual(tool_turn.payload["outcome"]["execution"]["side_effects"], ["code", "python", "sandbox"])
-        self.assertIn("hello api tool", tool_turn.payload["outcome"]["execution"]["summary"])
-        self.assertEqual(tool_turn.payload["latest_loop"]["request"]["tool_name"], "tool.code.execute")
-        self.assertEqual(tool_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"], "tool.code.execute")
+        self.assertIn("skill", tool_turn.payload["outcome"]["execution"]["side_effects"])
+        self.assertNotEqual(tool_turn.payload["outcome"]["execution"]["summary"].strip(), "<empty>")
+        self.assertEqual(tool_turn.payload["latest_loop"]["request"]["tool_name"], "tool.skill.list")
+        self.assertEqual(tool_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"], "tool.skill.list")
+
+        code_turn = self.app.dispatch(
+            "POST",
+            "/v1/episodes/session-turn/loops",
+            body=self._body(
+                {
+                    "prompt": "Run code after approval",
+                    "tool_name": "tool.code.execute",
+                    "tool_arguments": {"code": "print('hello api tool')"},
+                }
+            ),
+        )
+        self.assertEqual(code_turn.status_code, 200)
+        self.assertEqual(code_turn.payload["outcome"]["execution"]["outcome"], "deferred")
+        self.assertIn("Execution surfaces", code_turn.payload["outcome"]["execution"]["summary"])
+        code_records = [
+            record
+            for record in self.app.tool_runtime.list_executions()
+            if record.invocation.session_id == "session-turn"
+            and record.invocation.tool_id == "tool.code.execute"
+        ]
+        self.assertEqual(code_records[-1].approval.decision, "deferred")
+        self.assertIn("explicit-approval", code_records[-1].approval.required_controls)
+        self.assertEqual(code_turn.payload["latest_loop"]["request"]["tool_name"], "tool.code.execute")
+        self.assertEqual(code_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"], "tool.code.execute")
 
         clarify_turn = self.app.dispatch(
             "POST",
@@ -276,6 +301,47 @@ class APISurfaceE2ETest(APISurfaceTestBase):
         self.assertEqual(result.outcome, "success")
         self.assertIn("skill", result.side_effects)
         self.assertNotEqual(result.summary.strip(), "<empty>")
+
+    def test_api_chat_runtime_defers_high_risk_local_tool_side_effects(self) -> None:
+        created = self.app.dispatch(
+            "POST",
+            "/v1/episodes",
+            body=self._body(
+                {
+                    "profile_id": "profile-api-approval",
+                    "display_name": "Elephant Agent",
+                    "mode": "companion",
+                    "elephant_id": "elephant-api-approval",
+                    "episode_id": "session-api-approval",
+                }
+            ),
+        )
+        self.assertEqual(created.status_code, 201)
+        target = Path(self.tempdir.name) / "approval-should-not-write.txt"
+
+        file_write = self.app.tool_runtime.invoke(
+            "tool.file.write",
+            {"path": str(target), "content": "unsafe write\n"},
+            session_id="session-api-approval",
+            requester="model",
+        )
+        terminal = self.app.tool_runtime.invoke(
+            "tool.terminal.exec",
+            {"command": f"printf terminal-write > {target}"},
+            session_id="session-api-approval",
+            requester="model",
+        )
+
+        self.assertEqual(file_write.outcome, "deferred")
+        self.assertEqual(terminal.outcome, "deferred")
+        self.assertFalse(target.exists())
+        deferred = [
+            record
+            for record in self.app.tool_runtime.list_executions()
+            if record.invocation.session_id == "session-api-approval"
+        ]
+        self.assertEqual([record.approval.decision for record in deferred], ["deferred", "deferred"])
+        self.assertTrue(all(not record.approved for record in deferred))
 
     def test_canonical_state_routes_expose_identity_user_relationship_and_continuity(self) -> None:
         created = self.app.dispatch(

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from apps.provider_runtime import load_provider_profile
 from packages.runtime_config import global_config_path_for_state_dir
+from packages.security import SecurityPolicy
 from packages.models import SurfaceModelProviderCapability
 from packages.auth import AuthProfile, PersistentAuthProfileStore
 from packages.context import ContextRuntime
@@ -56,6 +57,10 @@ from packages.skills import (
 from packages.tools import (
     BuiltinToolDependencies,
     RequesterScopedToolCapability,
+    SecurityApprovalGateway,
+    ToolApprovalResult,
+    ToolDefinition,
+    ToolInvocation,
     ToolRequester,
     ToolRuntimeContext,
     build_tool_runtime,
@@ -98,6 +103,96 @@ from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
 
 LOGGER = logging.getLogger(__name__)
+
+_LOCAL_APPROVAL_TOOL_IDS = frozenset(
+    {
+        "tool.terminal.exec",
+        "tool.process.manage",
+        "tool.file.write",
+        "tool.file.patch",
+        "tool.code.execute",
+    }
+)
+_LOCAL_APPROVAL_FAMILIES = frozenset({"terminal", "process", "code_execution"})
+_LOCAL_APPROVAL_KEYWORDS = frozenset(
+    {
+        "applescript",
+        "automation",
+        "code",
+        "exec",
+        "filesystem",
+        "patch",
+        "process",
+        "shell",
+        "terminal",
+        "write",
+    }
+)
+
+
+class _APILocalToolApprovalGateway:
+    """Require product approval for risky local Chat side effects.
+
+    The API surface still permits low-risk reads and first-party Personal Model
+    writes. Local host mutation and execution tools fail closed until the macOS
+    Chat surface can resume approved calls.
+    """
+
+    def __init__(self, *, telemetry: object) -> None:
+        self._gateway = SecurityApprovalGateway(
+            policy=SecurityPolicy.default(),
+            telemetry=telemetry,
+            source="api.tool.runtime",
+            auto_approve_deferred=False,
+        )
+
+    def authorize(
+        self,
+        definition: ToolDefinition,
+        invocation: ToolInvocation,
+    ) -> ToolApprovalResult:
+        if _requires_local_tool_approval(definition):
+            return self._gateway.authorize(
+                _local_policy_definition(definition),
+                invocation,
+            )
+        return ToolApprovalResult(
+            decision="approved",
+            risk_class=definition.side_effects.risk_class,
+            reason="No high-risk local side effect requires approval for this API tool.",
+        )
+
+
+def _requires_local_tool_approval(definition: ToolDefinition) -> bool:
+    if definition.tool_id in _LOCAL_APPROVAL_TOOL_IDS:
+        return True
+    if definition.family in _LOCAL_APPROVAL_FAMILIES:
+        return True
+    if definition.backend != "mcp":
+        return False
+    if not definition.side_effects.writes_state and definition.side_effects.approval_class != "strict":
+        return False
+    searchable = " ".join(
+        str(value)
+        for value in (
+            definition.tool_id,
+            definition.family,
+            definition.backend,
+            *definition.side_effects.categories,
+            definition.metadata.get("serverId", ""),
+            definition.metadata.get("toolName", ""),
+        )
+    ).lower()
+    return any(keyword in searchable for keyword in _LOCAL_APPROVAL_KEYWORDS)
+
+
+def _local_policy_definition(definition: ToolDefinition) -> ToolDefinition:
+    if not definition.side_effects.touches_network:
+        return definition
+    return replace(
+        definition,
+        side_effects=replace(definition.side_effects, touches_network=False),
+    )
 
 
 def _enabled_overrides(state_dir: Path, section: str) -> dict[str, bool]:
@@ -366,6 +461,7 @@ class ElephantAPIApp:
                 ),
                 clarify_surface=self._api_clarify_surface,
             ),
+            approval_gateway=_APILocalToolApprovalGateway(telemetry=self.telemetry),
             context_resolver=_tool_context_for_session,
             state_dir=runtime_state_dir,
         )

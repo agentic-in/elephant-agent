@@ -5411,6 +5411,9 @@ struct ToolUseEventRow: View {
                     if !resultText.isEmpty {
                         ToolUseDetailBlock(title: model.text(.toolResult), text: resultText, tint: ElephantTheme.green)
                     }
+                    if !detailText.isEmpty {
+                        ToolUseDetailBlock(title: approvalDetailTitle, text: detailText, tint: isApprovalDeferred ? ElephantTheme.orange : ElephantTheme.faint)
+                    }
                 }
                 .padding(.leading, 12)
                 .transition(.opacity)
@@ -5501,16 +5504,37 @@ struct ToolUseEventRow: View {
         event.result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var detailText: String {
+        event.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var hasDetails: Bool {
-        !argumentsText.isEmpty || !resultText.isEmpty
+        !argumentsText.isEmpty || !resultText.isEmpty || !detailText.isEmpty
     }
 
     private var shouldAutoExpandDetails: Bool {
-        ToolFileChangePreview(event: event) != nil
+        ToolFileChangePreview(event: event) != nil || isApprovalDeferred
+    }
+
+    private var isApprovalDeferred: Bool {
+        let value = [event.status, event.phase, event.detail]
+            .joined(separator: " ")
+            .lowercased()
+        return value.contains("defer") || value.contains("approval")
+    }
+
+    private var approvalDetailTitle: String {
+        if isApprovalDeferred {
+            return localizedYouText(model.appLanguage, en: "Approval", zh: "审批", fr: "Approbation", de: "Freigabe")
+        }
+        return localizedYouText(model.appLanguage, en: "Detail", zh: "详情", fr: "Détail", de: "Detail")
     }
 
     private var statusTint: Color {
         let value = event.status.lowercased()
+        if value.contains("defer") || value.contains("approval") {
+            return ElephantTheme.orange
+        }
         if value.contains("fail") || value.contains("error") {
             return ElephantTheme.orange
         }
@@ -6554,6 +6578,9 @@ private func localizedLensTitle(_ lens: String, language: AppLanguage) -> String
 
 private func localizedToolStatus(_ rawValue: String, language: AppLanguage) -> String {
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if value.contains("defer") || value.contains("approval") {
+        return localizedYouText(language, en: "needs approval", zh: "需要审批", fr: "à approuver", de: "Freigabe nötig")
+    }
     if value.contains("fail") || value.contains("error") {
         return localizedYouText(language, en: "fail", zh: "失败", fr: "échec", de: "Fehler")
     }

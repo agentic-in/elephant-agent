@@ -1,6 +1,6 @@
 # Local Tool Approval Surface
 
-Status: open.
+Status: partially mitigated.
 
 ## Current State
 
@@ -16,6 +16,15 @@ The app now exposes Settings links to the relevant macOS privacy pages, which
 helps permission recovery and preflight readiness. That does not replace a
 product-owned approval step because tools can run inside already-allowed local
 execution contexts.
+
+The managed API Chat path now routes the riskiest local tools through the
+existing security approval policy with auto-approval disabled. File writes,
+patches, terminal execution, process control, code execution, and local-write
+MCP tools return `approval.deferred` before execution, and the macOS Chat tool
+activity row shows a visible needs-approval state. This prevents silent host
+mutation, but it is not the final approval experience because users still
+cannot approve once and resume the exact paused tool call from the native Chat
+surface.
 
 ## Target
 
@@ -42,6 +51,7 @@ experience.
 ## What Would Close It
 
 - Wire the app/API runtime to `SecurityApprovalGateway` for risky local tools.
+  Done for fail-closed deferral; still needs resumable approval decisions.
 - Add a Chat approval card or sheet that can approve, deny, or cancel deferred
   tool calls and resume the active loop.
 - Narrow default local roots or require explicit task-scoped folder selection
