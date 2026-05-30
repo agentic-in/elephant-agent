@@ -296,6 +296,10 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   Model scope with the temporary marker, and deleting the Path marked that
   semantic row `deleted` with the Path retention lifecycle metadata. The managed
   API remained healthy and no newer macOS crash report appeared.
+- The release contract now pins the Path learning summary closure UI: summaries
+  render in the Learning tab, the Properties tab exposes the understanding
+  review panel, the check button is disabled after `understood`, and the macOS
+  client posts the understanding-check payload through the managed API.
 - Diary memory lifecycle was verified through the rebuilt real packaged app's
   managed API and packaged runtime while Sleep Display remained locked. A
   temporary future-dated Diary entry was written with source episode provenance,
@@ -328,7 +332,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
-| Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, and deleted-Path memory cleanup verified |
+| Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, learned matches, pending draft projection/approval lifecycle, and no duplicate Settings summary contract verified; unlocked pending-row visual reinspection remains gated by Sleep Display |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |

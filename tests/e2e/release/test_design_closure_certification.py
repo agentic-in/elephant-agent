@@ -310,6 +310,41 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertGreaterEqual(views.count("confirmationDialog(deleteStepTitle"), 2)
         self.assertGreaterEqual(views.count("Button(deleteStepTitle, role: .destructive"), 2)
 
+    def test_macos_paths_learning_summaries_expose_understanding_closure(self) -> None:
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        api_client = MACOS_API_CLIENT_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        learning_tab = views.split("private struct PathStepLearningTab: View", 1)[1].split("private struct PathStepPropertiesTab", 1)[0]
+        properties_tab = views.split("private struct PathStepPropertiesTab: View", 1)[1].split("private struct PathReadonlyField", 1)[0]
+        review_panel = views.split("private struct PathUnderstandingReviewPanel: View", 1)[1].split("private struct PathUnderstandingCheckButton", 1)[0]
+        check_button = views.split("private struct PathUnderstandingCheckButton: View", 1)[1].split("private struct PathAssigneePicker", 1)[0]
+        summary_panel = views.split("private struct LearningSummaryPanel: View", 1)[1].split("private struct PathSummaryCoreRow", 1)[0]
+
+        self.assertIn("LearningSummaryPanel(summary: summary)", learning_tab)
+        self.assertIn("Run the step or attach a summary before closing understanding.", learning_tab)
+        self.assertIn("PathUnderstandingReviewPanel(step: step)", properties_tab)
+
+        self.assertIn('step.status == "checking" || summary != nil', review_panel)
+        self.assertIn("Understanding check will unlock after the summary is attached.", review_panel)
+        self.assertIn("Task { await model.markLearningSummary(summary, understood: true) }", review_panel)
+        self.assertIn('summary.check?.status != "understood"', review_panel)
+
+        self.assertIn("Task { await model.markLearningSummary(summary, understood: true) }", summary_panel)
+        self.assertIn("PathUnderstandingCheckButton(", summary_panel)
+        self.assertIn("Marks this learning summary as understood.", check_button)
+        self.assertIn(".disabled(understood)", check_button)
+        self.assertIn('accessibilityValue(understood ? localizedYouText(model.appLanguage, en: "Understood"', check_button)
+
+        self.assertIn("func markLearningSummary(_ summary: LearningSummaryItem, understood: Bool) async", app_model)
+        self.assertIn("try await client.markUnderstanding", app_model)
+        self.assertIn('pathActionResult = understood ? "Understanding checked" : "Marked for clarification"', app_model)
+        self.assertIn("func markUnderstanding(", api_client)
+        self.assertIn('path: "/v1/paths/\\(Self.pathSegment(pathID))/steps/\\(Self.pathSegment(stepID))/understanding-check"', api_client)
+        self.assertIn('"summary_id": summaryID', api_client)
+        self.assertIn('"status": understood ? "understood" : "needs_clarification"', api_client)
+        self.assertIn('row["understanding_check"]', api_client)
+        self.assertIn("UnderstandingCheckItem", api_client)
+
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
