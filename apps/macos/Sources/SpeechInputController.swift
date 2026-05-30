@@ -61,6 +61,7 @@ private final class OneShotPermissionCompletion: @unchecked Sendable {
 final class SpeechInputController: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var isTranscribing = false
+    @Published private(set) var isPreparingCapture = false
     @Published private(set) var statusText = ""
     @Published private(set) var recordingStartedAt: Date?
     @Published private(set) var capturedDuration: TimeInterval = 0
@@ -111,10 +112,11 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionEngine: SpeechRecognitionEngine,
         onText: @escaping (String) -> Void
     ) {
-        guard !isRecording && !isTranscribing else { return }
+        guard !isRecording && !isTranscribing && !isPreparingCapture else { return }
         captureGeneration += 1
         let generation = captureGeneration
         permissionTimeoutTask?.cancel()
+        isPreparingCapture = true
         baseText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.onText = onText
         activeLanguage = language
@@ -125,7 +127,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         activeMode = Self.resolvedMode(language: language, recognitionEngine: recognitionEngine)
         statusText = Self.localizedStatus(language, en: "Requesting microphone access...", zh: "正在请求麦克风权限...")
         guard Self.hasAudioInputDevice() else {
-            statusText = Self.localizedStatus(language, en: "No microphone input device was found.", zh: "没有找到可用的麦克风输入设备。")
+            finishCaptureSetupFailure(Self.localizedStatus(language, en: "No microphone input device was found.", zh: "没有找到可用的麦克风输入设备。"))
             return
         }
 
@@ -134,7 +136,7 @@ final class SpeechInputController: NSObject, ObservableObject {
             guard let self else { return }
             guard self.isActiveCapture(generation) else { return }
             guard allowed else {
-                self.statusText = Self.localizedStatus(self.activeLanguage, en: "Microphone access is disabled.", zh: "麦克风权限未开启。")
+                self.finishCaptureSetupFailure(Self.localizedStatus(self.activeLanguage, en: "Microphone access is disabled.", zh: "麦克风权限未开启。"))
                 return
             }
 
@@ -156,7 +158,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                         guard let self else { return }
                         guard self.isActiveCapture(generation) else { return }
                         guard status == .authorized else {
-                            self.statusText = Self.localizedStatus(self.activeLanguage, en: "Speech recognition is not authorized.", zh: "语音识别权限未开启。")
+                            self.finishCaptureSetupFailure(Self.localizedStatus(self.activeLanguage, en: "Speech recognition is not authorized.", zh: "语音识别权限未开启。"))
                             return
                         }
                         self.startAppleRecording(locale: locale, statusNotice: statusNotice, generation: generation)
@@ -167,11 +169,22 @@ final class SpeechInputController: NSObject, ObservableObject {
     }
 
     func stop() {
-        guard isRecording || audioEngine.isRunning else { return }
+        guard isRecording || audioEngine.isRunning || isPreparingCapture else { return }
+        if isPreparingCapture && !isRecording && !audioEngine.isRunning {
+            permissionTimeoutTask?.cancel()
+            permissionTimeoutTask = nil
+            onText = nil
+            captureGeneration += 1
+            isPreparingCapture = false
+            recordingStartedAt = nil
+            statusText = Self.localizedStatus(activeLanguage, en: "Voice input stopped.", zh: "语音输入已停止。")
+            return
+        }
         updateCapturedDuration()
         let mode = activeMode
         let generation = captureGeneration
         stopAudioEngine()
+        isPreparingCapture = false
         isRecording = false
         recordingStartedAt = nil
 
@@ -205,6 +218,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognizer = nil
         onText = nil
         baseText = ""
+        isPreparingCapture = false
         isRecording = false
         isTranscribing = false
         recognizedText = ""
@@ -318,6 +332,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                 let lowerStatus = self.statusText.lowercased()
                 guard lowerStatus.contains("requesting") || self.statusText.contains("请求") else { return }
                 self.statusText = Self.permissionTimeoutMessage(kind: kind, language: language)
+                self.isPreparingCapture = false
                 self.onText = nil
                 self.captureGeneration += 1
                 self.permissionTimeoutTask = nil
@@ -342,6 +357,15 @@ final class SpeechInputController: NSObject, ObservableObject {
         captureGeneration == generation && onText != nil
     }
 
+    private func finishCaptureSetupFailure(_ message: String) {
+        permissionTimeoutTask?.cancel()
+        permissionTimeoutTask = nil
+        statusText = message
+        isPreparingCapture = false
+        onText = nil
+        captureGeneration += 1
+    }
+
     private func authorizedSpeechPreviewLocale(_ locale: Locale) -> Locale? {
         switch SFSpeechRecognizer.authorizationStatus() {
         case .authorized:
@@ -355,7 +379,8 @@ final class SpeechInputController: NSObject, ObservableObject {
         guard isActiveCapture(generation) else { return }
         recognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer, recognizer.isAvailable else {
-            statusText = Self.localizedStatus(activeLanguage, en: "Speech recognizer is unavailable.", zh: "语音识别暂不可用。")
+            self.recognizer = nil
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Speech recognizer is unavailable.", zh: "语音识别暂不可用。"))
             return
         }
 
@@ -363,7 +388,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionTask = nil
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest else {
-            statusText = Self.localizedStatus(activeLanguage, en: "Could not create speech request.", zh: "无法创建语音识别请求。")
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not create speech request.", zh: "无法创建语音识别请求。"))
             return
         }
         recognitionRequest.shouldReportPartialResults = true
@@ -376,7 +401,8 @@ final class SpeechInputController: NSObject, ObservableObject {
         } catch {
             recognitionRequest.endAudio()
             self.recognitionRequest = nil
-            statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
+            self.recognizer = nil
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)"))
             return
         }
         let sink = SpeechAudioTapSink(recognitionRequest: recognitionRequest)
@@ -400,12 +426,13 @@ final class SpeechInputController: NSObject, ObservableObject {
             recognitionRequest.endAudio()
             self.recognitionRequest = nil
             self.recognizer = nil
-            statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)"))
             return
         }
 
         permissionTimeoutTask?.cancel()
         permissionTimeoutTask = nil
+        isPreparingCapture = false
         isRecording = true
         recordingStartedAt = Date()
         capturedDuration = 0
@@ -437,7 +464,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         do {
             format = try validInputFormat(from: inputNode)
         } catch {
-            statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)"))
             return
         }
 
@@ -446,7 +473,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         do {
             (url, file) = try makeRecordingFile(inputFormat: format)
         } catch {
-            statusText = Self.localizedStatus(activeLanguage, en: "Could not prepare local recording: \(error.localizedDescription)", zh: "无法准备本地录音：\(error.localizedDescription)")
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not prepare local recording: \(error.localizedDescription)", zh: "无法准备本地录音：\(error.localizedDescription)"))
             return
         }
         recordingURL = url
@@ -469,12 +496,13 @@ final class SpeechInputController: NSObject, ObservableObject {
         } catch {
             stopAudioEngine()
             stopApplePreviewRecognition()
-            statusText = Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)")
+            finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)"))
             return
         }
 
         permissionTimeoutTask?.cancel()
         permissionTimeoutTask = nil
+        isPreparingCapture = false
         isRecording = true
         recordingStartedAt = Date()
         capturedDuration = 0
@@ -566,6 +594,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognitionRequest = nil
         recognitionTask = nil
         recognizer = nil
+        isPreparingCapture = false
         isRecording = false
         recordingStartedAt = nil
     }

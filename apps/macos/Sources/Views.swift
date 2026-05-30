@@ -2920,7 +2920,7 @@ struct WakeComposerPanel: View {
                                     )
                             }
                             .buttonStyle(PressablePlainButtonStyle())
-                            .disabled(speech.isTranscribing)
+                            .disabled(speech.isTranscribing || speech.isPreparingCapture)
                             .help(voiceInputButtonHelp)
                             .accessibilityLabel(voiceInputButtonHelp)
 
@@ -2954,10 +2954,10 @@ struct WakeComposerPanel: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: composerControlHeight, alignment: .topLeading)
 
-                    if speech.isRecording || !speech.statusText.isEmpty {
-                        Label(speech.statusText, systemImage: speech.isRecording ? "waveform" : "mic")
+                    if speech.isRecording || speech.isPreparingCapture || !speech.statusText.isEmpty {
+                        Label(speech.statusText, systemImage: speech.isRecording ? "waveform" : speech.isPreparingCapture ? "hourglass" : "mic")
                             .font(.caption)
-                            .foregroundStyle(speech.isRecording ? ElephantTheme.accent : ElephantTheme.muted)
+                            .foregroundStyle(speech.isRecording || speech.isPreparingCapture ? ElephantTheme.accent : ElephantTheme.muted)
                             .lineLimit(1)
                     }
                 }
@@ -3027,7 +3027,7 @@ struct WakeComposerPanel: View {
     }
 
     private func startVoiceCapture() {
-        guard !speech.isRecording && !speech.isTranscribing else {
+        guard !speech.isRecording && !speech.isTranscribing && !speech.isPreparingCapture else {
             voiceCaptureVisible = true
             return
         }
@@ -3124,6 +3124,9 @@ struct WakeComposerPanel: View {
         if speech.isTranscribing {
             return "text.bubble"
         }
+        if speech.isPreparingCapture {
+            return "hourglass"
+        }
         return speech.isRecording ? "waveform" : "mic.fill"
     }
 
@@ -3142,6 +3145,9 @@ struct WakeComposerPanel: View {
     private var voiceInputButtonHelp: String {
         if speech.isTranscribing {
             return localizedYouText(model.appLanguage, en: "Voice is transcribing", zh: "正在识别语音", fr: "Transcription vocale", de: "Sprache wird transkribiert")
+        }
+        if speech.isPreparingCapture {
+            return localizedYouText(model.appLanguage, en: "Preparing voice input", zh: "正在准备语音输入", fr: "Préparation de la voix", de: "Spracheingabe wird vorbereitet")
         }
         return speech.isRecording ? model.text(.stopVoiceInput) : model.text(.voiceInput)
     }

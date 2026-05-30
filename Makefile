@@ -18,7 +18,7 @@ MACOS_TARGET ?=
 MACOS_TARGETS ?= aarch64-apple-darwin x86_64-apple-darwin
 MACOS_APP_VERSION ?=
 MACOS_APP_BUILD_NUMBER ?=
-MACOS_SIGNING_IDENTITY ?= none
+MACOS_SIGNING_IDENTITY ?= -
 MACOS_NOTARIZE ?=
 MACOS_ASSET_DIR ?=
 MACOS_BUNDLE_RUNTIME ?= auto
@@ -131,8 +131,8 @@ macos-help:
 	@echo "  MACOS_RUNTIME_PYTHON=/path/to/python3.12"
 	@echo ""
 	@echo "Signing/notarization variables:"
-	@echo "  MACOS_SIGNING_IDENTITY=none  # local default; skip codesign"
-	@echo "  MACOS_SIGNING_IDENTITY=-     # ad-hoc sign"
+	@echo "  MACOS_SIGNING_IDENTITY=-     # local default; ad-hoc sign for privacy-sensitive flows"
+	@echo "  MACOS_SIGNING_IDENTITY=none  # skip codesign for packaging-only debugging"
 	@echo "  MACOS_SIGNING_IDENTITY='Developer ID Application: ...'"
 	@echo "  MACOS_NOTARIZE=1 APPLE_ID=... APPLE_PASSWORD=... APPLE_TEAM_ID=..."
 
