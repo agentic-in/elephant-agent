@@ -1157,10 +1157,7 @@ struct HomeReadinessStrip: View {
 
     private var columns: [GridItem] {
         [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
+            GridItem(.adaptive(minimum: 238), spacing: 10)
         ]
     }
 
@@ -1320,12 +1317,21 @@ private struct HomeReadinessButton: View {
                         Text(item.title)
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(ElephantTheme.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.84)
                         StatusDot(tint: item.tint)
+                        Spacer(minLength: 4)
+                        Text(item.status)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(item.tint)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
                     }
                     Text(item.detail)
                         .font(.caption)
                         .foregroundStyle(ElephantTheme.muted)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)
@@ -1336,7 +1342,7 @@ private struct HomeReadinessButton: View {
                     .opacity(hovering ? 1 : 0.62)
             }
             .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor).opacity(hovering ? 0.92 : 1))
@@ -1350,8 +1356,24 @@ private struct HomeReadinessButton: View {
         }
         .buttonStyle(PressablePlainButtonStyle())
         .onHover { hovering = $0 }
-        .help("\(item.title): \(item.status)")
-        .accessibilityLabel("\(item.title), \(item.status)")
+        .help("\(item.title): \(item.status). \(item.detail). \(navigationHint)")
+        .accessibilityLabel("\(item.title), \(item.status). \(item.detail)")
+        .accessibilityHint(navigationHint)
+    }
+
+    private var targetTitle: String {
+        item.target.title(language: model.appLanguage)
+    }
+
+    private var navigationHint: String {
+        localizedFormat(
+            model.appLanguage,
+            en: "Opens %@.",
+            zh: "打开%@。",
+            fr: "Ouvre %@.",
+            de: "Öffnet %@.",
+            targetTitle
+        )
     }
 }
 

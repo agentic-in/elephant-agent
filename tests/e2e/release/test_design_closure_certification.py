@@ -137,6 +137,26 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("NotificationCenter.default.post(name: .elephantToggleSidebar", app)
         self.assertIn('.keyboardShortcut("s", modifiers: [.command, .option])', app)
 
+    def test_macos_home_readiness_cards_are_responsive_navigation_controls(self) -> None:
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        strip = views.split("struct HomeReadinessStrip: View", 1)[1].split("struct HomeContinuityPanel", 1)[0]
+        button = views.split("private struct HomeReadinessButton: View", 1)[1].split("struct HomeContinuityPanel", 1)[0]
+
+        self.assertIn("GridItem(.adaptive(minimum: 238), spacing: 10)", strip)
+        self.assertIn("HomeReadinessButton(item: providerItem)", strip)
+        self.assertIn("target: .settings", strip)
+        self.assertIn("target: .you", strip)
+        self.assertIn("target: .messaging", strip)
+        self.assertIn("target: .learn", strip)
+        self.assertIn("model.selectedSection = item.target", button)
+        self.assertIn("Text(item.status)", button)
+        self.assertIn(".lineLimit(2)", button)
+        self.assertIn(".frame(maxWidth: .infinity, minHeight: 74", button)
+        self.assertIn(".help(\"\\(item.title): \\(item.status). \\(item.detail). \\(navigationHint)\")", button)
+        self.assertIn(".accessibilityLabel(\"\\(item.title), \\(item.status). \\(item.detail)\")", button)
+        self.assertIn(".accessibilityHint(navigationHint)", button)
+        self.assertIn("item.target.title(language: model.appLanguage)", button)
+
     def test_macos_runtime_config_save_resets_clean_draft_state(self) -> None:
         views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
         app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")

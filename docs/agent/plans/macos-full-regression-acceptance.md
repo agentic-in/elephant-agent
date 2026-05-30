@@ -296,12 +296,19 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   queued/running jobs, and recent Dream/Letter jobs completed. Sleep Display
   remained locked, so unlocked visual reinspection of those buttons is still a
   user-controlled gate rather than a completed UI proof.
+- Home readiness card behavior was hardened and rebuilt in the real packaged
+  macOS app. The readiness strip now uses an adaptive grid instead of a fixed
+  four-column squeeze, surfaces status text inside each card, permits two-line
+  detail text, and exposes an accessibility hint naming the owning surface each
+  card opens. The packaged app launched with its managed API healthy and no
+  newer crash report appeared; Sleep Display remained locked, so unlocked Home
+  visual reinspection is still pending.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
-| Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial |
+| Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial; Personal Model presence, map, readiness strip, continuity context, and responsive/accessibility-hardened readiness navigation verified; unlocked Home visual reinspection still needs current evidence |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, managed-API recall search, and episode identity preservation verified |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
@@ -316,7 +323,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, config surface, and managed-API config save/restore verified; unlocked editor button/draft state covered by static contract |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
-| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, and fullscreen Home/Settings behavior verified |
+| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, and Home readiness responsive/accessibility contract verified |
 
 ## First Fix Track
 
@@ -422,6 +429,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   background learning passes.
 - Re-enable launchers only after the managed API reports no queued/running
   learning jobs.
+
+## Home Readiness Navigation Fix Track
+
+- Keep Home readiness cards readable at narrow window widths by adapting the
+  grid instead of forcing four compressed columns.
+- Show status text directly inside each card, not only through color.
+- Expose the card detail and destination surface through tooltip and
+  accessibility hints so readiness cards are clearly navigation controls.
 
 ## Semantic Index Recovery Fix Track
 
