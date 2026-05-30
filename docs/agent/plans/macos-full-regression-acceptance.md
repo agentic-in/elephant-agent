@@ -455,8 +455,8 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   `funASRLocal` still fell back to English system dictation when the app language
   was English; local FunASR recording also did not explain that final Chinese
   transcription happens after the user presses Stop. The voice input mode is
-  being tightened so explicit Local Chinese works independent of app language,
-  Automatic uses local Chinese final transcription whenever FunASR is available,
+  now keeps explicit Local Chinese independent of app language, Automatic uses
+  local Chinese final transcription whenever FunASR is available,
   the Settings install/status affordances stay visible in non-Chinese app
   languages, and the listening overlay tells the user to press Stop to
   transcribe Chinese. The pass also found that Personal Model first-language
@@ -469,6 +469,13 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   `ffmpeg-mac` while FunASR expected `ffmpeg` on `PATH`. The helper now installs
   a distutils compatibility alias and creates a temporary `ffmpeg` shim to the
   bundled signed binary before loading FunASR.
+- The same real-app baseline exposed a dashboard observability mismatch:
+  `/v1/internal/dashboard/evidence` reported the semantic index as ready with
+  140 entries, while `/v1/internal/dashboard/overview` kept the top-level
+  `semantic_index_health` placeholder at `unknown` and `0` even though the
+  overview counts and status were ready. The overview section now fills the
+  same semantic health summary as the evidence section so Home/dashboard memory
+  readiness cannot disagree with the detailed evidence route.
 
 ## Open Acceptance Matrix
 
@@ -476,7 +483,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, single-path microphone request, voice preparing-state duplicate-start guard, Desktop file-write probe, Notes automation probe, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on reliable microphone capture plus Chinese transcription verification, and high-risk local tool approval remains an open product gap |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; current follow-up is tightening app-language-independent local Chinese capture and explicit Stop-to-transcribe guidance before live voice send can be accepted |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, app-language-independent local Chinese selection, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live voice send still depends on reliable microphone capture plus in-UI Chinese transcript verification |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |

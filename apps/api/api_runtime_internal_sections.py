@@ -505,20 +505,26 @@ def _fill_overview(dashboard: dict[str, Any], self) -> None:
     )[:1]
     overview_target_models = canonical_models or personal_models[:1]
     current_personal_model_id = DEFAULT_PERSONAL_MODEL_ID
-    semantic_index_entries = self.repository.list_semantic_index_entries() if hasattr(self.repository, "list_semantic_index_entries") else ()
+    semantic_index_entries = tuple(
+        self.repository.list_semantic_index_entries()
+        if hasattr(self.repository, "list_semantic_index_entries")
+        else ()
+    )
     overview_models = tuple(_personal_model_rows(
         personal_models=overview_target_models,
         states=states,
-        semantic_index_entries=tuple(semantic_index_entries),
+        semantic_index_entries=semantic_index_entries,
         repository=self.repository,
     ))
     active_provider = dict(self.model_provider.describe())
+    semantic_index_health = _semantic_index_health(semantic_index_entries, active_provider)
     learning = _learning_overview(self)
     semantic_index_count = _count_rows(database_path, "semantic_index_entries")
     provider_auth_states = self.repository.list_provider_auth_states() if hasattr(self.repository, "list_provider_auth_states") else ()
     dashboard["personal_models"] = overview_models
     dashboard["runtime"] = {**dashboard["runtime"], "episode_traces": _latest_episode_row(self)}
     dashboard["learning"] = learning
+    dashboard["semantic_index_health"] = semantic_index_health
     dashboard["overview"] = {
         "counts": {
             "personal_models": len(overview_target_models),
@@ -540,7 +546,7 @@ def _fill_overview(dashboard: dict[str, Any], self) -> None:
         "current_state_id": current_state.state_id if current_state is not None else None,
         "current_personal_model_id": current_personal_model_id,
         "provider_status": str(active_provider.get("status") or "unknown"),
-        "semantic_index_status": str(active_provider.get("embedding_bootstrap_status") or ("indexed" if semantic_index_count else "empty")),
+        "semantic_index_status": semantic_index_health["status"],
         "note": "Overview fetches counts, current elephant, current PersonalModel identity, and latest Episode summary only.",
     }
 

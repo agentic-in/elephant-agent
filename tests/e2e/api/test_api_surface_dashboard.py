@@ -776,6 +776,12 @@ class APISurfaceDashboardE2ETest(APISurfaceTestBase):
         self.assertEqual(
             overview_only["personal_models"][0]["user_preferred_name"], "Bit"
         )
+        self.assertEqual(overview_only["semantic_index_health"]["entry_count"], 1)
+        self.assertNotEqual(overview_only["semantic_index_health"]["status"], "unknown")
+        self.assertEqual(
+            overview_only["overview"]["semantic_index_status"],
+            overview_only["semantic_index_health"]["status"],
+        )
         component_rows = {
             component["component_key"]: component
             for component in personal_model_row["understanding_components"]

@@ -253,7 +253,7 @@ class APISurfaceTestBase(unittest.TestCase):
 
     def _dashboard_sections(self, *sections: str) -> dict[str, Any]:
         top_level_keys = {
-            "overview": ("overview", "herd", "states", "personal_models", "runtime", "learning"),
+            "overview": ("overview", "herd", "states", "personal_models", "runtime", "learning", "semantic_index_health"),
             "personal-models": ("personal_models",),
             "herd": ("herd", "states"),
             "runtime": ("herd", "states", "runtime"),
@@ -287,4 +287,3 @@ class APISurfaceTestBase(unittest.TestCase):
     @staticmethod
     def _body(payload: dict[str, object]) -> bytes:
         return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-
