@@ -375,14 +375,21 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   alive and no new crash report appeared during this pass.
 - Voice permission handling was re-hardened after the no-prompt TCC path stayed
   reproducible. The macOS app now prefers `AVAudioApplication` record permission
-  on macOS 14+, falls back through the legacy capture permission request if the
-  modern callback does not settle, delivers permission callbacks through a
-  one-shot gate, gives Apple Speech its own request/timeout copy, and keeps
-  local FunASR capture from waiting on optional system Speech preview
-  permission. The ad-hoc hardened-runtime app bundle verified with audio-input
-  entitlements. A fresh privacy reset still did not surface a system microphone
-  prompt or list Elephant Agent on the macOS Microphone page, but the real app
-  stayed alive and landed in the `Voice unavailable` recovery state.
+  on macOS 14+, polls the modern permission state instead of issuing a second
+  duplicate prompt request, keeps the legacy capture permission path for older
+  macOS releases, delivers permission callbacks through a one-shot gate, gives
+  Apple Speech its own request/timeout copy, and keeps local FunASR capture from
+  waiting on optional system Speech preview permission. The ad-hoc
+  hardened-runtime app bundle verified with audio-input entitlements. A fresh
+  privacy reset still did not surface a system microphone prompt or list
+  Elephant Agent on the macOS Microphone page, but the real app stayed alive and
+  landed in the `Voice unavailable` recovery state.
+- The installed-app microphone pass reproduced the same no-prompt TCC state:
+  macOS accepted the microphone request and entered prompting, but did not return
+  an authorization result or add Elephant Agent to the Microphone privacy list.
+  The timeout path now expires that capture generation so a delayed system
+  callback cannot unexpectedly start recording after the UI has moved to
+  recovery.
 - Settings voice playback was rechecked in the unlocked app. The Voice row
   exposed enabled voice replies, auto-play, online/system voice controls,
   system/local recognition modes, local Chinese recognition readiness, and a
@@ -394,8 +401,8 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model replies before and after voice timeout, voice privacy recovery action, modern microphone permission request with legacy fallback, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, one-shot microphone callback delivery, modern/legacy permission request fallback, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model replies before and after voice timeout, voice privacy recovery action, modern microphone permission request with duplicate-prompt avoidance, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, one-shot microphone callback delivery, modern permission-state polling, legacy permission support for older macOS, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |

@@ -274,9 +274,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                         case .denied:
                             completionGate.deliver(false, completion: completion)
                         case .undetermined:
-                            self.requestLegacyMicrophoneAccess { allowed in
-                                completionGate.deliver(allowed, completion: completion)
-                            }
+                            break
                         @unknown default:
                             completionGate.deliver(false, completion: completion)
                         }
@@ -320,6 +318,9 @@ final class SpeechInputController: NSObject, ObservableObject {
                 let lowerStatus = self.statusText.lowercased()
                 guard lowerStatus.contains("requesting") || self.statusText.contains("请求") else { return }
                 self.statusText = Self.permissionTimeoutMessage(kind: kind, language: language)
+                self.onText = nil
+                self.captureGeneration += 1
+                self.permissionTimeoutTask = nil
             }
         }
     }
