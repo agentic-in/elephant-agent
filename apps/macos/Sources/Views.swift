@@ -1465,8 +1465,9 @@ struct HomeContinuityPanel: View {
     }
 
     private var relationshipMode: String {
-        firstProfileValue(["Relationship mode", "Communication", "Speaks"])
-            ?? firstFactText(lens: "identity", topicContains: ["style", "companion", "language"])
+        firstProfileValue(["Relationship mode", "Communication"])
+            ?? firstFactText(lens: "identity", topicContains: ["style", "companion"])
+            ?? languagePreferenceContext
             ?? localizedYouText(
                 model.appLanguage,
                 en: "Be specific, calm, and easy to correct.",
@@ -1474,6 +1475,35 @@ struct HomeContinuityPanel: View {
                 fr: "Être précis, calme et facile à corriger.",
                 de: "Konkret, ruhig und leicht korrigierbar sein."
             )
+    }
+
+    private var languagePreferenceContext: String? {
+        guard let raw = firstProfileValue(["Speaks"])
+            ?? firstFactText(lens: "identity", topicContains: ["language"])
+        else {
+            return nil
+        }
+        let language = readableLanguageName(raw)
+        return localizedFormat(
+            model.appLanguage,
+            en: "Prefer %@ by default, and mirror the language you use in the current conversation.",
+            zh: "默认优先使用%@；对话里跟随你当前使用的语言。",
+            fr: "Privilégier %@ par défaut, puis suivre la langue utilisée dans la conversation.",
+            de: "%@ standardmäßig bevorzugen und der Sprache im aktuellen Gespräch folgen.",
+            language
+        )
+    }
+
+    private func readableLanguageName(_ raw: String) -> String {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = value.lowercased()
+        if normalized == "en" || normalized.contains("english") || normalized.contains("英语") {
+            return localizedYouText(model.appLanguage, en: "English", zh: "英语", fr: "anglais", de: "Englisch")
+        }
+        if normalized == "zh" || normalized.hasPrefix("zh-") || normalized.contains("chinese") || normalized.contains("中文") || normalized.contains("汉语") {
+            return localizedYouText(model.appLanguage, en: "Chinese", zh: "中文", fr: "chinois", de: "Chinesisch")
+        }
+        return value
     }
 
     private var careBoundary: String {
