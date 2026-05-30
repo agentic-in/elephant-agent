@@ -19828,7 +19828,7 @@ struct VoiceRepliesSettingsContent: View {
 
     private var voiceActions: some View {
         SettingsActionBar {
-            if model.appLanguage == .zh && (!SpeechInputController.funASRInstalled || model.voiceRuntimeActionInFlight) {
+            if !SpeechInputController.funASRInstalled || model.voiceRuntimeActionInFlight {
                 Button {
                     Task { await model.installChineseSpeechRecognition() }
                 } label: {
@@ -19876,8 +19876,8 @@ struct VoiceRepliesSettingsContent: View {
     private var inputSubtitle: String {
         localizedYouText(
             model.appLanguage,
-            en: "Chinese can listen locally after setup. Other languages use the system listener in this version.",
-            zh: "中文可启用本地识别；其他语言本版使用系统听写。",
+            en: "Recommended mode uses local Chinese final transcription after setup, with a system preview while you speak.",
+            zh: "推荐模式启用后使用本地中文最终识别，并在说话时保留系统预览。",
             fr: "Le chinois peut être écouté localement après configuration.",
             de: "Chinesisch kann nach der Einrichtung lokal zuhören."
         )
@@ -19898,8 +19898,11 @@ struct VoiceRepliesSettingsContent: View {
     }
 
     private var inputRuntimeStatusText: String {
-        if model.appLanguage == .zh, SpeechInputController.funASRInstalled {
+        if SpeechInputController.funASRInstalled {
             return localizedYouText(model.appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
+        }
+        if model.voiceInputEngine == .funASRLocal {
+            return localizedYouText(model.appLanguage, en: "System Chinese fallback", zh: "系统中文兜底", fr: "Repli chinois système", de: "System-Chinesisch-Fallback")
         }
         return model.appLanguage == .zh
             ? localizedYouText(model.appLanguage, en: "System Chinese", zh: "系统中文", fr: "Chinois système", de: "System-Chinesisch")
@@ -19907,11 +19910,11 @@ struct VoiceRepliesSettingsContent: View {
     }
 
     private var inputRuntimeStatusSymbol: String {
-        model.appLanguage == .zh && SpeechInputController.funASRInstalled ? "checkmark.circle.fill" : "mic.fill"
+        SpeechInputController.funASRInstalled ? "checkmark.circle.fill" : "mic.fill"
     }
 
     private var inputRuntimeStatusTint: Color {
-        model.appLanguage == .zh && SpeechInputController.funASRInstalled ? ElephantTheme.green : ElephantTheme.accent
+        SpeechInputController.funASRInstalled ? ElephantTheme.green : ElephantTheme.accent
     }
 
     private var descriptionText: String {
@@ -20019,8 +20022,8 @@ struct VoiceRepliesSettingsContent: View {
     private var voiceInputNote: String {
         localizedYouText(
             model.appLanguage,
-            en: "Chinese uses local recognition after installation. Until then it uses Apple Chinese recognition. Other languages use Apple English recognition in this version.",
-            zh: "中文安装后使用本地识别；安装前使用 Apple 中文识别。其他语言本版使用 Apple 英文识别。",
+            en: "Chinese uses local recognition after installation. Until then, Local Chinese falls back to Apple Chinese recognition; System follows the app language.",
+            zh: "安装后中文使用本地识别；安装前，本地中文会兜底到 Apple 中文识别，系统识别跟随 App 语言。",
             fr: "Le chinois utilise la reconnaissance locale après installation. Les autres langues utilisent Apple dans cette version.",
             de: "Chinesisch nutzt nach Installation lokale Erkennung. Andere Sprachen nutzen in dieser Version Apple."
         )

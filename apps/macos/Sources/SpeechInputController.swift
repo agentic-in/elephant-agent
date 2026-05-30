@@ -69,7 +69,7 @@ final class SpeechInputController: NSObject, ObservableObject {
 
     private enum ActiveMode {
         case apple(locale: Locale, statusNotice: String?)
-        case funASR
+        case funASR(previewLocale: Locale?, statusNotice: String?)
     }
 
     private enum PermissionRequestKind {
@@ -141,9 +141,9 @@ final class SpeechInputController: NSObject, ObservableObject {
             }
 
             switch self.activeMode {
-            case .funASR:
+            case .funASR(let previewLocale, _):
                 self.startLocalRecording(
-                    previewLocale: self.authorizedSpeechPreviewLocale(Locale(identifier: "zh-CN")),
+                    previewLocale: previewLocale.flatMap { self.authorizedSpeechPreviewLocale($0) },
                     generation: generation
                 )
             case .apple(let locale, let statusNotice):
@@ -240,29 +240,49 @@ final class SpeechInputController: NSObject, ObservableObject {
         language: AppLanguage,
         recognitionEngine: SpeechRecognitionEngine
     ) -> ActiveMode {
-        if language == .zh {
-            switch recognitionEngine {
-            case .automatic:
-                if MacVoiceRuntime.isFunASRInstalled() {
-                    return .funASR
-                }
-                return .apple(
-                    locale: Locale(identifier: "zh-CN"),
-                    statusNotice: localizedStatus(language, en: "Local Chinese recognition is not ready; using system dictation for now.", zh: "本地中文识别尚未就绪，暂时使用系统听写。")
-                )
-            case .funASRLocal:
-                if MacVoiceRuntime.isFunASRInstalled() {
-                    return .funASR
-                }
-                return .apple(
-                    locale: Locale(identifier: "zh-CN"),
-                    statusNotice: localizedStatus(language, en: "Local Chinese recognition is not ready; using system dictation for now.", zh: "本地中文识别尚未就绪，暂时使用系统听写。")
-                )
-            case .appleSpeech:
-                return .apple(locale: Locale(identifier: "zh-CN"), statusNotice: nil)
-            }
+        switch recognitionEngine {
+        case .automatic:
+            return automaticMode(language: language)
+        case .funASRLocal:
+            return localChineseMode(language: language)
+        case .appleSpeech:
+            return .apple(locale: appleSpeechLocale(for: language), statusNotice: nil)
         }
-        return .apple(locale: Locale(identifier: "en-US"), statusNotice: nil)
+    }
+
+    private static func automaticMode(language: AppLanguage) -> ActiveMode {
+        if MacVoiceRuntime.isFunASRInstalled() {
+            return .funASR(
+                previewLocale: appleSpeechLocale(for: language),
+                statusNotice: localChineseRecordingNotice(language)
+            )
+        }
+        return .apple(locale: appleSpeechLocale(for: language), statusNotice: nil)
+    }
+
+    private static func localChineseMode(language: AppLanguage) -> ActiveMode {
+        if MacVoiceRuntime.isFunASRInstalled() {
+            return .funASR(
+                previewLocale: Locale(identifier: "zh-CN"),
+                statusNotice: localChineseRecordingNotice(language)
+            )
+        }
+        return .apple(
+            locale: Locale(identifier: "zh-CN"),
+            statusNotice: localizedStatus(language, en: "Local Chinese recognition is not ready; using system dictation for now.", zh: "本地中文识别尚未就绪，暂时使用系统听写。")
+        )
+    }
+
+    private static func appleSpeechLocale(for language: AppLanguage) -> Locale {
+        language == .zh ? Locale(identifier: "zh-CN") : Locale(identifier: "en-US")
+    }
+
+    private static func localChineseRecordingNotice(_ language: AppLanguage) -> String {
+        localizedStatus(
+            language,
+            en: "Listening. Press Stop to transcribe Chinese.",
+            zh: "正在听。说完后点停止开始中文识别。"
+        )
     }
 
     private func requestMicrophoneAccess(generation: Int, _ completion: @escaping (Bool) -> Void) {
@@ -500,7 +520,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         isRecording = true
         recordingStartedAt = Date()
         capturedDuration = 0
-        statusText = Self.localizedStatus(activeLanguage, en: "Listening...", zh: "正在听...")
+        statusText = recordingStatusText()
     }
 
     private func startApplePreviewRecognition(locale: Locale, generation: Int) -> SFSpeechAudioBufferRecognitionRequest? {
@@ -526,7 +546,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                         self.applyRecognizedText(spoken)
                     }
                     if self.isRecording {
-                        self.statusText = Self.localizedStatus(self.activeLanguage, en: "Listening...", zh: "正在听...")
+                        self.statusText = self.recordingStatusText()
                     }
                 }
 
@@ -626,6 +646,15 @@ final class SpeechInputController: NSObject, ObservableObject {
         recognizedText = trimmed
         let combined = [baseText, trimmed].filter { !$0.isEmpty }.joined(separator: " ")
         onText(combined)
+    }
+
+    private func recordingStatusText() -> String {
+        switch activeMode {
+        case .funASR(_, let statusNotice):
+            return statusNotice ?? Self.localizedStatus(activeLanguage, en: "Listening...", zh: "正在听...")
+        case .apple(_, let statusNotice):
+            return statusNotice ?? Self.localizedStatus(activeLanguage, en: "Listening...", zh: "正在听...")
+        }
     }
 
     private static func localizedStatus(_ language: AppLanguage, en: String, zh: String) -> String {

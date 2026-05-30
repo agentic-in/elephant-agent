@@ -1218,6 +1218,8 @@ extension ElephantAppModel {
 
     func syncAppLanguageFromSnapshot(_ snapshot: DashboardSnapshot) {
         guard !showingOnboarding else { return }
+        guard UserDefaults.standard.object(forKey: Self.appLanguageKey) == nil else { return }
+        guard AppLanguage.preferred == .en else { return }
         let profileCandidates = snapshot.profileFacts
             .filter { $0.label.lowercased() == "speaks" || $0.label.lowercased() == "language" }
             .map(\.value)

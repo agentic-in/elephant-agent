@@ -2400,8 +2400,8 @@ final class ElephantAppModel: ObservableObject {
     var voiceInputEngineLabel: String {
         switch voiceInputEngine {
         case .automatic:
-            return appLanguage == .zh && SpeechInputController.funASRInstalled
-                ? Self.localizedText(appLanguage, en: "Auto · local Chinese", zh: "自动 · 本地中文", fr: "Auto · chinois local", de: "Auto · lokales Chinesisch")
+            return SpeechInputController.funASRInstalled
+                ? Self.localizedText(appLanguage, en: "Auto · local Chinese + system preview", zh: "自动 · 本地中文 + 系统预览", fr: "Auto · chinois local + aperçu système", de: "Auto · lokales Chinesisch + Systemvorschau")
                 : Self.localizedText(appLanguage, en: "Auto · system dictation", zh: "自动 · 系统听写", fr: "Auto · dictée système", de: "Auto · Systemdiktat")
         case .funASRLocal:
             return SpeechInputController.funASRInstalled

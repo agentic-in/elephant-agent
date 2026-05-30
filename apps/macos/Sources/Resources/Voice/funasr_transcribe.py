@@ -7,7 +7,9 @@ import argparse
 import json
 import logging
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -50,10 +52,56 @@ def joined_text(result: Any) -> str:
 def activate_distutils_compat() -> None:
     # Python 3.12 removed stdlib distutils. FunASR still imports it in some
     # model files, and target site-packages do not process setuptools .pth hooks.
+    os.environ.setdefault("SETUPTOOLS_USE_DISTUTILS", "local")
     try:
-        import setuptools  # noqa: F401
+        import setuptools._distutils as distutils_compat
+
+        sys.modules.setdefault("distutils", distutils_compat)
+        try:
+            import setuptools._distutils.version as distutils_version
+
+            sys.modules.setdefault("distutils.version", distutils_version)
+        except Exception:
+            pass
     except Exception:
         pass
+
+
+def activate_ffmpeg_compat() -> None:
+    if shutil.which("ffmpeg"):
+        return
+    candidate = bundled_ffmpeg()
+    if candidate is None:
+        return
+    shim_root = Path(os.environ.get("ELEPHANT_VOICE_CACHE") or tempfile.gettempdir()) / "bin"
+    shim_root.mkdir(parents=True, exist_ok=True)
+    shim = shim_root / "ffmpeg"
+    if not shim.exists():
+        try:
+            shim.symlink_to(candidate)
+        except OSError:
+            shutil.copy2(candidate, shim)
+            shim.chmod(0o755)
+    os.environ["PATH"] = f"{shim_root}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+def bundled_ffmpeg() -> Path | None:
+    explicit = os.environ.get("ELEPHANT_FFMPEG")
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit))
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidates.extend(
+            [
+                parent / "Runtime" / "ms-playwright" / "ffmpeg-1011" / "ffmpeg-mac",
+                parent / "ms-playwright" / "ffmpeg-1011" / "ffmpeg-mac",
+            ]
+        )
+    for candidate in candidates:
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return candidate
+    return None
 
 
 def model_kwargs() -> dict[str, Any]:
@@ -74,6 +122,7 @@ def main() -> int:
     audio = Path(args.input)
     logging.basicConfig(level=logging.ERROR)
     activate_distutils_compat()
+    activate_ffmpeg_compat()
 
     if not args.health_check and not audio.exists():
         write_output(output, {"text": "", "error": f"Audio file does not exist: {audio}"})

@@ -449,14 +449,34 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   Microphone, Speech Recognition, Files & Folders, and Automation privacy pages,
   so voice, file, and app-automation readiness are discoverable before a chat
   requests local side effects.
+- A follow-up real-app voice pass exposed that Chinese speech recognition was
+  too tightly coupled to app/system language and had misleading live-listening
+  feedback. The Speech Recognition setting could advertise local Chinese, while
+  `funASRLocal` still fell back to English system dictation when the app language
+  was English; local FunASR recording also did not explain that final Chinese
+  transcription happens after the user presses Stop. The voice input mode is
+  being tightened so explicit Local Chinese works independent of app language,
+  Automatic uses local Chinese final transcription whenever FunASR is available,
+  the Settings install/status affordances stay visible in non-Chinese app
+  languages, and the listening overlay tells the user to press Stop to
+  transcribe Chinese. The pass also found that Personal Model first-language
+  facts could overwrite an explicit or non-English system app-language choice;
+  language sync now only infers from profile when no app-language preference is
+  saved and the system preference falls back to English.
+- The same voice pass found packaged FunASR helper failures underneath the UI:
+  the Python 3.12 runtime could miss `distutils` compatibility during FunASR
+  model registration, and the bundled Playwright ffmpeg binary was named
+  `ffmpeg-mac` while FunASR expected `ffmpeg` on `PATH`. The helper now installs
+  a distutils compatibility alias and creates a temporary `ffmpeg` shim to the
+  bundled signed binary before loading FunASR.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, single-path microphone request, voice preparing-state duplicate-start guard, Desktop file-write probe, Notes automation probe, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing, and high-risk local tool approval remains an open product gap |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, single-path microphone request, voice preparing-state duplicate-start guard, Desktop file-write probe, Notes automation probe, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on reliable microphone capture plus Chinese transcription verification, and high-risk local tool approval remains an open product gap |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; current follow-up is tightening app-language-independent local Chinese capture and explicit Stop-to-transcribe guidance before live voice send can be accepted |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |

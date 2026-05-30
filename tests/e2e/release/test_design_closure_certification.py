@@ -8,12 +8,14 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "design-closure-certification.yml"
 MAKEFILE_PATH = ROOT / "Makefile"
 MACOS_APP_MODEL_PATH = ROOT / "apps" / "macos" / "Sources" / "AppModel.swift"
+MACOS_APP_LOCALIZATION_PATH = ROOT / "apps" / "macos" / "Sources" / "AppLocalization.swift"
 MACOS_API_CLIENT_PATH = ROOT / "apps" / "macos" / "Sources" / "APIClient.swift"
 MACOS_DESIGN_SYSTEM_PATH = ROOT / "apps" / "macos" / "Sources" / "DesignSystem.swift"
 MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
 MACOS_SLEEP_DISPLAY_PATH = ROOT / "apps" / "macos" / "Sources" / "SleepDisplayView.swift"
 MACOS_SPEECH_INPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "SpeechInputController.swift"
 MACOS_SPEECH_OUTPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "LocalSpeechOutputController.swift"
+MACOS_FUNASR_HELPER_PATH = ROOT / "apps" / "macos" / "Sources" / "Resources" / "Voice" / "funasr_transcribe.py"
 MACOS_BUILD_SCRIPT_PATH = ROOT / "apps" / "macos" / "Scripts" / "build-app.sh"
 MACOS_README_PATH = ROOT / "apps" / "macos" / "README.md"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
@@ -245,6 +247,9 @@ class DesignClosureContractsTest(unittest.TestCase):
     def test_macos_voice_capture_ignores_stale_permission_callbacks(self) -> None:
         speech_input = MACOS_SPEECH_INPUT_PATH.read_text(encoding="utf-8")
         speech_output = MACOS_SPEECH_OUTPUT_PATH.read_text(encoding="utf-8")
+        funasr_helper = MACOS_FUNASR_HELPER_PATH.read_text(encoding="utf-8")
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        app_localization = MACOS_APP_LOCALIZATION_PATH.read_text(encoding="utf-8")
         views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
 
         self.assertIn("captureGeneration", speech_input)
@@ -255,7 +260,13 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("isActiveCapture(_ generation: Int)", speech_input)
         self.assertIn("finishCaptureSetupFailure(_ message: String)", speech_input)
         self.assertIn("startAppleRecording(locale: locale, statusNotice: statusNotice, generation: generation)", speech_input)
-        self.assertIn("authorizedSpeechPreviewLocale(Locale(identifier: \"zh-CN\"))", speech_input)
+        self.assertIn("case funASR(previewLocale: Locale?, statusNotice: String?)", speech_input)
+        self.assertIn("previewLocale.flatMap { self.authorizedSpeechPreviewLocale($0) }", speech_input)
+        self.assertIn("automaticMode(language: language)", speech_input)
+        self.assertIn("localChineseMode(language: language)", speech_input)
+        self.assertIn("appleSpeechLocale(for: language)", speech_input)
+        self.assertIn("Listening. Press Stop to transcribe Chinese.", speech_input)
+        self.assertIn("说完后点停止开始中文识别", speech_input)
         self.assertIn("startLocalRecording(previewLocale:", speech_input)
         self.assertIn("startFunASRTranscription(generation: generation)", speech_input)
         self.assertIn("finishAppleRecognition(generation: generation)", speech_input)
@@ -275,6 +286,18 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("Requesting speech recognition access", speech_input)
         self.assertIn("Microphone permission did not finish", speech_input)
         self.assertIn("Speech recognition permission did not finish", speech_input)
+        self.assertIn("Auto · local Chinese + system preview", app_model)
+        self.assertIn("自动 · 本地中文 + 系统预览", app_model)
+        self.assertIn("UserDefaults.standard.object(forKey: Self.appLanguageKey) == nil", app_localization)
+        self.assertIn("AppLanguage.preferred == .en", app_localization)
+        self.assertIn("if !SpeechInputController.funASRInstalled || model.voiceRuntimeActionInFlight", views)
+        self.assertIn("Recommended mode uses local Chinese final transcription after setup", views)
+        self.assertIn("System Chinese fallback", views)
+        self.assertIn("安装前，本地中文会兜底到 Apple 中文识别", views)
+        self.assertIn("SETUPTOOLS_USE_DISTUTILS", funasr_helper)
+        self.assertIn("sys.modules.setdefault(\"distutils\"", funasr_helper)
+        self.assertIn("activate_ffmpeg_compat", funasr_helper)
+        self.assertIn("ffmpeg-1011", funasr_helper)
         self.assertIn("lowerStatus.contains(\"permission\")", views)
         self.assertIn("MacPrivacySettings.openVoiceRecognition(statusText: statusText)", views)
         self.assertIn("MacPrivacySettings.openMicrophone()", views)
