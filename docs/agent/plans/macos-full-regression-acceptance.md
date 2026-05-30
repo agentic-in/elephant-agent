@@ -137,6 +137,15 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   visible connection failure instead of hanging, and Feishu exposes local secure
   credential fields plus save/connect controls; live transport remains blocked
   by network/device/credential availability.
+- Messaging was rechecked through the rebuilt packaged app's managed API while
+  Sleep Display remained locked. The gateway projection returned WeChat,
+  Feishu, Discord, DingDing, and WeCom; WeChat is QR-driven, and the other
+  channels expose local secret fields for their required credentials. The
+  release contract now pins the macOS Messaging surface to render service
+  counts, WeChat QR generation/status UX, secure local credential editors,
+  configure actions, start/restart actions, failure styling, and logos for all
+  five gateway services. Live transport remains a credential/device blocker,
+  not a missing desktop UI path.
 - Herd was inspected in the packaged app. Mother and baby elephant rows, runtime
   status, Codex/Gemini/Copilot/Hermes engine choices, tools, skills, prompt, and
   local CLI baby configuration tabs are editable from the native sheet.
@@ -344,7 +353,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, learned matches, pending draft projection/approval lifecycle, and no duplicate Settings summary contract verified; unlocked pending-row visual reinspection remains gated by Sleep Display |
-| Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
+| Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Complete with credential/device blocker for live transport; WeChat failure/QR UX, Feishu/Discord/DingDing/WeCom secure setup fields, configure/start/restart controls, status styling, and all five gateway service projections verified |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |

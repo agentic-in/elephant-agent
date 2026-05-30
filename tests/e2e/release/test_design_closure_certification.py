@@ -368,6 +368,50 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn('row["understanding_check"]', api_client)
         self.assertIn("UnderstandingCheckItem", api_client)
 
+    def test_macos_messaging_surface_exposes_all_gateway_setup_paths(self) -> None:
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        api_client = MACOS_API_CLIENT_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        messaging_view = views.split("struct MessagingView: View", 1)[1].split("struct GatewayServiceCard", 1)[0]
+        gateway_card = views.split("struct GatewayServiceCard: View", 1)[1].split("private struct MessagingServiceActionButton", 1)[0]
+        logo_spec = views.split("private struct GatewayLogoSpec", 1)[1].split("struct GatewaySecretEditor", 1)[0]
+        secret_editor = views.split("struct GatewaySecretEditor: View", 1)[1].split("struct WeixinQRPanel", 1)[0]
+        weixin_panel = views.split("struct WeixinQRPanel: View", 1)[1].split("struct GatewayQRMatrixView", 1)[0]
+
+        self.assertIn("snapshot.gatewayItems = gatewayServices.compactMap", api_client)
+        self.assertIn('let id = string(row["service"] ?? row["id"] ?? row["key"])', api_client)
+        self.assertIn('row["secretFields"]', api_client)
+
+        self.assertIn('en: "Services"', messaging_view)
+        self.assertIn('en: "Configured"', messaging_view)
+        self.assertIn('en: "Running"', messaging_view)
+        self.assertIn("GatewayServiceCard(service: service)", messaging_view)
+        self.assertIn("Configure accounts, connect chat services, and scan WeChat QR", messaging_view)
+
+        self.assertIn('if service.id == "weixin"', gateway_card)
+        self.assertIn("WeixinQRPanel(service: service)", gateway_card)
+        self.assertIn("GatewaySecretEditor(service: service)", gateway_card)
+        self.assertIn("MessagingServiceActionButton(", gateway_card)
+        self.assertIn("await model.configureGatewayService(service)", gateway_card)
+        self.assertIn('await model.runGatewayAction(service: service, action: service.running ? "restart" : "start")', gateway_card)
+
+        for service in ("wechat", "weixin", "feishu", "discord", "ding", "wecom"):
+            with self.subTest(service=service):
+                self.assertIn(service, logo_spec.lower())
+
+        self.assertIn("SecureField(", secret_editor)
+        self.assertIn("gatewaySecretDrafts[service.id]", secret_editor)
+        self.assertIn("model.startWeixinQR()", weixin_panel)
+        self.assertIn("GatewayQRMatrixView(matrix: model.gatewayQR.matrix)", weixin_panel)
+        self.assertIn("Checking automatically", weixin_panel)
+        self.assertIn("expired", weixin_panel)
+        self.assertIn("failed", weixin_panel)
+
+        self.assertIn("func runGatewayAction(service: GatewayServiceItem, action: String) async", app_model)
+        self.assertIn("func configureGatewayService(_ service: GatewayServiceItem) async", app_model)
+        self.assertIn("func startWeixinQR() async", app_model)
+        self.assertIn("gatewayActionFailed = true", app_model)
+
     def test_workflow_keeps_live_provider_manual_and_secret_backed(self) -> None:
         text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
