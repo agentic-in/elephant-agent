@@ -366,6 +366,13 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   the composer without crashing. A real model text turn was then sent in the
   same Chat session; streaming activity completed and the reply used Personal
   Model work-context memory.
+- Voice permission recovery was rechecked in the rebuilt unlocked app. The Chat
+  voice overlay now shows an `Open Privacy Settings` action while requesting
+  microphone access and keeps it after the timeout state; that action opened the
+  macOS Microphone privacy page. Settings > Voice also exposes persistent
+  `Microphone Settings` and `Speech Settings` actions, and `Speech Settings`
+  opened the macOS Speech Recognition privacy page. The app process stayed
+  alive and no new crash report appeared during this pass.
 - Settings voice playback was rechecked in the unlocked app. The Voice row
   exposed enabled voice replies, auto-play, online/system voice controls,
   system/local recognition modes, local Chinese recognition readiness, and a
@@ -377,8 +384,8 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model replies before and after voice timeout, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model replies before and after voice timeout, voice privacy recovery action, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |
@@ -388,7 +395,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Complete; focused Skill Matching UI run, diary queue, launcher disable/re-enable, active-job launcher gating, progress/status, history, needs-attention detail, managed-API Dream execution, managed-API Letter execution, and unlocked Dream/Letter/Diary launcher readiness verified |
-| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Complete; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, config surface, managed-API config save/restore, and runtime editor button/draft state contract verified |
+| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Complete; language, provider, voice controls, voice privacy recovery actions, memory, tools, history, sleep, logs, reset, runtime, config surface, managed-API config save/restore, and runtime editor button/draft state contract verified |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
 | Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Complete for current unlocked/locked evidence; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, Home readiness responsive/accessibility contract, unlocked Home/Chat/Skills/Learn/Settings visual pass, and Sleep Display privacy/accessibility/visual contract verified |

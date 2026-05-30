@@ -3198,6 +3198,36 @@ struct WakeComposerPanel: View {
     }
 }
 
+private enum MacPrivacySettings {
+    static func openVoiceRecognition(statusText: String) {
+        if shouldOpenSpeechRecognition(statusText: statusText) {
+            openSpeechRecognition()
+            return
+        }
+        openMicrophone()
+    }
+
+    static func openMicrophone() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+    }
+
+    static func openSpeechRecognition() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")
+    }
+
+    private static func shouldOpenSpeechRecognition(statusText: String) -> Bool {
+        let lowerStatus = statusText.lowercased()
+        return lowerStatus.contains("speech recognition")
+            || lowerStatus.contains("speech recognizer")
+            || statusText.contains("语音识别")
+    }
+
+    private static func open(_ rawValue: String) {
+        guard let url = URL(string: rawValue) else { return }
+        NSWorkspace.shared.open(url)
+    }
+}
+
 struct VoiceListeningOverlay: View {
     @EnvironmentObject private var model: ElephantAppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -3220,6 +3250,7 @@ struct VoiceListeningOverlay: View {
                 Spacer(minLength: 24)
                 animatedIndicator
                 titleAndDetail
+                permissionRecoveryAction
                 controls
                 Spacer(minLength: 24)
             }
@@ -3290,6 +3321,21 @@ struct VoiceListeningOverlay: View {
         .frame(maxWidth: 520)
     }
 
+    @ViewBuilder
+    private var permissionRecoveryAction: some View {
+        if showsPermissionRecoveryAction {
+            Button {
+                MacPrivacySettings.openVoiceRecognition(statusText: statusText)
+            } label: {
+                Label(openPrivacySettingsLabel, systemImage: "gearshape")
+            }
+            .settingsActionButton()
+            .help(openPrivacySettingsHelp)
+            .accessibilityLabel(openPrivacySettingsLabel)
+            .accessibilityHint(openPrivacySettingsHelp)
+        }
+    }
+
     private var controls: some View {
         HStack(spacing: 12) {
             overlayButton(symbol: "xmark", tint: ElephantTheme.muted, action: cancel)
@@ -3305,6 +3351,37 @@ struct VoiceListeningOverlay: View {
                 .help(model.text(.send))
                 .accessibilityLabel(model.text(.send))
         }
+    }
+
+    private var showsPermissionRecoveryAction: Bool {
+        guard !isRecording && !isTranscribing else { return false }
+        let lowerStatus = statusText.lowercased()
+        return lowerStatus.contains("requesting microphone")
+            || lowerStatus.contains("microphone permission")
+            || lowerStatus.contains("speech recognition")
+            || lowerStatus.contains("speech recognizer")
+            || lowerStatus.contains("not authorized")
+            || lowerStatus.contains("permission did not")
+            || lowerStatus.contains("could not start microphone")
+            || statusText.contains("请求麦克风")
+            || statusText.contains("麦克风权限")
+            || statusText.contains("语音识别")
+            || statusText.contains("权限未开启")
+            || statusText.contains("没有完成")
+    }
+
+    private var openPrivacySettingsLabel: String {
+        localizedYouText(model.appLanguage, en: "Open Privacy Settings", zh: "打开隐私设置", fr: "Ouvrir confidentialité", de: "Datenschutz öffnen")
+    }
+
+    private var openPrivacySettingsHelp: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Open macOS Privacy & Security settings for voice input.",
+            zh: "打开 macOS 隐私与安全设置以恢复语音输入。",
+            fr: "Ouvrir Confidentialité et sécurité pour la saisie vocale.",
+            de: "Öffnet macOS Datenschutz & Sicherheit für Spracheingabe."
+        )
     }
 
     private var title: String {
@@ -19654,6 +19731,26 @@ struct VoiceRepliesSettingsContent: View {
                     value: model.chineseSpeechRecognitionStatus
                 )
             }
+
+            SettingsActionBar {
+                Button {
+                    MacPrivacySettings.openMicrophone()
+                } label: {
+                    Label(openMicrophoneSettingsLabel, systemImage: "mic")
+                }
+                .settingsActionButton()
+                .help(openMicrophoneSettingsHelp)
+                .accessibilityHint(openMicrophoneSettingsHelp)
+
+                Button {
+                    MacPrivacySettings.openSpeechRecognition()
+                } label: {
+                    Label(openSpeechRecognitionSettingsLabel, systemImage: "waveform")
+                }
+                .settingsActionButton()
+                .help(openSpeechRecognitionSettingsHelp)
+                .accessibilityHint(openSpeechRecognitionSettingsHelp)
+            }
         }
     }
 
@@ -19822,6 +19919,34 @@ struct VoiceRepliesSettingsContent: View {
 
     private var appleRecognitionLabel: String {
         localizedYouText(model.appLanguage, en: "System", zh: "系统识别", fr: "Système", de: "System")
+    }
+
+    private var openMicrophoneSettingsLabel: String {
+        localizedYouText(model.appLanguage, en: "Microphone Settings", zh: "麦克风设置", fr: "Microphone", de: "Mikrofon")
+    }
+
+    private var openMicrophoneSettingsHelp: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Open macOS Microphone privacy settings.",
+            zh: "打开 macOS 麦克风隐私设置。",
+            fr: "Ouvrir les réglages de confidentialité du microphone macOS.",
+            de: "Öffnet die macOS-Mikrofon-Datenschutzeinstellungen."
+        )
+    }
+
+    private var openSpeechRecognitionSettingsLabel: String {
+        localizedYouText(model.appLanguage, en: "Speech Settings", zh: "语音识别设置", fr: "Parole", de: "Sprache")
+    }
+
+    private var openSpeechRecognitionSettingsHelp: String {
+        localizedYouText(
+            model.appLanguage,
+            en: "Open macOS Speech Recognition privacy settings.",
+            zh: "打开 macOS 语音识别隐私设置。",
+            fr: "Ouvrir les réglages de confidentialité de la reconnaissance vocale macOS.",
+            de: "Öffnet die macOS-Datenschutzeinstellungen für Spracherkennung."
+        )
     }
 
     private var onlinePrivacyValue: String {
