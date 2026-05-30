@@ -1884,7 +1884,7 @@ private struct ProfileMemoryChip: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
                     .lineLimit(1)
-                Text(fact.value.isEmpty ? fallbackValue : fact.value)
+                Text(displayValue)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(ElephantTheme.ink)
                     .lineLimit(fact.full ? 3 : 2)
@@ -1903,6 +1903,12 @@ private struct ProfileMemoryChip: View {
 
     private var fallbackValue: String {
         localizedYouText(language, en: "Not set", zh: "未设置", fr: "Non défini", de: "Nicht festgelegt")
+    }
+
+    private var displayValue: String {
+        let value = fact.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return fallbackValue }
+        return localizedProfileValue(label: fact.label, value: value, language: language)
     }
 
     private var symbol: String {
@@ -1925,6 +1931,17 @@ private struct ProfileMemoryChip: View {
         if key.contains("health") || key.contains("allerg") || key.contains("boundary") || key.contains("safety") { return ElephantTheme.orange }
         return ElephantTheme.accent
     }
+}
+
+private func localizedProfileValue(label: String, value: String, language: AppLanguage) -> String {
+    let key = label.lowercased()
+    if key.contains("speak") || key.contains("language") {
+        return localizedLanguageName(value, language: language)
+    }
+    if key.contains("gender") {
+        return localizedGenderValue(value, language: language)
+    }
+    return value
 }
 
 private func localizedProfileLabel(_ label: String, language: AppLanguage) -> String {
@@ -2114,6 +2131,47 @@ private func friendlyMemoryPreview(_ text: String, language: AppLanguage) -> Str
     return text.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+private func friendlyMemoryPreview(_ fact: PersonalModelFact, language: AppLanguage) -> String {
+    let text = fact.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return text }
+
+    let topic = fact.topic.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let value = memoryFactValue(from: text)
+    if topic.contains("language") || topic == "first_language" {
+        let languageName = localizedLanguageName(value, language: language)
+        return localizedYouText(
+            language,
+            en: "First language is \(languageName)",
+            zh: "第一语言是 \(languageName)",
+            fr: "Première langue : \(languageName)",
+            de: "Erste Sprache ist \(languageName)"
+        )
+    }
+    if topic.contains("gender") {
+        return localizedYouText(
+            language,
+            en: "Gender: \(localizedGenderValue(value, language: language))",
+            zh: "性别：\(localizedGenderValue(value, language: language))",
+            fr: "Genre : \(localizedGenderValue(value, language: language))",
+            de: "Geschlecht: \(localizedGenderValue(value, language: language))"
+        )
+    }
+    if topic.contains("birth") && topic.contains("date") {
+        return localizedYouText(language, en: "Birth date: \(value)", zh: "生日：\(value)", fr: "Date de naissance : \(value)", de: "Geburtstag: \(value)")
+    }
+    if topic.contains("name.preferred") || topic.hasSuffix(".name") {
+        return localizedYouText(language, en: "Prefers \(value)", zh: "称呼是 \(value)", fr: "Préfère \(value)", de: "Bevorzugt \(value)")
+    }
+    if topic.contains("city") || topic.contains("places") {
+        return localizedYouText(language, en: "Based around \(value)", zh: "当前城市或时区是 \(value)", fr: "Basé autour de \(value)", de: "Rund um \(value)")
+    }
+    if topic.contains("hobbies") {
+        return localizedYouText(language, en: "Interested in \(value)", zh: "兴趣包括 \(value)", fr: "S'intéresse à \(value)", de: "Interessiert an \(value)")
+    }
+
+    return friendlyMemoryPreview(text, language: language)
+}
+
 private func friendlyMemoryLine(_ line: String, language: AppLanguage) -> String? {
     let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }
@@ -2144,7 +2202,7 @@ private func friendlyMemoryLine(_ line: String, language: AppLanguage) -> String
         return localizedYouText(language, en: "Interested in \(value)", zh: "兴趣包括 \(value)", fr: "S'intéresse à \(value)", de: "Interessiert an \(value)")
     }
     if key.contains("first language") {
-        let languageName = value.lowercased() == "zh" ? localizedYouText(language, en: "Chinese", zh: "中文", fr: "chinois", de: "Chinesisch") : value
+        let languageName = localizedLanguageName(value, language: language)
         return localizedYouText(language, en: "First language is \(languageName)", zh: "第一语言是 \(languageName)", fr: "Première langue : \(languageName)", de: "Erste Sprache ist \(languageName)")
     }
     if key.contains("decision compass") {
@@ -2169,6 +2227,68 @@ private func friendlyMemoryLine(_ line: String, language: AppLanguage) -> String
         return localizedYouText(language, en: "Homepage: \(value)", zh: "个人主页：\(value)", fr: "Page personnelle : \(value)", de: "Homepage: \(value)")
     }
     return value
+}
+
+private func memoryFactValue(from text: String) -> String {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let separator = trimmed.firstIndex(where: { $0 == ":" || $0 == "：" }) else {
+        return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+    }
+    return String(trimmed[trimmed.index(after: separator)...])
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+}
+
+private func localizedLanguageName(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw
+        .replacingOccurrences(of: "_", with: "-")
+        .lowercased()
+    if value == "en" || value.hasPrefix("en-") || value == "english" {
+        return localizedYouText(language, en: "English", zh: "英语", fr: "anglais", de: "Englisch")
+    }
+    if value == "zh" || value.hasPrefix("zh-") || value == "chinese" || value == "mandarin" {
+        return localizedYouText(language, en: "Chinese", zh: "中文", fr: "chinois", de: "Chinesisch")
+    }
+    if value == "fr" || value.hasPrefix("fr-") || value == "french" {
+        return localizedYouText(language, en: "French", zh: "法语", fr: "français", de: "Französisch")
+    }
+    if value == "de" || value.hasPrefix("de-") || value == "german" {
+        return localizedYouText(language, en: "German", zh: "德语", fr: "allemand", de: "Deutsch")
+    }
+    return raw
+}
+
+private func localizedGenderValue(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw.lowercased()
+    if value == "male" || value == "man" || value == "m" {
+        return localizedYouText(language, en: "Male", zh: "男", fr: "Homme", de: "Männlich")
+    }
+    if value == "female" || value == "woman" || value == "f" {
+        return localizedYouText(language, en: "Female", zh: "女", fr: "Femme", de: "Weiblich")
+    }
+    if value == "nonbinary" || value == "non-binary" {
+        return localizedYouText(language, en: "Non-binary", zh: "非二元", fr: "Non binaire", de: "Nichtbinär")
+    }
+    return raw
+}
+
+private func displayIdentifier(_ rawValue: String, language: AppLanguage) -> String {
+    let words = rawValue
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "-", with: " ")
+        .replacingOccurrences(of: "_", with: " ")
+        .split(separator: " ")
+        .map(String.init)
+    guard !words.isEmpty else { return rawValue }
+    if language == .en {
+        return words.map { word in
+            guard let first = word.first else { return word }
+            return String(first).uppercased() + String(word.dropFirst())
+        }.joined(separator: " ")
+    }
+    return words.joined(separator: " ")
 }
 
 struct CommandCenterPanel: View {
@@ -6704,6 +6824,99 @@ private func localizedQuestionStatus(_ question: PersonalModelQuestionItem, lang
     }
 }
 
+private func localizedFactStatus(_ rawValue: String, language: AppLanguage) -> String {
+    let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if value.isEmpty || value == "active" {
+        return localizedYouText(language, en: "Kept", zh: "保留中", fr: "Conservé", de: "Behalten")
+    }
+    if value == "retired" || value == "forgotten" {
+        return localizedYouText(language, en: "Retired", zh: "已停用", fr: "Retiré", de: "Zurückgezogen")
+    }
+    if value == "deleted" {
+        return localizedYouText(language, en: "Deleted", zh: "已删除", fr: "Supprimé", de: "Gelöscht")
+    }
+    if value == "corrected" || value == "superseded" {
+        return localizedYouText(language, en: "Updated", zh: "已更新", fr: "Mis à jour", de: "Aktualisiert")
+    }
+    return displayIdentifier(rawValue, language: language)
+}
+
+private func localizedQuestionLensPath(_ lens: String, subLens: String, language: AppLanguage) -> String {
+    let title = localizedLensTitle(lens.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), language: language)
+    let subTitle = localizedMemorySubLens(subLens, language: language)
+    return subTitle.isEmpty ? title : "\(title) · \(subTitle)"
+}
+
+private func localizedMemorySubLens(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw
+        .replacingOccurrences(of: "-", with: "_")
+        .replacingOccurrences(of: " ", with: "_")
+        .lowercased()
+    if value.isEmpty { return "" }
+    if value.contains("transition") {
+        return localizedYouText(language, en: "Transition support", zh: "过渡支持", fr: "Soutien de transition", de: "Übergangshilfe")
+    }
+    if value.contains("parallel") || value.contains("thread") {
+        return localizedYouText(language, en: "Parallel threads", zh: "并行事项", fr: "Fils parallèles", de: "Parallele Themen")
+    }
+    if value.contains("step") {
+        return localizedYouText(language, en: "Small steps", zh: "小步推进", fr: "Petits pas", de: "Kleine Schritte")
+    }
+    if value.contains("coverage") {
+        return localizedYouText(language, en: "Memory coverage", zh: "记忆覆盖", fr: "Couverture mémoire", de: "Gedächtnisabdeckung")
+    }
+    if value.contains("preference") || value.contains("style") {
+        return localizedYouText(language, en: "Preference", zh: "偏好", fr: "Préférence", de: "Präferenz")
+    }
+    return displayIdentifier(raw, language: language)
+}
+
+private func localizedQuestionSource(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw
+        .replacingOccurrences(of: "-", with: "_")
+        .replacingOccurrences(of: " ", with: "_")
+        .lowercased()
+    if value.isEmpty {
+        return localizedYouText(language, en: "Question cue", zh: "问题线索", fr: "Indice de question", de: "Fragehinweis")
+    }
+    if value.contains("context") {
+        return localizedYouText(language, en: "Context cue", zh: "上下文线索", fr: "Indice de contexte", de: "Kontexthinweis")
+    }
+    if value.contains("coverage") {
+        return localizedYouText(language, en: "Memory gap", zh: "记忆缺口", fr: "Manque mémoire", de: "Gedächtnislücke")
+    }
+    if value.contains("user") || value.contains("explicit") {
+        return localizedYouText(language, en: "From your answer", zh: "来自你的回答", fr: "Depuis votre réponse", de: "Aus deiner Antwort")
+    }
+    if value.contains("diary") {
+        return localizedYouText(language, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch")
+    }
+    if value.contains("chat") || value.contains("conversation") || value.contains("episode") {
+        return localizedYouText(language, en: "Conversation", zh: "对话", fr: "Conversation", de: "Gespräch")
+    }
+    return displayIdentifier(raw, language: language)
+}
+
+private func localizedQuestionSensitivity(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw.lowercased()
+    if value.isEmpty || value == "low" {
+        return localizedYouText(language, en: "Ordinary", zh: "普通", fr: "Ordinaire", de: "Normal")
+    }
+    if value == "medium" || value == "moderate" {
+        return localizedYouText(language, en: "Handle gently", zh: "轻柔处理", fr: "À aborder doucement", de: "Behutsam behandeln")
+    }
+    if value == "high" || value == "sensitive" {
+        return localizedYouText(language, en: "Sensitive", zh: "敏感", fr: "Sensible", de: "Sensibel")
+    }
+    if value == "private" {
+        return localizedYouText(language, en: "Private", zh: "私密", fr: "Privé", de: "Privat")
+    }
+    return displayIdentifier(raw, language: language)
+}
+
 private func localizedRuntimeStatus(_ rawValue: String, language: AppLanguage) -> String {
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if value.isEmpty || value == "unknown" {
@@ -6981,11 +7194,11 @@ private struct EvidenceTraceRow: View {
                     .foregroundStyle(tint)
                     .frame(width: 18, height: 18)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(fact.detail)
+                    Text(localizedEvidenceDetail(fact.detail, language: model.appLanguage))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(tint)
                         .lineLimit(1)
-                    Text(fact.text)
+                    Text(friendlyMemoryPreview(fact, language: model.appLanguage))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -7003,7 +7216,7 @@ private struct EvidenceTraceRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(fact.detail), \(fact.text)")
+        .accessibilityLabel("\(localizedEvidenceDetail(fact.detail, language: model.appLanguage)), \(friendlyMemoryPreview(fact, language: model.appLanguage))")
     }
 
     private var tint: Color {
@@ -7013,6 +7226,56 @@ private struct EvidenceTraceRow: View {
         if lens.contains("journey") { return PersonalModelMapPalette.journey }
         return PersonalModelMapPalette.identity
     }
+}
+
+private func localizedEvidenceDetail(_ rawValue: String, language: AppLanguage) -> String {
+    let parts = rawValue
+        .components(separatedBy: " · ")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    let displayParts = parts.map { localizedEvidenceToken($0, language: language) }
+    return displayParts.isEmpty ? localizedYouText(language, en: "Source", zh: "来源", fr: "Source", de: "Quelle") : displayParts.joined(separator: " · ")
+}
+
+private func localizedEvidenceToken(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    if MacLocalDateTime.parse(raw) != nil {
+        return MacLocalDateTime.formatted(raw, language: language, fallback: raw)
+    }
+    return localizedEvidenceSource(raw, language: language)
+}
+
+private func localizedEvidenceSource(_ rawValue: String, language: AppLanguage) -> String {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = raw
+        .replacingOccurrences(of: "-", with: "_")
+        .replacingOccurrences(of: " ", with: "_")
+        .lowercased()
+    if value.isEmpty {
+        return localizedYouText(language, en: "Source", zh: "来源", fr: "Source", de: "Quelle")
+    }
+    if value.contains("user_explicit") || value == "explicit" || value == "manual" || value == "user" {
+        return localizedYouText(language, en: "You told Elephant", zh: "你明确告诉过 Elephant", fr: "Vous l'avez dit à Elephant", de: "Du hast es Elephant gesagt")
+    }
+    if value.contains("context") {
+        return localizedYouText(language, en: "Context cue", zh: "上下文线索", fr: "Indice de contexte", de: "Kontexthinweis")
+    }
+    if value.contains("coverage") {
+        return localizedYouText(language, en: "Memory gap", zh: "记忆缺口", fr: "Manque mémoire", de: "Gedächtnislücke")
+    }
+    if value.contains("onboarding") {
+        return localizedYouText(language, en: "First setup", zh: "首次设置", fr: "Première configuration", de: "Ersteinrichtung")
+    }
+    if value.contains("diary") {
+        return localizedYouText(language, en: "Diary", zh: "日记", fr: "Journal", de: "Tagebuch")
+    }
+    if value.contains("chat") || value.contains("conversation") || value.contains("episode") {
+        return localizedYouText(language, en: "Conversation", zh: "对话", fr: "Conversation", de: "Gespräch")
+    }
+    if value.contains("reflect") || value.contains("learning") {
+        return localizedYouText(language, en: "Reflect", zh: "Reflect 整理", fr: "Reflect", de: "Reflect")
+    }
+    return displayIdentifier(raw, language: language)
 }
 
 struct QuestionFieldPanel: View {
@@ -7264,8 +7527,8 @@ struct QuestionLedgerRow: View {
         VStack(alignment: .center, spacing: 10) {
             HStack(spacing: 8) {
                 Pill(text: lensText, symbol: "circle.grid.cross", tint: tint)
-                Pill(text: question.source, symbol: "link", tint: ElephantTheme.faint)
-                Pill(text: question.sensitivity, symbol: "lock", tint: ElephantTheme.faint)
+                Pill(text: localizedQuestionSource(question.source, language: model.appLanguage), symbol: "link", tint: ElephantTheme.faint)
+                Pill(text: localizedQuestionSensitivity(question.sensitivity, language: model.appLanguage), symbol: "lock", tint: ElephantTheme.faint)
                 if question.askedCount > 0 {
                     Pill(text: localizedFormat(model.appLanguage, en: "%d asked", zh: "问过 %d 次", fr: "%d posées", de: "%d gefragt", question.askedCount), symbol: "clock", tint: ElephantTheme.orange)
                 }
@@ -7288,7 +7551,7 @@ struct QuestionLedgerRow: View {
                                 .fill(ElephantTheme.green.opacity(0.72))
                                 .frame(width: 5, height: 5)
                                 .padding(.top, 7)
-                            Text(fact.text)
+                            Text(friendlyMemoryPreview(fact, language: model.appLanguage))
                                 .font(.callout.weight(.medium))
                                 .foregroundStyle(ElephantTheme.ink)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -7370,10 +7633,7 @@ struct QuestionLedgerRow: View {
     }
 
     private var lensText: String {
-        if question.subLens.isEmpty {
-            return question.lens
-        }
-        return "\(question.lens) · \(question.subLens)"
+        localizedQuestionLensPath(question.lens, subLens: question.subLens, language: model.appLanguage)
     }
 
     private var tint: Color {
@@ -8989,7 +9249,7 @@ struct LensDetailStrip: View {
                 )
             } else {
                 ForEach(filteredFacts.prefix(3)) { fact in
-                    Text(fact.text)
+                    Text(friendlyMemoryPreview(fact, language: model.appLanguage))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.muted)
                         .lineLimit(2)
@@ -9444,7 +9704,7 @@ struct FactDisclosureRow: View {
                     Image(systemName: "checkmark.seal")
                         .foregroundStyle(tint)
                         .frame(width: 20)
-                    Text(fact.text)
+                    Text(friendlyMemoryPreview(fact, language: model.appLanguage))
                         .font(.callout)
                         .foregroundStyle(ElephantTheme.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -9466,15 +9726,15 @@ struct FactDisclosureRow: View {
     private var expandedContent: some View {
         VStack(alignment: .center, spacing: 10) {
             if !fact.detail.isEmpty {
-                Text(fact.detail)
+                Text(localizedEvidenceDetail(fact.detail, language: model.appLanguage))
                     .font(.caption)
                     .foregroundStyle(ElephantTheme.muted)
                     .multilineTextAlignment(.center)
                     .textSelection(.enabled)
             }
             HStack(spacing: 8) {
-                Pill(text: fact.lens, symbol: "circle.grid.cross", tint: tint)
-                Pill(text: fact.status, symbol: "checkmark.seal", tint: fact.status == "active" ? ElephantTheme.green : ElephantTheme.orange)
+                Pill(text: localizedLensTitle(fact.lens.lowercased(), language: model.appLanguage), symbol: "circle.grid.cross", tint: tint)
+                Pill(text: localizedFactStatus(fact.status, language: model.appLanguage), symbol: "checkmark.seal", tint: fact.status == "active" ? ElephantTheme.green : ElephantTheme.orange)
             }
 
             if isEditing {
