@@ -214,7 +214,11 @@ sign_path() {
   fi
   require_macos_tool codesign
   if ad_hoc_signing; then
-    codesign_with_retry codesign --force --sign - "${path}" >/dev/null
+    if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
+      codesign_with_retry codesign --force --options runtime --entitlements "${SIGNING_ENTITLEMENTS}" --sign - "${path}" >/dev/null
+    else
+      codesign_with_retry codesign --force --options runtime --sign - "${path}" >/dev/null
+    fi
   else
     if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
       codesign_with_retry codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null
@@ -231,7 +235,11 @@ sign_macho_file() {
   fi
   require_macos_tool codesign
   if ad_hoc_signing; then
-    codesign_with_retry codesign --force --sign - "${path}" >/dev/null
+    if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
+      codesign_with_retry codesign --force --options runtime --entitlements "${SIGNING_ENTITLEMENTS}" --sign - "${path}" >/dev/null
+    else
+      codesign_with_retry codesign --force --options runtime --sign - "${path}" >/dev/null
+    fi
   else
     if [[ -f "${SIGNING_ENTITLEMENTS}" ]]; then
       codesign_with_retry codesign --force --options runtime --timestamp --entitlements "${SIGNING_ENTITLEMENTS}" --sign "${SIGNING_IDENTITY}" "${path}" >/dev/null

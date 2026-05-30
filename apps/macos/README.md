@@ -45,7 +45,7 @@ make macos-build-all \
   APPLE_TEAM_ID="TEAMID"
 ```
 
-Local builds default to `MACOS_SIGNING_IDENTITY=none`, which skips app and DMG signing entirely. Use `MACOS_SIGNING_IDENTITY=-` when you specifically need an ad-hoc signed test artifact. Official shareable releases should use Developer ID signing and notarization.
+Local builds default to `MACOS_SIGNING_IDENTITY=none`, which skips app and DMG signing entirely. Use `MACOS_SIGNING_IDENTITY=-` when you need an ad-hoc signed test artifact or are validating privacy-sensitive flows such as microphone and speech recognition permissions. The ad-hoc path uses the same hardened-runtime option and local audio-input entitlements as signed app builds; official shareable releases should use Developer ID signing and notarization.
 
 `make macos-release-latest` expects `gh` authentication and replaces the GitHub `latest` release/tag with the current local artifacts. The CI workflow `.github/workflows/macos-latest-release.yml` runs the same build on each push to `main`, uploads both macOS architecture artifacts, writes `latest.json`, and replaces the `latest` GitHub release.
 

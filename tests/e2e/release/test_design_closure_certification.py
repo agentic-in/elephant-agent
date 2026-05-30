@@ -14,6 +14,8 @@ MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
 MACOS_SLEEP_DISPLAY_PATH = ROOT / "apps" / "macos" / "Sources" / "SleepDisplayView.swift"
 MACOS_SPEECH_INPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "SpeechInputController.swift"
 MACOS_SPEECH_OUTPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "LocalSpeechOutputController.swift"
+MACOS_BUILD_SCRIPT_PATH = ROOT / "apps" / "macos" / "Scripts" / "build-app.sh"
+MACOS_README_PATH = ROOT / "apps" / "macos" / "README.md"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
 CANONICAL_DESIGN_DOCS = (
     ROOT / "docs" / "system-design" / "README.md",
@@ -250,12 +252,20 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("schedulePermissionTimeout(generation:", speech_input)
         self.assertIn("isActiveCapture(_ generation: Int)", speech_input)
         self.assertIn("startAppleRecording(locale: locale, statusNotice: statusNotice, generation: generation)", speech_input)
-        self.assertIn("startLocalRecording(previewLocale: locale, generation: generation)", speech_input)
-        self.assertIn("startApplePreviewRecognition(locale: $0, generation: generation)", speech_input)
+        self.assertIn("authorizedSpeechPreviewLocale(Locale(identifier: \"zh-CN\"))", speech_input)
+        self.assertIn("startLocalRecording(previewLocale:", speech_input)
         self.assertIn("startFunASRTranscription(generation: generation)", speech_input)
         self.assertIn("finishAppleRecognition(generation: generation)", speech_input)
         self.assertGreaterEqual(speech_input.count("isActiveCapture(generation) else { return }"), 8)
+        self.assertIn("OneShotPermissionCompletion", speech_input)
+        self.assertIn("import AVFAudio", speech_input)
+        self.assertIn("AVAudioApplication.shared.recordPermission", speech_input)
+        self.assertIn("AVAudioApplication.requestRecordPermission", speech_input)
+        self.assertIn("requestLegacyMicrophoneAccess", speech_input)
+        self.assertIn("AVCaptureDevice.authorizationStatus(for: .audio)", speech_input)
+        self.assertIn("Requesting speech recognition access", speech_input)
         self.assertIn("Microphone permission did not finish", speech_input)
+        self.assertIn("Speech recognition permission did not finish", speech_input)
         self.assertIn("lowerStatus.contains(\"permission\")", views)
         self.assertIn("MacPrivacySettings.openVoiceRecognition(statusText: statusText)", views)
         self.assertIn("MacPrivacySettings.openMicrophone()", views)
@@ -270,6 +280,18 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("activeSystemUtterance", speech_output)
         self.assertIn("guard self?.activeSystemUtterance === utterance else { return }", speech_output)
         self.assertIn("guard self?.audioPlayer === player else { return }", speech_output)
+
+    def test_macos_ad_hoc_build_keeps_audio_permission_entitlements(self) -> None:
+        build_script = MACOS_BUILD_SCRIPT_PATH.read_text(encoding="utf-8")
+        readme = MACOS_README_PATH.read_text(encoding="utf-8")
+        ad_hoc_signing = build_script.split("ad_hoc_signing() {", 1)[0].rsplit("sign_path() {", 1)[1]
+
+        self.assertIn("ad_hoc_signing", ad_hoc_signing)
+        self.assertIn("--options runtime --entitlements", ad_hoc_signing)
+        self.assertIn('--sign - "${path}"', ad_hoc_signing)
+        self.assertIn("com.apple.security.device.audio-input", (ROOT / "apps" / "macos" / "Entitlements.plist").read_text(encoding="utf-8"))
+        self.assertIn("privacy-sensitive flows such as microphone and speech recognition permissions", readme)
+        self.assertIn("hardened-runtime option and local audio-input entitlements", readme)
 
     def test_macos_diary_entries_surface_source_provenance(self) -> None:
         app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
