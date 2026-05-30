@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from packages.growth import build_growth_snapshot, default_growth_state
+from packages.runtime_config import load_tool_approvals_from_config
 from packages.runtime_layout import elephant_file_path
 from packages.state import ELEPHANT_IDENTITY_FILENAME
 from packages.storage.repository_support import DEFAULT_PERSONAL_MODEL_ID
@@ -873,10 +874,6 @@ def _skill_affinity_rows(self) -> tuple[dict[str, Any], ...]:
     )
 
 
-def _tools_settings(settings: Mapping[str, Any]) -> dict[str, Any]:
-    return {"globalConfigPath": settings.get("globalConfigPath", "")}
-
-
 def _fill_skills(dashboard: dict[str, Any], self) -> None:
     settings, global_config, state_dir = _operation_settings(self)
     skill_overrides = _profile_overrides(state_dir, "skill_overrides")
@@ -895,7 +892,10 @@ def _fill_tools(dashboard: dict[str, Any], self) -> None:
         **dashboard["operations"],
         "tools": tuple(_tools(self, tool_overrides=tool_overrides)),
         "mcp": _mcp_catalog(config_path=Path(settings["globalConfigPath"]), config=global_config),
-        "settings": _tools_settings(settings),
+        "settings": {
+            "globalConfigPath": settings.get("globalConfigPath", ""),
+            "approvals": load_tool_approvals_from_config(global_config),
+        },
     }
 
 

@@ -881,6 +881,20 @@ struct APIClient {
         )
     }
 
+    func saveToolApprovalSettings(_ settings: ToolApprovalSettings) async throws {
+        _ = try await request(
+            path: "/v1/operator/tools/approvals",
+            method: "PATCH",
+            body: [
+                "enabled": settings.enabled,
+                "toolIds": settings.toolIDs,
+                "families": settings.families,
+                "mcpKeywords": settings.mcpKeywords,
+                "mcpWritesOrStrictOnly": settings.mcpWritesOrStrictOnly
+            ]
+        )
+    }
+
     func runGatewayAction(
         service: String,
         action: String,
@@ -1564,8 +1578,11 @@ enum SnapshotParser {
         let mcp = toolOps["mcp"] as? [String: Any] ?? [:]
         let mcpServerRows = mcp["servers"] as? [[String: Any]] ?? []
         let mcpToolRows = mcp["tools"] as? [[String: Any]] ?? []
+        let toolSettings = toolOps["settings"] as? [String: Any] ?? [:]
+        let toolApprovals = toolSettings["approvals"] as? [String: Any] ?? [:]
         snapshot.tools = toolRows.count
         snapshot.enabledTools = toolRows.filter { bool($0["enabled"], fallback: true) }.count
+        snapshot.toolApprovalSettings = toolApprovalSettings(from: toolApprovals)
         snapshot.toolNames = toolRows.prefix(10).compactMap {
             string($0["displayName"] ?? $0["display_name"] ?? $0["toolId"] ?? $0["tool_id"])
         }.filter { !$0.isEmpty }
@@ -1587,6 +1604,8 @@ enum SnapshotParser {
                 provenance: string(row["provenance"]),
                 riskClass: string(row["riskClass"] ?? row["risk_class"], fallback: "medium"),
                 approvalClass: string(row["approvalClass"] ?? row["approval_class"], fallback: "standard"),
+                requiresApproval: bool(row["requiresApproval"] ?? row["requires_approval"], fallback: false),
+                approvalPolicyReason: string(row["approvalPolicyReason"] ?? row["approval_policy_reason"]),
                 available: bool(row["available"], fallback: true),
                 availabilityReason: string(row["availabilityReason"] ?? row["availability_reason"]),
                 readsState: bool(row["readsState"] ?? row["reads_state"], fallback: false),
@@ -3334,6 +3353,19 @@ enum SnapshotParser {
             approvalClass: string(row["approvalClass"] ?? row["approval_class"], fallback: "standard"),
             requiredFields: listStrings(row["requiredFields"] ?? row["required_fields"]),
             schemaJSON: jsonString(row["schema"])
+        )
+    }
+
+    private static func toolApprovalSettings(from row: [String: Any]) -> ToolApprovalSettings {
+        ToolApprovalSettings(
+            enabled: bool(row["enabled"], fallback: false),
+            toolIDs: listStrings(row["toolIds"] ?? row["tool_ids"]),
+            families: listStrings(row["families"]),
+            mcpKeywords: listStrings(row["mcpKeywords"] ?? row["mcp_keywords"]),
+            mcpWritesOrStrictOnly: bool(
+                row["mcpWritesOrStrictOnly"] ?? row["mcp_writes_or_strict_only"],
+                fallback: true
+            )
         )
     }
 

@@ -101,44 +101,16 @@ from . import api_runtime_http_io_methods as _http_io_methods
 from . import api_runtime_console as _console_methods
 from . import api_runtime_cron_ops as _cron_methods
 from . import api_runtime_internal_methods as _internal_methods
+from .api_tool_approval_policy import tool_approval_policy_match
 
 LOGGER = logging.getLogger(__name__)
 
-_LOCAL_APPROVAL_TOOL_IDS = frozenset(
-    {
-        "tool.terminal.exec",
-        "tool.process.manage",
-        "tool.file.write",
-        "tool.file.patch",
-        "tool.code.execute",
-    }
-)
-_LOCAL_APPROVAL_FAMILIES = frozenset({"terminal", "process", "code_execution"})
-_LOCAL_APPROVAL_KEYWORDS = frozenset(
-    {
-        "applescript",
-        "automation",
-        "code",
-        "exec",
-        "filesystem",
-        "patch",
-        "process",
-        "shell",
-        "terminal",
-        "write",
-    }
-)
-
 
 class _APILocalToolApprovalGateway:
-    """Require product approval for risky local Chat side effects.
+    """Apply the user-configured local tool approval policy."""
 
-    The API surface still permits low-risk reads and first-party Personal Model
-    writes. Local host mutation and execution tools fail closed until the macOS
-    Chat surface can resume approved calls.
-    """
-
-    def __init__(self, *, telemetry: object) -> None:
+    def __init__(self, *, telemetry: object, state_dir: Path) -> None:
+        self._state_dir = Path(state_dir)
         self._gateway = SecurityApprovalGateway(
             policy=SecurityPolicy.default(),
             telemetry=telemetry,
@@ -151,7 +123,11 @@ class _APILocalToolApprovalGateway:
         definition: ToolDefinition,
         invocation: ToolInvocation,
     ) -> ToolApprovalResult:
-        if _requires_local_tool_approval(definition):
+        requires_approval, reason = tool_approval_policy_match(
+            definition,
+            self._approval_config(),
+        )
+        if requires_approval:
             return self._gateway.authorize(
                 _local_policy_definition(definition),
                 invocation,
@@ -159,31 +135,18 @@ class _APILocalToolApprovalGateway:
         return ToolApprovalResult(
             decision="approved",
             risk_class=definition.side_effects.risk_class,
-            reason="No high-risk local side effect requires approval for this API tool.",
+            reason=f"Local tool approval policy did not match this API tool ({reason}).",
         )
 
+    def _approval_config(self) -> Mapping[str, Any]:
+        from packages.runtime_config import load_tool_approvals_from_config
 
-def _requires_local_tool_approval(definition: ToolDefinition) -> bool:
-    if definition.tool_id in _LOCAL_APPROVAL_TOOL_IDS:
-        return True
-    if definition.family in _LOCAL_APPROVAL_FAMILIES:
-        return True
-    if definition.backend != "mcp":
-        return False
-    if not definition.side_effects.writes_state and definition.side_effects.approval_class != "strict":
-        return False
-    searchable = " ".join(
-        str(value)
-        for value in (
-            definition.tool_id,
-            definition.family,
-            definition.backend,
-            *definition.side_effects.categories,
-            definition.metadata.get("serverId", ""),
-            definition.metadata.get("toolName", ""),
-        )
-    ).lower()
-    return any(keyword in searchable for keyword in _LOCAL_APPROVAL_KEYWORDS)
+        config_path = global_config_path_for_state_dir(self._state_dir)
+        try:
+            config = load_global_config(config_path, state_dir=self._state_dir)
+        except (OSError, ValueError):
+            return {}
+        return load_tool_approvals_from_config(config)
 
 
 def _local_policy_definition(definition: ToolDefinition) -> ToolDefinition:
@@ -461,7 +424,10 @@ class ElephantAPIApp:
                 ),
                 clarify_surface=self._api_clarify_surface,
             ),
-            approval_gateway=_APILocalToolApprovalGateway(telemetry=self.telemetry),
+            approval_gateway=_APILocalToolApprovalGateway(
+                telemetry=self.telemetry,
+                state_dir=runtime_state_dir,
+            ),
             context_resolver=_tool_context_for_session,
             state_dir=runtime_state_dir,
         )
@@ -543,6 +509,7 @@ ElephantAPIApp.trigger_diary_write = _internal_methods.trigger_diary_write
 ElephantAPIApp.trigger_reflect_job = _internal_methods.trigger_reflect_job
 ElephantAPIApp.patch_operator_settings = _console_methods.patch_operator_settings
 ElephantAPIApp.patch_operator_global_config = _console_methods.patch_operator_global_config
+ElephantAPIApp.patch_tool_approval_settings = _console_methods.patch_tool_approval_settings
 ElephantAPIApp.create_operator_mcp_tool = _console_methods.create_operator_mcp_tool
 ElephantAPIApp.update_operator_mcp_tool = _console_methods.update_operator_mcp_tool
 ElephantAPIApp.delete_operator_mcp_tool = _console_methods.delete_operator_mcp_tool

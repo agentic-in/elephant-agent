@@ -315,6 +315,40 @@ class APISurfaceDashboardE2ETest(APISurfaceTestBase):
             if tool["toolId"] == tool_id
         )
         self.assertFalse(refreshed_tool["enabled"])
+        self.assertFalse(refreshed_tool["requiresApproval"])
+
+        approval_policy = self.app.dispatch(
+            "PATCH",
+            "/v1/operator/tools/approvals",
+            body=self._body(
+                {
+                    "enabled": True,
+                    "toolIds": [tool_id],
+                    "families": [],
+                    "mcpKeywords": ["filesystem"],
+                    "mcpWritesOrStrictOnly": True,
+                }
+            ),
+        )
+        self.assertEqual(approval_policy.status_code, 200)
+        self.assertEqual(approval_policy.payload["runtimeStatus"], "runtime_policy_updated")
+        self.assertEqual(approval_policy.payload["approvals"]["tool_ids"], [tool_id])
+        stored_policy_config = load_global_config(
+            Path(approval_policy.payload["globalConfigPath"]),
+            state_dir=self.app.repository.database_path.parent,
+        )
+        self.assertTrue(stored_policy_config["tools"]["approvals"]["enabled"])
+        refreshed = self.app.dispatch("GET", "/v1/internal/dashboard/tools")
+        refreshed_tool = next(
+            tool
+            for tool in refreshed.payload["dashboard"]["operations"]["tools"]
+            if tool["toolId"] == tool_id
+        )
+        self.assertTrue(refreshed_tool["requiresApproval"])
+        self.assertEqual(
+            refreshed.payload["dashboard"]["operations"]["settings"]["approvals"]["tool_ids"],
+            [tool_id],
+        )
 
         created_mcp_tool = self.app.dispatch(
             "POST",

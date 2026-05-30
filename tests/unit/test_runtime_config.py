@@ -6,13 +6,16 @@ import unittest
 
 from packages.runtime_config import (
     configured_external_skill_dirs,
+    default_tool_approval_config,
     default_global_config,
     global_config_path_for_state_dir,
     global_config_schema,
+    load_tool_approvals_from_config,
     load_rtk_from_config,
     load_global_config,
     load_provider_from_config,
     save_provider_to_config,
+    save_tool_approvals_to_config,
     save_rtk_to_config,
     load_extensions_from_config,
     save_extensions_to_config,
@@ -30,21 +33,21 @@ class RuntimeConfigTest(unittest.TestCase):
         # dir (not a wrapper above it).
         self.assertEqual(
             global_config_path_for_state_dir(Path("/tmp/elephant/herd")),
-            Path("/tmp/elephant/config.yaml"),
+            Path("/tmp/elephant/config.yaml").resolve(),
         )
         self.assertEqual(
             global_config_path_for_state_dir(Path("/tmp/elephant/state")),
-            Path("/tmp/elephant/config.yaml"),
+            Path("/tmp/elephant/config.yaml").resolve(),
         )
 
     def test_global_config_path_tracks_database_layout(self) -> None:
         self.assertEqual(
             global_config_path_for_state_dir(Path("/tmp/elephant/state")),
-            Path("/tmp/elephant/config.yaml"),
+            Path("/tmp/elephant/config.yaml").resolve(),
         )
         self.assertEqual(
             global_config_path_for_state_dir(Path("/tmp")),
-            Path("/tmp/config.yaml"),
+            Path("/tmp/config.yaml").resolve(),
         )
 
     def test_yaml_round_trip_and_default_merge(self) -> None:
@@ -73,6 +76,7 @@ class RuntimeConfigTest(unittest.TestCase):
             self.assertEqual(loaded["models"]["default_provider_source"], "config")
             self.assertNotIn("state_focus_mode", loaded["models"])
             self.assertEqual(loaded["skills"]["external_dirs"], ["~/.agents/skills"])
+            self.assertEqual(loaded["tools"]["approvals"], default_tool_approval_config())
             self.assertEqual(loaded["tools"]["rtk"]["enabled"], False)
 
     def test_default_global_config_from_gateway_state_uses_shared_install_root(self) -> None:
@@ -98,14 +102,17 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(configured_external_skill_dirs(defaults), ("~/.agents/skills",))
         fields = {field["path"]: field for field in global_config_schema()}
         self.assertEqual(fields["skills.external_dirs"]["type"], "string_list")
+        self.assertEqual(fields["tools.approvals.enabled"]["type"], "boolean")
+        self.assertEqual(fields["tools.approvals.tool_ids"]["type"], "string_list")
         self.assertEqual(fields["tools.rtk.enabled"]["type"], "boolean")
+        self.assertNotIn("tools.require_approval_for_risky", fields)
         self.assertNotIn("models.state_focus_mode", fields)
 
     def test_removed_reset_config_keys_are_not_serialized(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             config_path = Path(tempdir) / "config.yaml"
             config_path.write_text(
-                "models:\n  default_provider_source: profile\n  state_focus_mode: balanced\n",
+                "models:\n  default_provider_source: profile\n  state_focus_mode: balanced\ntools:\n  require_approval_for_risky: true\n",
                 encoding="utf-8",
             )
             loaded = load_global_config(
@@ -113,8 +120,13 @@ class RuntimeConfigTest(unittest.TestCase):
                 state_dir=Path(tempdir) / "state",
             )
             self.assertNotIn("state_focus_mode", loaded["models"])
+            self.assertNotIn("require_approval_for_risky", loaded["tools"])
             self.assertNotIn(
                 "state_focus_mode",
+                serialize_global_config(loaded),
+            )
+            self.assertNotIn(
+                "require_approval_for_risky",
                 serialize_global_config(loaded),
             )
 
@@ -181,6 +193,33 @@ class RuntimeConfigTest(unittest.TestCase):
             self.assertEqual(rtk["rewrite_timeout_seconds"], 5)
             self.assertFalse(rtk["file_read_optimizer"]["enabled"])
             self.assertEqual(rtk["file_read_optimizer"]["min_chars"], 16_000)
+
+    def test_save_and_load_tool_approvals_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            config_path = Path(tempdir) / "config.yaml"
+            state_dir = Path(tempdir) / "state"
+            config = load_global_config(config_path, state_dir=state_dir)
+            self.assertEqual(load_tool_approvals_from_config(config), default_tool_approval_config())
+
+            save_tool_approvals_to_config(
+                config_path,
+                state_dir=state_dir,
+                approvals_payload={
+                    "enabled": True,
+                    "tool_ids": "tool.file.write, tool.terminal.exec",
+                    "families": ["process"],
+                    "mcp_keywords": "filesystem\npatch",
+                    "mcp_writes_or_strict_only": False,
+                },
+            )
+
+            config = load_global_config(config_path, state_dir=state_dir)
+            approvals = load_tool_approvals_from_config(config)
+            self.assertTrue(approvals["enabled"])
+            self.assertEqual(approvals["tool_ids"], ["tool.file.write", "tool.terminal.exec"])
+            self.assertEqual(approvals["families"], ["process"])
+            self.assertEqual(approvals["mcp_keywords"], ["filesystem", "patch"])
+            self.assertFalse(approvals["mcp_writes_or_strict_only"])
 
     def test_save_and_load_extensions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

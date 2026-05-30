@@ -972,6 +972,9 @@ def _dispatch_operator(self, method: str, parts: tuple[str, ...], body: bytes | 
             return APIResponse(200, _jsonable(self.delete_operator_mcp_tool(payload)))
         if method.upper() == "PATCH" and len(parts) == 3 and parts[2] == "enabled":
             return APIResponse(200, _jsonable(self.set_operator_mcp_tool_enabled(payload)))
+    if method.upper() == "PATCH" and len(parts) == 2 and parts[0] == "tools" and parts[1] == "approvals":
+        payload = _read_json_bytes(body)
+        return APIResponse(200, _jsonable(self.patch_tool_approval_settings(payload)))
     if method.upper() == "POST" and len(parts) == 1 and parts[0] == "gateway":
         payload = _read_json_bytes(body)
         return APIResponse(200, _jsonable(self.gateway_action(payload)))

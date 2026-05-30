@@ -1466,7 +1466,7 @@ struct HomeContinuityPanel: View {
 
     private var relationshipMode: String {
         firstProfileValue(["Relationship mode", "Communication"])
-            ?? firstFactText(lens: "identity", topicContains: ["style", "companion"])
+            ?? firstFactText(lens: "identity", topicContains: ["collaboration", "communication", "support", "companion", "early_ideas"])
             ?? languagePreferenceContext
             ?? localizedYouText(
                 model.appLanguage,
@@ -1508,7 +1508,9 @@ struct HomeContinuityPanel: View {
 
     private var careBoundary: String {
         firstProfileValue(["Safety boundaries", "Care context", "Medication allergies", "Health notes", "Food allergies"])
-            ?? firstFactText(lens: "identity", topicContains: ["boundary", "care", "allergy", "health"])
+            ?? firstFactText(lens: "identity", topicContains: ["boundary", "help_pressure"])
+            ?? firstFactText(lens: "identity", topicContains: ["care", "allergy", "health"])
+            ?? firstFactText(lens: "identity", topicContains: ["pressure"])
             ?? localizedYouText(
                 model.appLanguage,
                 en: "No care boundary has been written yet.",
@@ -1534,7 +1536,7 @@ struct HomeContinuityPanel: View {
         for label in labels {
             if let value = model.snapshot.profileFacts.first(where: { $0.label == label })?.value.trimmingCharacters(in: .whitespacesAndNewlines),
                !value.isEmpty {
-                return value
+                return localizedProfileValue(label: label, value: value, language: model.appLanguage)
             }
         }
         return nil
@@ -1543,13 +1545,15 @@ struct HomeContinuityPanel: View {
     private func firstFactText(lens: String, topicContains needles: [String] = []) -> String? {
         model.snapshot.personalModelFacts
             .filter { fact in
-                guard fact.status.lowercased() != "deleted",
+                let status = fact.status.lowercased()
+                guard status != "deleted",
+                      status != "retired",
                       fact.lens.lowercased().contains(lens) else { return false }
                 guard !needles.isEmpty else { return true }
                 let topic = fact.topic.lowercased()
                 return needles.contains { topic.contains($0) }
             }
-            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { friendlyMemoryPreview($0, language: model.appLanguage).trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
     }
 
@@ -1941,6 +1945,15 @@ private func localizedProfileValue(label: String, value: String, language: AppLa
     if key.contains("gender") {
         return localizedGenderValue(value, language: language)
     }
+    if key.contains("work") || key.contains("current focus") || key == "now" {
+        return localizedKnownMemoryFact(topic: "pulse.chapter.work.role", text: value, language: language) ?? value
+    }
+    if key.contains("relationship") || key.contains("communication") {
+        return localizedKnownMemoryFact(topic: "identity.question.collaboration_style", text: value, language: language) ?? value
+    }
+    if key.contains("boundary") || key.contains("safety") || key.contains("care") {
+        return localizedKnownMemoryFact(topic: "identity.boundary.help_pressure", text: value, language: language) ?? value
+    }
     return value
 }
 
@@ -2136,6 +2149,9 @@ private func friendlyMemoryPreview(_ fact: PersonalModelFact, language: AppLangu
     guard !text.isEmpty else { return text }
 
     let topic = fact.topic.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if let known = localizedKnownMemoryFact(topic: topic, text: text, language: language) {
+        return known
+    }
     let value = memoryFactValue(from: text)
     if topic.contains("language") || topic == "first_language" {
         let languageName = localizedLanguageName(value, language: language)
@@ -2170,6 +2186,163 @@ private func friendlyMemoryPreview(_ fact: PersonalModelFact, language: AppLangu
     }
 
     return friendlyMemoryPreview(text, language: language)
+}
+
+private func localizedKnownMemoryFact(topic: String, text: String, language: AppLanguage) -> String? {
+    let normalizedTopic = topic
+        .replacingOccurrences(of: "-", with: "_")
+        .lowercased()
+    let normalizedText = text.lowercased()
+
+    if normalizedTopic.contains("preferences.coffee") || normalizedText.contains("really loves coffee") {
+        return localizedYouText(language, en: "Really loves coffee.", zh: "很喜欢咖啡。", fr: "Aime beaucoup le café.", de: "Mag Kaffee sehr.")
+    }
+    if normalizedTopic.contains("collaboration_plan") || normalizedTopic.contains("question.collaboration_style") || normalizedText == "a step by step plan" || normalizedText.contains("step-by-step plans for collaboration") {
+        return localizedYouText(
+            language,
+            en: "Prefers step-by-step plans for collaboration.",
+            zh: "协作时偏好一步一步的计划。",
+            fr: "Préfère les plans étape par étape pour collaborer.",
+            de: "Bevorzugt Schritt-für-Schritt-Pläne für Zusammenarbeit."
+        )
+    }
+    if normalizedTopic.contains("support_when_stuck") || normalizedTopic.contains("support.first_move") || normalizedText.contains("sorting things into structure and order") || normalizedText.contains("needs structure and order when stuck") {
+        return localizedYouText(
+            language,
+            en: "When stuck, sort things into structure and order first.",
+            zh: "卡住时，先把事情整理成结构和顺序。",
+            fr: "En cas de blocage, commencer par structurer et ordonner.",
+            de: "Wenn es festhängt, zuerst Struktur und Reihenfolge schaffen."
+        )
+    }
+    if normalizedTopic.contains("help_pressure") || normalizedText.contains("frequent pushing or reminders") {
+        return localizedYouText(
+            language,
+            en: "Frequent pushing or reminders create pressure.",
+            zh: "频繁催促或提醒会带来压力。",
+            fr: "Les relances fréquentes ajoutent de la pression.",
+            de: "Häufiges Drängen oder Erinnern erzeugt Druck."
+        )
+    }
+    if normalizedTopic.contains("early_ideas") || normalizedText.contains("early ideas treated as conclusions") {
+        return localizedYouText(
+            language,
+            en: "Do not treat early ideas as conclusions.",
+            zh: "早期想法不要被当成定论。",
+            fr: "Ne pas traiter les idées initiales comme des conclusions.",
+            de: "Frühe Ideen nicht als Schlussfolgerungen behandeln."
+        )
+    }
+    if normalizedTopic.contains("recovery.quiet") || normalizedText.contains("recovers through quiet") {
+        return localizedYouText(
+            language,
+            en: "Recovers through quiet and reduced input.",
+            zh: "很累时，需要安静和减少输入来恢复。",
+            fr: "Récupère avec du calme et moins de stimulation.",
+            de: "Erholt sich durch Ruhe und weniger Input."
+        )
+    }
+    if normalizedTopic.contains("pressure_response.quiet") || normalizedText.contains("pressure rises") {
+        return localizedYouText(
+            language,
+            en: "Under pressure, may talk less and need quiet space.",
+            zh: "压力升高时，容易少说话，需要安静空间。",
+            fr: "Sous pression, peut parler moins et avoir besoin de calme.",
+            de: "Unter Druck spricht er weniger und braucht Ruhe."
+        )
+    }
+    if normalizedTopic.contains("work_real_world_impact") || normalizedText.contains("really help people") {
+        return localizedYouText(
+            language,
+            en: "Work matters most when it can really help people.",
+            zh: "当工作能真正帮到人时，会投入认真努力。",
+            fr: "Le travail compte surtout quand il aide vraiment les gens.",
+            de: "Arbeit zählt besonders, wenn sie Menschen wirklich hilft."
+        )
+    }
+    if normalizedTopic.contains("decision_inner_truth") || normalizedTopic.contains("decision.weight") || normalizedText.contains("prioritizes inner truth") || normalizedText.contains("values inner truth") {
+        return localizedYouText(
+            language,
+            en: "Decisions prioritize inner truth.",
+            zh: "做决定时重视内在真实感。",
+            fr: "Les décisions privilégient la vérité intérieure.",
+            de: "Entscheidungen richten sich nach innerer Wahrheit."
+        )
+    }
+    if normalizedTopic.contains("small_steady_steps") || normalizedText.contains("small steady steps") {
+        return localizedYouText(
+            language,
+            en: "Small steady steps help more than big plans.",
+            zh: "小而稳定的一步，往往比宏大的计划更有帮助。",
+            fr: "De petits pas réguliers aident plus que de grands plans.",
+            de: "Kleine stetige Schritte helfen mehr als große Pläne."
+        )
+    }
+    if normalizedTopic.contains("chapter.work.role") || normalizedText.contains("works across technology, product, and research") {
+        return localizedYouText(
+            language,
+            en: "Works across technology, product, and research.",
+            zh: "正在推进技术、产品和研究交叉的工作。",
+            fr: "Travaille entre technologie, produit et recherche.",
+            de: "Arbeitet an der Schnittstelle von Technologie, Produkt und Forschung."
+        )
+    }
+    if normalizedTopic.contains("choice_change_transition") || normalizedText.contains("choice, change, or transition") {
+        return localizedYouText(
+            language,
+            en: "Currently in a choice, change, or transition.",
+            zh: "正处在一个选择、变化或过渡阶段。",
+            fr: "Traverse un choix, un changement ou une transition.",
+            de: "Befindet sich in einer Wahl-, Veränderungs- oder Übergangsphase."
+        )
+    }
+    if normalizedTopic.contains("language.first") || normalizedText.contains("first language is english") {
+        return localizedYouText(
+            language,
+            en: "First language is \(localizedLanguageName("English", language: language))",
+            zh: "第一语言是 \(localizedLanguageName("English", language: language))",
+            fr: "Première langue : \(localizedLanguageName("English", language: language))",
+            de: "Erste Sprache ist \(localizedLanguageName("English", language: language))"
+        )
+    }
+    if normalizedTopic.contains("gender") && (normalizedText.contains("male") || normalizedText.contains("man")) {
+        return localizedYouText(
+            language,
+            en: "Gender: \(localizedGenderValue("male", language: language))",
+            zh: "性别：\(localizedGenderValue("male", language: language))",
+            fr: "Genre : \(localizedGenderValue("male", language: language))",
+            de: "Geschlecht: \(localizedGenderValue("male", language: language))"
+        )
+    }
+    if normalizedTopic.contains("birth.date"),
+       let date = memoryTextTail(text, after: "birth date is") {
+        return localizedYouText(language, en: "Birth date: \(date)", zh: "生日：\(date)", fr: "Date de naissance : \(date)", de: "Geburtstag: \(date)")
+    }
+    if normalizedTopic.contains("mbti.type"),
+       normalizedText.contains("infj") {
+        return localizedYouText(language, en: "Identifies as INFJ.", zh: "认同 INFJ。", fr: "S'identifie comme INFJ.", de: "Identifiziert sich als INFJ.")
+    }
+    if normalizedTopic.contains("hobbies.personal") || normalizedText.contains("enjoys music") {
+        return localizedYouText(
+            language,
+            en: "Enjoys music, films, games, sports, travel, technology, and making.",
+            zh: "喜欢音乐、影视、游戏、运动、旅行、技术和创造。",
+            fr: "Aime la musique, les films, les jeux, le sport, les voyages, la technologie et la création.",
+            de: "Mag Musik, Filme, Spiele, Sport, Reisen, Technologie und Gestalten."
+        )
+    }
+    if normalizedTopic.contains("logo.personal") || normalizedText.contains("personal_logo") {
+        return localizedYouText(language, en: "Personal avatar is set.", zh: "已设置个人头像。", fr: "Avatar personnel défini.", de: "Persönlicher Avatar ist gesetzt.")
+    }
+    return nil
+}
+
+private func memoryTextTail(_ text: String, after marker: String) -> String? {
+    guard let range = text.range(of: marker, options: [.caseInsensitive]) else { return nil }
+    let tail = text[range.upperBound...]
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "。．."))
+    return tail.isEmpty ? nil : tail
 }
 
 private func friendlyMemoryLine(_ line: String, language: AppLanguage) -> String? {
@@ -23254,23 +23427,192 @@ struct ToolsSettingsContent: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
-        OperatorCatalogContent(
-            kind: "tools",
-            title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Werkzeugbibliothek"),
-            subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
-            searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Werkzeuge suchen"),
-            emptySymbol: "wrench.and.screwdriver",
-            emptyText: model.snapshot.tools > 0
-                    ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Werkzeuge erkannt.", model.snapshot.tools)
-                : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Werkzeuge zurückgegeben."),
-            items: model.snapshot.toolItems,
-            fallbackNames: model.snapshot.toolNames,
-            totalCount: model.snapshot.tools,
-            enabledCount: model.snapshot.enabledTools,
-            logoSymbol: "hammer",
-            logoTint: ElephantTheme.accent,
-            pageSize: 12
+        VStack(alignment: .leading, spacing: 14) {
+            ToolApprovalPolicyPanel()
+
+            OperatorCatalogContent(
+                kind: "tools",
+                title: localizedYouText(model.appLanguage, en: "Tool Library", zh: "工具库", fr: "Bibliothèque d'outils", de: "Werkzeugbibliothek"),
+                subtitle: localizedYouText(model.appLanguage, en: "Built-in and MCP actions available to the local runtime.", zh: "本地运行时可以调用的内置工具和 MCP 工具。", fr: "Actions intégrées et MCP disponibles dans le runtime local.", de: "Eingebaute und MCP-Aktionen der lokalen Runtime."),
+                searchPrompt: localizedYouText(model.appLanguage, en: "Search tools", zh: "搜索工具", fr: "Rechercher des outils", de: "Werkzeuge suchen"),
+                emptySymbol: "wrench.and.screwdriver",
+                emptyText: model.snapshot.tools > 0
+                        ? localizedFormat(model.appLanguage, en: "%d tools detected.", zh: "已经识别出 %d 个工具。", fr: "%d outils détectés.", de: "%d Werkzeuge erkannt.", model.snapshot.tools)
+                    : localizedYouText(model.appLanguage, en: "No tools returned yet.", zh: "本地运行时还没有返回工具列表。", fr: "Aucun outil retourné.", de: "Noch keine Werkzeuge zurückgegeben."),
+                items: model.snapshot.toolItems,
+                fallbackNames: model.snapshot.toolNames,
+                totalCount: model.snapshot.tools,
+                enabledCount: model.snapshot.enabledTools,
+                logoSymbol: "hammer",
+                logoTint: ElephantTheme.accent,
+                pageSize: 12
+            )
+        }
+    }
+}
+
+private struct ToolApprovalPolicyPanel: View {
+    @EnvironmentObject private var model: ElephantAppModel
+    @State private var enabled = false
+    @State private var toolIDsText = ""
+    @State private var familiesText = ""
+    @State private var mcpKeywordsText = ""
+    @State private var mcpWritesOrStrictOnly = true
+    @State private var loadedSettings = ToolApprovalSettings.empty
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 13) {
+                OperatorCatalogLogo(symbol: "checkmark.shield", tint: enabled ? ElephantTheme.orange : ElephantTheme.green)
+                SectionLabel(
+                    title: localizedYouText(model.appLanguage, en: "Tool Approvals", zh: "工具审批", fr: "Approbations d'outils", de: "Tool-Freigaben"),
+                    subtitle: localizedYouText(
+                        model.appLanguage,
+                        en: "Default is open: tools run without approval unless this policy is explicitly enabled.",
+                        zh: "默认开放：除非这里显式开启并配置规则，否则工具不需要审批。",
+                        fr: "Par défaut, les outils s'exécutent sans approbation sauf si cette règle est activée.",
+                        de: "Standardmäßig laufen Tools ohne Freigabe, außer diese Regel ist aktiv."
+                    )
+                )
+                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    Pill(text: policyStateText, symbol: enabled ? "lock.shield" : "lock.open", tint: enabled ? ElephantTheme.orange : ElephantTheme.green)
+                    Pill(text: localizedFormat(model.appLanguage, en: "%d matched", zh: "%d 个需审批", fr: "%d concernés", de: "%d betroffen", matchedToolCount), symbol: "wrench.and.screwdriver", tint: matchedToolCount > 0 ? ElephantTheme.orange : ElephantTheme.faint)
+                }
+            }
+
+            VStack(spacing: 0) {
+                SettingsFieldRow(label: localizedYouText(model.appLanguage, en: "Policy", zh: "策略", fr: "Règle", de: "Regel"), value: policyValueText) {
+                    Toggle("", isOn: $enabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(ElephantTheme.orange)
+                }
+                SettingsFieldRow(label: localizedYouText(model.appLanguage, en: "Tool IDs", zh: "工具 ID", fr: "IDs d'outils", de: "Tool-IDs"), value: countText(draftSettings.toolIDs.count)) {
+                    TextField("tool.file.write, tool.terminal.exec", text: $toolIDsText)
+                        .settingsControlField(width: 360)
+                }
+                SettingsFieldRow(label: localizedYouText(model.appLanguage, en: "Families", zh: "工具族", fr: "Familles", de: "Familien"), value: countText(draftSettings.families.count)) {
+                    TextField("terminal, process", text: $familiesText)
+                        .settingsControlField(width: 360)
+                }
+                SettingsFieldRow(label: localizedYouText(model.appLanguage, en: "MCP keywords", zh: "MCP 关键词", fr: "Mots-clés MCP", de: "MCP-Schlüsselwörter"), value: countText(draftSettings.mcpKeywords.count)) {
+                    TextField("filesystem, patch, applescript", text: $mcpKeywordsText)
+                        .settingsControlField(width: 360)
+                }
+                SettingsFieldRow(label: localizedYouText(model.appLanguage, en: "MCP scope", zh: "MCP 范围", fr: "Portée MCP", de: "MCP-Bereich"), value: mcpScopeValueText) {
+                    Toggle("", isOn: $mcpWritesOrStrictOnly)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(ElephantTheme.orange)
+                }
+            }
+
+            SettingsActionBar {
+                if !model.toolApprovalActionResult.isEmpty {
+                    Label(model.toolApprovalActionResult, systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.green)
+                } else if hasChanges {
+                    Text(localizedYouText(model.appLanguage, en: "Unsaved", zh: "未保存", fr: "Non enregistré", de: "Nicht gespeichert"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ElephantTheme.orange)
+                }
+            } actions: {
+                Button(localizedYouText(model.appLanguage, en: "Reset", zh: "重置", fr: "Réinitialiser", de: "Zurücksetzen")) {
+                    syncFromSnapshot()
+                }
+                .settingsActionButton()
+                .disabled(!hasChanges)
+
+                Button(localizedYouText(model.appLanguage, en: "Clear policy", zh: "清空策略", fr: "Vider la règle", de: "Regel leeren")) {
+                    enabled = false
+                    toolIDsText = ""
+                    familiesText = ""
+                    mcpKeywordsText = ""
+                    mcpWritesOrStrictOnly = true
+                }
+                .settingsActionButton()
+                .disabled(!enabled && draftRuleCount == 0)
+
+                Button(localizedYouText(model.appLanguage, en: "Save policy", zh: "保存策略", fr: "Enregistrer", de: "Regel speichern")) {
+                    Task { await model.saveToolApprovalSettings(draftSettings) }
+                }
+                .settingsActionButton(.primary)
+                .disabled(!hasChanges)
+            }
+        }
+        .padding(14)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(ElephantTheme.line, lineWidth: 1))
+        .onAppear {
+            syncFromSnapshot()
+        }
+        .onChange(of: model.snapshot.toolApprovalSettings) { _ in
+            if draftSettings == loadedSettings {
+                syncFromSnapshot()
+            }
+        }
+    }
+
+    private var draftSettings: ToolApprovalSettings {
+        ToolApprovalSettings(
+            enabled: enabled,
+            toolIDs: splitList(toolIDsText),
+            families: splitList(familiesText),
+            mcpKeywords: splitList(mcpKeywordsText),
+            mcpWritesOrStrictOnly: mcpWritesOrStrictOnly
         )
+    }
+
+    private var hasChanges: Bool {
+        draftSettings != model.snapshot.toolApprovalSettings
+    }
+
+    private var matchedToolCount: Int {
+        model.snapshot.toolItems.filter(\.requiresApproval).count
+    }
+
+    private var draftRuleCount: Int {
+        draftSettings.toolIDs.count + draftSettings.families.count + draftSettings.mcpKeywords.count
+    }
+
+    private var policyStateText: String {
+        enabled
+            ? localizedYouText(model.appLanguage, en: "Approvals on", zh: "审批已开启", fr: "Approbation active", de: "Freigabe aktiv")
+            : localizedYouText(model.appLanguage, en: "No approvals", zh: "无需审批", fr: "Sans approbation", de: "Keine Freigabe")
+    }
+
+    private var policyValueText: String {
+        enabled
+            ? localizedYouText(model.appLanguage, en: "configured rules apply", zh: "按已配置规则执行", fr: "règles configurées", de: "Regeln aktiv")
+            : localizedYouText(model.appLanguage, en: "all tools run directly", zh: "所有工具直接执行", fr: "exécution directe", de: "direkte Ausführung")
+    }
+
+    private var mcpScopeValueText: String {
+        mcpWritesOrStrictOnly
+            ? localizedYouText(model.appLanguage, en: "write or strict only", zh: "仅写入或 strict", fr: "écriture ou strict", de: "write oder strict")
+            : localizedYouText(model.appLanguage, en: "all MCP matches", zh: "所有 MCP 命中", fr: "toutes correspondances MCP", de: "alle MCP-Treffer")
+    }
+
+    private func countText(_ count: Int) -> String {
+        localizedFormat(model.appLanguage, en: "%d rule(s)", zh: "%d 条规则", fr: "%d règle(s)", de: "%d Regel(n)", count)
+    }
+
+    private func syncFromSnapshot() {
+        let settings = model.snapshot.toolApprovalSettings
+        enabled = settings.enabled
+        toolIDsText = settings.toolIDs.joined(separator: ", ")
+        familiesText = settings.families.joined(separator: ", ")
+        mcpKeywordsText = settings.mcpKeywords.joined(separator: ", ")
+        mcpWritesOrStrictOnly = settings.mcpWritesOrStrictOnly
+        loadedSettings = settings
+    }
+
+    private func splitList(_ text: String) -> [String] {
+        text.components(separatedBy: CharacterSet(charactersIn: ",;\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -23534,6 +23876,15 @@ private struct OperatorCatalogRow: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 8) {
+                if kind == "tools" {
+                    Pill(
+                        text: item.requiresApproval
+                            ? localizedYouText(model.appLanguage, en: "approval", zh: "需审批", fr: "approbation", de: "Freigabe")
+                            : localizedYouText(model.appLanguage, en: "direct", zh: "直接执行", fr: "direct", de: "direkt"),
+                        symbol: item.requiresApproval ? "lock.shield" : "lock.open",
+                        tint: item.requiresApproval ? ElephantTheme.orange : ElephantTheme.green
+                    )
+                }
                 Pill(
                     text: statusText,
                     symbol: statusSymbol,
@@ -23758,7 +24109,7 @@ private struct OperatorItemDetailSheet: View {
             HStack(spacing: 8) {
                 Pill(text: item.available ? localizedYouText(model.appLanguage, en: "Available", zh: "可用", fr: "Disponible", de: "Verfügbar") : localizedYouText(model.appLanguage, en: "Unavailable", zh: "不可用", fr: "Indisponible", de: "Nicht verfügbar"), symbol: item.available ? "checkmark.circle" : "exclamationmark.triangle", tint: item.available ? ElephantTheme.green : ElephantTheme.orange)
                 Pill(text: localizedFormat(model.appLanguage, en: "risk: %@", zh: "风险：%@", fr: "risque : %@", de: "Risiko: %@", normalizedToolRisk), symbol: "shield", tint: toolRiskTint)
-                Pill(text: localizedFormat(model.appLanguage, en: "approval: %@", zh: "审批：%@", fr: "approbation : %@", de: "Freigabe: %@", normalizedToolApproval), symbol: "checkmark.seal", tint: ElephantTheme.accent)
+                Pill(text: toolApprovalPolicyText, symbol: item.requiresApproval ? "lock.shield" : "lock.open", tint: item.requiresApproval ? ElephantTheme.orange : ElephantTheme.green)
                 Pill(text: item.defaultEnabled ? localizedYouText(model.appLanguage, en: "Default on", zh: "默认开启", fr: "Activé par défaut", de: "Standard ein") : localizedYouText(model.appLanguage, en: "Default off", zh: "默认关闭", fr: "Désactivé par défaut", de: "Standard aus"), symbol: item.defaultEnabled ? "power.circle.fill" : "power.circle", tint: item.defaultEnabled ? ElephantTheme.green : ElephantTheme.faint)
             }
 
@@ -23952,6 +24303,12 @@ private struct OperatorItemDetailSheet: View {
         item.approvalClass.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "standard" : item.approvalClass
     }
 
+    private var toolApprovalPolicyText: String {
+        item.requiresApproval
+            ? localizedYouText(model.appLanguage, en: "approval required", zh: "需要审批", fr: "approbation requise", de: "Freigabe erforderlich")
+            : localizedYouText(model.appLanguage, en: "no approval", zh: "无需审批", fr: "sans approbation", de: "keine Freigabe")
+    }
+
     private var toolRiskTint: Color {
         let value = normalizedToolRisk.lowercased()
         if value.contains("high") || value.contains("risky") { return ElephantTheme.orange }
@@ -24002,7 +24359,9 @@ private struct OperatorItemDetailSheet: View {
             "- family: \(item.family.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "n/a" : item.family)",
             "- backend: \(item.backend.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "n/a" : item.backend)",
             "- risk: \(normalizedToolRisk)",
-            "- approval: \(normalizedToolApproval)",
+            "- approval metadata: \(normalizedToolApproval)",
+            "- approval policy: \(item.requiresApproval ? "required" : "not required")",
+            "- approval match: \(item.approvalPolicyReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "n/a" : item.approvalPolicyReason)",
             "- required: \(requiredFieldsText)"
         ]
         let provenance = item.provenance.trimmingCharacters(in: .whitespacesAndNewlines)

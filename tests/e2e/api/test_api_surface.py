@@ -188,16 +188,16 @@ class APISurfaceE2ETest(APISurfaceTestBase):
             ),
         )
         self.assertEqual(code_turn.status_code, 200)
-        self.assertEqual(code_turn.payload["outcome"]["execution"]["outcome"], "deferred")
-        self.assertIn("Execution surfaces", code_turn.payload["outcome"]["execution"]["summary"])
+        self.assertEqual(code_turn.payload["outcome"]["execution"]["outcome"], "success")
+        self.assertIn("hello api tool", code_turn.payload["outcome"]["execution"]["summary"])
         code_records = [
             record
             for record in self.app.tool_runtime.list_executions()
             if record.invocation.session_id == "session-turn"
             and record.invocation.tool_id == "tool.code.execute"
         ]
-        self.assertEqual(code_records[-1].approval.decision, "deferred")
-        self.assertIn("explicit-approval", code_records[-1].approval.required_controls)
+        self.assertEqual(code_records[-1].approval.decision, "approved")
+        self.assertNotIn("explicit-approval", code_records[-1].approval.required_controls)
         self.assertEqual(code_turn.payload["latest_loop"]["request"]["tool_name"], "tool.code.execute")
         self.assertEqual(code_turn.payload["inspection"]["latest_loop"]["request"]["tool_name"], "tool.code.execute")
 
@@ -302,7 +302,7 @@ class APISurfaceE2ETest(APISurfaceTestBase):
         self.assertIn("skill", result.side_effects)
         self.assertNotEqual(result.summary.strip(), "<empty>")
 
-    def test_api_chat_runtime_defers_high_risk_local_tool_side_effects(self) -> None:
+    def test_api_chat_runtime_uses_configured_local_tool_approval_policy(self) -> None:
         created = self.app.dispatch(
             "POST",
             "/v1/episodes",
@@ -318,6 +318,31 @@ class APISurfaceE2ETest(APISurfaceTestBase):
         )
         self.assertEqual(created.status_code, 201)
         target = Path(self.tempdir.name) / "approval-should-not-write.txt"
+
+        default_write = self.app.tool_runtime.invoke(
+            "tool.file.write",
+            {"path": str(target), "content": "default write\n"},
+            session_id="session-api-approval",
+            requester="model",
+        )
+        self.assertEqual(default_write.outcome, "success")
+        self.assertEqual(target.read_text(encoding="utf-8"), "default write\n")
+        target.unlink()
+
+        configured = self.app.dispatch(
+            "PATCH",
+            "/v1/operator/tools/approvals",
+            body=self._body(
+                {
+                    "enabled": True,
+                    "toolIds": ["tool.file.write"],
+                    "families": ["terminal"],
+                    "mcpKeywords": ["filesystem", "patch"],
+                }
+            ),
+        )
+        self.assertEqual(configured.status_code, 200)
+        self.assertTrue(configured.payload["approvals"]["enabled"])
 
         file_write = self.app.tool_runtime.invoke(
             "tool.file.write",
@@ -367,12 +392,13 @@ class APISurfaceE2ETest(APISurfaceTestBase):
             record
             for record in self.app.tool_runtime.list_executions()
             if record.invocation.session_id == "session-api-approval"
+            and record.invocation.tool_id in {"tool.file.write", "tool.terminal.exec"}
         ]
         self.assertEqual(
             [record.approval.decision for record in deferred],
-            ["deferred", "deferred", "approved", "denied"],
+            ["approved", "deferred", "deferred", "approved", "denied"],
         )
-        self.assertEqual([record.approved for record in deferred], [False, False, True, False])
+        self.assertEqual([record.approved for record in deferred], [True, False, False, True, False])
         self.assertEqual(self.app.tool_runtime.list_pending_approvals(session_id="session-api-approval"), ())
 
     def test_canonical_state_routes_expose_identity_user_relationship_and_continuity(self) -> None:

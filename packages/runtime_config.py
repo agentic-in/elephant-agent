@@ -28,6 +28,16 @@ def default_rtk_config() -> dict[str, Any]:
     }
 
 
+def default_tool_approval_config() -> dict[str, Any]:
+    return {
+        "enabled": False,
+        "tool_ids": [],
+        "families": [],
+        "mcp_keywords": [],
+        "mcp_writes_or_strict_only": True,
+    }
+
+
 def default_personal_model_question_config() -> dict[str, Any]:
     return {
         "proactive_ask": {
@@ -75,7 +85,7 @@ def default_global_config(*, state_dir: str | Path) -> dict[str, Any]:
             "external_dirs": list(DEFAULT_EXTERNAL_SKILL_DIRS),
         },
         "tools": {
-            "require_approval_for_risky": True,
+            "approvals": default_tool_approval_config(),
             "rtk": default_rtk_config(),
         },
         "gateway": {
@@ -133,7 +143,11 @@ def global_config_schema() -> list[dict[str, Any]]:
         {"path": "sessions.max_history_rows", "type": "number", "label": "Max history rows", "section": "Sessions"},
         {"path": "skills.enable_profile_overrides", "type": "boolean", "label": "Skill profile overrides", "section": "Skills"},
         {"path": "skills.external_dirs", "type": "string_list", "label": "External skill dirs", "section": "Skills"},
-        {"path": "tools.require_approval_for_risky", "type": "boolean", "label": "Approval for risky tools", "section": "Tools"},
+        {"path": "tools.approvals.enabled", "type": "boolean", "label": "Tool approvals enabled", "section": "Tools"},
+        {"path": "tools.approvals.tool_ids", "type": "string_list", "label": "Tool IDs requiring approval", "section": "Tools"},
+        {"path": "tools.approvals.families", "type": "string_list", "label": "Tool families requiring approval", "section": "Tools"},
+        {"path": "tools.approvals.mcp_keywords", "type": "string_list", "label": "MCP approval keywords", "section": "Tools"},
+        {"path": "tools.approvals.mcp_writes_or_strict_only", "type": "boolean", "label": "MCP keywords require write/strict", "section": "Tools"},
         {"path": "tools.rtk.enabled", "type": "boolean", "label": "RTK terminal optimizer", "section": "Tools"},
         {"path": "tools.rtk.binary", "type": "string", "label": "RTK binary", "section": "Tools"},
         {"path": "tools.rtk.rewrite_timeout_seconds", "type": "number", "label": "RTK rewrite timeout", "section": "Tools"},
@@ -249,6 +263,9 @@ def _without_removed_reset_keys(config: Mapping[str, Any]) -> dict[str, Any]:
     models = cleaned.get("models")
     if isinstance(models, dict):
         models.pop("state_focus_mode", None)
+    tools = cleaned.get("tools")
+    if isinstance(tools, dict):
+        tools.pop("require_approval_for_risky", None)
     return cleaned
 
 
@@ -307,6 +324,48 @@ def save_rtk_to_config(
     write_global_config(config_path, config)
 
 
+def normalize_tool_approval_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Normalize the tool approval policy payload used by API and UI surfaces."""
+    defaults = default_tool_approval_config()
+    if not isinstance(config, Mapping):
+        return defaults
+    merged = _deep_merge(defaults, config)
+    return {
+        "enabled": bool(merged.get("enabled", False)),
+        "tool_ids": _configured_string_list(merged.get("tool_ids")),
+        "families": _configured_string_list(merged.get("families")),
+        "mcp_keywords": _configured_string_list(merged.get("mcp_keywords")),
+        "mcp_writes_or_strict_only": bool(merged.get("mcp_writes_or_strict_only", True)),
+    }
+
+
+def load_tool_approvals_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract local tool approval rules from the global config."""
+    tools = config.get("tools")
+    if not isinstance(tools, Mapping):
+        return default_tool_approval_config()
+    approvals = tools.get("approvals")
+    if not isinstance(approvals, Mapping):
+        return default_tool_approval_config()
+    return normalize_tool_approval_config(approvals)
+
+
+def save_tool_approvals_to_config(
+    config_path: str | Path,
+    *,
+    state_dir: str | Path,
+    approvals_payload: Mapping[str, Any],
+) -> None:
+    """Write local tool approval rules into the global config."""
+    config = load_global_config(config_path, state_dir=state_dir)
+    tools = config.get("tools")
+    if not isinstance(tools, dict):
+        tools = {}
+    tools["approvals"] = normalize_tool_approval_config(approvals_payload)
+    config["tools"] = tools
+    write_global_config(config_path, config)
+
+
 def load_extensions_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
     """Extract the extensions section from global config."""
     extensions = config.get("extensions")
@@ -355,6 +414,31 @@ def _deep_merge(base: Mapping[str, Any], overlay: Mapping[str, Any]) -> dict[str
         else:
             merged[key] = deepcopy(value)
     return merged
+
+
+def _configured_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        return [
+            item.strip()
+            for item in stripped.replace("\n", ",").replace(";", ",").split(",")
+            if item.strip()
+        ]
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    return [text] if text else []
 
 
 def _parse_simple_yaml(text: str) -> dict[str, Any]:

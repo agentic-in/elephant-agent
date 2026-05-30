@@ -562,6 +562,8 @@ struct OperationItem: Identifiable, Equatable {
     var provenance: String = ""
     var riskClass: String = ""
     var approvalClass: String = ""
+    var requiresApproval: Bool = false
+    var approvalPolicyReason: String = ""
     var available: Bool = true
     var availabilityReason: String = ""
     var readsState: Bool = false
@@ -570,6 +572,21 @@ struct OperationItem: Identifiable, Equatable {
     var touchesSecrets: Bool = false
     var requiredFields: [String] = []
     var schemaJSON: String = ""
+}
+
+struct ToolApprovalSettings: Equatable {
+    var enabled: Bool = false
+    var toolIDs: [String] = []
+    var families: [String] = []
+    var mcpKeywords: [String] = []
+    var mcpWritesOrStrictOnly: Bool = true
+
+    static let empty = ToolApprovalSettings()
+
+    var activeRuleCount: Int {
+        guard enabled else { return 0 }
+        return toolIDs.count + families.count + mcpKeywords.count
+    }
 }
 
 struct MCPServerItem: Identifiable, Equatable {
@@ -1313,6 +1330,7 @@ struct DashboardSnapshot: Equatable {
     var skillAffinities = 0
     var tools = 0
     var enabledTools = 0
+    var toolApprovalSettings = ToolApprovalSettings.empty
     var mcpServers = 0
     var mcpTools = 0
     var mcpConfigPath = ""
@@ -1505,6 +1523,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var diaryActionResult = ""
     @Published var factActionResult = ""
     @Published var configActionResult = ""
+    @Published var toolApprovalActionResult = ""
     @Published var mcpActionResult = ""
     @Published var mcpActionFailed = false
     @Published var mcpActionInFlight = false
@@ -3186,6 +3205,24 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    func saveToolApprovalSettings(_ settings: ToolApprovalSettings) async {
+        do {
+            toolApprovalActionResult = ""
+            try await client.saveToolApprovalSettings(settings)
+            try await refreshDashboard()
+            toolApprovalActionResult = Self.localizedText(
+                appLanguage,
+                en: "Tool approval policy saved.",
+                zh: "工具审批策略已保存。",
+                fr: "Politique d'approbation enregistrée.",
+                de: "Tool-Freigaberegel gespeichert."
+            )
+        } catch {
+            toolApprovalActionResult = ""
+            lastError = error.localizedDescription
+        }
+    }
+
     func surfaceQuestionSooner(_ question: PersonalModelQuestionItem) async {
         do {
             try await client.bumpPersonalModelQuestion(
@@ -4467,6 +4504,7 @@ final class ElephantAppModel: ObservableObject {
             )
             resolved = Self.mergedToolEvent(existing: resolving, incoming: resolved)
             replaceToolUseEvent(matching: event, with: resolved)
+            appendToolApprovalResolution(resolved, approved: approved)
         } catch {
             var failed = resolving
             failed.status = "failed"
@@ -4474,6 +4512,50 @@ final class ElephantAppModel: ObservableObject {
             replaceToolUseEvent(matching: event, with: failed)
             lastError = error.localizedDescription
         }
+    }
+
+    private func appendToolApprovalResolution(_ event: ToolUseEvent, approved: Bool) {
+        let message = Self.toolApprovalResolutionText(event, approved: approved, language: appLanguage)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return }
+        messages.append(ChatMessage(role: .assistant, text: message))
+        chatScrollRevision += 1
+    }
+
+    private static func toolApprovalResolutionText(_ event: ToolUseEvent, approved: Bool, language: AppLanguage) -> String {
+        let toolName = event.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? localizedText(language, en: "Tool", zh: "工具", fr: "Outil", de: "Werkzeug")
+            : event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard approved else {
+            return localizedText(
+                language,
+                en: "%@ was denied and did not run.",
+                zh: "已拒绝 %@，这次没有执行。",
+                fr: "%@ a été refusé et n'a pas été exécuté.",
+                de: "%@ wurde abgelehnt und nicht ausgeführt.",
+                toolName
+            )
+        }
+        let result = event.result.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !result.isEmpty else {
+            return localizedText(
+                language,
+                en: "%@ was approved once and ran.",
+                zh: "已一次性批准并执行 %@。",
+                fr: "%@ a été approuvé une fois et exécuté.",
+                de: "%@ wurde einmalig freigegeben und ausgeführt.",
+                toolName
+            )
+        }
+        return localizedText(
+            language,
+            en: "%@ was approved once and ran.\n\nResult: %@",
+            zh: "已一次性批准并执行 %@。\n\n结果：%@",
+            fr: "%@ a été approuvé une fois et exécuté.\n\nRésultat : %@",
+            de: "%@ wurde einmalig freigegeben und ausgeführt.\n\nErgebnis: %@",
+            toolName,
+            result
+        )
     }
 
     private func replaceToolUseEvent(matching target: ToolUseEvent, with replacement: ToolUseEvent) {
@@ -4719,6 +4801,7 @@ final class ElephantAppModel: ObservableObject {
         diaryActionResult = ""
         factActionResult = ""
         configActionResult = ""
+        toolApprovalActionResult = ""
         isReflecting = false
         isWakeRunning = false
         isWakeCancelling = false

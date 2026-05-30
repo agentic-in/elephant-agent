@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from packages.runtime_config import configured_external_skill_dirs
+from packages.runtime_config import load_tool_approvals_from_config
 from packages.skills import (
     SkillHub,
     default_skill_hub_sources,
@@ -15,6 +16,7 @@ from packages.skills import (
     operator_skill_catalog_entries,
 )
 
+from .api_tool_approval_policy import tool_approval_policy_match
 from .api_runtime_console_ops import (
     _gateway,
     _logs,
@@ -34,6 +36,7 @@ from .api_runtime_console_ops import (
     sync_operator_mcp_server,
     update_operator_mcp_tool,
 )
+from .api_runtime_tool_approval_settings import patch_tool_approval_settings
 from .api_runtime_http_dispatch_helpers import _cron_job_record
 
 
@@ -140,8 +143,15 @@ def _skills(
 
 def _tools(app: Any, *, tool_overrides: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    settings = _settings(app.repository.database_path.parent, app.repository.database_path)
+    global_config = settings.get("globalConfig") if isinstance(settings.get("globalConfig"), Mapping) else {}
+    approval_config = load_tool_approvals_from_config(global_config)
     for tool in app.tool_runtime.list_tools(audience="operator"):
         enabled = _override_enabled(tool_overrides, tool.tool_id, bool(tool.enabled))
+        requires_approval, approval_policy_reason = tool_approval_policy_match(
+            tool,
+            approval_config,
+        )
         rows.append(
             {
                 "toolId": tool.tool_id,
@@ -155,6 +165,8 @@ def _tools(app: Any, *, tool_overrides: Mapping[str, Any]) -> list[dict[str, Any
                 "availabilityReason": tool.availability.reason,
                 "riskClass": tool.side_effects.risk_class,
                 "approvalClass": tool.side_effects.approval_class,
+                "requiresApproval": requires_approval,
+                "approvalPolicyReason": approval_policy_reason,
                 "readsState": tool.side_effects.reads_state,
                 "writesState": tool.side_effects.writes_state,
                 "touchesNetwork": tool.side_effects.touches_network,
@@ -299,6 +311,7 @@ __all__ = [
     "_settings",
     "_skills",
     "_tools",
+    "patch_tool_approval_settings",
     "patch_operator_settings",
     "patch_operator_global_config",
     "create_operator_mcp_tool",
