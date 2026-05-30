@@ -3358,7 +3358,7 @@ struct VoiceListeningOverlay: View {
                 Text(detail(elapsed: elapsedDuration(now: timeline.date)))
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .foregroundStyle(ElephantTheme.muted)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .multilineTextAlignment(.center)
             }
         }
@@ -3468,7 +3468,9 @@ struct VoiceListeningOverlay: View {
             if !draft.isEmpty {
                 return draft
             }
-            return formattedVoiceDuration(elapsed)
+            let duration = formattedVoiceDuration(elapsed)
+            let notice = recordingNotice
+            return notice.isEmpty ? duration : "\(notice) · \(duration)"
         }
         if isTranscribing {
             let draft = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3481,6 +3483,20 @@ struct VoiceListeningOverlay: View {
             return formattedVoiceDuration(max(capturedDuration, elapsed))
         }
         return localizedYouText(model.appLanguage, en: "No speech captured.", zh: "还没有捕捉到声音。", fr: "Aucune parole capturée.", de: "Noch keine Sprache erkannt.")
+    }
+
+    private var recordingNotice: String {
+        let trimmed = statusText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let genericStatuses = [
+            "Listening...",
+            "Listening",
+            "正在听...",
+            "正在听",
+            localizedYouText(model.appLanguage, en: "Listening...", zh: "正在听...", fr: "Écoute...", de: "Hört zu..."),
+            localizedYouText(model.appLanguage, en: "Listening", zh: "正在听", fr: "Écoute", de: "Hört zu")
+        ]
+        return genericStatuses.contains(trimmed) ? "" : trimmed
     }
 
     private func elapsedDuration(now: Date) -> TimeInterval {
@@ -19867,6 +19883,7 @@ struct VoiceRepliesSettingsContent: View {
                     value: model.chineseSpeechRecognitionStatus
                 )
             }
+            VoiceSettingsNotice(text: voiceInputNote, tint: ElephantTheme.accent)
 
             SettingsActionBar {
                 Button {
