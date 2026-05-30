@@ -341,27 +341,57 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - After rebuilding the packaged app, the 2026-05-30 00:33 UTC launch again
   reached Sleep Display with the same accessible lock controls and a healthy
   managed API.
+- The real packaged app was then inspected in an unlocked state through a
+  reversible local lock-preference reset. Home rendered the user identity,
+  Personal Model map, day badge, readiness strip, and "Carry into the next
+  reply" context without overlapping text or inaccessible controls.
+- The unlocked Home readiness strip was exercised directly. The Memory card
+  opened Personal Model, Messaging opened the Messaging setup surface, and
+  Learn opened the Learn surface. Each card exposed a concrete accessibility
+  label and destination hint.
+- Learn was rechecked in the unlocked app. Memory & Dream Review, Paths Learn,
+  Skill Matching, Skill Evolution, Diary, and Letter launchers were visible in
+  the Ready state; recent Dream and Letter runs were visible as completed
+  history rows.
+- Skills pending-draft presentation was rechecked in the unlocked app with a
+  temporary authored draft. The metric row moved to one pending draft, the
+  Skill Library sorted the disabled pending row above normal enabled skills,
+  the row showed a pending pill and Approve action, and the detail sheet showed
+  pending review, Not in prompt, Disabled, source/review metadata, instructions,
+  and the Approve footer action. The temporary draft was removed after the
+  visual pass and the managed dashboard returned to zero pending drafts.
+- Chat voice was rechecked in the unlocked app after a macOS privacy prompt
+  reset. Voice input entered the waiting overlay, timed out to the clear
+  `Voice unavailable` state when no system prompt appeared, and canceled back to
+  the composer without crashing. A real model text turn was then sent in the
+  same Chat session; streaming activity completed and the reply used Personal
+  Model work-context memory.
+- Settings voice playback was rechecked in the unlocked app. The Voice row
+  exposed enabled voice replies, auto-play, online/system voice controls,
+  system/local recognition modes, local Chinese recognition readiness, and a
+  Preview/Stop playback control that returned to the ready state while the app
+  and managed API stayed healthy.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
-| Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial; Personal Model presence, map, readiness strip, continuity context, and responsive/accessibility-hardened readiness navigation verified; unlocked Home visual reinspection still needs current evidence |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, managed-API recall search, and episode identity preservation verified |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
+| Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model replies before and after voice timeout, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |
-| Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, learned matches, pending draft projection/approval lifecycle, and no duplicate Settings summary contract verified; unlocked pending-row visual reinspection remains gated by Sleep Display |
+| Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Complete; search, pagination state, detail sheet, enabled/available rows, learned matches, pending draft projection/approval lifecycle, unlocked pending-row visual review, and no duplicate Settings summary contract verified |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Complete with credential/device blocker for live transport; WeChat failure/QR UX, Feishu/Discord/DingDing/WeCom secure setup fields, configure/start/restart controls, status styling, and all five gateway service projections verified |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
-| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching UI run, diary queue, launcher disable/re-enable, active-job launcher gating, progress/status, history, needs-attention detail, managed-API Dream execution, and managed-API Letter execution verified; unlocked Dream/Letter button state still needs UI reinspection |
+| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Complete; focused Skill Matching UI run, diary queue, launcher disable/re-enable, active-job launcher gating, progress/status, history, needs-attention detail, managed-API Dream execution, managed-API Letter execution, and unlocked Dream/Letter/Diary launcher readiness verified |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Complete; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, config surface, managed-API config save/restore, and runtime editor button/draft state contract verified |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
-| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, Home readiness responsive/accessibility contract, and Sleep Display privacy/accessibility/visual contract verified |
+| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Complete for current unlocked/locked evidence; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, Home readiness responsive/accessibility contract, unlocked Home/Chat/Skills/Learn/Settings visual pass, and Sleep Display privacy/accessibility/visual contract verified |
 
 ## First Fix Track
 
