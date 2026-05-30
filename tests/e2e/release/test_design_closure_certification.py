@@ -9,6 +9,7 @@ WORKFLOW_PATH = ROOT / ".github" / "workflows" / "design-closure-certification.y
 MAKEFILE_PATH = ROOT / "Makefile"
 MACOS_APP_MODEL_PATH = ROOT / "apps" / "macos" / "Sources" / "AppModel.swift"
 MACOS_API_CLIENT_PATH = ROOT / "apps" / "macos" / "Sources" / "APIClient.swift"
+MACOS_DESIGN_SYSTEM_PATH = ROOT / "apps" / "macos" / "Sources" / "DesignSystem.swift"
 MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
 MACOS_SPEECH_INPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "SpeechInputController.swift"
 MACOS_SPEECH_OUTPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "LocalSpeechOutputController.swift"
@@ -188,6 +189,30 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn("entry.sourceCount > 0", diary_panel)
         self.assertIn('systemImage: "link"', diary_panel)
         self.assertIn("Source Episodes", diary_panel)
+
+    def test_macos_learning_launchers_follow_active_job_state(self) -> None:
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        design_system = MACOS_DESIGN_SYSTEM_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        learn_view = views.split("struct LearnView: View", 1)[1].split("struct LearningJobSection", 1)[0]
+        diary_view = views.split("struct DiaryView: View", 1)[1].split("struct DiaryStepButton", 1)[0]
+        reflect_settings = views.split("struct ReflectSettingsContent: View", 1)[1].split("struct RuntimeSettingsContent", 1)[0]
+
+        self.assertIn("var isActive: Bool", app_model)
+        self.assertIn("var activeLearningJobCount: Int", app_model)
+        self.assertIn("var hasActiveLearningJobs: Bool", app_model)
+        self.assertIn("var learningLaunchDisabled: Bool", app_model)
+        self.assertGreaterEqual(app_model.count("guard !learningLaunchDisabled else { return }"), 4)
+        self.assertIn("var actionDisabled = false", design_system)
+        self.assertGreaterEqual(design_system.count(".disabled(actionDisabled)"), 2)
+        self.assertIn("let launchDisabled = model.learningLaunchDisabled", learn_view)
+        self.assertIn("actionDisabled: launchDisabled", learn_view)
+        self.assertIn("LearnActionButton(action: action, disabled: launchDisabled)", learn_view)
+        self.assertIn("if model.learningLaunchDisabled", learn_view)
+        self.assertIn("let writeDisabled = model.learningLaunchDisabled", diary_view)
+        self.assertIn("actionDisabled: writeDisabled", diary_view)
+        self.assertIn("model.hasActiveLearningJobs", diary_view)
+        self.assertIn(".disabled(model.learningLaunchDisabled)", reflect_settings)
 
     def test_macos_you_surface_separates_evidence_and_question_actions(self) -> None:
         views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")

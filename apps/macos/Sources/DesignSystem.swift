@@ -189,6 +189,7 @@ struct PageHeader: View {
     var actionTitle: String? = nil
     var actionSymbol: String? = nil
     var actionIconOnly = false
+    var actionDisabled = false
     var action: (() -> Void)? = nil
 
     var body: some View {
@@ -216,6 +217,7 @@ struct PageHeader: View {
                     .buttonStyle(PressablePlainButtonStyle())
                     .help(actionTitle)
                     .accessibilityLabel(actionTitle)
+                    .disabled(actionDisabled)
                 } else {
                     Button(action: action) {
                         Label(actionTitle, systemImage: actionSymbol)
@@ -223,6 +225,7 @@ struct PageHeader: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .tint(ElephantTheme.accent)
+                    .disabled(actionDisabled)
                 }
             }
         }

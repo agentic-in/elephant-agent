@@ -358,13 +358,13 @@ struct ElephantLetterEnvelopeOverlay: View {
             } label: {
                 Image(systemName: model.isRegeneratingOnboardingLetter ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(model.isReflecting ? 0.26 : 0.62))
+                    .foregroundStyle(Color.white.opacity(model.learningLaunchDisabled ? 0.26 : 0.62))
                     .shadow(color: Color.black.opacity(0.10), radius: 3, y: 1)
                     .frame(width: 28, height: 28)
                     .contentShape(Circle())
             }
             .buttonStyle(PressablePlainButtonStyle())
-            .disabled(model.isReflecting)
+            .disabled(model.learningLaunchDisabled)
             .help(localizedYouText(model.appLanguage, en: "Regenerate letter", zh: "重新生成这封信", fr: "Régénérer la lettre", de: "Brief neu erstellen"))
 
             Button {
@@ -12652,13 +12652,15 @@ struct DiaryView: View {
     @State private var showsDatePicker = false
 
     var body: some View {
+        let writeDisabled = model.learningLaunchDisabled
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
                 title: AppSection.diary.title(language: model.appLanguage),
                 subtitle: model.text(.diaryPageSubtitle),
-                actionTitle: model.isReflecting ? model.text(.writing) : model.text(.writeDiary),
+                actionTitle: model.isReflecting ? model.text(.writing) : model.hasActiveLearningJobs ? model.text(.learning) : model.text(.writeDiary),
                 actionSymbol: "square.and.pencil",
-                actionIconOnly: true
+                actionIconOnly: true,
+                actionDisabled: writeDisabled
             ) {
                 writeDiaryForSelectedDate()
             }
@@ -12793,9 +12795,9 @@ struct DiaryView: View {
 
     private var writeDiaryButton: some View {
         DiaryWriteActionButton(
-            title: model.isReflecting ? model.text(.writing) : model.text(.writeDiary),
+            title: model.isReflecting ? model.text(.writing) : model.hasActiveLearningJobs ? model.text(.learning) : model.text(.writeDiary),
             subtitle: localizedFormat(model.appLanguage, en: "For %@", zh: "日期：%@", fr: "Pour %@", de: "Für %@", selectedDateDisplay),
-            isDisabled: model.isReflecting
+            isDisabled: model.learningLaunchDisabled
         ) {
             writeDiaryForSelectedDate()
         }
@@ -12812,6 +12814,12 @@ struct DiaryView: View {
                     .font(.callout)
                     .foregroundStyle(ElephantTheme.muted)
             }
+        } else if model.hasActiveLearningJobs {
+            Label(localizedYouText(model.appLanguage, en: "A learning job is already running.", zh: "已有学习任务正在运行。", fr: "Une tâche d'apprentissage est déjà en cours.", de: "Ein Lernjob läuft bereits."), systemImage: "arrow.triangle.2.circlepath")
+                .font(.callout)
+                .foregroundStyle(ElephantTheme.muted)
+                .lineLimit(2)
+                .multilineTextAlignment(.trailing)
         } else if !model.diaryActionResult.isEmpty {
             Label(model.diaryActionResult, systemImage: "checkmark.circle.fill")
                 .font(.callout)
@@ -18244,12 +18252,14 @@ struct LearnView: View {
     @EnvironmentObject private var model: ElephantAppModel
 
     var body: some View {
+        let launchDisabled = model.learningLaunchDisabled
         VStack(alignment: .leading, spacing: 18) {
             PageHeader(
                 title: AppSection.learn.title(language: model.appLanguage),
                 subtitle: model.text(.learnPageSubtitle),
-                actionTitle: model.isReflecting ? model.text(.learning) : model.text(.runLearn),
-                actionSymbol: "brain.head.profile"
+                actionTitle: launchDisabled ? model.text(.learning) : model.text(.runLearn),
+                actionSymbol: "brain.head.profile",
+                actionDisabled: launchDisabled
             ) {
                 Task { await model.runReflect(trigger: "dream") }
             }
@@ -18350,6 +18360,7 @@ struct LearnControlsPanel: View {
     }
 
     var body: some View {
+        let launchDisabled = model.learningLaunchDisabled
         NativePanel {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 14) {
@@ -18363,7 +18374,7 @@ struct LearnControlsPanel: View {
 
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(actions) { action in
-                        LearnActionButton(action: action, disabled: model.isReflecting) {
+                        LearnActionButton(action: action, disabled: launchDisabled) {
                             Task {
                                 if action.id == "letter" {
                                     await model.requestOnboardingLetter()
@@ -18376,11 +18387,11 @@ struct LearnControlsPanel: View {
                 }
 
                 HStack(spacing: 10) {
-                    Image(systemName: model.isReflecting ? "arrow.triangle.2.circlepath" : "checkmark.circle")
+                    Image(systemName: launchDisabled ? "arrow.triangle.2.circlepath" : "checkmark.circle")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(model.isReflecting ? ElephantTheme.accent : latestTint)
+                        .foregroundStyle(launchDisabled ? ElephantTheme.accent : latestTint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.isReflecting ? localizedYouText(model.appLanguage, en: "Evolution job is running", zh: "正在自我进化", fr: "Tâche d'évolution en cours", de: "Evolutionsjob läuft") : localizedYouText(model.appLanguage, en: "Last completed", zh: "上次完成", fr: "Dernière fin", de: "Zuletzt abgeschlossen"))
+                        Text(launchDisabled ? localizedYouText(model.appLanguage, en: "Evolution job is running", zh: "正在自我进化", fr: "Tâche d'évolution en cours", de: "Evolutionsjob läuft") : localizedYouText(model.appLanguage, en: "Last completed", zh: "上次完成", fr: "Dernière fin", de: "Zuletzt abgeschlossen"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ElephantTheme.ink)
                         Text(latestCompletedText)
@@ -18408,7 +18419,7 @@ struct LearnControlsPanel: View {
 
     @ViewBuilder
     private var statusSummary: some View {
-        if model.isReflecting {
+        if model.learningLaunchDisabled {
             Pill(text: model.text(.statusRunning), symbol: "arrow.triangle.2.circlepath", tint: ElephantTheme.accent)
         } else {
             Pill(text: latestBadgeText, symbol: latestCompletedDate == nil ? "clock" : "checkmark", tint: latestTint)
@@ -21379,11 +21390,11 @@ struct ReflectSettingsContent: View {
             SettingsRow(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: model.snapshot.workerStatus)
             SettingsRow(label: localizedYouText(model.appLanguage, en: "Latest", zh: "最近一次", fr: "Dernier", de: "Zuletzt"), value: model.snapshot.latestCompletedAt.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : MacLocalDateTime.formatted(model.snapshot.latestCompletedAt, language: model.appLanguage))
             SettingsActionBar {
-                Button(model.isReflecting ? localizedYouText(model.appLanguage, en: "Reflecting...", zh: "正在 Reflect...", fr: "Reflect en cours...", de: "Reflect läuft...") : localizedYouText(model.appLanguage, en: "Run Reflect", zh: "运行 Reflect", fr: "Lancer Reflect", de: "Reflect starten")) {
+                Button(model.learningLaunchDisabled ? localizedYouText(model.appLanguage, en: "Reflecting...", zh: "正在 Reflect...", fr: "Reflect en cours...", de: "Reflect läuft...") : localizedYouText(model.appLanguage, en: "Run Reflect", zh: "运行 Reflect", fr: "Lancer Reflect", de: "Reflect starten")) {
                     Task { await model.runReflect(trigger: "settings") }
                 }
                 .settingsActionButton(.primary)
-                .disabled(model.isReflecting)
+                .disabled(model.learningLaunchDisabled)
             }
         }
     }
@@ -24072,10 +24083,10 @@ struct ReflectSettingsPanel: View {
                 SettingsRow(label: localizedYouText(model.appLanguage, en: "Worker", zh: "Worker", fr: "Worker", de: "Worker"), value: model.snapshot.workerStatus)
                 SettingsRow(label: localizedYouText(model.appLanguage, en: "Latest", zh: "最近一次", fr: "Dernier", de: "Zuletzt"), value: model.snapshot.latestCompletedAt.isEmpty ? localizedYouText(model.appLanguage, en: "not yet", zh: "还没有", fr: "pas encore", de: "noch nicht") : MacLocalDateTime.formatted(model.snapshot.latestCompletedAt, language: model.appLanguage))
 
-                Button(model.isReflecting ? localizedYouText(model.appLanguage, en: "Reflecting...", zh: "正在 Reflect...", fr: "Reflect en cours...", de: "Reflect läuft...") : localizedYouText(model.appLanguage, en: "Run Reflect", zh: "运行 Reflect", fr: "Lancer Reflect", de: "Reflect starten")) {
+                Button(model.learningLaunchDisabled ? localizedYouText(model.appLanguage, en: "Reflecting...", zh: "正在 Reflect...", fr: "Reflect en cours...", de: "Reflect läuft...") : localizedYouText(model.appLanguage, en: "Run Reflect", zh: "运行 Reflect", fr: "Lancer Reflect", de: "Reflect starten")) {
                     Task { await model.runReflect(trigger: "settings") }
                 }
-                .disabled(model.isReflecting)
+                .disabled(model.learningLaunchDisabled)
             }
         }
     }

@@ -1104,6 +1104,14 @@ struct LearningJobItem: Identifiable, Equatable {
     var toolProgress: LearningToolCallProgress
     var modelProgress: LearningModelProgress
     var markdown: String
+
+    var isActive: Bool {
+        let normalized = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return false }
+        return !normalized.contains("completed")
+            && !normalized.contains("failed")
+            && !normalized.contains("cancel")
+    }
 }
 
 struct PathItem: Identifiable, Equatable {
@@ -1528,6 +1536,18 @@ final class ElephantAppModel: ObservableObject {
     @Published var voiceInputEngineRaw = UserDefaults.standard.string(forKey: ElephantAppModel.voiceInputEngineKey) ?? SpeechRecognitionEngine.automatic.rawValue
     @Published var voiceRuntimeActionResult = ""
     @Published var voiceRuntimeActionInFlight = false
+
+    var activeLearningJobCount: Int {
+        snapshot.learningItems.filter(\.isActive).count
+    }
+
+    var hasActiveLearningJobs: Bool {
+        activeLearningJobCount > 0
+    }
+
+    var learningLaunchDisabled: Bool {
+        isReflecting || hasActiveLearningJobs
+    }
 
     let speechOutput = LocalSpeechOutputController()
     private let runner = CoreRunner()
@@ -2642,8 +2662,9 @@ final class ElephantAppModel: ObservableObject {
     }
 
     func runReflect(trigger: String, features: String? = nil) async {
-        guard !isReflecting else { return }
+        guard !learningLaunchDisabled else { return }
         isReflecting = true
+        defer { isReflecting = false }
         do {
             try await client.runReflect(trigger: trigger, features: features)
             try? await Task.sleep(nanoseconds: 700_000_000)
@@ -2652,12 +2673,12 @@ final class ElephantAppModel: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
-        isReflecting = false
     }
 
     func requestOnboardingLetter() async {
-        guard !isReflecting else { return }
+        guard !learningLaunchDisabled else { return }
         isReflecting = true
+        defer { isReflecting = false }
         do {
             let jobID = try await client.runReflect(trigger: "onboarding_letter")
             onboardingLetterJobID = jobID
@@ -2674,12 +2695,15 @@ final class ElephantAppModel: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
-        isReflecting = false
     }
 
     func regenerateOnboardingLetter(_ entry: DiaryEntry? = nil) async {
-        guard !isReflecting else { return }
+        guard !learningLaunchDisabled else { return }
         isReflecting = true
+        defer {
+            isRegeneratingOnboardingLetter = false
+            isReflecting = false
+        }
         isRegeneratingOnboardingLetter = true
         let targetEntry = entry ?? onboardingLetterEntry
         do {
@@ -2705,8 +2729,6 @@ final class ElephantAppModel: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
-        isRegeneratingOnboardingLetter = false
-        isReflecting = false
     }
 
     func openOnboardingLetter(_ entry: DiaryEntry? = nil) {
@@ -2735,6 +2757,9 @@ final class ElephantAppModel: ObservableObject {
     func writeDiary(targetDate: String) async {
         let date = targetDate.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !date.isEmpty else { return }
+        guard !learningLaunchDisabled else { return }
+        isReflecting = true
+        defer { isReflecting = false }
         do {
             try await client.writeDiary(targetDate: date)
             diaryActionResult = Self.localizedText(

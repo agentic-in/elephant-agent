@@ -288,6 +288,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   a Personal Model-scoped `diary:*` semantic-index row, and deletion through the
   managed API removed the Diary row while marking the semantic row `deleted`.
   The managed API remained healthy and no newer macOS crash report appeared.
+- Learn launcher state was hardened and rebuilt in the real packaged macOS app.
+  Dream, Letter, Diary, Settings Reflect, and onboarding-letter regeneration now
+  share the same active-learning gate, so existing queued/running learning jobs
+  keep launchers disabled until the dashboard snapshot reports no active jobs.
+  The packaged app's managed reflect snapshot showed the worker stopped, zero
+  queued/running jobs, and recent Dream/Letter jobs completed. Sleep Display
+  remained locked, so unlocked visual reinspection of those buttons is still a
+  user-controlled gate rather than a completed UI proof.
 
 ## Open Acceptance Matrix
 
@@ -304,7 +312,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
-| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching UI run, diary queue, launcher disable/re-enable, progress/status, history, needs-attention detail, managed-API Dream execution, and managed-API Letter execution verified; unlocked Dream/Letter button state still needs UI reinspection |
+| Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Partial; focused Skill Matching UI run, diary queue, launcher disable/re-enable, active-job launcher gating, progress/status, history, needs-attention detail, managed-API Dream execution, and managed-API Letter execution verified; unlocked Dream/Letter button state still needs UI reinspection |
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Partial; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, config surface, and managed-API config save/restore verified; unlocked editor button/draft state covered by static contract |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
@@ -404,6 +412,16 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   background work.
 - Verify from the packaged app that a manual Learn job completes without
   creating recursive `episode_close` jobs.
+
+## Learn Launcher State Fix Track
+
+- Treat queued and running learning jobs from the dashboard snapshot as active
+  launch state, not only the short local HTTP request window.
+- Disable Dream, Letter, Diary, Settings Reflect, and letter regeneration while
+  a learning job remains active so users cannot accidentally stack duplicate
+  background learning passes.
+- Re-enable launchers only after the managed API reports no queued/running
+  learning jobs.
 
 ## Semantic Index Recovery Fix Track
 
