@@ -268,6 +268,13 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   deleted both the original and superseding refs, marked their Personal Model
   semantic-index entries deleted, and a recall search for the temporary marker
   returned zero hits. The app and managed API stayed alive throughout.
+- The Personal Model projection was rechecked after later acceptance passes:
+  the canonical `you` model still displayed as `You`, exposed 48 active facts
+  across Identity, World, Pulse, and Journey, and carried 120 Personal
+  Model-scoped semantic entries with the evidence index in `ready` state. The
+  questions ledger currently had no waiting items, while the earlier packaged
+  app pass already verified Sooner, Dismiss, Reply open/cancel, source
+  evidence, and map detail interactions.
 - A Chat/acceptance episode creation regression was fixed and verified against
   the rebuilt packaged app's managed API. `POST /v1/episodes` with
   `profile_id=you` and the macOS Chat session display name now opens an Episode
@@ -319,7 +326,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Partial; Personal Model presence, map, readiness strip, continuity context, and responsive/accessibility-hardened readiness navigation verified; unlocked Home visual reinspection still needs current evidence |
 | Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model reply, step records, managed-API recall search, and episode identity preservation verified |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, and Edge TTS reply asset verified; live Chat send/playback UI is gated by Sleep Display unlock |
-| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
+| You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, and deleted-Path memory cleanup verified |
 | Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, learned matches, pending draft projection/approval lifecycle, and no duplicate Settings summary contract verified; unlocked pending-row visual reinspection remains gated by Sleep Display |
