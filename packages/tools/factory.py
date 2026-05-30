@@ -10,8 +10,9 @@ from typing import Any, TYPE_CHECKING
 from packages.runtime_config import load_rtk_from_config, load_sandbox_from_config, global_config_path_for_state_dir
 from packages.security import SecurityPolicy
 
+from .approval_gateways import SecurityApprovalGateway
 from .builtins import register_builtin_tools
-from .runtime import ApprovalGateway, InMemoryToolExecutor, SecurityApprovalGateway, ToolContextResolver, ToolRuntime
+from .runtime import ApprovalGateway, InMemoryToolExecutor, ToolContextResolver, ToolRuntime
 from .surfaces import BuiltinToolDependencies
 
 if TYPE_CHECKING:

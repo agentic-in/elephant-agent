@@ -5414,6 +5414,9 @@ struct ToolUseEventRow: View {
                     if !detailText.isEmpty {
                         ToolUseDetailBlock(title: approvalDetailTitle, text: detailText, tint: isApprovalDeferred ? ElephantTheme.orange : ElephantTheme.faint)
                     }
+                    if canResolveApproval {
+                        approvalActions
+                    }
                 }
                 .padding(.leading, 12)
                 .transition(.opacity)
@@ -5523,6 +5526,38 @@ struct ToolUseEventRow: View {
         return value.contains("defer") || value.contains("approval")
     }
 
+    private var canResolveApproval: Bool {
+        isApprovalDeferred && !event.approvalToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var approvalActions: some View {
+        HStack(spacing: 8) {
+            Button {
+                Task { await model.resolveToolUseApproval(event, approved: true) }
+            } label: {
+                Label(
+                    localizedYouText(model.appLanguage, en: "Approve once", zh: "批准一次", fr: "Approuver une fois", de: "Einmal freigeben"),
+                    systemImage: "checkmark.seal"
+                )
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .help(localizedYouText(model.appLanguage, en: "Run only this exact tool call.", zh: "只运行这一次完全相同的工具调用。", fr: "Exécuter uniquement cet appel exact.", de: "Nur diesen exakten Werkzeugaufruf ausführen."))
+
+            Button(role: .destructive) {
+                Task { await model.resolveToolUseApproval(event, approved: false) }
+            } label: {
+                Label(
+                    localizedYouText(model.appLanguage, en: "Deny", zh: "拒绝", fr: "Refuser", de: "Ablehnen"),
+                    systemImage: "xmark.circle"
+                )
+            }
+            .controlSize(.small)
+            .help(localizedYouText(model.appLanguage, en: "Do not run this tool call.", zh: "不要运行这次工具调用。", fr: "Ne pas exécuter cet appel.", de: "Diesen Werkzeugaufruf nicht ausführen."))
+        }
+        .padding(.top, 2)
+    }
+
     private var approvalDetailTitle: String {
         if isApprovalDeferred {
             return localizedYouText(model.appLanguage, en: "Approval", zh: "审批", fr: "Approbation", de: "Freigabe")
@@ -5533,6 +5568,12 @@ struct ToolUseEventRow: View {
     private var statusTint: Color {
         let value = event.status.lowercased()
         if value.contains("defer") || value.contains("approval") {
+            return ElephantTheme.orange
+        }
+        if value.contains("approving") || value.contains("denying") {
+            return ElephantTheme.accent
+        }
+        if value.contains("denied") || value.contains("blocked") {
             return ElephantTheme.orange
         }
         if value.contains("fail") || value.contains("error") {
@@ -6580,6 +6621,15 @@ private func localizedToolStatus(_ rawValue: String, language: AppLanguage) -> S
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if value.contains("defer") || value.contains("approval") {
         return localizedYouText(language, en: "needs approval", zh: "需要审批", fr: "à approuver", de: "Freigabe nötig")
+    }
+    if value.contains("approving") {
+        return localizedYouText(language, en: "approving", zh: "批准中", fr: "approbation", de: "Freigabe")
+    }
+    if value.contains("denying") {
+        return localizedYouText(language, en: "denying", zh: "拒绝中", fr: "refus", de: "Ablehnung")
+    }
+    if value.contains("denied") || value.contains("blocked") {
+        return localizedYouText(language, en: "denied", zh: "已拒绝", fr: "refusé", de: "abgelehnt")
     }
     if value.contains("fail") || value.contains("error") {
         return localizedYouText(language, en: "fail", zh: "失败", fr: "échec", de: "Fehler")
@@ -19932,8 +19982,8 @@ struct VoiceRepliesSettingsContent: View {
             return localizedYouText(model.appLanguage, en: "System Chinese fallback", zh: "系统中文兜底", fr: "Repli chinois système", de: "System-Chinesisch-Fallback")
         }
         return model.appLanguage == .zh
-            ? localizedYouText(model.appLanguage, en: "System Chinese", zh: "系统中文", fr: "Chinois système", de: "System-Chinesisch")
-            : localizedYouText(model.appLanguage, en: "System English", zh: "系统英文", fr: "Anglais système", de: "System-Englisch")
+            ? localizedYouText(model.appLanguage, en: "System Chinese + fallback", zh: "系统中文 + 兜底", fr: "Chinois système + repli", de: "System-Chinesisch + Fallback")
+            : localizedYouText(model.appLanguage, en: "System + Chinese fallback", zh: "系统识别 + 中文兜底", fr: "Système + repli chinois", de: "System + Chinesisch-Fallback")
     }
 
     private var inputRuntimeStatusSymbol: String {
@@ -20049,8 +20099,8 @@ struct VoiceRepliesSettingsContent: View {
     private var voiceInputNote: String {
         localizedYouText(
             model.appLanguage,
-            en: "Chinese uses local recognition after installation. Until then, Local Chinese falls back to Apple Chinese recognition; System follows the app language.",
-            zh: "安装后中文使用本地识别；安装前，本地中文会兜底到 Apple 中文识别，系统识别跟随 App 语言。",
+            en: "Chinese uses local recognition after installation. Until then, automatic mode records once and falls back to Apple Chinese if the primary system language hears nothing.",
+            zh: "安装后中文使用本地识别；安装前，自动模式会保留录音，在主系统识别没有结果时兜底尝试 Apple 中文。",
             fr: "Le chinois utilise la reconnaissance locale après installation. Les autres langues utilisent Apple dans cette version.",
             de: "Chinesisch nutzt nach Installation lokale Erkennung. Andere Sprachen nutzen in dieser Version Apple."
         )

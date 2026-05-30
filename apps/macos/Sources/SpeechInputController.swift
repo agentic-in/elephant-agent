@@ -57,6 +57,25 @@ private final class OneShotPermissionCompletion: @unchecked Sendable {
     }
 }
 
+private final class SpeechRecognitionTaskBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: SFSpeechRecognitionTask?
+
+    func set(_ task: SFSpeechRecognitionTask) {
+        lock.lock()
+        self.task = task
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        let activeTask = task
+        task = nil
+        lock.unlock()
+        activeTask?.cancel()
+    }
+}
+
 @MainActor
 final class SpeechInputController: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
@@ -68,7 +87,7 @@ final class SpeechInputController: NSObject, ObservableObject {
     @Published private(set) var recognizedText = ""
 
     private enum ActiveMode {
-        case apple(locale: Locale, statusNotice: String?)
+        case apple(locale: Locale, fallbackLocales: [Locale], statusNotice: String?)
         case funASR(previewLocale: Locale?, statusNotice: String?)
     }
 
@@ -89,9 +108,12 @@ final class SpeechInputController: NSObject, ObservableObject {
     private var captureGeneration = 0
     private var baseText = ""
     private var onText: ((String) -> Void)?
-    private var activeMode: ActiveMode = .apple(locale: Locale(identifier: "en-US"), statusNotice: nil)
+    private var activeMode: ActiveMode = .apple(locale: Locale(identifier: "en-US"), fallbackLocales: [], statusNotice: nil)
     private var activeLanguage: AppLanguage = .en
     private static let localTranscriptionTimeout: TimeInterval = 60
+    private static let appleFallbackTranscriptionTimeout: TimeInterval = 24
+    private static let chineseAppleSpeechLocaleIdentifiers = ["zh-CN", "zh_CN", "zh-Hans-CN", "zh_Hans_CN", "cmn-Hans-CN"]
+    private static let englishAppleSpeechLocaleIdentifiers = ["en-US", "en_US", "en"]
 
     func toggle(
         startingWith text: String,
@@ -146,7 +168,7 @@ final class SpeechInputController: NSObject, ObservableObject {
                     previewLocale: previewLocale.flatMap { self.authorizedSpeechPreviewLocale($0) },
                     generation: generation
                 )
-            case .apple(let locale, let statusNotice):
+            case .apple(let locale, let fallbackLocales, let statusNotice):
                 self.statusText = Self.localizedStatus(
                     self.activeLanguage,
                     en: "Requesting speech recognition access...",
@@ -161,7 +183,12 @@ final class SpeechInputController: NSObject, ObservableObject {
                             self.finishCaptureSetupFailure(Self.localizedStatus(self.activeLanguage, en: "Speech recognition is not authorized.", zh: "语音识别权限未开启。"))
                             return
                         }
-                        self.startAppleRecording(locale: locale, statusNotice: statusNotice, generation: generation)
+                        self.startAppleRecording(
+                            locale: locale,
+                            fallbackLocales: fallbackLocales,
+                            statusNotice: statusNotice,
+                            generation: generation
+                        )
                     }
                 }
             }
@@ -192,13 +219,18 @@ final class SpeechInputController: NSObject, ObservableObject {
         case .funASR:
             stopApplePreviewRecognition()
             startFunASRTranscription(generation: generation)
-        case .apple:
+        case .apple(_, let fallbackLocales, _):
             recognitionRequest?.endAudio()
             recognitionTask?.finish()
             recognitionRequest = nil
-            statusText = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? Self.localizedStatus(activeLanguage, en: "Voice input stopped.", zh: "语音输入已停止。")
-                : Self.localizedStatus(activeLanguage, en: "Voice input captured.", zh: "已捕捉到语音。")
+            let hasRecognizedText = !recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if !hasRecognizedText, recordingURL != nil, !fallbackLocales.isEmpty {
+                startAppleFallbackTranscription(locales: fallbackLocales, generation: generation)
+            } else {
+                statusText = hasRecognizedText
+                    ? Self.localizedStatus(activeLanguage, en: "Voice input captured.", zh: "已捕捉到语音。")
+                    : Self.localizedStatus(activeLanguage, en: "Voice input stopped.", zh: "语音输入已停止。")
+            }
         }
     }
 
@@ -246,18 +278,28 @@ final class SpeechInputController: NSObject, ObservableObject {
         case .funASRLocal:
             return localChineseMode(language: language)
         case .appleSpeech:
-            return .apple(locale: appleSpeechLocale(for: language), statusNotice: nil)
+            let locale = appleSpeechLocale(for: language)
+            return .apple(
+                locale: locale,
+                fallbackLocales: alternateAppleSpeechFallbackLocales(for: locale),
+                statusNotice: nil
+            )
         }
     }
 
     private static func automaticMode(language: AppLanguage) -> ActiveMode {
         if MacVoiceRuntime.isFunASRInstalled() {
             return .funASR(
-                previewLocale: appleSpeechLocale(for: language),
+                previewLocale: automaticAppleSpeechPrimaryLocale(for: language),
                 statusNotice: localChineseRecordingNotice(language)
             )
         }
-        return .apple(locale: appleSpeechLocale(for: language), statusNotice: nil)
+        let locale = automaticAppleSpeechPrimaryLocale(for: language)
+        return .apple(
+            locale: locale,
+            fallbackLocales: alternateAppleSpeechFallbackLocales(for: locale),
+            statusNotice: nil
+        )
     }
 
     private static func localChineseMode(language: AppLanguage) -> ActiveMode {
@@ -267,14 +309,59 @@ final class SpeechInputController: NSObject, ObservableObject {
                 statusNotice: localChineseRecordingNotice(language)
             )
         }
+        let locale = appleSpeechLocale(for: .zh)
         return .apple(
-            locale: Locale(identifier: "zh-CN"),
+            locale: locale,
+            fallbackLocales: [],
             statusNotice: localizedStatus(language, en: "Local Chinese recognition is not ready; using system dictation for now.", zh: "本地中文识别尚未就绪，暂时使用系统听写。")
         )
     }
 
     private static func appleSpeechLocale(for language: AppLanguage) -> Locale {
-        language == .zh ? Locale(identifier: "zh-CN") : Locale(identifier: "en-US")
+        language == .zh ? preferredAppleSpeechLocale(for: chineseAppleSpeechLocaleIdentifiers) : preferredAppleSpeechLocale(for: englishAppleSpeechLocaleIdentifiers)
+    }
+
+    private static func automaticAppleSpeechPrimaryLocale(for language: AppLanguage) -> Locale {
+        if language == .zh || preferredSystemLanguageIsChinese() {
+            return preferredAppleSpeechLocale(for: chineseAppleSpeechLocaleIdentifiers)
+        }
+        return preferredAppleSpeechLocale(for: englishAppleSpeechLocaleIdentifiers)
+    }
+
+    private static func alternateAppleSpeechFallbackLocales(for primary: Locale) -> [Locale] {
+        let primaryIdentifier = normalizedLocaleIdentifier(primary.identifier)
+        let candidates = [
+            preferredAppleSpeechLocale(for: chineseAppleSpeechLocaleIdentifiers),
+            preferredAppleSpeechLocale(for: englishAppleSpeechLocaleIdentifiers)
+        ]
+        return candidates.filter { normalizedLocaleIdentifier($0.identifier) != primaryIdentifier }
+    }
+
+    private static func preferredSystemLanguageIsChinese() -> Bool {
+        Locale.preferredLanguages.contains { identifier in
+            AppLanguage(code: identifier) == .zh
+        }
+    }
+
+    private static func preferredAppleSpeechLocale(for identifiers: [String]) -> Locale {
+        let supportedLocales = SFSpeechRecognizer.supportedLocales()
+        for identifier in identifiers {
+            let normalized = normalizedLocaleIdentifier(identifier)
+            if let locale = supportedLocales.first(where: { normalizedLocaleIdentifier($0.identifier) == normalized }) {
+                return locale
+            }
+        }
+        for identifier in identifiers {
+            let languagePrefix = normalizedLocaleIdentifier(identifier).prefix(2)
+            if let locale = supportedLocales.first(where: { normalizedLocaleIdentifier($0.identifier).hasPrefix(languagePrefix) }) {
+                return locale
+            }
+        }
+        return Locale(identifier: identifiers[0])
+    }
+
+    nonisolated private static func normalizedLocaleIdentifier(_ identifier: String) -> String {
+        identifier.replacingOccurrences(of: "-", with: "_").lowercased()
     }
 
     private static func localChineseRecordingNotice(_ language: AppLanguage) -> String {
@@ -389,11 +476,25 @@ final class SpeechInputController: NSObject, ObservableObject {
         }
     }
 
-    private func startAppleRecording(locale: Locale, statusNotice: String?, generation: Int) {
+    private func startAppleRecording(
+        locale: Locale,
+        fallbackLocales: [Locale],
+        statusNotice: String?,
+        generation: Int
+    ) {
         guard isActiveCapture(generation) else { return }
         recognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer, recognizer.isAvailable else {
             self.recognizer = nil
+            if let fallbackLocale = fallbackLocales.first {
+                startAppleRecording(
+                    locale: fallbackLocale,
+                    fallbackLocales: Array(fallbackLocales.dropFirst()),
+                    statusNotice: statusNotice,
+                    generation: generation
+                )
+                return
+            }
             finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Speech recognizer is unavailable.", zh: "语音识别暂不可用。"))
             return
         }
@@ -419,7 +520,16 @@ final class SpeechInputController: NSObject, ObservableObject {
             finishCaptureSetupFailure(Self.localizedStatus(activeLanguage, en: "Could not start microphone: \(error.localizedDescription)", zh: "无法启动麦克风：\(error.localizedDescription)"))
             return
         }
-        let sink = SpeechAudioTapSink(recognitionRequest: recognitionRequest)
+        let fallbackRecordingFile: AVAudioFile?
+        do {
+            let recording = try makeRecordingFile(inputFormat: format)
+            recordingURL = recording.0
+            fallbackRecordingFile = recording.1
+        } catch {
+            recordingURL = nil
+            fallbackRecordingFile = nil
+        }
+        let sink = SpeechAudioTapSink(file: fallbackRecordingFile, recognitionRequest: recognitionRequest)
         audioTapSink = sink
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             sink.accept(buffer)
@@ -598,6 +708,68 @@ final class SpeechInputController: NSObject, ObservableObject {
         }
     }
 
+    private func startAppleFallbackTranscription(locales: [Locale], generation: Int) {
+        guard isActiveCapture(generation) else { return }
+        guard let recordingURL else {
+            statusText = Self.localizedStatus(activeLanguage, en: "No voice recording was captured.", zh: "没有捕捉到语音录音。")
+            return
+        }
+        let fallbackLocales = Self.uniqueLocales(locales)
+        guard !fallbackLocales.isEmpty else {
+            statusText = Self.localizedStatus(activeLanguage, en: "No speech was recognized.", zh: "没有识别到语音。")
+            return
+        }
+        isTranscribing = true
+        statusText = Self.localizedStatus(activeLanguage, en: "Checking alternate speech language...", zh: "正在尝试备用语音语言...")
+        transcriptionTask?.cancel()
+        transcriptionTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            let shouldContinue = await MainActor.run {
+                guard let self, self.isActiveCapture(generation), !Task.isCancelled else { return false }
+                return self.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            guard shouldContinue else {
+                await MainActor.run { [weak self] in
+                    guard let self, self.isActiveCapture(generation) else { return }
+                    self.isTranscribing = false
+                }
+                return
+            }
+
+            for locale in fallbackLocales {
+                guard !Task.isCancelled else { return }
+                do {
+                    let text = try await Self.recognizeRecordedAudio(
+                        recordingURL,
+                        locale: locale,
+                        timeout: Self.appleFallbackTranscriptionTimeout
+                    )
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { continue }
+                    await MainActor.run {
+                        guard let self, self.isActiveCapture(generation), !Task.isCancelled else { return }
+                        self.applyRecognizedText(trimmed)
+                        self.statusText = Self.localizedStatus(self.activeLanguage, en: "Voice input captured.", zh: "已捕捉到语音。")
+                        self.isTranscribing = false
+                    }
+                    return
+                } catch {
+                    continue
+                }
+            }
+
+            await MainActor.run {
+                guard let self, self.isActiveCapture(generation), !Task.isCancelled else { return }
+                self.statusText = Self.localizedStatus(
+                    self.activeLanguage,
+                    en: "No speech was recognized. Try Local Chinese in Voice settings if you mainly speak Chinese.",
+                    zh: "没有识别到语音。如果主要说中文，请在语音设置里启用本地中文识别。"
+                )
+                self.isTranscribing = false
+            }
+        }
+    }
+
     private func finishAppleRecognition(generation: Int) {
         guard isActiveCapture(generation) else { return }
         updateCapturedDuration()
@@ -652,7 +824,7 @@ final class SpeechInputController: NSObject, ObservableObject {
         switch activeMode {
         case .funASR(_, let statusNotice):
             return statusNotice ?? Self.localizedStatus(activeLanguage, en: "Listening...", zh: "正在听...")
-        case .apple(_, let statusNotice):
+        case .apple(_, _, let statusNotice):
             return statusNotice ?? Self.localizedStatus(activeLanguage, en: "Listening...", zh: "正在听...")
         }
     }
@@ -717,5 +889,63 @@ final class SpeechInputController: NSObject, ObservableObject {
             }
             return output
         }.value
+    }
+
+    nonisolated private static func recognizeRecordedAudio(
+        _ input: URL,
+        locale: Locale,
+        timeout: TimeInterval
+    ) async throws -> String {
+        let taskBox = SpeechRecognitionTaskBox()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
+                    continuation.resume(throwing: MacVoiceRuntimeError.processFailed("Speech recognition is not authorized."))
+                    return
+                }
+                guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+                    continuation.resume(throwing: MacVoiceRuntimeError.processFailed("Speech recognizer is unavailable."))
+                    return
+                }
+                let completionGate = OneShotPermissionCompletion()
+                let request = SFSpeechURLRecognitionRequest(url: input)
+                request.shouldReportPartialResults = false
+                let task = recognizer.recognitionTask(with: request) { result, error in
+                    if let result, result.isFinal {
+                        let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+                        completionGate.finish {
+                            continuation.resume(returning: text)
+                        }
+                        return
+                    }
+                    if let error {
+                        completionGate.finish {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+                taskBox.set(task)
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                    completionGate.finish {
+                        taskBox.cancel()
+                        continuation.resume(throwing: MacVoiceRuntimeError.timedOut("Speech recognition timed out."))
+                    }
+                }
+            }
+        } onCancel: {
+            taskBox.cancel()
+        }
+    }
+
+    nonisolated private static func uniqueLocales(_ locales: [Locale]) -> [Locale] {
+        var seen = Set<String>()
+        var result: [Locale] = []
+        for locale in locales {
+            let key = normalizedLocaleIdentifier(locale.identifier)
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            result.append(locale)
+        }
+        return result
     }
 }

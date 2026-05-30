@@ -55,6 +55,10 @@ from .api_runtime_context_compression import (
 )
 from .api_runtime_elephants import _dispatch_elephants
 from .api_runtime_paths import _dispatch_paths
+from .api_runtime_tool_approvals import (
+    pending_tool_approval_records as _pending_tool_approval_records,
+    resolve_tool_approval as _resolve_tool_approval,
+)
 
 _STREAM_KEEPALIVE_SECONDS = 15.0
 _STREAM_CLARIFY_TIMEOUT_SECONDS = 600.0
@@ -518,6 +522,8 @@ def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResp
         return APIResponse(404, {"error": "not_found"})
     except KeyError as error:
         return APIResponse(404, {"error": "not_found", "missing": str(error)})
+    except PermissionError as error:
+        return APIResponse(403, {"error": "forbidden", "detail": str(error)})
     except (ValueError, TypeError) as error:
         return APIResponse(400, {"error": "bad_request", "detail": str(error)})
     except LookupError as error:
@@ -681,6 +687,27 @@ def _dispatch_episodes(self, method: str, parts: tuple[str, ...], body: bytes | 
             answer=str(payload.get("answer") or payload.get("response") or payload.get("user_response") or ""),
         )
         return APIResponse(202, _jsonable(result))
+    if method.upper() == "GET" and len(parts) == 2 and parts[1] == "approvals":
+        return APIResponse(
+            200,
+            _jsonable(
+                {
+                    "episode_id": episode_id,
+                    "approvals": _pending_tool_approval_records(self, episode_id=episode_id),
+                }
+            ),
+        )
+    if method.upper() == "POST" and len(parts) == 4 and parts[1] == "approvals":
+        action = parts[3].strip().lower()
+        if action not in {"approve", "deny"}:
+            raise ValueError("approval action must be approve or deny")
+        result = _resolve_tool_approval(
+            self,
+            episode_id=episode_id,
+            approval_token=unquote(parts[2]).strip(),
+            approved=action == "approve",
+        )
+        return APIResponse(200, _jsonable(result))
     if method.upper() == "PATCH" and len(parts) == 3 and parts[1] == "todos":
         payload = _read_json_bytes(body)
         result = _update_episode_todo(

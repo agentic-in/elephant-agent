@@ -17,7 +17,6 @@ from typing import Any, Callable, Literal, Mapping, Protocol, runtime_checkable
 
 from packages.capabilities.runtime import CapabilityDescriptor, ToolCapability
 from packages.contracts.runtime import ExecutionResult
-from packages.security import ApprovalClass, PolicyDecision, SecurityPolicy, SecurityRequest, evaluate_with_telemetry
 from .local_roots import default_local_allowed_roots
 
 LOGGER = logging.getLogger(__name__)
@@ -137,52 +136,6 @@ class ToolDefinition:
         return f"{self.tool_id}: {self.description} Required: {required}. Parameters: {parameters}."
 
 
-def build_tool_fallback_prompt(tools: tuple[ToolDefinition, ...]) -> str:
-    """Render a text fallback for transports without native tool calling."""
-
-    if not tools:
-        return ""
-    tool_ids = {tool.tool_id for tool in tools}
-    has_personal_model_update = "tool.personal_model.update" in tool_ids
-    durable_understanding_guidance = (
-        "A self-introduction, durable preference, correction, boundary, relationship rule, recurring-work context, "
-        "or stable personal fact changes Elephant Agent's Personal Model. If the user explicitly asks you to remember, save, note, or keep a durable personal fact, call tool.personal_model.update before replying and do not say it was remembered unless the update tool succeeded. Use tool.personal_model.update with one lens "
-        "(identity, world, pulse, journey), one dot.path topic (`lens.facet.entity[.qualifier...]`), "
-        "and a grounded reason before replying. Reuse a full topic for replacement; add a qualifier for snapshots, "
-        "drafts, versions, or multiple instances. Use tool.personal_model.search for durable claims, "
-        "tool.conversation.search for prior conversation history, and tool.personal_model.update for durable user-stated changes. For history questions, patiently map user time wording to top-level expr such as last_night, yesterday, last:3d, or an ISO interval; never run mode=discover without expr or explicit start_at/end_at, and after discover copy the returned range start_at, end_at, and timezone into mode=recall for details. "
-        "Prefer claim refs for correct/forget/dispute when the target is uncertain; restore must use an exact ref from status=all search. "
-        "Use updated claims naturally without narrating storage mechanics unless asked."
-        if has_personal_model_update
-        else
-        "Durable user understanding changes need Personal Model update tooling, but it is unavailable. State the "
-        "intended durable update clearly without pretending it was stored."
-    )
-    tool_lines = "; ".join(
-        f"{tool.display_name} ({tool.tool_id}): {tool.description}"
-        for tool in tools
-    )
-    summaries = " ".join(tool.prompt_summary() for tool in tools)
-    return (
-        "available-tools: governed built-ins are available through the runtime; "
-        f"{tool_lines}\n"
-        "tool-call-protocol: call governed built-in tools directly when the active provider supports native "
-        "tool calling. Otherwise emit <tool_call><invoke name=\"tool.id\"><parameter name=\"arg\">value"
-        "</parameter></invoke></tool_call>; multiple invoke blocks are allowed, structured values may be "
-        "encoded as JSON inside a parameter body, and the final answer must not include raw tool markup.\n"
-        "tool-usage-discipline: use tools only when they materially advance the current request. "
-        "For ordinary social conversation or acknowledgements with no durable state change, do not call any tool. "
-        f"{durable_understanding_guidance} "
-        "Ongoing work is carried by canonical State continuity, not by a separate durable planning structure. "
-        "Use tool.process.manage only after a background process was "
-        "started through tool.terminal.exec background=true. For complex tasks, cross-file changes, or work that "
-        "clearly spans three or more meaningful steps, prefer using tool.todo.manage early to create or update a "
-        "concise todo board even when the user did not explicitly request one. Use tool.todo.manage as an "
-        "in-session execution board while working; do not present it as a durable planner or runtime hierarchy.\n"
-        f"tool-parameter-schemas: {summaries}"
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class ToolInvocation:
     """Invocation record passed to the execution backend."""
@@ -207,6 +160,31 @@ class ToolExecutionRecord:
     approval: "ToolApprovalResult | None" = None
     side_effects: tuple[str, ...] = ()
     detail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PendingToolApproval:
+    """Paused tool invocation waiting for an explicit user decision."""
+
+    approval_token: str
+    definition: ToolDefinition
+    invocation: ToolInvocation
+    approval: "ToolApprovalResult"
+    requested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            "approval_token": self.approval_token,
+            "tool_id": self.definition.tool_id,
+            "display_name": self.definition.display_name,
+            "session_id": self.invocation.session_id,
+            "invocation_id": self.invocation.invocation_id,
+            "arguments": dict(self.invocation.arguments),
+            "risk_class": self.approval.risk_class,
+            "required_controls": self.approval.required_controls,
+            "reason": self.approval.reason or "",
+            "requested_at": self.requested_at.isoformat(),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,73 +277,6 @@ class ApprovalGateway(Protocol):
         invocation: ToolInvocation,
     ) -> ToolApprovalResult:
         """Authorize a tool invocation before execution."""
-
-
-@dataclass(frozen=True, slots=True)
-class SecurityApprovalGateway:
-    policy: SecurityPolicy
-    telemetry: object
-    source: str = "tool.runtime"
-    auto_approve_deferred: bool = False
-
-    def authorize(
-        self,
-        definition: ToolDefinition,
-        invocation: ToolInvocation,
-    ) -> ToolApprovalResult:
-        request = _security_request_for_tool(definition, invocation)
-        if request is None:
-            return ToolApprovalResult(
-                decision="approved",
-                risk_class=definition.side_effects.risk_class,
-                reason="No approval class was configured for this tool invocation.",
-            )
-        result = evaluate_with_telemetry(
-            self.policy,
-            request,
-            self.telemetry,
-            source=self.source,
-        )
-        decision = _tool_decision_from_policy(result.decision)
-        reason = result.rationale
-        approval_token: str | None = None
-        if decision == "deferred":
-            approval_token = f"approval:{invocation.invocation_id}"
-            if self.auto_approve_deferred:
-                decision = "approved"
-                approval_token = f"auto:{invocation.invocation_id}"
-                reason = (
-                    f"{result.rationale} Auto-approved on {self.source} "
-                    "until an external approval surface is configured."
-                )
-        return ToolApprovalResult(
-            decision=decision,
-            risk_class=result.risk_level.value,
-            required_controls=result.required_controls,
-            reason=reason,
-            approval_token=approval_token,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class CallableApprovalGateway:
-    policy: Callable[[ToolDefinition, ToolInvocation], bool]
-
-    def authorize(
-        self,
-        definition: ToolDefinition,
-        invocation: ToolInvocation,
-    ) -> ToolApprovalResult:
-        approved = self.policy(definition, invocation)
-        return ToolApprovalResult(
-            decision="approved" if approved else "denied",
-            risk_class=definition.side_effects.risk_class,
-            reason=(
-                "approved by callable approval gateway"
-                if approved
-                else "blocked by callable approval gateway"
-            ),
-        )
 
 
 @runtime_checkable
@@ -480,6 +391,8 @@ class ToolRuntime(ToolCapability):
         self._observer_lock = Lock()
         self._cancel_checks: dict[str, Callable[[], bool]] = {}
         self._cancel_check_lock = Lock()
+        self._pending_approvals: dict[str, PendingToolApproval] = {}
+        self._pending_approval_lock = Lock()
 
     @property
     def registry(self) -> ToolRegistry:
@@ -576,6 +489,81 @@ class ToolRuntime(ToolCapability):
     def list_executions(self) -> tuple[ToolExecutionRecord, ...]:
         return tuple(self._executions)
 
+    def list_pending_approvals(self, *, session_id: str | None = None) -> tuple[PendingToolApproval, ...]:
+        with self._pending_approval_lock:
+            pending = tuple(self._pending_approvals.values())
+        if session_id is not None:
+            pending = tuple(item for item in pending if item.invocation.session_id == session_id)
+        return tuple(sorted(pending, key=lambda item: item.requested_at))
+
+    def approve_pending(
+        self,
+        approval_token: str,
+        *,
+        session_id: str | None = None,
+        approver: str = "user",
+    ) -> ToolExecutionRecord:
+        pending = self._pop_pending_approval(approval_token, session_id=session_id)
+        approval = replace(
+            pending.approval,
+            decision="approved",
+            reason=f"Approved once by {approver} for this exact tool call.",
+            approval_token=f"approved:{pending.invocation.invocation_id}",
+        )
+        self._emit_event(
+            ToolLifecycleEvent(
+                event_id=f"{pending.invocation.invocation_id}:approval.granted",
+                invocation=pending.invocation,
+                phase="approval.granted",
+                detail=approval.reason or "approved once",
+                approval=approval,
+            )
+        )
+        return self._execute_approved(pending.definition, pending.invocation, approval)
+
+    def deny_pending(
+        self,
+        approval_token: str,
+        *,
+        session_id: str | None = None,
+        approver: str = "user",
+    ) -> ToolExecutionRecord:
+        pending = self._pop_pending_approval(approval_token, session_id=session_id)
+        approval = replace(
+            pending.approval,
+            decision="denied",
+            reason=f"Denied by {approver}; the tool call was not executed.",
+            approval_token=f"denied:{pending.invocation.invocation_id}",
+        )
+        result = ExecutionResult(
+            execution_id=pending.invocation.invocation_id,
+            episode_id=pending.invocation.session_id,
+            outcome="blocked",
+            summary=approval.reason or f"tool invocation denied: {pending.definition.tool_id}",
+            side_effects=pending.definition.side_effects.categories,
+        )
+        record = ToolExecutionRecord(
+            execution_id=result.execution_id,
+            invocation=pending.invocation,
+            result=result,
+            approved=False,
+            approval=approval,
+            side_effects=result.side_effects,
+            detail=result.summary,
+        )
+        self._executions.append(record)
+        self._emit_event(
+            ToolLifecycleEvent(
+                event_id=f"{pending.invocation.invocation_id}:approval.denied",
+                invocation=pending.invocation,
+                phase="approval.denied",
+                detail=result.summary,
+                approval=approval,
+                execution=result,
+            )
+        )
+        return record
+
     def subscribe(self, observer: ToolObserver) -> Callable[[], None]:
         with self._observer_lock:
             self._observers.append(observer)
@@ -643,6 +631,8 @@ class ToolRuntime(ToolCapability):
         )
 
         approval = self._authorize(definition, invocation)
+        if approval.decision == "deferred":
+            approval = self._store_pending_approval(definition, invocation, approval)
         self._emit_event(
             ToolLifecycleEvent(
                 event_id=f"{invocation.invocation_id}:classified",
@@ -683,12 +673,21 @@ class ToolRuntime(ToolCapability):
             )
             return blocked
 
+        record = self._execute_approved(definition, invocation, approval)
+        return record.result
+
+    def _execute_approved(
+        self,
+        definition: ToolDefinition,
+        invocation: ToolInvocation,
+        approval: ToolApprovalResult,
+    ) -> ToolExecutionRecord:
         self._emit_event(
             ToolLifecycleEvent(
                 event_id=f"{invocation.invocation_id}:execution.started",
                 invocation=invocation,
                 phase="execution.started",
-                detail=f"executing {tool_name}",
+                detail=f"executing {invocation.tool_id}",
                 approval=approval,
             )
         )
@@ -698,13 +697,13 @@ class ToolRuntime(ToolCapability):
             import logging as _logging
             _logging.getLogger(__name__).debug(
                 "🔧 ToolRuntime.execute: tool=%s executor=%s session=%s",
-                tool_name, _executor_type, session_id[:8] if session_id else "?",
+                invocation.tool_id, _executor_type, invocation.session_id[:8] if invocation.session_id else "?",
             )
             result = self._executor.execute(definition, invocation)
         except Exception as error:
             failure = ExecutionResult(
                 execution_id=invocation.invocation_id,
-                episode_id=session_id,
+                episode_id=invocation.session_id,
                 outcome="error",
                 summary=str(error),
                 side_effects=definition.side_effects.categories,
@@ -734,18 +733,17 @@ class ToolRuntime(ToolCapability):
         if result.side_effects:
             final = result
         else:
-            final = replace(result, side_effects=definition.side_effects.categories, episode_id=session_id)
-        self._executions.append(
-            ToolExecutionRecord(
-                execution_id=final.execution_id,
-                invocation=invocation,
-                result=final,
-                approved=approval.approved,
-                approval=approval,
-                side_effects=final.side_effects,
-                detail=final.summary,
-            )
+            final = replace(result, side_effects=definition.side_effects.categories, episode_id=invocation.session_id)
+        record = ToolExecutionRecord(
+            execution_id=final.execution_id,
+            invocation=invocation,
+            result=final,
+            approved=approval.approved,
+            approval=approval,
+            side_effects=final.side_effects,
+            detail=final.summary,
         )
+        self._executions.append(record)
         execution_phase = "execution.failed" if final.outcome == "failed" else "execution.completed"
         self._emit_event(
             ToolLifecycleEvent(
@@ -757,7 +755,7 @@ class ToolRuntime(ToolCapability):
                 execution=final,
             )
         )
-        return final
+        return record
 
     def _authorize(
         self,
@@ -787,6 +785,41 @@ class ToolRuntime(ToolCapability):
         with self._cancel_check_lock:
             cancel_check = self._cancel_checks.get(session_id)
         return replace(context, requester=requester, cancel_check=cancel_check)
+
+    def _store_pending_approval(
+        self,
+        definition: ToolDefinition,
+        invocation: ToolInvocation,
+        approval: ToolApprovalResult,
+    ) -> ToolApprovalResult:
+        approval_token = approval.approval_token or f"approval:{invocation.invocation_id}"
+        stored_approval = replace(approval, approval_token=approval_token)
+        pending = PendingToolApproval(
+            approval_token=approval_token,
+            definition=definition,
+            invocation=invocation,
+            approval=stored_approval,
+        )
+        with self._pending_approval_lock:
+            self._pending_approvals[approval_token] = pending
+        return stored_approval
+
+    def _pop_pending_approval(
+        self,
+        approval_token: str,
+        *,
+        session_id: str | None,
+    ) -> PendingToolApproval:
+        token = approval_token.strip()
+        if not token:
+            raise KeyError("approval token is required")
+        with self._pending_approval_lock:
+            pending = self._pending_approvals.get(token)
+            if pending is None:
+                raise KeyError(f"pending approval is not registered: {token}")
+            if session_id is not None and pending.invocation.session_id != session_id:
+                raise PermissionError("pending approval does not belong to this episode")
+            return self._pending_approvals.pop(token)
 
     def _emit_event(self, event: ToolLifecycleEvent) -> None:
         with self._observer_lock:
@@ -883,14 +916,6 @@ class _SafeFormatMap(dict[str, Any]):
         return "{" + key + "}"
 
 
-def _tool_decision_from_policy(decision: PolicyDecision) -> ToolApprovalDecision:
-    if decision == PolicyDecision.ALLOW:
-        return "approved"
-    if decision == PolicyDecision.DENY:
-        return "denied"
-    return "deferred"
-
-
 def _approval_phase(approval: ToolApprovalResult) -> ToolLifecyclePhase:
     if approval.decision == "approved":
         return "approval.granted"
@@ -907,36 +932,6 @@ def _classification_detail(definition: ToolDefinition, approval: ToolApprovalRes
     )
 
 
-def _security_request_for_tool(
-    definition: ToolDefinition,
-    invocation: ToolInvocation,
-) -> SecurityRequest | None:
-    approval_class = _resolve_approval_class(definition.side_effects)
-    if approval_class is None:
-        return None
-    return SecurityRequest(
-        request_id=f"req:tool:{invocation.invocation_id}",
-        approval_class=approval_class,
-        operation=definition.tool_id,
-        episode_id=invocation.session_id,
-        description=definition.description or definition.display_name,
-        is_external=definition.side_effects.touches_network,
-        is_destructive=definition.side_effects.writes_state,
-        consent_given=False,
-        target_trusted=False,
-        metadata={
-            "tool_id": definition.tool_id,
-            "approval_class": approval_class.value,
-            "risk_class": definition.side_effects.risk_class,
-            "surface_id": invocation.context.surface_id,
-            "surface_kind": invocation.context.surface_kind,
-            "state_id": invocation.context.state_id,
-            "personal_model_id": invocation.context.personal_model_id,
-            "elephant_id": invocation.context.elephant_id,
-        },
-    )
-
-
 def _default_context(session_id: str, requester: ToolRequester | None) -> ToolRuntimeContext:
     return ToolRuntimeContext(
         cwd=Path.cwd(),
@@ -946,27 +941,3 @@ def _default_context(session_id: str, requester: ToolRequester | None) -> ToolRu
         surface_kind="session",
         requester=requester,
     )
-
-
-def _resolve_approval_class(side_effects: ToolSideEffectMetadata) -> ApprovalClass | None:
-    raw = side_effects.approval_class.strip().lower()
-    if raw in {"", "none"}:
-        return None
-    for approval_class in ApprovalClass:
-        if raw == approval_class.value:
-            return approval_class
-    if raw == "strict":
-        if side_effects.touches_network:
-            return ApprovalClass.NETWORK
-        if side_effects.writes_state and side_effects.reads_state:
-            return ApprovalClass.EXEC
-        if side_effects.writes_state:
-            return ApprovalClass.WRITE
-        return ApprovalClass.EXEC
-    if raw == "standard":
-        if side_effects.touches_network:
-            return ApprovalClass.NETWORK
-        if side_effects.writes_state:
-            return ApprovalClass.WRITE
-        return ApprovalClass.READ
-    return ApprovalClass.WRITE if side_effects.writes_state else ApprovalClass.READ

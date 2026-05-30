@@ -1124,6 +1124,28 @@ struct APIClient {
         return SnapshotParser.toolUseEvents(in: dashboard)
     }
 
+    func resolveToolApproval(episodeID: String, approvalToken: String, approved: Bool) async throws -> ToolUseEvent {
+        let action = approved ? "approve" : "deny"
+        let json = try await request(
+            path: "/v1/episodes/\(Self.pathSegment(episodeID))/approvals/\(Self.pathSegment(approvalToken))/\(action)",
+            method: "POST",
+            body: [:]
+        )
+        if let toolEvent = SnapshotParser.toolUseEvents(in: json).first {
+            return toolEvent
+        }
+        let execution = json["execution"] as? [String: Any] ?? [:]
+        return ToolUseEvent(
+            sourceID: approvalToken,
+            invocationID: SnapshotParser.findString(in: json, keys: ["invocation_id", "invocationId"]) ?? "",
+            name: SnapshotParser.findString(in: json, keys: ["tool_name", "toolName", "name"]) ?? "tool",
+            status: SnapshotParser.findString(in: execution, keys: ["outcome"]) ?? (approved ? "completed" : "blocked"),
+            arguments: "",
+            result: SnapshotParser.findString(in: execution, keys: ["summary"]) ?? "",
+            approvalToken: approvalToken
+        )
+    }
+
     private func consumeWakeLoopStream(
         _ text: String,
         episodeID: String,
@@ -2593,8 +2615,13 @@ enum SnapshotParser {
 
         let fallbackStatus = eventType == "tool_call" ? "planned" : "completed"
         let rawStatus = string(dictionary["status"] ?? argumentObject["status"], fallback: fallbackStatus)
+        let approvalObject = object(
+            detail["approval"]
+                ?? dictionary["approval"]
+                ?? metadata["approval"]
+        )
         func field(_ keys: [String]) -> String {
-            for source in [argumentObject, detail, dictionary, metadata] {
+            for source in [argumentObject, approvalObject, detail, dictionary, metadata] {
                 let value = firstString(in: source, keys: keys)
                 if !value.isEmpty {
                     return value
@@ -2605,6 +2632,14 @@ enum SnapshotParser {
         let phase = field(["phase"])
         let detailText = compactToolText(rawDetail is [String: Any] ? argumentObject["detail"] : rawDetail ?? argumentObject["detail"])
         let clarifyChoices = stringArray(argumentObject["choices"])
+        var approvalToken = field(["approval_token", "approvalToken"])
+        if approvalToken.isEmpty {
+            let decision = field(["decision"]).lowercased()
+            let currentInvocationID = invocationID.trimmingCharacters(in: .whitespacesAndNewlines)
+            if decision == "deferred", !currentInvocationID.isEmpty {
+                approvalToken = "approval:\(currentInvocationID)"
+            }
+        }
         events.append(
             ToolUseEvent(
                 sourceID: sourceID,
@@ -2629,7 +2664,8 @@ enum SnapshotParser {
                 clarifyID: field(["clarify_id", "clarifyId"]),
                 clarifyQuestion: field(["question"]),
                 clarifyMode: field(["mode"]),
-                clarifyChoices: clarifyChoices
+                clarifyChoices: clarifyChoices,
+                approvalToken: approvalToken
             )
         )
     }

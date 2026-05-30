@@ -4,13 +4,12 @@ Status: partially mitigated.
 
 ## Current State
 
-The tool runtime has approval classes and a `SecurityApprovalGateway`, but the
-packaged macOS Chat path can still execute high-risk local tools without a
-first-class Elephant approval surface. Real packaged-app probes showed a model
-could write a temporary Desktop file after the tool root policy allowed the
-current-user path, and could use terminal-based local automation to create a
-temporary Apple Notes note. No macOS Files & Folders, Automation, or Notes prompt
-appeared in that environment.
+The tool runtime has approval classes and a `SecurityApprovalGateway`. Earlier
+packaged-app probes showed why the Chat path needed a first-class Elephant
+approval surface: a model could write a temporary Desktop file after the tool
+root policy allowed the current-user path, and could use terminal-based local
+automation to create a temporary Apple Notes note. No macOS Files & Folders,
+Automation, or Notes prompt appeared in that environment.
 
 The app now exposes Settings links to the relevant macOS privacy pages, which
 helps permission recovery and preflight readiness. That does not replace a
@@ -22,9 +21,17 @@ existing security approval policy with auto-approval disabled. File writes,
 patches, terminal execution, process control, code execution, and local-write
 MCP tools return `approval.deferred` before execution, and the macOS Chat tool
 activity row shows a visible needs-approval state. This prevents silent host
-mutation, but it is not the final approval experience because users still
-cannot approve once and resume the exact paused tool call from the native Chat
-surface.
+mutation. Deferred tool calls now retain a one-time approval token scoped to the
+originating Episode; the native Chat activity row exposes Approve once and Deny;
+approving resumes the exact paused invocation; denying records a blocked result
+without executing the handler.
+
+The current packaged-app regression probe launched the rebuilt macOS app and
+used its own managed API to defer both a file write and a terminal command. The
+file write did not create the target before approval, Approve once resumed that
+exact invocation and wrote the expected content, Deny blocked the terminal
+invocation without creating its target file, pending approvals were cleared, and
+`/healthz` stayed healthy.
 
 ## Target
 
@@ -42,18 +49,19 @@ Risky local side effects should pause behind an explicit in-app approval flow:
 
 ## Why The Gap Remains
 
-The existing security policy can classify risky tools, but the macOS product
-does not yet have a resumable approval sheet, stream protocol, and user decision
-handler wired into the managed API path. Turning on deferred approvals without
-that surface would block useful tools instead of producing a good user
-experience.
+The basic pause/resume decision loop is now wired, but this is still tracked as
+partially mitigated rather than closed because approval decisions are not yet
+durably reflected as first-class Episode / Loop / Step evidence, the UI is an
+inline card rather than a full review sheet for complex actions, and broad local
+root assumptions still need tightening.
 
 ## What Would Close It
 
 - Wire the app/API runtime to `SecurityApprovalGateway` for risky local tools.
-  Done for fail-closed deferral; still needs resumable approval decisions.
+  Done for fail-closed deferral and approve-once/deny decisions.
 - Add a Chat approval card or sheet that can approve, deny, or cancel deferred
-  tool calls and resume the active loop.
+  tool calls and resume the active loop. The inline card is done; a richer sheet
+  is still useful for multi-file or external-app actions.
 - Narrow default local roots or require explicit task-scoped folder selection
   for user-visible file writes.
 - Normalize model-provided `~` and user-home paths against the actual current

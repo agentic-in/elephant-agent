@@ -463,6 +463,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   facts could overwrite an explicit or non-English system app-language choice;
   language sync now only infers from profile when no app-language preference is
   saved and the system preference falls back to English.
+- A later language-specific voice pass covered two Apple Speech edge cases:
+  when the macOS preferred language is Chinese, Automatic now selects a
+  supported Apple Chinese speech locale instead of stale app-language English;
+  when the primary Apple recognizer produces no text, the recorded capture is
+  retried after Stop through alternate Chinese/English locales. This addresses
+  both Chinese-system no-transcript capture and English-system Chinese speech
+  capture when local FunASR is not available or not selected. The rebuilt
+  package confirmed `zh-CN` is available in `SFSpeechRecognizer.supportedLocales`.
 - The same voice pass found packaged FunASR helper failures underneath the UI:
   the Python 3.12 runtime could miss `distutils` compatibility during FunASR
   model registration, and the bundled Playwright ffmpeg binary was named
@@ -479,18 +487,26 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Local tool approval now fails closed for the riskiest managed-API Chat tools:
   file write, file patch, terminal execution, process control, code execution,
   and local-write-like MCP tools are routed through the security approval
-  policy with auto-approval disabled. Until the full resumable approval sheet is
-  implemented, those calls return `approval.deferred` instead of mutating the
-  host, and the macOS Chat activity row shows `needs approval` with the
-  policy reason expanded.
+  policy with auto-approval disabled. Those calls return `approval.deferred`
+  instead of mutating the host until the user acts, and the macOS Chat activity
+  row shows `needs approval` with the policy reason expanded.
+- Resumable local tool approval was wired through the real packaged macOS app's
+  managed API. Deferred tool calls now retain a one-time approval token; the
+  native Chat tool card exposes Approve once and Deny actions; approving resumes
+  the exact paused tool invocation, while denying records a blocked result
+  without execution. The rebuilt packaged app launched its own managed API at
+  127.0.0.1, deferred both a file write and terminal command, approved the file
+  write into the expected temporary file content, denied the terminal command
+  without creating the target file, cleared pending approvals, kept `/healthz`
+  healthy, and produced no newer macOS crash report.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, single-path microphone request, voice preparing-state duplicate-start guard, Desktop file-write probe, Notes automation probe, risky local tool fail-closed approval deferral, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on reliable microphone capture plus Chinese transcription verification, and resumable local tool approval remains an open product gap |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, app-language-independent local Chinese selection, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live voice send still depends on reliable microphone capture plus in-UI Chinese transcript verification |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, single-path microphone request, voice preparing-state duplicate-start guard, Desktop file-write probe, Notes automation probe, risky local tool fail-closed approval deferral plus approve-once/deny resume path, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on reliable microphone capture plus Chinese transcription verification |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, app-language-independent local Chinese selection, Apple Chinese automatic locale selection, recorded Apple Chinese/English fallback after empty primary recognition, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live voice send still depends on reliable microphone capture plus in-UI Chinese transcript verification |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |
@@ -688,6 +704,9 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Wire the app/API runtime to the existing security approval policy so risky
   tool calls can pause, explain the exact action in user language, and resume
   only after explicit approval.
+- Keep deferred tool approval resumable from native Chat: one-time approval
+  tokens must be scoped to the originating Episode, Approve once must execute
+  only the exact paused invocation, and Deny must leave the host unmodified.
 - Reduce broad home-directory write/read assumptions into user-selected or
   task-scoped roots where possible, and make path expansion resolve against the
   current OS user instead of relying on model guesses.

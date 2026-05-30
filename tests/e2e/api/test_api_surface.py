@@ -335,13 +335,45 @@ class APISurfaceE2ETest(APISurfaceTestBase):
         self.assertEqual(file_write.outcome, "deferred")
         self.assertEqual(terminal.outcome, "deferred")
         self.assertFalse(target.exists())
+        pending = self.app.dispatch("GET", "/v1/episodes/session-api-approval/approvals")
+        self.assertEqual(pending.status_code, 200)
+        pending_by_tool = {
+            item["tool_id"]: item["approval_token"]
+            for item in pending.payload["approvals"]
+        }
+        self.assertIn("tool.file.write", pending_by_tool)
+        self.assertIn("tool.terminal.exec", pending_by_tool)
+
+        approved = self.app.dispatch(
+            "POST",
+            f"/v1/episodes/session-api-approval/approvals/{pending_by_tool['tool.file.write']}/approve",
+            body=self._body({}),
+        )
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.payload["execution"]["outcome"], "success")
+        self.assertTrue(target.exists())
+        self.assertEqual(target.read_text(encoding="utf-8"), "unsafe write\n")
+        target.unlink()
+
+        denied = self.app.dispatch(
+            "POST",
+            f"/v1/episodes/session-api-approval/approvals/{pending_by_tool['tool.terminal.exec']}/deny",
+            body=self._body({}),
+        )
+        self.assertEqual(denied.status_code, 200)
+        self.assertEqual(denied.payload["execution"]["outcome"], "blocked")
+        self.assertFalse(target.exists())
         deferred = [
             record
             for record in self.app.tool_runtime.list_executions()
             if record.invocation.session_id == "session-api-approval"
         ]
-        self.assertEqual([record.approval.decision for record in deferred], ["deferred", "deferred"])
-        self.assertTrue(all(not record.approved for record in deferred))
+        self.assertEqual(
+            [record.approval.decision for record in deferred],
+            ["deferred", "deferred", "approved", "denied"],
+        )
+        self.assertEqual([record.approved for record in deferred], [False, False, True, False])
+        self.assertEqual(self.app.tool_runtime.list_pending_approvals(session_id="session-api-approval"), ())
 
     def test_canonical_state_routes_expose_identity_user_relationship_and_continuity(self) -> None:
         created = self.app.dispatch(

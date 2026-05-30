@@ -153,6 +153,7 @@ struct ToolUseEvent: Identifiable, Equatable {
     var clarifyQuestion: String = ""
     var clarifyMode: String = ""
     var clarifyChoices: [String] = []
+    var approvalToken: String = ""
 
     var isChildAgentRun: Bool {
         backend == "local_cli"
@@ -2402,7 +2403,7 @@ final class ElephantAppModel: ObservableObject {
         case .automatic:
             return SpeechInputController.funASRInstalled
                 ? Self.localizedText(appLanguage, en: "Auto · local Chinese + system preview", zh: "自动 · 本地中文 + 系统预览", fr: "Auto · chinois local + aperçu système", de: "Auto · lokales Chinesisch + Systemvorschau")
-                : Self.localizedText(appLanguage, en: "Auto · system dictation", zh: "自动 · 系统听写", fr: "Auto · dictée système", de: "Auto · Systemdiktat")
+                : Self.localizedText(appLanguage, en: "Auto · system dictation + Chinese fallback", zh: "自动 · 系统听写 + 中文兜底", fr: "Auto · dictée système + repli chinois", de: "Auto · Systemdiktat + Chinesisch-Fallback")
         case .funASRLocal:
             return SpeechInputController.funASRInstalled
                 ? Self.localizedText(appLanguage, en: "Local Chinese", zh: "本地中文", fr: "Chinois local", de: "Lokales Chinesisch")
@@ -2416,7 +2417,7 @@ final class ElephantAppModel: ObservableObject {
         if SpeechInputController.funASRInstalled {
             return Self.localizedText(appLanguage, en: "Ready on this Mac", zh: "本机已就绪", fr: "Prêt sur ce Mac", de: "Auf diesem Mac bereit")
         }
-        return Self.localizedText(appLanguage, en: "Setup required; Chinese currently uses system dictation", zh: "需要启用；当前使用系统中文听写", fr: "Configuration requise ; le chinois utilise la dictée système", de: "Einrichtung nötig; Chinesisch nutzt Systemdiktat")
+        return Self.localizedText(appLanguage, en: "Setup required; automatic mode falls back to Apple Chinese", zh: "需要启用；自动模式会兜底到 Apple 中文识别", fr: "Configuration requise ; le mode auto se replie sur Apple chinois", de: "Einrichtung nötig; Auto nutzt Apple-Chinesisch als Fallback")
     }
 
     func setVoiceRepliesEnabled(_ enabled: Bool) {
@@ -4444,6 +4445,49 @@ final class ElephantAppModel: ObservableObject {
         }
     }
 
+    func resolveToolUseApproval(_ event: ToolUseEvent, approved: Bool) async {
+        let token = event.approvalToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        let episodeID = activeEpisodeID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty, !episodeID.isEmpty else {
+            lastError = text(.chatLoopFailureGeneric)
+            return
+        }
+        var resolving = event
+        resolving.status = approved ? "approving" : "denying"
+        resolving.detail = approved
+            ? Self.localizedText(appLanguage, en: "Approving this exact tool call once.", zh: "正在一次性批准这次工具调用。", fr: "Approbation ponctuelle de cet appel d'outil.", de: "Dieser Werkzeugaufruf wird einmalig freigegeben.")
+            : Self.localizedText(appLanguage, en: "Denying this tool call.", zh: "正在拒绝这次工具调用。", fr: "Refus de cet appel d'outil.", de: "Dieser Werkzeugaufruf wird abgelehnt.")
+        replaceToolUseEvent(matching: event, with: resolving)
+
+        do {
+            var resolved = try await client.resolveToolApproval(
+                episodeID: episodeID,
+                approvalToken: token,
+                approved: approved
+            )
+            resolved = Self.mergedToolEvent(existing: resolving, incoming: resolved)
+            replaceToolUseEvent(matching: event, with: resolved)
+        } catch {
+            var failed = resolving
+            failed.status = "failed"
+            failed.detail = error.localizedDescription
+            replaceToolUseEvent(matching: event, with: failed)
+            lastError = error.localizedDescription
+        }
+    }
+
+    private func replaceToolUseEvent(matching target: ToolUseEvent, with replacement: ToolUseEvent) {
+        let targetKey = Self.toolEventKey(target)
+        for messageIndex in messages.indices {
+            for eventIndex in messages[messageIndex].toolEvents.indices {
+                let candidate = messages[messageIndex].toolEvents[eventIndex]
+                guard candidate.id == target.id || Self.toolEventKey(candidate) == targetKey else { continue }
+                messages[messageIndex].toolEvents[eventIndex] = replacement
+            }
+        }
+        chatScrollRevision += 1
+    }
+
     private func chatLoopFailureMessage(_ error: Error) -> String {
         chatLoopFailureMessage(detail: error.localizedDescription)
     }
@@ -4505,7 +4549,8 @@ final class ElephantAppModel: ObservableObject {
                     $0.childEpisodeID,
                     $0.clarifyID,
                     $0.clarifyQuestion,
-                    $0.clarifyChoices.joined(separator: ",")
+                    $0.clarifyChoices.joined(separator: ","),
+                    $0.approvalToken
                 ].joined(separator: "|")
             }
             .joined(separator: "\n")
@@ -4579,7 +4624,8 @@ final class ElephantAppModel: ObservableObject {
             clarifyID: incoming.clarifyID.isEmpty ? existing.clarifyID : incoming.clarifyID,
             clarifyQuestion: incoming.clarifyQuestion.isEmpty ? existing.clarifyQuestion : incoming.clarifyQuestion,
             clarifyMode: incoming.clarifyMode.isEmpty ? existing.clarifyMode : incoming.clarifyMode,
-            clarifyChoices: incoming.clarifyChoices.isEmpty ? existing.clarifyChoices : incoming.clarifyChoices
+            clarifyChoices: incoming.clarifyChoices.isEmpty ? existing.clarifyChoices : incoming.clarifyChoices,
+            approvalToken: incoming.approvalToken.isEmpty ? existing.approvalToken : incoming.approvalToken
         )
     }
 

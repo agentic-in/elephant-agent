@@ -374,6 +374,115 @@ class ToolsAndSkillsIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(runtime.list_executions()[0].approval.decision, "deferred")
         self.assertFalse(runtime.list_executions()[0].approved)
+        pending = runtime.list_pending_approvals(session_id="session-blocked")
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].invocation.tool_id, "tool.mail.send")
+        self.assertEqual(pending[0].approval_token, "approval:session-blocked:tool.mail.send")
+
+    def test_tool_runtime_can_resume_deferred_invocation_after_explicit_approval(
+        self,
+    ) -> None:
+        registry = InMemoryToolRegistry()
+        executor = InMemoryToolExecutor()
+        runtime = ToolRuntime(
+            registry=registry,
+            executor=executor,
+            approval_gateway=_DeferredApprovalGateway(),
+        )
+        events = []
+        runtime.subscribe(events.append)
+        handler = mock.Mock(
+            return_value={
+                "execution_id": "tool:approved-run",
+                "summary": "sent approved mail",
+                "outcome": "success",
+            }
+        )
+        runtime.register_tool(
+            ToolDefinition(
+                tool_id="tool.mail.send",
+                display_name="Send Mail",
+                version="1.0.0",
+                description="Send an outbound message.",
+                side_effects=ToolSideEffectMetadata(
+                    risk_class="high",
+                    approval_class="network",
+                    touches_network=True,
+                    categories=("mail", "external_write"),
+                ),
+            ),
+            handler=handler,
+        )
+
+        result = runtime.invoke(
+            "tool.mail.send",
+            {"subject": "Status"},
+            session_id="session-approval",
+        )
+        self.assertEqual(result.outcome, "deferred")
+        handler.assert_not_called()
+
+        record = runtime.approve_pending(
+            "approval:session-approval:tool.mail.send",
+            session_id="session-approval",
+            approver="test",
+        )
+
+        handler.assert_called_once()
+        self.assertEqual(record.result.outcome, "success")
+        self.assertEqual(record.result.summary, "sent approved mail")
+        self.assertTrue(record.approved)
+        self.assertEqual(record.approval.decision, "approved")
+        self.assertEqual(runtime.list_pending_approvals(session_id="session-approval"), ())
+        self.assertEqual(
+            [event.phase for event in events],
+            [
+                "requested",
+                "classified",
+                "approval.deferred",
+                "approval.granted",
+                "execution.started",
+                "execution.completed",
+            ],
+        )
+
+    def test_tool_runtime_can_deny_deferred_invocation_without_executing_handler(
+        self,
+    ) -> None:
+        runtime = ToolRuntime(approval_gateway=_DeferredApprovalGateway())
+        handler = mock.Mock(
+            return_value={
+                "execution_id": "tool:should-not-run",
+                "summary": "unexpected",
+                "outcome": "success",
+            }
+        )
+        runtime.register_tool(
+            ToolDefinition(
+                tool_id="tool.mail.send",
+                display_name="Send Mail",
+                version="1.0.0",
+                side_effects=ToolSideEffectMetadata(
+                    risk_class="high",
+                    approval_class="network",
+                    touches_network=True,
+                ),
+            ),
+            handler=handler,
+        )
+
+        runtime.invoke("tool.mail.send", {"subject": "Status"}, session_id="session-deny")
+        record = runtime.deny_pending(
+            "approval:session-deny:tool.mail.send",
+            session_id="session-deny",
+            approver="test",
+        )
+
+        handler.assert_not_called()
+        self.assertEqual(record.result.outcome, "blocked")
+        self.assertFalse(record.approved)
+        self.assertEqual(record.approval.decision, "denied")
+        self.assertEqual(runtime.list_pending_approvals(session_id="session-deny"), ())
 
     def test_security_approval_gateway_can_auto_grant_deferred_reviews(self) -> None:
         sink = _CaptureSink()
