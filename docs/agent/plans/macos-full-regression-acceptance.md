@@ -322,6 +322,16 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   card opens. The packaged app launched with its managed API healthy and no
   newer crash report appeared; Sleep Display remained locked, so unlocked Home
   visual reinspection is still pending.
+- The real packaged app was relaunched at 2026-05-30 00:27 UTC and presented
+  Sleep Display. The native accessibility tree exposed the locked window, user
+  identity, password field, Unlock button, and letter notification while the
+  underlying app content stayed hidden and non-interactive. The managed API was
+  healthy and no newer crash report appeared. The Sleep Display visual contract
+  was tightened to keep the real video backdrop and subtle wave overlay while
+  removing decorative orb canvas elements from the lock screen.
+- After rebuilding the packaged app, the 2026-05-30 00:33 UTC launch again
+  reached Sleep Display with the same accessible lock controls and a healthy
+  managed API.
 
 ## Open Acceptance Matrix
 
@@ -342,7 +352,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Complete; language, provider, voice, memory, tools, history, sleep, logs, reset, runtime, config surface, managed-API config save/restore, and runtime editor button/draft state contract verified |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
-| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, and Home readiness responsive/accessibility contract verified |
+| Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Partial; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, Home readiness responsive/accessibility contract, and Sleep Display privacy/accessibility/visual contract verified |
 
 ## First Fix Track
 
@@ -456,6 +466,16 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Show status text directly inside each card, not only through color.
 - Expose the card detail and destination surface through tooltip and
   accessibility hints so readiness cards are clearly navigation controls.
+
+## Sleep Display Design Fix Track
+
+- Keep Sleep Display as a real native lock surface: the underlying app content
+  must not be hittable or present in the accessibility tree while locked.
+- Preserve the photographic/video Elephant presence as the primary first-screen
+  signal instead of layering generic decorative effects over it.
+- Expose the password field, Unlock control, and letter notification through
+  native accessibility so the locked state remains usable without revealing app
+  content.
 
 ## Skills Review Surface Contract Track
 

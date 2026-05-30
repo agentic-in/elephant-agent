@@ -11,6 +11,7 @@ MACOS_APP_MODEL_PATH = ROOT / "apps" / "macos" / "Sources" / "AppModel.swift"
 MACOS_API_CLIENT_PATH = ROOT / "apps" / "macos" / "Sources" / "APIClient.swift"
 MACOS_DESIGN_SYSTEM_PATH = ROOT / "apps" / "macos" / "Sources" / "DesignSystem.swift"
 MACOS_VIEWS_PATH = ROOT / "apps" / "macos" / "Sources" / "Views.swift"
+MACOS_SLEEP_DISPLAY_PATH = ROOT / "apps" / "macos" / "Sources" / "SleepDisplayView.swift"
 MACOS_SPEECH_INPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "SpeechInputController.swift"
 MACOS_SPEECH_OUTPUT_PATH = ROOT / "apps" / "macos" / "Sources" / "LocalSpeechOutputController.swift"
 WORKFLOW_BASE_URL_PLACEHOLDER = "REPLACE_BEFORE_RUN"
@@ -156,6 +157,28 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn(".accessibilityLabel(\"\\(item.title), \\(item.status). \\(item.detail)\")", button)
         self.assertIn(".accessibilityHint(navigationHint)", button)
         self.assertIn("item.target.title(language: model.appLanguage)", button)
+
+    def test_macos_sleep_display_hides_app_content_and_avoids_orb_decoration(self) -> None:
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        sleep_display = MACOS_SLEEP_DISPLAY_PATH.read_text(encoding="utf-8")
+        root_view = views.split("struct RootView: View", 1)[1].split("struct OnboardingLetterToast", 1)[0]
+
+        self.assertIn(".allowsHitTesting(!model.isSleepDisplayPresented && !model.showingOnboarding)", root_view)
+        self.assertIn(".accessibilityHidden(model.isSleepDisplayPresented || model.showingOnboarding)", root_view)
+        self.assertIn("if model.isSleepDisplayPresented && !model.showingOnboarding", root_view)
+        self.assertIn("SleepDisplayView()", root_view)
+
+        self.assertIn("SleepVideoBackdrop(paused: reduceMotion)", sleep_display)
+        self.assertIn('Bundle.main.url(forResource: "baby-el", withExtension: "mp4")', sleep_display)
+        self.assertIn("SecureField(model.text(.sleepPasswordPlaceholder)", sleep_display)
+        self.assertIn("model.verifySleepUnlock()", sleep_display)
+        self.assertIn(".accessibilityLabel(model.text(.sleepPasswordPlaceholder))", sleep_display)
+        self.assertIn(".accessibilityHint(model.text(.sleepLockSubtitle))", sleep_display)
+        self.assertIn(".accessibilityElement(children: .contain)", sleep_display)
+        self.assertIn("SleepAmbientCanvas", sleep_display)
+        self.assertIn("drawWaveLines", sleep_display)
+        self.assertNotIn("drawOrbs", sleep_display)
+        self.assertNotIn("Path(ellipseIn:", sleep_display)
 
     def test_macos_runtime_config_save_resets_clean_draft_state(self) -> None:
         views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")

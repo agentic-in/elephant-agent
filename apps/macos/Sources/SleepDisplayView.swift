@@ -442,29 +442,10 @@ struct SleepAmbientGlass: View {
 
 private struct SleepAmbientCanvas: View {
     var phase: TimeInterval
-    private let palette = [ElephantTheme.accent, ElephantTheme.mint, ElephantTheme.ember, ElephantTheme.green]
 
     var body: some View {
         Canvas { context, size in
-            drawOrbs(context: &context, size: size)
             drawWaveLines(context: &context, size: size)
-        }
-    }
-
-    private func drawOrbs(context: inout GraphicsContext, size: CGSize) {
-        for index in 0..<7 {
-            let speed = 0.020 + Double(index) * 0.004
-            let offset = Double(index) * 0.19
-            let progress = CGFloat((phase * speed + offset).truncatingRemainder(dividingBy: 1))
-            let x = size.width * (0.10 + 0.80 * progress)
-            let wave = CGFloat((sin(phase * 0.18 + Double(index)) + 1.0) / 2.0)
-            let y = size.height * (0.18 + 0.64 * wave)
-            let radius = min(size.width, size.height) * (0.10 + CGFloat(index % 3) * 0.035)
-            let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-            context.fill(
-                Path(ellipseIn: rect),
-                with: .color(palette[index % palette.count].opacity(0.045))
-            )
         }
     }
 
