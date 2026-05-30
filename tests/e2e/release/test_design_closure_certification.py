@@ -172,6 +172,51 @@ class DesignClosureContractsTest(unittest.TestCase):
         self.assertIn('configActionResult = ""', save_global_config)
         self.assertIn('configActionResult = "Config saved."', save_global_config)
 
+    def test_macos_skills_surface_owns_drafts_and_settings_stays_deduplicated(self) -> None:
+        app_model = MACOS_APP_MODEL_PATH.read_text(encoding="utf-8")
+        api_client = MACOS_API_CLIENT_PATH.read_text(encoding="utf-8")
+        views = MACOS_VIEWS_PATH.read_text(encoding="utf-8")
+        skills_view = views.split("struct SkillsView: View", 1)[1].split("struct ToolsView: View", 1)[0]
+        settings_view = views.split("struct SettingsView: View", 1)[1].split("private struct SettingsLockedView", 1)[0]
+        catalog = views.split("private struct OperatorCatalogContent: View", 1)[1].split("private struct OperatorCatalogLogo", 1)[0]
+        row = views.split("private struct OperatorCatalogRow: View", 1)[1].split("private struct OperatorItemDetailSheet", 1)[0]
+        detail = views.split("private struct OperatorItemDetailSheet: View", 1)[1].split("private struct OperatorDetailBlock", 1)[0]
+
+        self.assertIn("var sourceKind: String", app_model)
+        self.assertIn("var reviewStatus: String", app_model)
+        self.assertIn("var promptIndexVisible: Bool", app_model)
+        self.assertIn('sourceKind: string(row["sourceKind"] ?? row["source_kind"] ?? metadata["source_kind"])', api_client)
+        self.assertIn('reviewStatus: string(row["reviewStatus"] ?? row["review_status"] ?? metadata["review_status"])', api_client)
+        self.assertIn('promptIndexVisible: bool(row["promptIndexVisible"] ?? row["prompt_index_visible"], fallback: false)', api_client)
+
+        self.assertIn('en: "Drafts"', skills_view)
+        self.assertIn("private var pendingDrafts", skills_view)
+        self.assertIn("SkillAffinityPanel()", skills_view)
+        self.assertIn("SkillLibraryPanel()", skills_view)
+
+        self.assertIn('if kind == "skills", pendingDraftCount > 0', catalog)
+        self.assertIn("items.filter(isPendingDraft).count", catalog)
+        self.assertIn("return leftPending && !rightPending", catalog)
+        self.assertIn("private func isPendingDraft", catalog)
+        self.assertIn('item.reviewStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "pending"', catalog)
+
+        self.assertIn("private var isEvolutionDraft", row)
+        self.assertIn('normalizedReviewStatus == "pending"', row)
+        self.assertIn('en: "pending"', row)
+        self.assertIn('en: "Approve"', row)
+        self.assertIn('return "sparkles"', row)
+
+        self.assertIn('en: "Skill Evolution"', detail)
+        self.assertIn('en: "Prompt visible"', detail)
+        self.assertIn('en: "Review"', detail)
+        self.assertIn("Approve this skill to make it available for future prompts.", detail)
+        self.assertIn('en: "pending review"', detail)
+
+        self.assertNotIn("SkillsSettingsContent()", settings_view)
+        self.assertNotIn("paneBinding(.skills)", settings_view)
+        self.assertIn("ToolsSettingsContent()", settings_view)
+        self.assertIn("RuntimeConfigSettingsContent()", settings_view)
+
     def test_macos_voice_capture_ignores_stale_permission_callbacks(self) -> None:
         speech_input = MACOS_SPEECH_INPUT_PATH.read_text(encoding="utf-8")
         speech_output = MACOS_SPEECH_OUTPUT_PATH.read_text(encoding="utf-8")

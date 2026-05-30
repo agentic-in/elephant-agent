@@ -125,6 +125,14 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Skills was inspected in the packaged app. Learned skill matches, library
   counts, search, pagination state, enabled/available rows, and the detail sheet
   were verified with a `paper` search.
+- Skills pending-draft review was verified against the real packaged app's
+  managed API while Sleep Display remained locked. A temporary authored draft
+  appeared as disabled, `pending`, and outside the prompt index; approving it
+  through the operator skill control moved it to `approved`, enabled, and
+  prompt-visible; disabling and deleting the exact temporary draft removed it
+  from the catalog again. The release contract now also pins that Skills owns
+  affinity/library/draft review presentation while Settings does not duplicate
+  the Skills summary surface.
 - Messaging was inspected in the packaged app. WeChat QR startup now surfaces a
   visible connection failure instead of hanging, and Feishu exposes local secure
   credential fields plus save/connect controls; live transport remains blocked
@@ -314,7 +322,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Partial; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, and managed-API correction/retire/recover/delete lifecycle verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Partial; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, and deleted-Path memory cleanup verified |
-| Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, and learned matches verified |
+| Skills | Search, pagination, skill detail, pending evolution drafts, and no duplicate settings summaries verified. | Partial; search, pagination state, detail sheet, enabled/available rows, learned matches, pending draft projection/approval lifecycle, and no duplicate Settings summary contract verified; unlocked pending-row visual reinspection remains gated by Sleep Display |
 | Messaging | WeChat QR, Feishu/Discord/DingDing/WeCom setup controls, start/stop, and status UX verified where credentials allow. | Partial; WeChat failure UX and Feishu setup verified; live transport blocked by credentials/network/device |
 | Herd | Mother and baby runtime editing, provider/local CLI babies, delegation, and expanded row editability verified. | Complete for native edit surface |
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
@@ -437,6 +445,15 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 - Show status text directly inside each card, not only through color.
 - Expose the card detail and destination surface through tooltip and
   accessibility hints so readiness cards are clearly navigation controls.
+
+## Skills Review Surface Contract Track
+
+- Keep learned skill affinities, library search, pagination, and draft review on
+  the primary Skills surface.
+- Sort pending evolution drafts before normal enabled/available rows and expose
+  explicit pending counters, review copy, and Approve affordances.
+- Keep Settings focused on configuration surfaces such as Tools and Runtime
+  Config instead of duplicating the Skills library or affinity summary.
 
 ## Semantic Index Recovery Fix Track
 
