@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from threading import Event, Thread
+import time
 import unittest
 from unittest import mock
 
@@ -352,6 +354,78 @@ class BuiltinToolsFileCodeTest(BuiltinToolsTestBase):
         self.assertIn("ImportError: cannot import name UTC", result.summary)
         self.assertEqual(result.trace_metadata.get("rtk_rewritten"), "true")
         self.assertEqual(result.trace_metadata.get("rtk_exit_code"), "3")
+
+    @unittest.skipIf(os.name != "posix", "process-group termination is POSIX-specific")
+    def test_terminal_exec_timeout_kills_child_process_group(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            marker = cwd / "survivor.txt"
+            child = cwd / "child.py"
+            child.write_text(
+                "import pathlib, sys, time\n"
+                "time.sleep(2)\n"
+                "pathlib.Path(sys.argv[1]).write_text('survived', encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            command = (
+                f"{sys.executable} -c \"import subprocess, sys, time; "
+                f"subprocess.Popen([sys.executable, {str(child)!r}, {str(marker)!r}]); "
+                "time.sleep(30)\""
+            )
+            runtime = self._make_builtin_runtime(cwd=cwd)
+
+            result = runtime.invoke(
+                "tool.terminal.exec",
+                {"command": command, "timeout_seconds": 1},
+                session_id="session-terminal-timeout",
+            )
+            time.sleep(2.4)
+
+            self.assertEqual(result.outcome, "failed")
+            self.assertIn("command timed out after 1 seconds", result.summary)
+            self.assertFalse(marker.exists())
+
+    @unittest.skipIf(os.name != "posix", "process-group termination is POSIX-specific")
+    def test_terminal_exec_cancel_kills_child_process_group(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            marker = cwd / "cancel-survivor.txt"
+            child = cwd / "cancel_child.py"
+            child.write_text(
+                "import pathlib, sys, time\n"
+                "time.sleep(2)\n"
+                "pathlib.Path(sys.argv[1]).write_text('survived', encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            command = (
+                f"{sys.executable} -c \"import subprocess, sys, time; "
+                f"subprocess.Popen([sys.executable, {str(child)!r}, {str(marker)!r}]); "
+                "time.sleep(30)\""
+            )
+            runtime = self._make_builtin_runtime(cwd=cwd)
+            cancel_event = Event()
+            runtime.set_session_cancel_check("session-terminal-cancel", cancel_event.is_set)
+            result_holder: dict[str, object] = {}
+
+            def invoke() -> None:
+                result_holder["result"] = runtime.invoke(
+                    "tool.terminal.exec",
+                    {"command": command, "timeout_seconds": 30},
+                    session_id="session-terminal-cancel",
+                )
+
+            worker = Thread(target=invoke)
+            worker.start()
+            time.sleep(0.4)
+            cancel_event.set()
+            worker.join(timeout=2.0)
+            time.sleep(2.4)
+
+            self.assertFalse(worker.is_alive())
+            result = result_holder["result"]
+            self.assertEqual(getattr(result, "outcome"), "cancelled")
+            self.assertIn("command cancelled", getattr(result, "summary"))
+            self.assertFalse(marker.exists())
 
     def test_file_read_uses_configured_optimizer_for_non_exact_reads(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

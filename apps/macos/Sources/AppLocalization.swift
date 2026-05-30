@@ -262,6 +262,8 @@ enum AppText {
     case voiceInput
     case typeMessagePlaceholder
     case send
+    case stopReply
+    case stoppingReply
     case providerSetup
     case askElephant
     case chatEmptySubtitle
@@ -283,6 +285,7 @@ enum AppText {
     case noRenderedMessagesYet
     case liveConnectionEnded
     case liveConnectionStopped
+    case chatRunStopped
     case chatLoopFailureGeneric
     case chatLoopFailureDetail
     case untitledChat
@@ -768,6 +771,10 @@ enum AppText {
             return pick(language, en: "Write a message...", zh: "写点什么...", fr: "Écrivez un message...", de: "Nachricht schreiben...")
         case .send:
             return pick(language, en: "Send", zh: "发送", fr: "Envoyer", de: "Senden")
+        case .stopReply:
+            return pick(language, en: "Stop reply", zh: "停止回复", fr: "Arrêter la réponse", de: "Antwort stoppen")
+        case .stoppingReply:
+            return pick(language, en: "Stopping reply", zh: "正在停止回复", fr: "Arrêt de la réponse", de: "Antwort wird gestoppt")
         case .providerSetup:
             return pick(language, en: "provider setup", zh: "配置模型服务", fr: "configuration du fournisseur", de: "Anbieter einrichten")
         case .askElephant:
@@ -810,6 +817,8 @@ enum AppText {
             return pick(language, en: "The live connection ended before Elephant replied.", zh: "实时连接在回复前结束了。", fr: "La connexion en direct s'est arrêtée avant la réponse d'Elephant.", de: "Die Live-Verbindung endete, bevor Elephant geantwortet hat.")
         case .liveConnectionStopped:
             return pick(language, en: "The live connection stopped before the reply finished.", zh: "实时连接中断，回复还没完成。", fr: "La connexion en direct s'est arrêtée avant la fin de la réponse.", de: "Die Live-Verbindung stoppte, bevor die Antwort fertig war.")
+        case .chatRunStopped:
+            return pick(language, en: "Stopped this reply.", zh: "已停止这次回复。", fr: "Réponse arrêtée.", de: "Diese Antwort wurde gestoppt.")
         case .chatLoopFailureGeneric:
             return pick(language, en: "I could not run the full chat loop. Check provider and Personal Model settings, then send again.", zh: "这次没跑完整。检查一下模型服务和个人模型设置，然后再发一次。", fr: "Je n'ai pas pu terminer la boucle de chat. Vérifiez le fournisseur et le modèle personnel, puis renvoyez.", de: "Ich konnte den Chatlauf nicht abschließen. Prüfe Anbieter und persönliches Modell und sende erneut.")
         case .chatLoopFailureDetail:

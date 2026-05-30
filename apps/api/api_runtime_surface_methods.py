@@ -156,6 +156,13 @@ def create_episode(
 
 
 def interrupt_episode(self, episode_id: str, *, interruption_state: str) -> APIEpisodeLifecycleResult:
+    events = getattr(self, "_loop_cancel_events", None)
+    lock = getattr(self, "_loop_cancel_lock", None)
+    if isinstance(events, dict) and lock is not None:
+        with lock:
+            cancel_event = events.get(episode_id)
+        if cancel_event is not None and hasattr(cancel_event, "set"):
+            cancel_event.set()
     episode = self.repository.refresh_episode_state(
         episode_id,
         status="paused",

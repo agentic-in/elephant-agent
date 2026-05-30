@@ -5,7 +5,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 import tempfile
-from threading import Lock
+from threading import Lock, Thread
 import time
 from types import SimpleNamespace
 import unittest
@@ -1281,6 +1281,54 @@ class LoopEventStreamTest(unittest.TestCase):
         event_types = [event["type"] for event in events]
         self.assertIn("stream.heartbeat", event_types)
         self.assertEqual(events[-1]["type"], "loop.completed")
+
+    def test_stream_loop_events_stops_after_cancel_event(self) -> None:
+        model_provider = _StreamModelProvider()
+        tool_runtime = _StreamToolRuntime()
+        telemetry = APITelemetrySink()
+        saw_cancel = False
+
+        def run_loop(_episode_id: str, **kwargs):
+            nonlocal saw_cancel
+            cancel_check = kwargs["cancel_check"]
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                if cancel_check():
+                    saw_cancel = True
+                    return _LoopResult()
+                time.sleep(0.005)
+            return _LoopResult()
+
+        app = SimpleNamespace(
+            model_provider=model_provider,
+            tool_runtime=tool_runtime,
+            telemetry=telemetry,
+            run_loop=run_loop,
+            _loop_stream_lock=Lock(),
+            _loop_cancel_events={},
+            _loop_cancel_lock=Lock(),
+        )
+        events: list[dict[str, object]] = []
+        consumer = Thread(
+            target=lambda: events.extend(stream_loop_events(app, "session-stream", prompt="hello"))
+        )
+        consumer.start()
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            with app._loop_cancel_lock:
+                cancel_event = app._loop_cancel_events.get("session-stream")
+            if cancel_event is not None:
+                cancel_event.set()
+                break
+            time.sleep(0.005)
+        consumer.join(timeout=1.0)
+        deadline = time.monotonic() + 1.0
+        while not saw_cancel and time.monotonic() < deadline:
+            time.sleep(0.005)
+
+        self.assertFalse(consumer.is_alive())
+        self.assertTrue(saw_cancel)
+        self.assertEqual(events[-1]["type"], "loop.cancelled")
 
     def test_wsgi_call_streams_sse_for_loop_endpoint(self) -> None:
         app = SimpleNamespace()

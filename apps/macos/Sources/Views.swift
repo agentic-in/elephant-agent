@@ -2925,26 +2925,30 @@ struct WakeComposerPanel: View {
                             .accessibilityLabel(voiceInputButtonHelp)
 
                             Button {
-                                speech.stop()
-                                Task { await model.sendWakeMessage() }
+                                if model.isWakeRunning {
+                                    model.cancelWakeRun()
+                                } else {
+                                    speech.stop()
+                                    Task { await model.sendWakeMessage() }
+                                }
                             } label: {
-                                Image(systemName: "arrow.up")
+                                Image(systemName: sendButtonSymbol)
                                     .font(.system(size: 15, weight: .bold))
                                     .frame(width: 32, height: 32)
-                                    .foregroundStyle(canSend ? Color.white : ElephantTheme.faint)
+                                    .foregroundStyle(sendButtonIsActive ? Color.white : ElephantTheme.faint)
                                     .background(
                                         Circle()
-                                            .fill(canSend ? Color(red: 0.08, green: 0.09, blue: 0.10) : ElephantTheme.line.opacity(0.34))
+                                            .fill(sendButtonFill)
                                     )
                                     .overlay(
                                         Circle()
-                                            .stroke(canSend ? Color.black.opacity(0.10) : ElephantTheme.line.opacity(0.42), lineWidth: 1)
+                                            .stroke(sendButtonStroke, lineWidth: 1)
                                     )
                             }
                             .buttonStyle(PressablePlainButtonStyle())
-                            .disabled(!canSend)
-                            .help(model.text(.send))
-                            .accessibilityLabel(model.text(.send))
+                            .disabled(!sendButtonIsActive || model.isWakeCancelling)
+                            .help(sendButtonHelp)
+                            .accessibilityLabel(sendButtonHelp)
                         }
                         .padding(.bottom, 1)
                     }
@@ -3088,6 +3092,32 @@ struct WakeComposerPanel: View {
 
     private var canSendVoice: Bool {
         !speech.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var sendButtonIsActive: Bool {
+        model.isWakeRunning || canSend
+    }
+
+    private var sendButtonSymbol: String {
+        model.isWakeRunning ? "stop.fill" : "arrow.up"
+    }
+
+    private var sendButtonFill: Color {
+        if model.isWakeRunning {
+            return ElephantTheme.orange
+        }
+        return canSend ? Color(red: 0.08, green: 0.09, blue: 0.10) : ElephantTheme.line.opacity(0.34)
+    }
+
+    private var sendButtonStroke: Color {
+        model.isWakeRunning ? ElephantTheme.orange.opacity(0.22) : (canSend ? Color.black.opacity(0.10) : ElephantTheme.line.opacity(0.42))
+    }
+
+    private var sendButtonHelp: String {
+        if model.isWakeRunning {
+            return model.text(model.isWakeCancelling ? .stoppingReply : .stopReply)
+        }
+        return model.text(.send)
     }
 
     private var voiceInputButtonSymbol: String {

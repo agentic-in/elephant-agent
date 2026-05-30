@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import select
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -185,18 +186,34 @@ def run_terminal_exec(
     )
     run_command = str(getattr(rewrite_result, "command", command) or command)
     trace_metadata = rewrite_result.trace_metadata() if rewrite_result is not None else {}
-    completed = subprocess.run(
+    returncode, stdout, stderr, timed_out, cancelled = _run_foreground_terminal_command(
         run_command,
-        shell=True,
         cwd=cwd,
         env=env,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
+        cancel_check=invocation.context.cancel_check,
     )
-    body = join_parts(completed.stdout, completed.stderr)
-    summary = body or f"command exited with status {completed.returncode}"
-    if completed.returncode != 0:
+    body = join_parts(stdout, stderr)
+    if cancelled:
+        summary = join_parts(body, "command cancelled")
+        return tool_summary(
+            invocation,
+            append_rtk_failure_tail(summary, rewrite_result),
+            outcome="cancelled",
+            side_effects=("terminal", "filesystem"),
+            trace_metadata=trace_metadata,
+        )
+    if timed_out:
+        summary = join_parts(body, f"command timed out after {timeout_seconds} seconds")
+        return tool_summary(
+            invocation,
+            append_rtk_failure_tail(summary, rewrite_result),
+            outcome="failed",
+            side_effects=("terminal", "filesystem"),
+            trace_metadata=trace_metadata,
+        )
+    summary = body or f"command exited with status {returncode}"
+    if returncode != 0:
         summary = append_rtk_failure_tail(summary, rewrite_result)
         return tool_summary(
             invocation,
@@ -206,6 +223,92 @@ def run_terminal_exec(
             trace_metadata=trace_metadata,
         )
     return tool_summary(invocation, summary, side_effects=("terminal", "filesystem"), trace_metadata=trace_metadata)
+
+
+def _run_foreground_terminal_command(
+    command: str,
+    *,
+    cwd: Path,
+    env: Mapping[str, str],
+    timeout_seconds: int,
+    cancel_check: Any = None,
+) -> tuple[int, str, str, bool, bool]:
+    session_kwargs: dict[str, Any] = {}
+    if os.name == "posix":
+        session_kwargs["start_new_session"] = True
+    process = subprocess.Popen(
+        command,
+        shell=True,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        **session_kwargs,
+    )
+    deadline = time.monotonic() + max(1, timeout_seconds)
+    while True:
+        if callable(cancel_check):
+            try:
+                if cancel_check():
+                    _terminate_terminal_process_group(process)
+                    stdout, stderr = _communicate_after_terminal_stop(process)
+                    return process.returncode, stdout, stderr, False, True
+            except Exception:
+                pass
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate_terminal_process_group(process)
+            stdout, stderr = _communicate_after_terminal_stop(process)
+            return process.returncode, stdout, stderr, True, False
+        try:
+            stdout, stderr = process.communicate(timeout=min(0.2, remaining))
+            return process.returncode, stdout, stderr, False, False
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def _communicate_after_terminal_stop(process: subprocess.Popen[str]) -> tuple[str, str]:
+    try:
+        return process.communicate(timeout=1)
+    except subprocess.TimeoutExpired:
+        _kill_terminal_process_group(process)
+        return process.communicate()
+
+
+def _terminate_terminal_process_group(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=1)
+            return
+        except ProcessLookupError:
+            return
+        except subprocess.TimeoutExpired:
+            pass
+    else:
+        process.terminate()
+        try:
+            process.wait(timeout=1)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+    _kill_terminal_process_group(process)
+
+
+def _kill_terminal_process_group(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+    else:
+        process.kill()
+    process.wait(timeout=1)
 
 
 def run_file_read(

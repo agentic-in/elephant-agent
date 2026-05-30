@@ -7,7 +7,7 @@ delivery specifics.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -245,6 +245,7 @@ class KernelSourceRequest:
     loop_id: str | None = None
     episode_policy: str = "auto"
     episode_reuse_idle_seconds: int = 1800
+    cancel_check: Callable[[], bool] | None = None
 
     @property
     def source_id(self) -> str:
@@ -552,7 +553,13 @@ def _execute_direct_tool_loop(
         result=result,
     )
     persist_loop_checkpoint(checkpoint, step=tool_step)
-    checkpoint = loop_service.complete(checkpoint, summary=result.summary)
+    outcome = str(result.outcome or "").strip().lower()
+    if outcome == "cancelled":
+        checkpoint = loop_service.cancel(checkpoint, summary=result.summary)
+    elif outcome in {"failed", "error", "blocked"}:
+        checkpoint = loop_service.fail(checkpoint, summary=result.summary, reason=outcome or "failed")
+    else:
+        checkpoint = loop_service.complete(checkpoint, summary=result.summary)
     persist_loop_checkpoint(checkpoint)
     return result, checkpoint
 

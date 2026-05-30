@@ -1509,6 +1509,7 @@ final class ElephantAppModel: ObservableObject {
     @Published var mcpActionInFlight = false
     @Published var isReflecting = false
     @Published var isWakeRunning = false
+    @Published var isWakeCancelling = false
     @Published var activeEpisodeID = ""
     @Published var composerFocusToken = UUID()
     @Published var userAvatarPath = UserDefaults.standard.string(forKey: ElephantAppModel.userAvatarPathKey) ?? ""
@@ -1556,6 +1557,8 @@ final class ElephantAppModel: ObservableObject {
     private var onboardingLetterPollTask: Task<Void, Never>?
     private var sleepIdleMonitorTask: Task<Void, Never>?
     private var weixinQRPollTask: Task<Void, Never>?
+    private var activeWakeRunToken: UUID?
+    private var cancelledWakeRunToken: UUID?
     private var launchSleepUnlockAccepted = false
     private var onboardingCreatedStateID = ""
     private static let onboardingCompleteKey = "elephant.mac.onboardingComplete"
@@ -3973,12 +3976,25 @@ final class ElephantAppModel: ObservableObject {
 
     private func drainWakeQueueIfNeeded() async {
         guard !isWakeRunning else { return }
+        let runToken = UUID()
+        activeWakeRunToken = runToken
+        cancelledWakeRunToken = nil
+        isWakeCancelling = false
         isWakeRunning = true
         defer {
+            if activeWakeRunToken == runToken {
+                activeWakeRunToken = nil
+                cancelledWakeRunToken = nil
+            }
             isWakeRunning = false
+            isWakeCancelling = false
             focusComposer()
         }
         while !wakeQueue.isEmpty {
+            if cancelledWakeRunToken == runToken {
+                wakeQueue.removeAll()
+                break
+            }
             let item = wakeQueue.removeFirst()
             await runWakeMessage(
                 item.text,
@@ -3986,6 +4002,27 @@ final class ElephantAppModel: ObservableObject {
                 inputModality: item.inputModality,
                 voiceDuration: item.voiceDuration
             )
+        }
+    }
+
+    func cancelWakeRun() {
+        guard isWakeRunning, !isWakeCancelling else { return }
+        if let activeWakeRunToken {
+            cancelledWakeRunToken = activeWakeRunToken
+        }
+        isWakeCancelling = true
+        wakeQueue.removeAll()
+        speechOutput.stop()
+        let episodeID = activeEpisodeID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !episodeID.isEmpty else { return }
+        Task {
+            do {
+                try await client.interruptWakeLoop(episodeID: episodeID, reason: "cancelled")
+            } catch {
+                if !Self.isBenignCancellationErrorMessage(error.localizedDescription) {
+                    lastError = error.localizedDescription
+                }
+            }
         }
     }
 
@@ -4017,6 +4054,11 @@ final class ElephantAppModel: ObservableObject {
         var liveToolGenerations: [String: Int] = [:]
         let minimumTextFlushInterval: TimeInterval = 0.08
         let minimumScrollFlushInterval: TimeInterval = 0.25
+        let runToken = activeWakeRunToken
+
+        func wakeRunWasCancelled() -> Bool {
+            Task.isCancelled || (runToken != nil && cancelledWakeRunToken == runToken)
+        }
 
         func appendLiveAssistantMessage(text: String = "", toolEvents: [ToolUseEvent] = []) -> UUID {
             let message = ChatMessage(role: .assistant, text: text, toolEvents: toolEvents, isStreaming: true)
@@ -4167,6 +4209,24 @@ final class ElephantAppModel: ObservableObject {
             )
         }
 
+        func finishCancelledRun() {
+            guard !completed else { return }
+            completed = true
+            _ = flushAssistantText(force: true)
+            finishLiveMessages()
+            if streamedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let assistantMessageID {
+                updateAssistantMessage(
+                    id: assistantMessageID,
+                    text: self.text(.chatRunStopped),
+                    toolEvents: liveToolEvents.filter { !$0.shouldHideInChat },
+                    isStreaming: false
+                )
+            } else {
+                messages.append(ChatMessage(role: .assistant, text: self.text(.chatRunStopped)))
+                chatScrollRevision += 1
+            }
+        }
+
         currentAssistantTextMessageID = appendLiveAssistantMessage()
 
         do {
@@ -4176,8 +4236,17 @@ final class ElephantAppModel: ObservableObject {
                 activeEpisodeID: activeEpisodeID
             )
             activeEpisodeID = episodeID
+            if wakeRunWasCancelled() {
+                try? await client.interruptWakeLoop(episodeID: episodeID, reason: "cancelled")
+                finishCancelledRun()
+                return
+            }
 
             streamLoop: for try await event in client.streamWakeLoop(prompt, episodeID: episodeID) {
+                if wakeRunWasCancelled() {
+                    finishCancelledRun()
+                    break streamLoop
+                }
                 if event.type == "stream.heartbeat" {
                     continue
                 }
@@ -4257,11 +4326,17 @@ final class ElephantAppModel: ObservableObject {
                     messages.append(ChatMessage(role: .assistant, text: chatLoopFailureMessage(detail: event.error)))
                     lastError = chatLoopFailureDetail(event.error)
                     break streamLoop
+                case "loop.cancelled":
+                    finishCancelledRun()
+                    break streamLoop
                 default:
                     continue
                 }
             }
 
+            if wakeRunWasCancelled() {
+                finishCancelledRun()
+            }
             if !completed {
                 if streamedText.isEmpty, let id = assistantMessageID {
                     updateAssistantMessage(
@@ -4274,6 +4349,10 @@ final class ElephantAppModel: ObservableObject {
                 finishLiveMessages()
             }
         } catch {
+            if wakeRunWasCancelled() {
+                finishCancelledRun()
+                return
+            }
             if let assistantMessageID, !receivedStreamEvent, !activeEpisodeID.isEmpty {
                 let episodeID = activeEpisodeID
                 do {
@@ -4596,6 +4675,9 @@ final class ElephantAppModel: ObservableObject {
         configActionResult = ""
         isReflecting = false
         isWakeRunning = false
+        isWakeCancelling = false
+        activeWakeRunToken = nil
+        cancelledWakeRunToken = nil
         isSleepDisplayPresented = false
         sleepDisplayReason = "manual"
         launchSleepUnlockAccepted = false

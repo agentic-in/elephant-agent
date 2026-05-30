@@ -57,6 +57,7 @@ class ToolRuntimeContext:
     episode_id: str | None = None
     loop_id: str | None = None
     step_id: str | None = None
+    cancel_check: Callable[[], bool] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -477,6 +478,8 @@ class ToolRuntime(ToolCapability):
         self._manifest_loads: list[ToolManifestLoadRecord] = []
         self._observers: list[ToolObserver] = []
         self._observer_lock = Lock()
+        self._cancel_checks: dict[str, Callable[[], bool]] = {}
+        self._cancel_check_lock = Lock()
 
     @property
     def registry(self) -> ToolRegistry:
@@ -503,6 +506,14 @@ class ToolRuntime(ToolCapability):
             cleaner()
         except Exception:
             return
+
+    def set_session_cancel_check(self, session_id: str, cancel_check: Callable[[], bool]) -> None:
+        with self._cancel_check_lock:
+            self._cancel_checks[session_id] = cancel_check
+
+    def clear_session_cancel_check(self, session_id: str) -> None:
+        with self._cancel_check_lock:
+            self._cancel_checks.pop(session_id, None)
 
     def register_tool(self, definition: ToolDefinition, handler: ToolHandler | None = None) -> None:
         self._register_tool(definition, handler=handler)
@@ -773,9 +784,9 @@ class ToolRuntime(ToolCapability):
             if self._context_resolver is not None
             else _default_context(session_id, requester)
         )
-        if context.requester == requester:
-            return context
-        return replace(context, requester=requester)
+        with self._cancel_check_lock:
+            cancel_check = self._cancel_checks.get(session_id)
+        return replace(context, requester=requester, cancel_check=cancel_check)
 
     def _emit_event(self, event: ToolLifecycleEvent) -> None:
         with self._observer_lock:

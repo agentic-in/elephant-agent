@@ -395,13 +395,32 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   system/local recognition modes, local Chinese recognition readiness, and a
   Preview/Stop playback control that returned to the ready state while the app
   and managed API stayed healthy.
+- A live unlocked Chat acceptance turn exposed a running-state recovery gap
+  that also affects voice-sent Chat turns: once a reply entered long model/tool
+  activity, the composer had no visible Stop affordance, API interruption only
+  paused the Episode record, and foreground terminal tool timeouts could leave
+  child work alive. The desktop Chat composer now switches Send into Stop while
+  a reply is running, posts the Episode interrupt, the stream emits
+  `loop.cancelled`, kernel turns observe cancellation between model/tool
+  cycles, cancelled loops are recorded distinctly, and foreground terminal
+  timeouts terminate the whole child process group. Unit coverage pins stream
+  cancellation and terminal timeout cleanup.
+- The rebuilt packaged app was relaunched and inspected unlocked. During a live
+  Chat turn, the composer changed from Send to Stop and then to a disabled
+  Stopping state after Stop was clicked; the transcript rendered
+  `Stopped this reply.` and the composer returned to the normal Send state.
+  A managed-API packaged-runtime smoke then interrupted a running
+  `tool.terminal.exec` command after execution had started; the stream emitted
+  `loop.cancelled`, both the checkpoint Loop and kernel Loop recorded
+  `cancelled`, the `call_tool` Step recorded `cancelled`, no matching child
+  process remained, and no newer macOS crash report appeared.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, memory-backed real model replies before and after voice timeout, voice privacy recovery action, modern microphone permission request with duplicate-prompt avoidance, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, modern microphone permission request with duplicate-prompt avoidance, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
 | Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; permission timeout, one-shot microphone callback delivery, modern permission-state polling, legacy permission support for older macOS, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
@@ -573,6 +592,19 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   preserving the app's local AVSpeech fallback path for online failures.
 - Treat Sleep Display and microphone permission prompts as user-controlled
   gates; verify graceful locked/permission states without bypassing privacy.
+
+## Chat Running Cancellation Fix Track
+
+- Treat voice-sent Chat turns the same as typed Chat turns once they enter the
+  model/tool loop: the composer must expose a visible Stop control while the
+  reply is running.
+- `POST /v1/episodes/{episode_id}/interrupt` must notify any active stream for
+  that Episode, not only update Episode metadata.
+- Kernel loop execution should stop at the next safe boundary after a cancel
+  request and record the outcome as cancelled instead of continuing into more
+  model/tool cycles.
+- Bounded terminal tools must clean up their foreground process tree on timeout
+  so a stopped Chat turn cannot leave local child work running.
 
 ## Exit Criteria
 

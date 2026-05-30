@@ -70,6 +70,22 @@ def execute_kernel_turn(
             effective_prompt=turn_messages[0].content if turn_messages else prompt_for_execution,
             source_event_id=request.event.event_id,
         )
+        if _request_cancelled(request):
+            execution = _cancelled_execution(session)
+            _record_step(
+                step_recorder,
+                action="call_tool",
+                status="cancelled",
+                summary=execution.summary,
+                outcome=execution.outcome,
+                payload_refs=(request.event.event_id,),
+                metadata={
+                    "tool_name": request.tool_name,
+                    "tool_arguments": dict(request.tool_arguments),
+                    "turn_event_id": request.event.event_id,
+                },
+            )
+            return execution, loop_checkpoint, (*turn_messages, *assistant_turn_messages(execution))
         if service.dependencies.tools is None:
             raise RuntimeError("tool execution requested but no tool capability was configured")
         _record_step(
@@ -93,7 +109,7 @@ def execute_kernel_turn(
         _record_step(
             step_recorder,
             action="call_tool",
-            status="failed" if execution.outcome == "failed" else "completed",
+            status=_step_status_for_execution(execution),
             summary=execution.summary,
             outcome=execution.outcome,
             payload_refs=(execution.execution_id,),
@@ -114,6 +130,17 @@ def execute_kernel_turn(
         recall_count=0,
         recall_bytes=0,
     )
+    if _request_cancelled(request):
+        execution = _cancelled_execution(session)
+        _record_step(
+            step_recorder,
+            action="call_model",
+            status="cancelled",
+            summary=execution.summary,
+            outcome=execution.outcome,
+            payload_refs=(request.event.event_id,),
+        )
+        return execution, loop_checkpoint, (*turn_messages, *assistant_turn_messages(execution))
     response = _generate_with_steps(
         service,
         profile,
@@ -226,7 +253,7 @@ def _generate_with_steps(
     _record_step(
         step_recorder,
         action="call_model",
-        status="failed" if response.outcome == "failed" else "completed",
+        status=_step_status_for_execution(response),
         summary=response.summary,
         outcome=response.outcome,
         payload_refs=(response.execution_id,),
@@ -265,6 +292,35 @@ def _record_step(
         outcome=outcome,
         payload_refs=payload_refs,
         metadata=_step_metadata(metadata or {}),
+    )
+
+
+def _step_status_for_execution(execution: ExecutionResult) -> str:
+    outcome = str(execution.outcome or "").strip().lower()
+    if outcome == "cancelled":
+        return "cancelled"
+    if outcome in {"failed", "error", "blocked"}:
+        return "failed"
+    return "completed"
+
+
+def _request_cancelled(request: KernelSourceRequest) -> bool:
+    cancel_check = getattr(request, "cancel_check", None)
+    if not callable(cancel_check):
+        return False
+    try:
+        return bool(cancel_check())
+    except Exception:
+        return False
+
+
+def _cancelled_execution(session: Episode) -> ExecutionResult:
+    return ExecutionResult(
+        execution_id=f"cancelled:{session.episode_id}:{uuid4().hex[:8]}",
+        episode_id=session.episode_id,
+        outcome="cancelled",
+        summary="The chat run was stopped.",
+        side_effects=("cancelled",),
     )
 
 
@@ -368,6 +424,21 @@ def _execute_model_tool_loop(
                 response_text=_clean_execution_summary(response).summary,
             )
             service._persist_loop_checkpoint(current_loop, step=model_step)
+        if _request_cancelled(request):
+            return _cancel_model_tool_loop(
+                service,
+                current_loop,
+                loop_service,
+                session,
+                loop_traces=tuple(loop_traces),
+                collected_turn_messages=collected_turn_messages,
+                prompt_tokens_total=prompt_tokens_total,
+                completion_tokens_total=completion_tokens_total,
+                total_tokens_total=total_tokens_total,
+                cached_prompt_tokens_total=cached_prompt_tokens_total,
+                cache_creation_prompt_tokens_total=cache_creation_prompt_tokens_total,
+                cache_usage_reported=cache_usage_reported,
+            )
         if not deduped_calls:
             return _finalize_model_loop_response(
                 service,
@@ -394,6 +465,21 @@ def _execute_model_tool_loop(
             step_recorder=step_recorder,
             loop_traces=loop_traces,
         )
+        if _request_cancelled(request):
+            return _cancel_model_tool_loop(
+                service,
+                current_loop,
+                loop_service,
+                session,
+                loop_traces=tuple(loop_traces),
+                collected_turn_messages=collected_turn_messages,
+                prompt_tokens_total=prompt_tokens_total,
+                completion_tokens_total=completion_tokens_total,
+                total_tokens_total=total_tokens_total,
+                cached_prompt_tokens_total=cached_prompt_tokens_total,
+                cache_creation_prompt_tokens_total=cache_creation_prompt_tokens_total,
+                cache_usage_reported=cache_usage_reported,
+            )
         tool_turn_messages = _role_preserved_tool_interaction_messages(
             assistant_summary=parsed.cleaned_text or response.summary,
             calls=deduped_calls,
@@ -485,6 +571,42 @@ def _finalize_model_loop_response(
     return finalized, current_loop, tuple(collected_turn_messages)
 
 
+def _cancel_model_tool_loop(
+    service,
+    current_loop: LoopState | None,
+    loop_service: LoopCheckpointService,
+    session: Episode,
+    *,
+    loop_traces: tuple[str, ...],
+    collected_turn_messages: list[PromptMessage],
+    prompt_tokens_total: int,
+    completion_tokens_total: int,
+    total_tokens_total: int,
+    cached_prompt_tokens_total: int,
+    cache_creation_prompt_tokens_total: int,
+    cache_usage_reported: bool,
+) -> tuple[ExecutionResult, LoopState | None, tuple[PromptMessage, ...]]:
+    cancelled = _with_execution_usage(
+        _cancelled_execution(session),
+        prompt_tokens=prompt_tokens_total,
+        completion_tokens=completion_tokens_total,
+        total_tokens=total_tokens_total,
+        cached_prompt_tokens=cached_prompt_tokens_total,
+        cache_creation_prompt_tokens=cache_creation_prompt_tokens_total,
+        cache_usage_reported=cache_usage_reported,
+    )
+    if loop_traces:
+        cancelled = replace(
+            cancelled,
+            side_effects=tuple(dict.fromkeys((*cancelled.side_effects, *loop_traces))),
+        )
+    if current_loop is not None:
+        current_loop = loop_service.cancel(current_loop, summary=cancelled.summary)
+        service._persist_loop_checkpoint(current_loop)
+    collected_turn_messages.extend(assistant_turn_messages(cancelled))
+    return cancelled, current_loop, tuple(collected_turn_messages)
+
+
 def _invoke_tools_for_loop(
     service,
     calls: tuple[_TextToolCall, ...],
@@ -520,7 +642,7 @@ def _invoke_tools_for_loop(
         _record_step(
             step_recorder,
             action="call_tool",
-            status="failed" if result.outcome == "failed" else "completed",
+            status=_step_status_for_execution(result),
             summary=result.summary,
             outcome=result.outcome,
             payload_refs=(result.execution_id,),

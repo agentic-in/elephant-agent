@@ -144,6 +144,26 @@ class LoopCheckpointService:
             last_summary=_compact(summary, limit=800),
         )
 
+    def cancel(
+        self,
+        run: LoopState,
+        *,
+        summary: str,
+        reason: str = "cancelled",
+        now: datetime | None = None,
+    ) -> LoopState:
+        current = now or _utc_now()
+        return replace(
+            run,
+            status="cancelled",
+            phase="done",
+            updated_at=current,
+            heartbeat_at=current,
+            waiting_reason=reason,
+            continuation_prompt=None,
+            last_summary=_compact(summary, limit=800),
+        )
+
     def park(
         self,
         run: LoopState,

@@ -1063,6 +1063,15 @@ struct APIClient {
         return WakeReply(episodeID: episodeID, text: reply, toolEvents: toolEvents)
     }
 
+    func interruptWakeLoop(episodeID: String, reason: String = "cancelled") async throws {
+        guard baseURL != nil else { return }
+        _ = try await request(
+            path: "/v1/episodes/\(Self.pathSegment(episodeID))/interrupt",
+            method: "POST",
+            body: ["interruption_state": reason]
+        )
+    }
+
     func submitClarification(episodeID: String, clarifyID: String, answer: String) async throws {
         guard baseURL != nil else { return }
         _ = try await request(
@@ -1205,6 +1214,12 @@ struct APIClient {
                     result: ""
                 ),
                 detail: message
+            )
+        }
+        if type == "loop.cancelled" {
+            return WakeStreamEvent(
+                type: type,
+                error: object["error"] as? String ?? "cancelled"
             )
         }
         if type == "clarify.requested" || type == "clarify.expired" {

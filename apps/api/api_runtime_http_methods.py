@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 import json
 from queue import Empty, Queue
-from threading import Lock, Thread
-from typing import Any, Mapping
+from threading import Event, Lock, Thread
+from typing import Any
 from urllib.parse import unquote
 from uuid import uuid4
 
@@ -58,6 +58,30 @@ from .api_runtime_paths import _dispatch_paths
 
 _STREAM_KEEPALIVE_SECONDS = 15.0
 _STREAM_CLARIFY_TIMEOUT_SECONDS = 600.0
+
+
+def _register_loop_cancel_event(self, episode_id: str) -> Event:
+    cancel_event = Event()
+    events = getattr(self, "_loop_cancel_events", None)
+    lock = getattr(self, "_loop_cancel_lock", None)
+    if not isinstance(events, dict) or lock is None:
+        return cancel_event
+    with lock:
+        previous = events.get(episode_id)
+        if previous is not None and hasattr(previous, "set"):
+            previous.set()
+        events[episode_id] = cancel_event
+    return cancel_event
+
+
+def _clear_loop_cancel_event(self, episode_id: str, cancel_event: Event) -> None:
+    events = getattr(self, "_loop_cancel_events", None)
+    lock = getattr(self, "_loop_cancel_lock", None)
+    if not isinstance(events, dict) or lock is None:
+        return
+    with lock:
+        if events.get(episode_id) is cancel_event:
+            events.pop(episode_id, None)
 
 
 class _StreamingClarifySurface:
@@ -216,6 +240,7 @@ def run_loop(
     tool_arguments: Mapping[str, Any] | None = None,
     delivery_payload: Mapping[str, Any] | None = None,
     source_event_type: str = "loop.received",
+    cancel_check: Callable[[], bool] | None = None,
 ) -> APILoopResult:
     episode = self.repository.load_episode_state(episode_id)
     if episode is None:
@@ -240,28 +265,38 @@ def run_loop(
             "tool_name": tool_name or "",
         },
     )
-    outcome = self.kernel.run(
-        KernelSourceRequest(
-            route_id=episode_id,
-            prompt=prompt,
-            surface="api",
-            source_event_type=source_event_type,
-            source_payload=dict(event.payload),
-            source_event_id=event.event_id,
-            route_profile_id=episode.personal_model_id,
-            route_status=episode.status,
-            route_interruption_state=episode.interruption_state,
-            route_started_at=episode.started_at,
-            personal_model_id=route_state.personal_model_id if route_state is not None else episode.personal_model_id,
-            state_id=route_state.state_id if route_state is not None else None,
-            episode_id=episode.episode_id,
-            episode_policy="api_session",
-            state_query=state_query,
-            tool_name=tool_name,
-            tool_arguments=dict(tool_arguments or {}),
-            delivery_payload=dict(delivery_payload or {}),
+    set_cancel_check = getattr(getattr(self, "tool_runtime", None), "set_session_cancel_check", None)
+    clear_cancel_check = getattr(getattr(self, "tool_runtime", None), "clear_session_cancel_check", None)
+    registered_cancel_check = cancel_check is not None and callable(set_cancel_check) and callable(clear_cancel_check)
+    if registered_cancel_check:
+        set_cancel_check(episode_id, cancel_check)
+    try:
+        outcome = self.kernel.run(
+            KernelSourceRequest(
+                route_id=episode_id,
+                prompt=prompt,
+                surface="api",
+                source_event_type=source_event_type,
+                source_payload=dict(event.payload),
+                source_event_id=event.event_id,
+                route_profile_id=episode.personal_model_id,
+                route_status=episode.status,
+                route_interruption_state=episode.interruption_state,
+                route_started_at=episode.started_at,
+                personal_model_id=route_state.personal_model_id if route_state is not None else episode.personal_model_id,
+                state_id=route_state.state_id if route_state is not None else None,
+                episode_id=episode.episode_id,
+                episode_policy="api_session",
+                state_query=state_query,
+                tool_name=tool_name,
+                tool_arguments=dict(tool_arguments or {}),
+                delivery_payload=dict(delivery_payload or {}),
+                cancel_check=cancel_check,
+            )
         )
-    )
+    finally:
+        if registered_cancel_check:
+            clear_cancel_check(episode_id)
     observation = ReconciliationPipeline().observe_turn(
         inbound_event=event,
         execution=outcome.execution,
@@ -331,6 +366,7 @@ def stream_loop_events(
     sentinel = object()
     sequence_lock = Lock()
     stream_sequence = 0
+    cancel_event = _register_loop_cancel_event(self, episode_id)
 
     def envelope(event: Mapping[str, Any]) -> dict[str, Any]:
         nonlocal stream_sequence
@@ -418,6 +454,7 @@ def stream_loop_events(
                 tool_name=tool_name,
                 tool_arguments=tool_arguments,
                 delivery_payload=delivery_payload,
+                cancel_check=cancel_event.is_set,
             )
             enqueue(_loop_result_stream_completed_event(result))
         except Exception as error:
@@ -435,15 +472,25 @@ def stream_loop_events(
 
     Thread(target=worker, daemon=True).start()
 
-    while True:
-        try:
-            event = event_queue.get(timeout=_STREAM_KEEPALIVE_SECONDS)
-        except Empty:
-            yield envelope({"type": "stream.heartbeat"})
-            continue
-        if event is sentinel:
-            break
-        yield event  # type: ignore[misc]
+    try:
+        while True:
+            try:
+                event = event_queue.get(timeout=_STREAM_KEEPALIVE_SECONDS)
+            except Empty:
+                if cancel_event.is_set():
+                    yield envelope({"type": "loop.cancelled", "error": "cancelled"})
+                    break
+                yield envelope({"type": "stream.heartbeat"})
+                continue
+            if event is sentinel:
+                break
+            yield event  # type: ignore[misc]
+            event_type = event.get("type") if isinstance(event, Mapping) else ""
+            if cancel_event.is_set() and event_type != "loop.cancelled":
+                yield envelope({"type": "loop.cancelled", "error": "cancelled"})
+                break
+    finally:
+        _clear_loop_cancel_event(self, episode_id, cancel_event)
 
 def dispatch(self, method: str, path: str, body: bytes | None = None) -> APIResponse:
     if method.upper() == "GET" and path == API_HEALTH_ROUTE:
@@ -528,9 +575,11 @@ def _loop_result_payload(result: APILoopResult) -> dict[str, Any]:
 
 def _loop_result_stream_completed_event(result: APILoopResult) -> dict[str, Any]:
     reply_text = _loop_reply_text(result)
+    outcome = str(getattr(result.outcome.execution, "outcome", "") or "").strip().lower()
     return {
-        "type": "loop.completed",
+        "type": "loop.cancelled" if outcome == "cancelled" else "loop.completed",
         "reply_text": reply_text,
+        "error": "cancelled" if outcome == "cancelled" else "",
         "reply": {
             "episode_id": str(getattr(getattr(result, "episode", None), "episode_id", "") or ""),
             "text": reply_text,

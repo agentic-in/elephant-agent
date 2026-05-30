@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 import json
 import logging
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -404,6 +404,8 @@ class ElephantAPIApp:
         )
         self._loops: dict[str, list[APILoopRecord]] = {}
         self._loop_stream_lock = Lock()
+        self._loop_cancel_events: dict[str, Event] = {}
+        self._loop_cancel_lock = Lock()
 
 ElephantAPIApp.list_providers = _provider_methods.list_providers
 ElephantAPIApp.setup_provider = _provider_methods.setup_provider

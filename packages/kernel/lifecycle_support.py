@@ -375,6 +375,8 @@ def close_loop_lifecycle(
         status = "paused"
     elif outcome == "failed":
         status = "failed"
+    elif outcome == "cancelled":
+        status = "cancelled"
     else:
         status = "completed"
     loop = replace(
