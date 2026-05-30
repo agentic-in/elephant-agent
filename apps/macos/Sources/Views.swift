@@ -1603,7 +1603,7 @@ private struct HomeContinuityQuestionRow: View {
                 Text(localizedYouText(model.appLanguage, en: "Next useful question", zh: "接下来可以问", fr: "Prochaine question utile", de: "Nächste nützliche Frage"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
-                Text(question.text)
+                Text(localizedQuestionText(question, language: model.appLanguage))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(ElephantTheme.ink)
                     .lineLimit(2)
@@ -3973,7 +3973,7 @@ struct PendingQuestionReplyCard: View {
                 Text(localizedYouText(language, en: "Replying to", zh: "正在回答", fr: "Réponse à", de: "Antwort auf"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ElephantTheme.muted)
-                Text(question.text)
+                Text(localizedQuestionText(question, language: language))
                     .font(isCompact ? .caption.weight(.medium) : .callout.weight(.medium))
                     .foregroundStyle(ElephantTheme.ink.opacity(isCompact ? 0.76 : 1))
                     .lineLimit(isCompact ? 1 : nil)
@@ -6824,6 +6824,94 @@ private func localizedQuestionStatus(_ question: PersonalModelQuestionItem, lang
     }
 }
 
+private func localizedQuestionText(_ question: PersonalModelQuestionItem, language: AppLanguage) -> String {
+    let raw = question.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !raw.isEmpty else {
+        return localizedYouText(
+            language,
+            en: "What should Elephant understand next?",
+            zh: "Elephant 接下来应该更理解什么？",
+            fr: "Qu'est-ce qu'Elephant devrait mieux comprendre ensuite ?",
+            de: "Was sollte Elephant als Nächstes besser verstehen?"
+        )
+    }
+    guard language == .zh else { return raw }
+    if textContainsCJK(raw) { return raw }
+
+    let lens = normalizedQuestionToken(question.lens)
+    let subLens = normalizedQuestionToken(question.subLens)
+    let source = normalizedQuestionToken(question.source)
+    let text = normalizedQuestionToken(raw)
+
+    if subLens.contains("transition") || text.contains("choice_change_or_transition") {
+        return "什么选择、变化或过渡最值得 Elephant 先理解，才能帮得上你、又不增加压力？"
+    }
+    if subLens.contains("parallel") || subLens.contains("thread") || text.contains("parallel_threads") {
+        return "现在最占用你注意力的 2 到 3 条线是什么？"
+    }
+    if subLens.contains("steady_step") || subLens.contains("small_step") || subLens.contains("step") || text.contains("small_steady_step") {
+        return "当一个项目显得太大时，哪种小而稳定的一步最适合你？"
+    }
+    if subLens.contains("feedback_preference") {
+        return "你找我一起想事时，更想先看选项、先听推荐，还是先被问几个问题？"
+    }
+    if subLens.contains("autonomy_boundary") {
+        return "哪些地方我不要主动往前推，除非你先邀请我进去？"
+    }
+    if subLens.contains("communication_culture") {
+        return "你更喜欢我把话说得明一点，还是多留一点上下文和余地？"
+    }
+    if subLens.contains("conscientiousness") {
+        return "事情变乱的时候，你更希望我先给清单和步骤，还是先陪你把可能性摊开？"
+    }
+    if subLens.contains("extraversion") {
+        return "你能量低的时候，是说出来一点更容易恢复，还是先安静一会儿更有用？"
+    }
+    if subLens.contains("agreeableness") {
+        return "如果我不同意你，应该直接说，还是先把语气放软一点？"
+    }
+    if source.contains("ambiguity") {
+        return "我好像同时听见了两种线索。关于\(localizedQuestionLensNoun(lens, language: language))，你更希望我怎么理解才不跑偏？"
+    }
+    if source.contains("context") {
+        return "刚才那条关于\(localizedQuestionLensNoun(lens, language: language))的线索有点重要。你愿意多给我一小块背景吗？"
+    }
+    if subLens.contains("coverage") || source.contains("coverage") {
+        return "关于\(localizedQuestionLensNoun(lens, language: language))，有什么是你希望我以后自然记得的？"
+    }
+    return "关于\(localizedQuestionLensNoun(lens, language: language))，有什么是你希望我以后自然记得的？"
+}
+
+private func localizedQuestionLensNoun(_ lens: String, language: AppLanguage) -> String {
+    switch normalizedQuestionToken(lens) {
+    case let value where value.contains("world"):
+        return localizedYouText(language, en: "the people, places, and world around you", zh: "你身边重要的人、事和世界", fr: "les personnes, lieux et contexte autour de vous", de: "die Menschen, Orte und Welt um dich herum")
+    case let value where value.contains("pulse"):
+        return localizedYouText(language, en: "this current season of your life", zh: "你此刻所处的人生段落", fr: "votre période de vie actuelle", de: "deine aktuelle Lebensphase")
+    case let value where value.contains("journey"):
+        return localizedYouText(language, en: "your experiences, patterns, and key decisions", zh: "你的经历、模式和关键决定", fr: "vos expériences, schémas et décisions clés", de: "deine Erfahrungen, Muster und wichtigen Entscheidungen")
+    default:
+        return localizedYouText(language, en: "how you work and experience the world", zh: "你做事和感受世界的方式", fr: "votre façon d'agir et de percevoir le monde", de: "wie du arbeitest und die Welt erlebst")
+    }
+}
+
+private func normalizedQuestionToken(_ value: String) -> String {
+    value
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "-", with: "_")
+        .replacingOccurrences(of: " ", with: "_")
+        .replacingOccurrences(of: "/", with: "_")
+        .replacingOccurrences(of: "?", with: "")
+        .replacingOccurrences(of: ",", with: "")
+        .lowercased()
+}
+
+private func textContainsCJK(_ value: String) -> Bool {
+    value.unicodeScalars.contains { scalar in
+        (0x4E00...0x9FFF).contains(Int(scalar.value))
+    }
+}
+
 private func localizedFactStatus(_ rawValue: String, language: AppLanguage) -> String {
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if value.isEmpty || value == "active" {
@@ -7513,7 +7601,7 @@ struct QuestionLedgerRow: View {
                             .foregroundStyle(ElephantTheme.muted)
                     }
                 }
-                Text(question.text)
+                Text(localizedQuestionText(question, language: model.appLanguage))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(ElephantTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -7761,7 +7849,7 @@ struct QuestionReplyPopover: View {
                     Text(localizedYouText(language, en: "Reply to this question", zh: "回复这个问题", fr: "Répondre à cette question", de: "Diese Frage beantworten"))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(ElephantTheme.ink)
-                    Text(question.text)
+                    Text(localizedQuestionText(question, language: language))
                         .font(.callout.weight(.medium))
                         .foregroundStyle(ElephantTheme.ink.opacity(0.82))
                         .fixedSize(horizontal: false, vertical: true)
