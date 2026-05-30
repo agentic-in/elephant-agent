@@ -5,7 +5,7 @@ diverge after a change lands.
 
 ## Current Open Entries
 
-No open debt entries are currently tracked.
+- [Local Tool Approval Surface](local-tool-approval-surface.md)
 
 ## Closed Entries
 

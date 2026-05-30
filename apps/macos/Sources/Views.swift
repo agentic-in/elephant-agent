@@ -3251,6 +3251,14 @@ private enum MacPrivacySettings {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")
     }
 
+    static func openFilesAndFolders() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders")
+    }
+
+    static func openAutomation() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+    }
+
     private static func shouldOpenSpeechRecognition(statusText: String) -> Bool {
         let lowerStatus = statusText.lowercased()
         return lowerStatus.contains("speech recognition")
@@ -19010,6 +19018,7 @@ private enum SettingsPane: Hashable {
     case language
     case provider
     case voiceReplies
+    case localPermissions
     case tools
     case memoryEngine
     case curiosity
@@ -19089,6 +19098,20 @@ struct SettingsView: View {
                         expanded: paneBinding(.voiceReplies)
                     ) {
                         VoiceRepliesSettingsContent()
+                    }
+                    ExpandableSettingsRow(
+                        symbol: "hand.raised",
+                        title: localizedYouText(model.appLanguage, en: "Local Permissions", zh: "本机权限", fr: "Autorisations locales", de: "Lokale Berechtigungen"),
+                        subtitle: localizedYouText(
+                            model.appLanguage,
+                            en: "Voice, files, and app automation",
+                            zh: "语音、文件与应用自动化",
+                            fr: "Voix, fichiers et automatisation",
+                            de: "Sprache, Dateien und Automatisierung"
+                        ),
+                        expanded: paneBinding(.localPermissions)
+                    ) {
+                        LocalPermissionsSettingsContent()
                     }
                     ExpandableSettingsRow(
                         symbol: "questionmark.bubble",
@@ -20056,6 +20079,70 @@ private struct VoiceSettingsNotice: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .stroke(tint.opacity(0.16), lineWidth: 1)
         )
+    }
+}
+
+struct LocalPermissionsSettingsContent: View {
+    @EnvironmentObject private var model: ElephantAppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(
+                title: localizedYouText(model.appLanguage, en: "Permission Readiness", zh: "权限准备", fr: "Autorisations prêtes", de: "Berechtigungen vorbereiten"),
+                subtitle: localizedYouText(
+                    model.appLanguage,
+                    en: "Open the macOS privacy pages Elephant may need before a chat asks for local actions.",
+                    zh: "在对话需要本机动作前，先打开 Elephant 可能需要的 macOS 隐私页面。",
+                    fr: "Ouvrez les pages de confidentialité macOS avant les actions locales.",
+                    de: "Öffne die macOS-Datenschutzseiten, bevor lokale Aktionen sie brauchen."
+                )
+            )
+
+            VStack(spacing: 0) {
+                SettingsRow(
+                    label: localizedYouText(model.appLanguage, en: "Voice input", zh: "语音输入", fr: "Entrée vocale", de: "Spracheingabe"),
+                    value: localizedYouText(model.appLanguage, en: "Microphone and Speech Recognition", zh: "麦克风与语音识别", fr: "Microphone et reconnaissance vocale", de: "Mikrofon und Spracherkennung")
+                )
+                SettingsRow(
+                    label: localizedYouText(model.appLanguage, en: "Local files", zh: "本地文件", fr: "Fichiers locaux", de: "Lokale Dateien"),
+                    value: localizedYouText(model.appLanguage, en: "Desktop, Documents, Downloads, and selected folders", zh: "桌面、文稿、下载与选定文件夹", fr: "Bureau, Documents, Téléchargements et dossiers choisis", de: "Schreibtisch, Dokumente, Downloads und gewählte Ordner")
+                )
+                SettingsRow(
+                    label: localizedYouText(model.appLanguage, en: "App automation", zh: "应用自动化", fr: "Automatisation d'apps", de: "App-Automatisierung"),
+                    value: localizedYouText(model.appLanguage, en: "Notes and other apps controlled by local tools", zh: "由本地工具控制的备忘录等应用", fr: "Notes et autres apps contrôlées localement", de: "Notizen und andere lokal gesteuerte Apps")
+                )
+            }
+
+            SettingsActionBar {
+                Button {
+                    MacPrivacySettings.openMicrophone()
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Microphone", zh: "麦克风", fr: "Microphone", de: "Mikrofon"), systemImage: "mic")
+                }
+                .settingsActionButton()
+
+                Button {
+                    MacPrivacySettings.openSpeechRecognition()
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Speech", zh: "语音识别", fr: "Parole", de: "Sprache"), systemImage: "waveform")
+                }
+                .settingsActionButton()
+
+                Button {
+                    MacPrivacySettings.openFilesAndFolders()
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Files & Folders", zh: "文件与文件夹", fr: "Fichiers et dossiers", de: "Dateien & Ordner"), systemImage: "folder")
+                }
+                .settingsActionButton()
+
+                Button {
+                    MacPrivacySettings.openAutomation()
+                } label: {
+                    Label(localizedYouText(model.appLanguage, en: "Automation", zh: "自动化", fr: "Automatisation", de: "Automatisierung"), systemImage: "gearshape.2")
+                }
+                .settingsActionButton()
+            }
+        }
     }
 }
 

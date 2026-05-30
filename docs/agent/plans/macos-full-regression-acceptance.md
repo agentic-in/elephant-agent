@@ -426,14 +426,37 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   microphone prompt, and Cancel dismissed back to the composer with Voice input
   re-enabled. The managed API stayed healthy and no newer Elephant Agent crash
   report appeared.
+- Microphone permission startup was simplified again after the real packaged
+  app kept reproducing the no-prompt TCC path. Capture now uses the
+  `AVCaptureDevice` microphone authorization request as the single prompt path
+  and treats `AVAudioApplication.shared.recordPermission` only as a supplemental
+  denial check, avoiding duplicate macOS microphone request APIs during one
+  capture generation. The rebuilt app, DMG, app zip, and checksums were produced
+  by `make macos-build`; the rebuilt `.app` passed an independent
+  `codesign --verify --deep --strict` check.
+- Local-action probes were run through the unlocked packaged Chat UI with a
+  real model. A Desktop file-write request first tried an incorrect non-current
+  user Desktop path and was rejected by the tool root policy, then wrote the
+  requested temporary file under the current user's Desktop and was cleaned up.
+  No macOS Files & Folders prompt appeared.
+- Apple Notes automation was probed through the unlocked packaged Chat UI with
+  a real model. The model used the terminal tool to run local automation and
+  create the requested temporary Notes note; no macOS Automation or Notes prompt
+  appeared in this environment. The later Notes cleanup attempt timed out at the
+  AppleEvent layer, so the probe exposed both missing product-level approval and
+  unreliable external-app cleanup behavior.
+- Settings now includes a Local Permissions row with direct entry points for
+  Microphone, Speech Recognition, Files & Folders, and Automation privacy pages,
+  so voice, file, and app-automation readiness are discoverable before a chat
+  requests local side effects.
 
 ## Open Acceptance Matrix
 
 | Surface | Required Proof | Status |
 | --- | --- | --- |
 | Home | First viewport is useful in under two seconds; readiness cards navigate to owning surfaces. | Complete; Personal Model presence, map, readiness strip, continuity context, responsive/accessibility-hardened readiness navigation, and unlocked card navigation to Settings/Personal Model/Messaging/Learn verified |
-| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, modern microphone permission request with duplicate-prompt avoidance, voice preparing-state duplicate-start guard, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing |
-| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, modern permission-state polling, preparing-state duplicate-start guard, pending-capture cancellation, legacy permission support for older macOS, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
+| Chat | Text, image, voice, history, queue, streaming activity, and markdown response behavior verified. | Partial; text, image attachment, history open, live activity, Stop/cancel contract, memory-backed real model replies before and after voice timeout, voice privacy recovery action, single-path microphone request, voice preparing-state duplicate-start guard, Desktop file-write probe, Notes automation probe, step records, managed-API recall search, and episode identity preservation verified; live voice send still depends on macOS microphone authorization completing, and high-risk local tool approval remains an open product gap |
+| Voice | Native permissions, start/stop/cancel/send, local transcription fallback, and reply playback verified. | Partial; default ad-hoc signed local build with audio-input entitlement, permission timeout, one-shot microphone callback delivery, single-path `AVCaptureDevice` microphone request, supplemental `AVAudioApplication` denial check, preparing-state duplicate-start guard, pending-capture cancellation, separate Speech permission timeout, direct macOS Microphone/Speech privacy recovery, cancel, stale callback guards, packaged FunASR health, generated-audio Chinese transcription, Edge TTS reply asset, Settings playback preview, and no-crash unlocked Chat voice timeout verified; live microphone capture/send remains blocked by the macOS permission prompt not appearing |
 | You | Facts, questions, source evidence, correction, retire/recover/delete, and map interactions verified. | Complete; facts, evidence separation, question actions, map detail, reply cancel, durable semantic index recovery, managed-API recall query, managed-API correction/retire/recover/delete lifecycle, current Personal Model projection, and ready semantic evidence verified |
 | Diary | Read/write Markdown diary entries and learning linkage verified. | Complete; Markdown render, date picker, write queue, source provenance, semantic indexing, managed-API read/delete, and deleted-Diary memory cleanup verified |
 | Paths | Path board, step detail, comments, run, learning summaries, and trust prompts verified. | Complete; board, detail tabs, comment composer, comment API, queued run API, run affordance, safe delete confirmation, learning summary semantic indexing, understanding check, deleted-Path memory cleanup, and understanding closure UI contract verified |
@@ -443,7 +466,7 @@ showing Personal Model memory as correctable evidence rather than hidden state.
 | Usage | Token trend chart and row detail verified with real usage events. | Complete |
 | Calendar | Week, Month, Year views plus create/run/pause/delete job controls verified. | Complete for native controls; Week/Month/Year, create, pause, delete, event popover, system controls, and Run unavailable error UX verified |
 | Learn | Reflect/dream/diary jobs, progress, summaries, and understood checks verified. | Complete; focused Skill Matching UI run, diary queue, launcher disable/re-enable, active-job launcher gating, progress/status, history, needs-attention detail, managed-API Dream execution, managed-API Letter execution, and unlocked Dream/Letter/Diary launcher readiness verified |
-| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Complete; language, provider, voice controls, voice privacy recovery actions, memory, tools, history, sleep, logs, reset, runtime, config surface, managed-API config save/restore, and runtime editor button/draft state contract verified |
+| Settings | Language, voice, provider, memory, curiosity, history, sleep, logs, reset, runtime, and config editing verified. | Complete; language, provider, voice controls, Local Permissions readiness actions, voice privacy recovery actions, memory, tools, history, sleep, logs, reset, runtime, config surface, managed-API config save/restore, and runtime editor button/draft state contract verified |
 | Menus | New Chat, Reflect, Refresh, Reveal Database, Restart Core, sidebar, navigation, and Sleep Display verified. | Complete for native command coverage; New Chat, Navigate, Sleep Display, Reveal Database, Restart Core, Refresh, Reflect, and the custom sidebar command were verified |
 | Runtime | Managed PID ownership, stale cleanup, restart, quit cleanup, and no duplicate loopback APIs verified. | Complete |
 | Design | Native IA, text fit, accessibility labels, no internal-only first-level nav, and resized/fullscreen layouts verified. | Complete for current unlocked/locked evidence; first-level IA, minimum-size, wide-window, fullscreen Home/Settings behavior, Home readiness responsive/accessibility contract, unlocked Home/Chat/Skills/Learn/Settings visual pass, and Sleep Display privacy/accessibility/visual contract verified |
@@ -622,6 +645,20 @@ showing Personal Model memory as correctable evidence rather than hidden state.
   model/tool cycles.
 - Bounded terminal tools must clean up their foreground process tree on timeout
   so a stopped Chat turn cannot leave local child work running.
+
+## Local Tool Approval Fix Track
+
+- Treat file writes, patches, terminal execution, code execution, and external
+  app automation as high-risk Chat side effects that need an Elephant approval
+  surface, not only macOS privacy prompts.
+- Wire the app/API runtime to the existing security approval policy so risky
+  tool calls can pause, explain the exact action in user language, and resume
+  only after explicit approval.
+- Reduce broad home-directory write/read assumptions into user-selected or
+  task-scoped roots where possible, and make path expansion resolve against the
+  current OS user instead of relying on model guesses.
+- Collapse or redact raw local implementation details in user-facing tool
+  cards while keeping enough evidence for audit and undo.
 
 ## Exit Criteria
 

@@ -267,54 +267,48 @@ final class SpeechInputController: NSObject, ObservableObject {
 
     private func requestMicrophoneAccess(generation: Int, _ completion: @escaping (Bool) -> Void) {
         let completionGate = OneShotPermissionCompletion()
-
-        if #available(macOS 14.0, *) {
-            switch AVAudioApplication.shared.recordPermission {
-            case .granted:
-                completionGate.deliver(true, completion: completion)
-            case .denied:
-                completionGate.deliver(false, completion: completion)
-            case .undetermined:
-                AVAudioApplication.requestRecordPermission { allowed in
-                    completionGate.deliver(allowed, completion: completion)
-                }
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    await MainActor.run {
-                        guard let self, self.isActiveCapture(generation) else { return }
-                        switch AVAudioApplication.shared.recordPermission {
-                        case .granted:
-                            completionGate.deliver(true, completion: completion)
-                        case .denied:
-                            completionGate.deliver(false, completion: completion)
-                        case .undetermined:
-                            break
-                        @unknown default:
-                            completionGate.deliver(false, completion: completion)
-                        }
-                    }
-                }
-            @unknown default:
-                completionGate.deliver(false, completion: completion)
+        requestCaptureDeviceMicrophoneAccess(
+            generation: generation,
+            completionGate: completionGate,
+            completion: { [weak self] allowed in
+                guard let self else { return }
+                guard self.isActiveCapture(generation) else { return }
+                completion(allowed && self.audioApplicationRecordPermissionAllowsCapture())
             }
-            return
-        }
-
-        requestLegacyMicrophoneAccess { allowed in
-            completionGate.deliver(allowed, completion: completion)
-        }
+        )
     }
 
-    private func requestLegacyMicrophoneAccess(_ completion: @escaping (Bool) -> Void) {
+    private func audioApplicationRecordPermissionAllowsCapture() -> Bool {
+        if #available(macOS 14.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .denied:
+                return false
+            case .granted, .undetermined:
+                return true
+            @unknown default:
+                return false
+            }
+        }
+        return true
+    }
+
+    private func requestCaptureDeviceMicrophoneAccess(
+        generation: Int,
+        completionGate: OneShotPermissionCompletion,
+        completion: @escaping (Bool) -> Void
+    ) {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
-            completion(true)
+            completionGate.deliver(true, completion: completion)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { allowed in
-                Task { @MainActor in completion(allowed) }
+                Task { @MainActor [weak self] in
+                    guard let self, self.isActiveCapture(generation) else { return }
+                    completionGate.deliver(allowed, completion: completion)
+                }
             }
         default:
-            completion(false)
+            completionGate.deliver(false, completion: completion)
         }
     }
 
