@@ -71,15 +71,29 @@ class SecurityGuard:
         self,
         base_env: dict[str, str],
         extra_env: dict[str, str] | None = None,
+        *,
+        exempt_vars: tuple[str, ...] | list[str] = (),
     ) -> dict[str, str]:
         """Build a sanitized environment dict.
 
         Starts from base_env, keeps only keys with safe prefixes, excludes
-        keys containing secret fragments, then overlays extra_env, and
-        finally adds sandbox-specific variables.
+        keys containing secret fragments (unless in exempt_vars), then
+        overlays extra_env, and finally adds sandbox-specific variables.
+
+        Parameters
+        ----------
+        exempt_vars:
+            Variable names that are exempted from secret filtering even if
+            they contain KEY/TOKEN/SECRET/etc fragments.  Used by the
+            ``allow.env`` config to let specific vars through.
         """
+        exempt_set = frozenset(exempt_vars)
         env: dict[str, str] = {}
         for key, value in base_env.items():
+            if key in exempt_set:
+                # Explicitly exempted — pass through regardless of fragments
+                env[key] = value
+                continue
             if any(fragment in key.upper() for fragment in _SECRET_FRAGMENTS):
                 continue
             if any(key.startswith(prefix) for prefix in _SAFE_PREFIXES):

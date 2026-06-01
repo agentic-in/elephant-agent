@@ -285,17 +285,17 @@ def mode_to_policy(
     # --- Base settings per mode ---
     if mode == SandboxMode.READONLY:
         writable_roots: list[str] = []
-        restrict_file_read = True
+        restrict_file_read = True  # precise whitelist for readonly analysis
         allow_network = False
         allow_network_loopback = False
     elif mode == SandboxMode.SAFE:
         writable_roots = [cwd_str]
-        restrict_file_read = True
+        restrict_file_read = False  # allow-all read, credential deny covers security
         allow_network = False
         allow_network_loopback = True
     elif mode == SandboxMode.DEV:
         writable_roots = [cwd_str]
-        restrict_file_read = True
+        restrict_file_read = False  # allow-all read, credential deny covers security
         allow_network = True
         allow_network_loopback = True
     elif mode == SandboxMode.OPEN:
@@ -306,7 +306,7 @@ def mode_to_policy(
     else:
         # Fallback to safe
         writable_roots = [cwd_str]
-        restrict_file_read = True
+        restrict_file_read = False
         allow_network = False
         allow_network_loopback = True
 

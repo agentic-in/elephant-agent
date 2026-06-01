@@ -60,6 +60,13 @@
   (subpath "/usr/sbin")
   (subpath "/usr/libexec"))
 
+; --- Xcode / Command Line Developer Tools ---
+; Required for git, clang, make, and other dev tools that ship via
+; /usr/bin shims which delegate to the actual binaries here.
+(allow file-read* file-test-existence file-map-executable
+  (subpath "/Library/Developer/CommandLineTools")
+  (subpath "/Applications/Xcode.app/Contents/Developer"))
+
 ; --- Configuration ---
 (allow file-read* file-test-existence
   (subpath "/etc")

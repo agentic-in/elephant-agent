@@ -757,6 +757,51 @@ def _truncate_line(line: str) -> str:
     return line[:MAX_FILE_LINE_CHARS].rstrip() + " ... [line truncated]"
 
 
+# --- VCS protected path check (aligned with seatbelt protected_paths) ---
+# Only block dangerous VCS subdirectories, not the entire .git tree.
+# This allows git commit (writes to .git/objects, .git/refs, .git/index)
+# while still preventing sandbox escape via hook injection.
+
+_PROTECTED_VCS_SUBDIRS = (
+    ".git/hooks",
+    ".hg/hgrc",
+    ".claude/settings",
+    ".claude/skills",
+    ".claude/commands",
+    ".claude/agents",
+)
+
+
+def _is_protected_vcs_write(resolved: Path) -> bool:
+    """Check if a resolved path targets a protected VCS/config subdirectory.
+
+    Returns True for paths like:
+      .git/hooks/pre-commit  → blocked (sandbox escape)
+      .claude/settings.json  → blocked (config tampering)
+      .claude/skills/evil.py → blocked (code injection)
+
+    Returns False for paths like:
+      .git/objects/abc123    → allowed (git commit needs this)
+      .git/refs/heads/main   → allowed (git branch needs this)
+      .git/index             → allowed (git add needs this)
+    """
+    parts = resolved.parts
+    path_str = str(resolved)
+
+    for protected in _PROTECTED_VCS_SUBDIRS:
+        # Check if any segment sequence in the path matches the protected pattern
+        protected_parts = protected.split("/")
+        for i in range(len(parts) - len(protected_parts) + 1):
+            if parts[i:i + len(protected_parts)] == tuple(protected_parts):
+                return True
+            # Also match .claude/settings.json, .claude/settings.local.json etc
+            if protected == ".claude/settings" and i < len(parts) - 1:
+                if parts[i] == ".claude" and parts[i + 1].startswith("settings"):
+                    return True
+
+    return False
+
+
 def _ensure_safe_write_path(path: Path) -> None:
     resolved = path.expanduser().resolve(strict=False)
     home = Path.home().resolve()
@@ -768,8 +813,10 @@ def _ensure_safe_write_path(path: Path) -> None:
     for prefix_name in _SENSITIVE_HOME_PREFIX_NAMES:
         if _path_is_relative_to(resolved, home / prefix_name):
             raise ValueError(f"refusing to write sensitive credential directory: {path}")
-    if any(part in {".git", ".hg"} for part in resolved.parts):
-        raise ValueError(f"refusing to write VCS metadata path: {path}")
+    # VCS protection: only block dangerous subdirectories, not entire .git
+    # This aligns with seatbelt's protected_paths (allows git commit to work)
+    if _is_protected_vcs_write(resolved):
+        raise ValueError(f"refusing to write protected VCS path: {path}")
     for exact in _SENSITIVE_EXACT_PATHS:
         if resolved == exact:
             raise ValueError(f"refusing to write sensitive system path: {path}")
@@ -787,8 +834,9 @@ def _ensure_safe_search_path(path: Path) -> None:
     for prefix_name in _SENSITIVE_HOME_PREFIX_NAMES:
         if resolved == home / prefix_name or _path_is_relative_to(resolved, home / prefix_name):
             raise ValueError(f"refusing to search sensitive credential directory: {path}")
-    if any(part in {".git", ".hg"} for part in resolved.parts):
-        raise ValueError(f"refusing to search VCS metadata path: {path}")
+    # VCS protection: only block dangerous subdirectories (consistent with write)
+    if _is_protected_vcs_write(resolved):
+        raise ValueError(f"refusing to search protected VCS path: {path}")
     for exact in _SENSITIVE_EXACT_PATHS:
         if resolved == exact:
             raise ValueError(f"refusing to search sensitive system path: {path}")
