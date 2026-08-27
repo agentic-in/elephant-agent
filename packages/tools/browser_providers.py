@@ -43,7 +43,7 @@ class BrowserUseProvider(CloudBrowserProvider):
         api_key = os.environ.get("BROWSER_USE_API_KEY", "")
         response = _http_json(
             "POST",
-            os.environ.get("BROWSER_USE_API_URL", "https://api.browser-use.com/api/v3").rstrip("/") + "/browsers",
+            os.environ.get("BROWSER_USE_API_URL", "https://api.browser-use.com/api/v4").rstrip("/") + "/browsers",
             headers={"X-Browser-Use-API-Key": api_key, "Content-Type": "application/json"},
             payload={"timeout": int(os.environ.get("BROWSER_USE_TIMEOUT_MINUTES", "5"))},
         )
@@ -62,7 +62,7 @@ class BrowserUseProvider(CloudBrowserProvider):
         api_key = os.environ.get("BROWSER_USE_API_KEY", "")
         _http_json(
             "PATCH",
-            os.environ.get("BROWSER_USE_API_URL", "https://api.browser-use.com/api/v3").rstrip()
+            os.environ.get("BROWSER_USE_API_URL", "https://api.browser-use.com/api/v4").rstrip()
             + f"/browsers/{session_id}",
             headers={"X-Browser-Use-API-Key": api_key, "Content-Type": "application/json"},
             payload={"action": "stop"},
