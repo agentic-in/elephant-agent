@@ -116,6 +116,7 @@ _URL_TO_PROVIDER: dict[str, str] = {
     "models.github.ai": "copilot",
     "openrouter.ai": "openrouter",
     "router.requesty.ai": "requesty",
+    "api.cheaperinference.com": "cheaper-inference",
     "opencode.ai": "opencode-go",
     "portal.qwen.ai": "qwen-oauth",
     "qianfan.baidubce.com": "baidu-qianfan",
